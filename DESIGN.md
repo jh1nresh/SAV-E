@@ -544,6 +544,7 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 ### Map Pins
 
 2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. The coral pin and pop animation rules below are historical.
+2026-11-01 clarification: selection uses Apple's own enlarged native marker. At the selected stamp's exact coordinate, other saved markers are temporarily hidden so a second pin cannot show underneath it; nearby markers remain native and saved records are unchanged.
 
 Source: product Map previously used coral numbered pins via `SaveDoodleMapPinStyle`
 on `SaveDoodleMapView`. Trip / Navigate MapKit still uses
@@ -894,6 +895,9 @@ Rules:
   native Apple Markers. Map Eat/Go (`map.eat` / `map.go`) and city (`map.city`)
   write the same session Home reads. Explicit filtered intent survives late
   collection loading and remounts; unchanged filters preserve the viewport.
+  An empty loading fallback does not complete the initial collection fit;
+  that pending fit survives tab changes until stamps arrive, unless a user
+  gesture or explicit camera command has established the viewport.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in

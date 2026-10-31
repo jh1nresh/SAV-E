@@ -99,7 +99,6 @@ struct SaveDoodleMapView: View {
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var lastGestureCamera: MapCameraPosition?
     @State private var nativeMapSelection: SaveDoodleNativeMapSelection?
-    @State private var hasFittedCollection = false
     @State private var showsCityPicker = false
     @State private var visitError: String?
     private static let collapsedChromeClearance: CGFloat = 160
@@ -183,14 +182,12 @@ struct SaveDoodleMapView: View {
             cameraPosition = mapViewModel.cameraPosition
             switch session.consumeMapEntry() {
             case .explicitCommand:
-                hasFittedCollection = true
+                session.mapHasEstablishedViewport = true
             case .changedFilters:
                 onClearSelection()
                 fitVisiblePlaces()
             case .restoreViewport:
-                if mapViewModel.visibleMapRegion != nil {
-                    hasFittedCollection = true
-                } else {
+                if session.shouldFitMapCollection(hasVisibleRegion: mapViewModel.visibleMapRegion != nil) {
                     fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)
                 }
             }
@@ -200,13 +197,16 @@ struct SaveDoodleMapView: View {
         .onChange(of: mapViewModel.cameraPosition) { _, position in
             // A gesture publishes one snapshot on end. Do not feed that snapshot
             // back into MapKit; explicit commands still move the local camera.
-            if position != lastGestureCamera { cameraPosition = position }
+            if position != lastGestureCamera {
+                session.mapHasEstablishedViewport = true
+                cameraPosition = position
+            }
             lastGestureCamera = nil
         }
         .onChange(of: mapViewModel.places.map(\.id)) { _, _ in
             selectParityPlaceIfNeeded()
             synchronizeNativeSavedSelection()
-            guard !hasFittedCollection, !cameraPosition.positionedByUser else { return }
+            guard !session.mapHasEstablishedViewport, !cameraPosition.positionedByUser else { return }
             fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)
         }
         .onChange(of: mapViewModel.selectedPlace?.id) { _, _ in
@@ -279,7 +279,7 @@ struct SaveDoodleMapView: View {
             UserAnnotation()
 
             if SaveDoodleMapPinStyle.current == .appleDefault {
-                ForEach(displayedListedPlaces) { item in
+                ForEach(Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)) { item in
                     if item.place.isMapKitMappable {
                         let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
                         // Native MapKit takes its accessible name from the
@@ -350,6 +350,7 @@ struct SaveDoodleMapView: View {
         .safeAreaPadding(.bottom, Self.collapsedChromeClearance)
         .onMapCameraChange(frequency: .onEnd) { context in
             guard MapSearchGeography.isTrustworthyRegion(context.region) else { return }
+            if cameraPosition.positionedByUser { session.mapHasEstablishedViewport = true }
             mapViewModel.updateVisibleMapRegion(context.region)
             let snapshot = MapCameraPosition.region(context.region)
             lastGestureCamera = snapshot
@@ -869,7 +870,7 @@ struct SaveDoodleMapView: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
                 )
             )
-            hasFittedCollection = true
+            session.mapHasEstablishedViewport = true
             return
         }
         if initialOpening {
@@ -878,13 +879,13 @@ struct SaveDoodleMapView: View {
             let pins = mapViewModel.places.filter(\.isMapKitMappable).map(\.coordinate)
             let fallback = locationService.isAuthorizationDenied ? nil : locationService.currentLocation?.coordinate
             cameraPosition = .region(Self.region(fitting: pins, fallback: fallback))
-            hasFittedCollection = !pins.isEmpty
+            session.mapHasEstablishedViewport = !pins.isEmpty
             return
         }
         let pins = cityOpeningPins()
         if !pins.isEmpty {
             cameraPosition = .region(Self.region(fitting: pins))
-            hasFittedCollection = true
+            session.mapHasEstablishedViewport = true
             return
         }
         if let fallback = cityOpeningFallback() {
@@ -1066,6 +1067,22 @@ struct SaveDoodleMapView: View {
             }
         }
         return locationService.currentLocation?.coordinate
+    }
+
+    static func nativeSavedMarkers(
+        _ places: [SaveDoodleListedPlace],
+        selected: Place?
+    ) -> [SaveDoodleListedPlace] {
+        guard let selected, selected.isMapKitMappable,
+              places.contains(where: { $0.id == selected.id }) else { return places }
+        // MapKit enlarges the selected native marker. A second saved marker at
+        // that exact coordinate must not peek out underneath it. Keep the saved
+        // collection intact and restore those markers when the card closes.
+        return places.filter { item in
+            item.id == selected.id
+                || item.place.latitude != selected.latitude
+                || item.place.longitude != selected.longitude
+        }
     }
 
     static func region(

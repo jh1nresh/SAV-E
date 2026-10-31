@@ -5012,6 +5012,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertEqual(selectedCard.label, "Taipei Window Cafe")
         XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: selectedCard.label)),
                       "The selected card's marker must remain tappable among collocated stamps")
+        for name in ["Tainan Garden Cafe", "New Taipei Corner Cafe", "Taipei Lunch", "Taipei Riverside Park"] {
+            XCTAssertFalse(nativeMapMarker(app, name: name).exists,
+                           "Only the selected native marker renders at a shared coordinate")
+        }
         if language == "zh-Hant" {
             attach(app, name: "298-12-zh")
         } else {

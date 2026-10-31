@@ -83,6 +83,9 @@ final class SaveDoodleSession: ObservableObject {
 
     /// A fresh command entering Map owns its camera even if Home filters changed.
     var pendingExplicitMapEntry = false
+    /// An empty loading fallback is not a completed collection fit. Keep this
+    /// across tab mounts, without publishing camera-ownership bookkeeping.
+    var mapHasEstablishedViewport = false
     private var lastMapFilters: (lens: SaveDoodleLens, city: SaveDoodleCitySelection)?
 
     enum MapEntry: Equatable {
@@ -93,6 +96,10 @@ final class SaveDoodleSession: ObservableObject {
 
     func recordMapFilters() {
         lastMapFilters = (lens, city)
+    }
+
+    func shouldFitMapCollection(hasVisibleRegion: Bool) -> Bool {
+        !mapHasEstablishedViewport || !hasVisibleRegion
     }
 
     func consumeMapEntry() -> MapEntry {

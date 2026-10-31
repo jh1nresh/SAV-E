@@ -110,6 +110,27 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(candidates.contains(".tint("), "Unsaved markers keep Apple's native color")
     }
 
+    func testSelectedNativeMarkerDoesNotStackAnotherStampAtItsCoordinate() {
+        func stamp(_ name: String, latitude: Double = 25.04) -> Place {
+            Place(id: UUID(), name: name, address: "Taipei",
+                  latitude: latitude, longitude: 121.54, category: .cafe,
+                  status: .visited, sourcePlatform: .other, createdAt: Date())
+        }
+        let selected = stamp("Selected Cafe")
+        let collocated = stamp("Same-building Cafe")
+        let nearby = stamp("Nearby Cafe", latitude: 25.041)
+        let places = [collocated, selected, nearby].enumerated().map { index, place in
+            SaveDoodleListedPlace(place: place, index: index + 1, distance: nil)
+        }
+        XCTAssertEqual(SaveDoodleMapView.nativeSavedMarkers(places, selected: selected).map(\.id),
+                       [selected.id, nearby.id])
+        XCTAssertEqual(SaveDoodleMapView.nativeSavedMarkers(places, selected: nil), places,
+                       "Closing the card restores the complete collection")
+        XCTAssertEqual(SaveDoodleMapView.nativeSavedMarkers([places[0], places[2]], selected: selected),
+                       [places[0], places[2]], "An off-filter selection must not hide displayed stamps")
+        XCTAssertEqual(places.count, 3, "Rendering never removes saved places")
+    }
+
     func testInitialFitIncludesDistantSavedPlacesWithPadding() {
         let coordinates = [
             CLLocationCoordinate2D(latitude: 25.03, longitude: 121.56),
@@ -639,6 +660,34 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(map.cameraPosition.region?.center.longitude, candidate.longitude)
         XCTAssertEqual(map.cameraPosition.region?.span.latitudeDelta, 0.01,
                        "Explicit candidate selection must still focus the camera")
+    }
+
+    func testPendingCollectionFitSurvivesMapReentryUntilViewportIsEstablished() throws {
+        let suite = "SaveDoodleMapLoading-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let session = SaveDoodleSession(defaults: defaults)
+
+        XCTAssertTrue(session.shouldFitMapCollection(hasVisibleRegion: false))
+        // MapKit reports the empty loading fallback, then Map unmounts. Places
+        // may load before reentry (no ID-change event) or after it: both still fit.
+        for _ in 0..<2 {
+            session.recordMapFilters()
+            XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+            XCTAssertTrue(session.shouldFitMapCollection(hasVisibleRegion: true))
+        }
+        session.mapHasEstablishedViewport = true // A nonempty fit, pan or explicit focus.
+        session.recordMapFilters()
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        XCTAssertFalse(session.shouldFitMapCollection(hasVisibleRegion: true))
+        XCTAssertTrue(session.shouldFitMapCollection(hasVisibleRegion: false))
+
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertFalse(map.contains("@State private var hasFittedCollection"))
+        XCTAssertTrue(map.contains("session.shouldFitMapCollection(hasVisibleRegion: mapViewModel.visibleMapRegion != nil)"))
+        XCTAssertTrue(map.contains("guard !session.mapHasEstablishedViewport, !cameraPosition.positionedByUser"))
+        XCTAssertTrue(map.contains("if cameraPosition.positionedByUser { session.mapHasEstablishedViewport = true }"))
+        XCTAssertTrue(map.contains("session.mapHasEstablishedViewport = !pins.isEmpty"))
     }
 
     func testMapEntryReconcilesFiltersAndConsumesExplicitCommand() throws {
