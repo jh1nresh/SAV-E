@@ -187,6 +187,7 @@ struct SaveDoodleMapView: View {
                     fitVisiblePlaces()
                 }
             }
+            synchronizeNativeSavedSelection()
         }
         .onDisappear { session.recordMapFilters() }
         .onChange(of: mapViewModel.cameraPosition) { _, position in
@@ -197,11 +198,12 @@ struct SaveDoodleMapView: View {
         }
         .onChange(of: mapViewModel.places.map(\.id)) { _, _ in
             selectParityPlaceIfNeeded()
+            synchronizeNativeSavedSelection()
             guard !hasFittedCollection, !cameraPosition.positionedByUser else { return }
             fitVisiblePlaces()
         }
-        .onChange(of: mapViewModel.selectedPlace?.id) { _, id in
-            if id == nil, case .saved? = nativeMapSelection { nativeMapSelection = nil }
+        .onChange(of: mapViewModel.selectedPlace?.id) { _, _ in
+            synchronizeNativeSavedSelection()
         }
         .onChange(of: mapViewModel.selectedMapCandidate?.id) { _, id in
             if id == nil, case .candidate? = nativeMapSelection { nativeMapSelection = nil }
@@ -231,6 +233,7 @@ struct SaveDoodleMapView: View {
         .onChange(of: nativeMapSelection) { _, selection in
             switch selection {
             case .saved(let id):
+                guard mapViewModel.selectedPlace?.id != id else { return }
                 guard let place = mapViewModel.places.first(where: { $0.id == id }) else { return }
                 mapViewModel.selectPlace(place)
             case .candidate(let id):
@@ -254,6 +257,19 @@ struct SaveDoodleMapView: View {
     private func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+
+    private func synchronizeNativeSavedSelection() {
+        // A Home handoff can select a stamp before Map exists. Tell MapKit
+        // which native marker owns the card, including collocated places.
+        if let selected = mapViewModel.selectedPlace,
+           selected.isMapKitMappable,
+           displayedListedPlaces.contains(where: { $0.place.id == selected.id }) {
+            let selection = SaveDoodleNativeMapSelection.saved(selected.id)
+            if nativeMapSelection != selection { nativeMapSelection = selection }
+        } else if case .saved? = nativeMapSelection {
+            nativeMapSelection = nil
+        }
     }
 
     private var mapCanvas: some View {

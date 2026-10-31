@@ -1373,6 +1373,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        // The parity seed has several named stamps at identical coordinates.
+        // Programmatic preselection must promote the card's own native marker.
+        let selectedCard = app.buttons["map.peek.card"]
+        XCTAssertTrue(selectedCard.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(selectedCard.label, "Taipei Window Cafe")
+        XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: selectedCard.label)),
+                      "The selected card's marker must remain tappable among collocated stamps")
         attach(app, name: "atlas-map")
 
         openRootTab("Friends", app: app)
