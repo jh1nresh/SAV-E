@@ -282,10 +282,14 @@ struct SaveDoodleMapView: View {
                 ForEach(Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)) { item in
                     if item.place.isMapKitMappable {
                         let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
-                        // Native MapKit takes its accessible name from the
-                        // marker title; Text's label modifier is not forwarded.
-                        Marker("\(item.place.name), \(state.displayName(language: languageSettings.language))",
-                               coordinate: item.place.coordinate)
+                        let stateName = state.displayName(language: languageSettings.language)
+                        // The marker title is the on-screen name. Status stays
+                        // in accessibility so it is not drawn beside the pin.
+                        Marker(coordinate: item.place.coordinate) {
+                            Text(item.place.name)
+                                .accessibilityLabel("\(item.place.name), \(stateName)")
+                                .accessibilityValue(stateName)
+                        }
                             .tint(item.place.status == .visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
                             .tag(SaveDoodleNativeMapSelection.saved(item.place.id))
                     }
@@ -318,8 +322,12 @@ struct SaveDoodleMapView: View {
             }
 
             ForEach(nativeUnsavedCandidates) { candidate in
-                Marker("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))",
-                       coordinate: candidate.coordinate)
+                let stateName = SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)
+                Marker(coordinate: candidate.coordinate) {
+                    Text(candidate.title)
+                        .accessibilityLabel("\(candidate.title), \(stateName)")
+                        .accessibilityValue(stateName)
+                }
                     .tag(SaveDoodleNativeMapSelection.candidate(candidate.id))
             }
 

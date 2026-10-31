@@ -5040,8 +5040,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
         }
         XCTAssertTrue(unsavedPin.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(unsavedPin.label.contains(language == "zh-Hant" ? "尚未保存" : "Not saved yet"),
-                      "Native candidates must announce that they are not saved")
+        XCTAssertTrue(
+            nativeMarkerAnnounces(unsavedPin, language == "zh-Hant" ? "尚未保存" : "Not saved yet"),
+            "Native candidates must announce that they are not saved"
+        )
         XCTAssertTrue(unsavedPin.isHittable, "Unsaved native MapKit marker must receive taps")
         unsavedPin.tap()
         XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
@@ -5051,16 +5053,24 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func nativeMapMarker(_ app: XCUIApplication, name: String) -> XCUIElement {
-        // Apple's own POIs can have the same place name. Only our markers
-        // carry one of these established saved/visited/unsaved state titles.
+        // The visible title is the place name. Status is the accessibility
+        // value, and older builds also appended it to the accessibility label.
         let states = ["Map Stamp", "Visited Map Stamp", "Not saved yet",
                       "地圖章", "去過的地圖章", "尚未保存"]
-        let titles = states.map { "\(name), \($0)" }
-        return app.maps.descendants(matching: .any).matching(NSCompoundPredicate(
-            orPredicateWithSubpredicates: titles.map { title in
-                NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, title + ",")
-            }
-        )).firstMatch
+        var predicates = [NSPredicate(format: "label == %@ OR label BEGINSWITH %@", name, name + ",")]
+        predicates += states.map { state in
+            NSPredicate(format: "label == %@ AND value CONTAINS %@", name, state)
+        }
+        return app.maps.descendants(matching: .any).matching(
+            NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
+        ).firstMatch
+    }
+
+    @MainActor
+    private func nativeMarkerAnnounces(_ marker: XCUIElement, _ state: String) -> Bool {
+        if marker.label.contains(state) { return true }
+        let value = marker.value as? String ?? ""
+        return value.contains(state)
     }
 
     /// Use separated map coordinates for taps; the M1 memory raster intentionally
@@ -5089,8 +5099,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let selectedName = app.buttons["map.peek.card"].label
         let selectedPin = nativeMapMarker(app, name: selectedName)
         XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(selectedPin.label.contains(language == "zh-Hant" ? "去過的地圖章" : "Visited Map Stamp"),
-                      "Native visited markers must announce their visited state")
+        XCTAssertTrue(
+            nativeMarkerAnnounces(selectedPin, language == "zh-Hant" ? "去過的地圖章" : "Visited Map Stamp"),
+            "Native visited markers must announce their visited state"
+        )
         for _ in 0..<2 {
             close.tap()
             XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
@@ -5133,8 +5145,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Taipei Lunch", "Raohe Night Market", "Fujin Tree 353 Cafe"
         ].first { $0 != selectedName && nativeMapMarker(app, name: $0).isHittable })
         let otherPin = nativeMapMarker(app, name: otherName)
-        XCTAssertTrue(otherPin.label.contains(language == "zh-Hant" ? "地圖章" : "Map Stamp"))
-        XCTAssertFalse(otherPin.label.contains(language == "zh-Hant" ? "去過的地圖章" : "Visited Map Stamp"),
+        let savedState = language == "zh-Hant" ? "地圖章" : "Map Stamp"
+        let visitedState = language == "zh-Hant" ? "去過的地圖章" : "Visited Map Stamp"
+        XCTAssertTrue(nativeMarkerAnnounces(otherPin, savedState))
+        XCTAssertFalse(nativeMarkerAnnounces(otherPin, visitedState),
                        "Unvisited saved markers must stay distinct from visited stamps")
         otherPin.tap()
         XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
