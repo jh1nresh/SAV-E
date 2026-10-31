@@ -282,10 +282,10 @@ struct SaveDoodleMapView: View {
                 ForEach(displayedListedPlaces) { item in
                     if item.place.isMapKitMappable {
                         let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
-                        Marker(coordinate: item.place.coordinate) {
-                            Text(item.place.name)
-                                .accessibilityLabel("\(item.place.name), \(state.displayName(language: languageSettings.language))")
-                        }
+                        // Native MapKit takes its accessible name from the
+                        // marker title; Text's label modifier is not forwarded.
+                        Marker("\(item.place.name), \(state.displayName(language: languageSettings.language))",
+                               coordinate: item.place.coordinate)
                             .tint(item.place.status == .visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
                             .tag(SaveDoodleNativeMapSelection.saved(item.place.id))
                     }
@@ -318,10 +318,8 @@ struct SaveDoodleMapView: View {
             }
 
             ForEach(nativeUnsavedCandidates) { candidate in
-                Marker(coordinate: candidate.coordinate) {
-                    Text(candidate.title)
-                        .accessibilityLabel("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))")
-                }
+                Marker("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))",
+                       coordinate: candidate.coordinate)
                     .tag(SaveDoodleNativeMapSelection.candidate(candidate.id))
             }
 

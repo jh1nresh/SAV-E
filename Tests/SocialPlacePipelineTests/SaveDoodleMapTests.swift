@@ -96,17 +96,15 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(root.contains("accessibilityElement(children: .contain)"))
     }
 
-    func testNativeMarkerTitlesKeepStateOnlyInAccessibilityLabel() throws {
+    func testNativeMarkerTitlesExposePlaceStateToMapKit() throws {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let start = try XCTUnwrap(map.range(of: "private var mapCanvas"))
         let end = try XCTUnwrap(map.range(of: "if let polyline", range: start.upperBound..<map.endIndex))
         let markers = map[start.lowerBound..<end.lowerBound]
-        XCTAssertTrue(markers.contains("Marker(coordinate: item.place.coordinate)"))
-        XCTAssertTrue(markers.contains("Text(item.place.name)"))
-        XCTAssertTrue(markers.contains(#".accessibilityLabel("\(item.place.name), \(state.displayName(language: languageSettings.language))")"#))
-        XCTAssertTrue(markers.contains("Marker(coordinate: candidate.coordinate)"))
-        XCTAssertTrue(markers.contains("Text(candidate.title)"))
-        XCTAssertTrue(markers.contains(#".accessibilityLabel("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))")"#))
+        XCTAssertTrue(markers.contains(#"Marker("\(item.place.name), \(state.displayName(language: languageSettings.language))""#))
+        XCTAssertTrue(markers.contains("coordinate: item.place.coordinate"))
+        XCTAssertTrue(markers.contains(#"Marker("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))""#))
+        XCTAssertTrue(markers.contains("coordinate: candidate.coordinate"))
         let candidateStart = try XCTUnwrap(markers.range(of: "ForEach(nativeUnsavedCandidates)"))
         let candidates = markers[candidateStart.lowerBound...]
         XCTAssertFalse(candidates.contains(".tint("), "Unsaved markers keep Apple's native color")

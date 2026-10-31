@@ -5208,6 +5208,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "298-7-map-tab")
         XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        // This is a filtered Home/Map count comparison, not the initial
+        // all-saved collection. Activate the shared Eat filter explicitly.
+        tapReachable(app.buttons["map.eat"])
         let eatPin = "Siji Minfu Roast Duck"
         let noodlePin = "Fangzhuangchang Noodles"
         let cafePin = "Grey Cafe"
