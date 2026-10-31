@@ -478,7 +478,12 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(design.contains("0.90 visual-parity score is not evidence"))
         XCTAssertTrue(design.contains("Do not apply `map-mask.png` to the 0.90 score"))
         XCTAssertTrue(design.contains("Home and Map share one Eat/Go + city state"))
-        XCTAssertTrue(design.contains("pin count equals Home list rows"))
+        // Approved a5d62df8 contract: the first frame shows the whole collection.
+        // Pin-count equality with Home applies only after shared filtering.
+        XCTAssertTrue(design.contains("Map initially frames the whole saved collection"))
+        XCTAssertTrue(design.contains("HoP 298-3 applies in filtered mode: ordinary collection pin counts match"))
+        XCTAssertTrue(design.contains("their count matches Home under the same filters"))
+        XCTAssertFalse(design.contains("pin count equals Home list rows"))
         XCTAssertFalse(design.contains("Map always uses its own state"))
         XCTAssertTrue(design.contains("coral outline lollipops"))
         XCTAssertFalse(design.contains("SaveTileTownRootMap"))
