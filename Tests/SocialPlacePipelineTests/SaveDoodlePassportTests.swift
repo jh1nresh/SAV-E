@@ -3,6 +3,22 @@ import XCTest
 
 @MainActor
 final class SaveDoodlePassportTests: XCTestCase {
+    func testPassportUsesNeutralAvatarAndKeepsIdentityCounts() throws {
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertFalse(profile.contains("SavvyLogo"), "Missing, loading and failed avatars must stay neutral")
+        XCTAssertTrue(profile.contains(#"Image(systemName: "person.crop.circle.fill")"#))
+        XCTAssertTrue(profile.contains(".foregroundStyle(SaveAtlasPalette.muted)"))
+        XCTAssertTrue(profile.contains(".background(SaveAtlasPalette.kraft, in: Circle())"))
+        XCTAssertEqual(profile.components(separatedBy: "neutralAvatar").count - 1, 3,
+                       "Remote failure and no-photo branches share the neutral avatar")
+        XCTAssertTrue(profile.contains("profileCount(posts.counts?.postCount"))
+        XCTAssertTrue(profile.contains("profileCount(posts.counts?.followingCount"))
+        XCTAssertTrue(profile.contains("profileCount(posts.counts?.followerCount"))
+        XCTAssertTrue(profile.contains("passportIdentity"))
+        XCTAssertTrue(page.contains("identity\n                    .padding"))
+    }
+
     func testVisitRanksFollowOneThreeFive() {
         XCTAssertEqual(SavePassportStampRank.from(visitCount: 0), .none)
         XCTAssertEqual(SavePassportStampRank.from(visitCount: 1), .single)

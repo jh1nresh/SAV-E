@@ -2344,20 +2344,24 @@ private struct ProfileAvatarView: View {
                             .resizable()
                             .scaledToFill()
                     default:
-                        Image("SavvyLogo")
-                            .resizable()
-                            .scaledToFill()
+                        neutralAvatar
                     }
                 }
             } else {
-                Image("SavvyLogo")
-                    .resizable()
-                    .scaledToFill()
+                neutralAvatar
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.6))
+    }
+
+    private var neutralAvatar: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .background(SaveAtlasPalette.kraft, in: Circle())
     }
 
     private var remoteURL: URL? {
