@@ -81,6 +81,40 @@ final class SaveDoodleSession: ObservableObject {
     /// stays unfiltered (#290). Not a mini-map handoff.
     @Published var mapFollowsHomeFilter = false
 
+    /// A fresh command entering Map owns its camera even if Home filters changed.
+    var pendingExplicitMapEntry = false
+    /// An empty loading fallback is not a completed collection fit. Keep this
+    /// across tab mounts, without publishing camera-ownership bookkeeping.
+    var mapHasEstablishedViewport = false
+    private var lastMapFilters: (lens: SaveDoodleLens, city: SaveDoodleCitySelection)?
+
+    enum MapEntry: Equatable {
+        case explicitCommand
+        case changedFilters
+        case restoreViewport
+    }
+
+    func recordMapFilters() {
+        lastMapFilters = (lens, city)
+    }
+
+    func shouldFitMapCollection(hasVisibleRegion: Bool) -> Bool {
+        !mapHasEstablishedViewport || !hasVisibleRegion
+    }
+
+    func consumeMapEntry() -> MapEntry {
+        defer {
+            pendingExplicitMapEntry = false
+            recordMapFilters()
+        }
+        if pendingExplicitMapEntry { return .explicitCommand }
+        if let lastMapFilters,
+           lastMapFilters.lens != lens || lastMapFilters.city != city {
+            return .changedFilters
+        }
+        return .restoreViewport
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {

@@ -3,17 +3,28 @@ import MapKit
 import SwiftUI
 import UIKit
 
-/// HoP 298-2: coral numbered Savvy pins on saved places only.
-/// Light `#F26B4A` / dark `#D97861`, white number, `stampRed` once visited.
-/// Flip `current` to `.appleDefault` for unstyled Apple pins without
-/// rewriting the Map surface, header, or place sheet.
+/// Native saved markers use coral (light `#F26B4A` / dark `#D97861`),
+/// with `stampRed` once visited. Photo pins are deferred.
 enum SaveDoodleMapPinStyle {
     enum Kind: String {
         case coralNumbered
         case appleDefault
     }
 
-    static var current: Kind = .coralNumbered
+    static var current: Kind = .appleDefault
+}
+
+/// Native markers and Apple POIs share selection without custom hit-test overlays.
+enum SaveDoodleNativeMapSelection: MapSelectable {
+    case saved(UUID)
+    case candidate(String)
+    case nativeFeature(MapFeature?)
+
+    init(_ feature: MapFeature?) { self = .nativeFeature(feature) }
+    var feature: MapFeature? {
+        if case .nativeFeature(let feature) = self { return feature }
+        return nil
+    }
 }
 
 /// Peek-card / saved-pin open during Review exact-search.
@@ -63,7 +74,7 @@ enum SaveDoodleMapPeekOpen {
 enum SaveDoodleMapUnsavedMarker {
     @MainActor
     static func select(_ candidate: SaveMapCandidate, on mapViewModel: MapViewModel) {
-        mapViewModel.selectMapCandidate(candidate)
+        mapViewModel.selectMapCandidate(candidate, focusingCamera: false)
     }
 }
 
@@ -83,9 +94,14 @@ struct SaveDoodleMapView: View {
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
     @StateObject private var checkIns = SaveDoodleCheckInStore()
+    // Camera gestures stay local: publishing every camera write invalidates the
+    // root, drawer and all derived collection presentations while MapKit renders.
+    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var lastGestureCamera: MapCameraPosition?
+    @State private var nativeMapSelection: SaveDoodleNativeMapSelection?
     @State private var showsCityPicker = false
-    @State private var stampPulse = false
     @State private var visitError: String?
+    private static let collapsedChromeClearance: CGFloat = 160
 
     var body: some View {
         let followsHomeFilter = session.mapFollowsHomeFilter
@@ -102,6 +118,11 @@ struct SaveDoodleMapView: View {
             ZStack(alignment: .top) {
                 mapCanvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay {
+                        SaveMapMarkerAccessibilityBridge(entries: markerAccessibilityEntries)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
 
                 if !providerBackedPlaces.isEmpty {
                     providerBackedPlacesControl
@@ -111,7 +132,7 @@ struct SaveDoodleMapView: View {
                     SaveLocationDeniedNotice(
                         onOpenSettings: openSystemSettings,
                         onDismiss: {
-                            withAnimation(SaveTheme.Motion.standardSpring) {
+                            withAnimation(reduceMotion ? nil : SaveTheme.Motion.standardSpring) {
                                 mapViewModel.showsLocationDeniedNotice = false
                             }
                         }
@@ -140,33 +161,64 @@ struct SaveDoodleMapView: View {
                 ZStack(alignment: .bottom) {
                     if let place = mapViewModel.selectedPlace {
                         placeSheet(place)
-                            .transition(peekTransition)
                     }
                 }
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .allowsHitTesting(mapViewModel.selectedPlace != nil)
                 .accessibilityHidden(mapViewModel.selectedPlace == nil)
-                .animation(
-                    reduceMotion ? .easeOut(duration: 0.15)
-                        : .spring(response: 0.38, dampingFraction: 0.78),
-                    value: mapViewModel.selectedPlace != nil
-                )
             }
             .padding(.bottom, bottomChromeClearance)
+            .transaction { transaction in
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
         .onAppear {
             _ = onPlanAroundPlace
             mapViewModel.seedUITestUnsavedCandidateIfNeeded()
             selectParityPlaceIfNeeded()
-            fitVisiblePlaces()
+            cameraPosition = mapViewModel.cameraPosition
+            switch session.consumeMapEntry() {
+            case .explicitCommand:
+                session.mapHasEstablishedViewport = true
+            case .changedFilters:
+                onClearSelection()
+                fitVisiblePlaces()
+            case .restoreViewport:
+                if session.shouldFitMapCollection(hasVisibleRegion: mapViewModel.visibleMapRegion != nil) {
+                    fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)
+                }
+            }
+            synchronizeNativeSavedSelection()
+        }
+        .onDisappear { session.recordMapFilters() }
+        .onChange(of: mapViewModel.cameraPosition) { _, position in
+            // A gesture publishes one snapshot on end. Do not feed that snapshot
+            // back into MapKit; explicit commands still move the local camera.
+            if position != lastGestureCamera {
+                session.mapHasEstablishedViewport = true
+                cameraPosition = position
+            }
+            lastGestureCamera = nil
         }
         .onChange(of: mapViewModel.places.map(\.id)) { _, _ in
             selectParityPlaceIfNeeded()
-            fitVisiblePlaces()
+            synchronizeNativeSavedSelection()
+            guard !session.mapHasEstablishedViewport, !cameraPosition.positionedByUser else { return }
+            fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)
         }
         .onChange(of: mapViewModel.selectedPlace?.id) { _, _ in
-            fitVisiblePlaces()
+            synchronizeNativeSavedSelection()
+        }
+        .onChange(of: mapViewModel.selectedMapCandidate?.id) { _, id in
+            if id == nil, case .candidate? = nativeMapSelection { nativeMapSelection = nil }
         }
         .onChange(of: session.lens) { _, _ in
             if followsHomeFilter {
@@ -183,26 +235,29 @@ struct SaveDoodleMapView: View {
         .onChange(of: session.mapFollowsHomeFilter) { _, follows in
             if follows {
                 onClearSelection()
+                fitVisiblePlaces()
             }
-            fitVisiblePlaces()
         }
         .onChange(of: mapViewModel.selectedMapFeature) { _, feature in
+            if feature == nil, case .nativeFeature? = nativeMapSelection { nativeMapSelection = nil }
             mapViewModel.selectMapFeature(feature)
         }
-        .onChange(of: locationService.currentLocation?.coordinate.latitude) { _, _ in
-            guard mapViewModel.selectedPlace == nil else { return }
-            guard cityOpeningPins().isEmpty else { return }
-            fitVisiblePlaces()
+        .onChange(of: nativeMapSelection) { _, selection in
+            switch selection {
+            case .saved(let id):
+                guard mapViewModel.selectedPlace?.id != id else { return }
+                guard let place = mapViewModel.places.first(where: { $0.id == id }) else { return }
+                mapViewModel.selectPlace(place)
+            case .candidate(let id):
+                guard let candidate = nativeUnsavedCandidates.first(where: { $0.id == id }) else { return }
+                SaveDoodleMapUnsavedMarker.select(candidate, on: mapViewModel)
+            case .nativeFeature(let feature):
+                mapViewModel.selectedMapFeature = feature
+            case nil: break
+            }
         }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
-        }
-        .task(id: shouldFocusOnUserLocation) {
-            guard shouldFocusOnUserLocation else { return }
-            await mapViewModel.focusOnUserLocationOnLaunch()
-            // Location request must not hide city stamps behind a tight
-            // user-span. Refit so every saved pin in the city stays visible.
-            fitVisiblePlaces()
         }
     }
 
@@ -211,14 +266,31 @@ struct SaveDoodleMapView: View {
         UIApplication.shared.open(url)
     }
 
+    private func synchronizeNativeSavedSelection() {
+        // A Home handoff can select a stamp before Map exists. Tell MapKit
+        // which native marker owns the card, including collocated places.
+        if let selected = mapViewModel.selectedPlace,
+           selected.isMapKitMappable,
+           displayedListedPlaces.contains(where: { $0.place.id == selected.id }) {
+            let selection = SaveDoodleNativeMapSelection.saved(selected.id)
+            if nativeMapSelection != selection { nativeMapSelection = selection }
+        } else if case .saved? = nativeMapSelection {
+            nativeMapSelection = nil
+        }
+    }
+
     private var mapCanvas: some View {
-        Map(position: $mapViewModel.cameraPosition, selection: $mapViewModel.selectedMapFeature) {
+        Map(position: $cameraPosition, selection: $nativeMapSelection) {
             UserAnnotation()
 
             if SaveDoodleMapPinStyle.current == .appleDefault {
-                ForEach(displayedListedPlaces) { item in
+                ForEach(Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)) { item in
                     if item.place.isMapKitMappable {
+                        // The Marker string is the drawn title. MapKit does not
+                        // copy SwiftUI accessibility modifiers onto that balloon.
                         Marker(item.place.name, coordinate: item.place.coordinate)
+                            .tint(item.place.status == .visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
+                            .tag(SaveDoodleNativeMapSelection.saved(item.place.id))
                     }
                 }
             } else {
@@ -250,19 +322,7 @@ struct SaveDoodleMapView: View {
 
             ForEach(nativeUnsavedCandidates) { candidate in
                 Marker(candidate.title, coordinate: candidate.coordinate)
-                Annotation("", coordinate: candidate.coordinate, anchor: .bottom) {
-                    Button {
-                        SaveDoodleMapUnsavedMarker.select(candidate, on: mapViewModel)
-                    } label: {
-                        Color.clear
-                            .frame(width: 44, height: 56)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("map.unsaved.\(candidate.id)")
-                    .accessibilityLabel(candidate.title)
-                    .accessibilityAddTraits(.isButton)
-                }
+                    .tag(SaveDoodleNativeMapSelection.candidate(candidate.id))
             }
 
             if let polyline = mapViewModel.routePolyline {
@@ -285,8 +345,18 @@ struct SaveDoodleMapView: View {
         .mapControls {
             MapCompass()
         }
+        // The root overlays its tab bar and collapsed search shelf. Give
+        // MapKit their safe area so collection fitting keeps pins tappable.
+        // Keep this constant when a place card replaces the shelf: changing
+        // map insets on selection/dismissal would move the camera again.
+        .safeAreaPadding(.bottom, Self.collapsedChromeClearance)
         .onMapCameraChange(frequency: .onEnd) { context in
+            guard MapSearchGeography.isTrustworthyRegion(context.region) else { return }
+            if cameraPosition.positionedByUser { session.mapHasEstablishedViewport = true }
             mapViewModel.updateVisibleMapRegion(context.region)
+            let snapshot = MapCameraPosition.region(context.region)
+            lastGestureCamera = snapshot
+            mapViewModel.cameraPosition = snapshot
         }
         .accessibilityIdentifier("map.liveSurface")
     }
@@ -378,15 +448,6 @@ struct SaveDoodleMapView: View {
         .accessibilityIdentifier("map.eatGo")
     }
 
-    private var peekTransition: AnyTransition {
-        reduceMotion ? .opacity : .asymmetric(
-            insertion: .scale(scale: 0.92, anchor: .top)
-                .combined(with: .offset(y: SaveSpace.sm))
-                .combined(with: .opacity),
-            removal: .opacity
-        )
-    }
-
     private func placeSheet(_ place: Place) -> some View {
         let listed = displayedListedPlaces.first(where: { $0.place.id == place.id })
         let visited = place.status == .visited || checkIns.visitCount(for: place.id) > 0
@@ -440,7 +501,6 @@ struct SaveDoodleMapView: View {
                                         height: SaveLayout.passportSlot
                                     )
                                     .rotationEffect(.degrees(stampAngle(for: place.id)))
-                                    .scaleEffect(stampPulse ? 1 : 0.82)
                             }
                         }
                         .accessibilityHidden(true)
@@ -647,7 +707,12 @@ struct SaveDoodleMapView: View {
     }
 
     private var displayedListedPlaces: [SaveDoodleListedPlace] {
-        SaveDoodleHomeCatalog.listedPlaces(
+        if !session.mapFollowsHomeFilter {
+            return mapViewModel.places.enumerated().map { index, place in
+                SaveDoodleListedPlace(place: place, index: index + 1, distance: nil)
+            }
+        }
+        return SaveDoodleHomeCatalog.listedPlaces(
             from: mapViewModel.places,
             lens: session.lens,
             selection: session.city,
@@ -655,6 +720,30 @@ struct SaveDoodleMapView: View {
             locationDenied: locationService.isAuthorizationDenied,
             including: mapViewModel.selectedPlace
         )
+    }
+
+    private var markerAccessibilityEntries: [SaveMapMarkerAccessibilityEntry] {
+        var entries: [SaveMapMarkerAccessibilityEntry] = []
+        if SaveDoodleMapPinStyle.current == .appleDefault {
+            for item in Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)
+            where item.place.isMapKitMappable {
+                let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
+                entries.append(SaveMapMarkerAccessibilityEntry(
+                    placeName: item.place.name,
+                    stateName: state.displayName(language: languageSettings.language),
+                    coordinate: item.place.coordinate
+                ))
+            }
+        }
+        let unsaved = SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)
+        for candidate in nativeUnsavedCandidates {
+            entries.append(SaveMapMarkerAccessibilityEntry(
+                placeName: candidate.title,
+                stateName: unsaved,
+                coordinate: candidate.coordinate
+            ))
+        }
+        return entries
     }
 
     /// HoP 298-10: unsaved search/POI results stay native Markers.
@@ -708,7 +797,7 @@ struct SaveDoodleMapView: View {
         }
         // Locate must stay above the collapsed 64pt search shelf (test: maxY
         // <= shelf.minY - 4). Original clearance 160 clears that band.
-        return 160
+        return Self.collapsedChromeClearance
     }
 
     private func selectParityPlaceIfNeeded() {
@@ -764,10 +853,6 @@ struct SaveDoodleMapView: View {
             }
             visitError = nil
             SaveHaptics.stamp()
-            stampPulse = false
-            withAnimation(SaveTheme.Motion.stampSpring) {
-                stampPulse = true
-            }
         }
     }
 
@@ -787,7 +872,6 @@ struct SaveDoodleMapView: View {
                 return
             }
             visitError = nil
-            stampPulse = false
         }
     }
 
@@ -797,7 +881,8 @@ struct SaveDoodleMapView: View {
         return Double(abs(hasher.finalize()) % 13) - 6
     }
 
-    private func fitVisiblePlaces() {
+    private func fitVisiblePlaces(initialOpening: Bool = false) {
+        session.mapFollowsHomeFilter = !initialOpening
         // Show-on-Map for a collaborative list already aimed the camera.
         // A single mappable stop sets one routeCoordinate and no polyline.
         // Do not snap back to personal city stamps.
@@ -805,33 +890,64 @@ struct SaveDoodleMapView: View {
             return
         }
         if let selected = mapViewModel.selectedPlace, selected.isMapKitMappable {
-            mapViewModel.cameraPosition = .region(
+            cameraPosition = .region(
                 MKCoordinateRegion(
                     center: selected.coordinate,
                     span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
                 )
             )
+            session.mapHasEstablishedViewport = true
             return
         }
+        if initialOpening {
+            // First entry frames the entire saved collection. Late location
+            // updates must not replace this viewport; locate is an explicit action.
+            let pins = mapViewModel.places.filter(\.isMapKitMappable).map(\.coordinate)
+            let fallback = locationService.isAuthorizationDenied ? nil : locationService.currentLocation?.coordinate
+            cameraPosition = .region(Self.region(fitting: pins, fallback: fallback))
+            session.mapHasEstablishedViewport = !pins.isEmpty
+            return
+        }
+        let filtered = filteredOpeningPins()
+        if Self.filterFitEstablishesViewport(matchingPinCount: filtered.count) {
+            cameraPosition = .region(Self.region(fitting: filtered))
+            session.mapHasEstablishedViewport = true
+            return
+        }
+        // No matching stamps yet. Fallback framing is not the filtered fit;
+        // leave it pending so a later load can bring those markers on screen.
+        session.mapHasEstablishedViewport = false
         let pins = cityOpeningPins()
         if !pins.isEmpty {
-            mapViewModel.cameraPosition = .region(Self.region(fitting: pins))
+            cameraPosition = .region(Self.region(fitting: pins))
             return
         }
         if let fallback = cityOpeningFallback() {
-            mapViewModel.cameraPosition = .region(
+            cameraPosition = .region(
                 MKCoordinateRegion(
                     center: fallback,
                     span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
                 )
             )
+            return
         }
+        // Drop a user-owned camera so the pending fit is not blocked
+        // when the matching stamps arrive.
+        if cameraPosition.positionedByUser, let region = cameraPosition.region {
+            cameraPosition = .region(region)
+        }
+    }
+
+    /// A changed filter establishes the viewport only after at least one
+    /// matching stamp is framed. An empty result stays pending.
+    static func filterFitEstablishesViewport(matchingPinCount: Int) -> Bool {
+        matchingPinCount > 0
     }
 
     /// HoP 298-3 / 298-7: fit the same saved Eat/Go + city set Home lists.
     /// Unsaved candidates stay native Markers and are not in this fit.
     /// Never fit the worldwide set — that opens over Europe/Africa.
-    private func cityOpeningPins() -> [CLLocationCoordinate2D] {
+    private func filteredOpeningPins() -> [CLLocationCoordinate2D] {
         let denied = locationService.isAuthorizationDenied
         let location = denied ? nil : locationService.currentLocation
         var selection = SaveDoodleHomeCatalog.resolvedSelection(
@@ -845,19 +961,22 @@ struct SaveDoodleMapView: View {
                 selection = .city(id)
             }
         }
-        var coords: [CLLocationCoordinate2D] = []
-        for place in SaveDoodleHomeCatalog.visiblePlaces(
+        return SaveDoodleHomeCatalog.visiblePlaces(
             from: mapViewModel.places,
             lens: session.lens,
             selection: selection,
             location: location,
             locationDenied: denied
-        ) where place.isMapKitMappable {
-            coords.append(place.coordinate)
+        ).filter(\.isMapKitMappable).map(\.coordinate)
+    }
+
+    private func cityOpeningPins() -> [CLLocationCoordinate2D] {
+        let filtered = filteredOpeningPins()
+        if !filtered.isEmpty {
+            return filtered
         }
-        if !coords.isEmpty {
-            return coords
-        }
+        let denied = locationService.isAuthorizationDenied
+        let location = denied ? nil : locationService.currentLocation
         guard let cityID = openingCityID(denied: denied, location: location) else {
             return addresslessOpeningPins(location: location)
         }
@@ -999,26 +1118,210 @@ struct SaveDoodleMapView: View {
         return locationService.currentLocation?.coordinate
     }
 
-    private static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
-        var minLat = coordinates[0].latitude
-        var maxLat = coordinates[0].latitude
-        var minLon = coordinates[0].longitude
-        var maxLon = coordinates[0].longitude
+    static func nativeSavedMarkers(
+        _ places: [SaveDoodleListedPlace],
+        selected: Place?
+    ) -> [SaveDoodleListedPlace] {
+        guard let selected, selected.isMapKitMappable,
+              places.contains(where: { $0.id == selected.id }) else { return places }
+        // MapKit enlarges the selected native marker. A second saved marker at
+        // that exact coordinate must not peek out underneath it. Keep the saved
+        // collection intact and restore those markers when the card closes.
+        return places.filter { item in
+            item.id == selected.id
+                || item.place.latitude != selected.latitude
+                || item.place.longitude != selected.longitude
+        }
+    }
+
+    static func region(
+        fitting coordinates: [CLLocationCoordinate2D],
+        fallback: CLLocationCoordinate2D? = nil
+    ) -> MKCoordinateRegion {
+        guard let first = coordinates.first else {
+            return MKCoordinateRegion(
+                center: fallback ?? CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            )
+        }
+        var minLat = first.latitude
+        var maxLat = first.latitude
         for coordinate in coordinates.dropFirst() {
             minLat = min(minLat, coordinate.latitude)
             maxLat = max(maxLat, coordinate.latitude)
-            minLon = min(minLon, coordinate.longitude)
-            maxLon = max(maxLon, coordinate.longitude)
         }
+        let longitudes = longitudeFit(coordinates.map(\.longitude))
         let center = CLLocationCoordinate2D(
             latitude: (minLat + maxLat) / 2,
-            longitude: (minLon + maxLon) / 2
+            longitude: longitudes.center
         )
         let span = MKCoordinateSpan(
-            latitudeDelta: min(max((maxLat - minLat) * 1.6, 0.012), 0.45),
-            longitudeDelta: min(max((maxLon - minLon) * 1.6, 0.012), 0.45)
+            latitudeDelta: min(max((maxLat - minLat) * 1.6, 0.012), 180),
+            longitudeDelta: min(max(longitudes.span * 1.6, 0.012), 360)
         )
         return MKCoordinateRegion(center: center, span: span)
+    }
+
+    /// Smallest arc that contains every longitude, including a date-line crossing.
+    static func longitudeFit(_ longitudes: [CLLocationDegrees]) -> (center: CLLocationDegrees, span: CLLocationDegrees) {
+        let sorted = longitudes.map(normalizeLongitude).sorted()
+        guard let first = sorted.first else { return (0, 0) }
+        if sorted.count == 1 { return (first, 0) }
+        var maxGap = (sorted[0] + 360) - sorted[sorted.count - 1]
+        var eastOfGap = sorted[0]
+        for index in 0..<(sorted.count - 1) {
+            let gap = sorted[index + 1] - sorted[index]
+            if gap > maxGap {
+                maxGap = gap
+                eastOfGap = sorted[index + 1]
+            }
+        }
+        let span = 360 - maxGap
+        var center = eastOfGap + span / 2
+        if center > 180 { center -= 360 }
+        if center < -180 { center += 360 }
+        return (center, span)
+    }
+
+    static func normalizeLongitude(_ longitude: CLLocationDegrees) -> CLLocationDegrees {
+        var value = longitude.truncatingRemainder(dividingBy: 360)
+        if value > 180 { value -= 360 }
+        if value <= -180 { value += 360 }
+        return value
+    }
+
+    /// VoiceOver name for a native marker. The drawn title stays the place name.
+    static func nativeMarkerAccessibilityLabel(placeName: String, stateName: String) -> String {
+        "\(placeName), \(stateName)"
+    }
+
+    static func nativeMarkerAccessibilityValue(stateName: String) -> String {
+        stateName
+    }
+}
+
+struct SaveMapMarkerAccessibilityEntry: Equatable {
+    var placeName: String
+    var stateName: String
+    var coordinate: CLLocationCoordinate2D
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.placeName == rhs.placeName
+            && lhs.stateName == rhs.stateName
+            && lhs.coordinate.latitude == rhs.coordinate.latitude
+            && lhs.coordinate.longitude == rhs.coordinate.longitude
+    }
+}
+
+/// Writes place state onto MapKit's marker views. SwiftUI `Marker` draws
+/// `annotation.title` and ignores accessibility modifiers on its label.
+private struct SaveMapMarkerAccessibilityBridge: UIViewRepresentable {
+    var entries: [SaveMapMarkerAccessibilityEntry]
+
+    func makeUIView(context: Context) -> SaveMapMarkerAccessibilityAnchor {
+        let view = SaveMapMarkerAccessibilityAnchor()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        view.entries = entries
+        return view
+    }
+
+    func updateUIView(_ uiView: SaveMapMarkerAccessibilityAnchor, context: Context) {
+        uiView.entries = entries
+        uiView.apply()
+    }
+}
+
+private final class SaveMapMarkerAccessibilityAnchor: UIView {
+    var entries: [SaveMapMarkerAccessibilityEntry] = []
+    private weak var cachedMapView: MKMapView?
+    private var displayLink: CADisplayLink?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = false
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        isAccessibilityElement = false
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            displayLink?.invalidate()
+            displayLink = nil
+        } else if displayLink == nil {
+            let link = CADisplayLink(target: self, selector: #selector(tick))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+        apply()
+    }
+
+    @objc private func tick() {
+        apply()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        apply()
+    }
+
+    func apply() {
+        guard let mapView = enclosingMapView() else { return }
+        for annotation in mapView.annotations {
+            guard let marker = mapView.view(for: annotation),
+                  let title = annotation.title ?? nil,
+                  !title.isEmpty,
+                  let entry = entry(matching: title, coordinate: annotation.coordinate) else { continue }
+            let label = SaveDoodleMapView.nativeMarkerAccessibilityLabel(
+                placeName: entry.placeName,
+                stateName: entry.stateName
+            )
+            let value = SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: entry.stateName)
+            if marker.accessibilityLabel != label { marker.accessibilityLabel = label }
+            if (marker.accessibilityValue as? String) != value { marker.accessibilityValue = value }
+        }
+    }
+
+    private func entry(matching title: String, coordinate: CLLocationCoordinate2D) -> SaveMapMarkerAccessibilityEntry? {
+        let named = entries.filter { $0.placeName == title }
+        guard let first = named.first else { return nil }
+        if named.count == 1 { return first }
+        return named.min { lhs, rhs in
+            Self.distance(lhs.coordinate, coordinate) < Self.distance(rhs.coordinate, coordinate)
+        }
+    }
+
+    private func enclosingMapView() -> MKMapView? {
+        if let cachedMapView, cachedMapView.window != nil { return cachedMapView }
+        var ancestor = superview
+        var depth = 0
+        while let current = ancestor, depth < 12 {
+            if let mapView = Self.findMapView(in: current) {
+                cachedMapView = mapView
+                return mapView
+            }
+            ancestor = current.superview
+            depth += 1
+        }
+        return nil
+    }
+
+    private static func findMapView(in view: UIView) -> MKMapView? {
+        if let mapView = view as? MKMapView { return mapView }
+        for subview in view.subviews {
+            if let mapView = findMapView(in: subview) { return mapView }
+        }
+        return nil
+    }
+
+    private static func distance(_ lhs: CLLocationCoordinate2D, _ rhs: CLLocationCoordinate2D) -> CLLocationDistance {
+        let left = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+        let right = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
+        return left.distance(from: right)
     }
 }
 

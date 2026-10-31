@@ -121,6 +121,17 @@ struct ProfileView: View {
 
     private var passportContent: some View {
             SaveDoodlePassportPage(
+                identity: VStack(alignment: .leading, spacing: SaveSpace.sm) {
+                    passportIdentity
+                    Button { showSettings = true } label: {
+                        Label(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"), systemImage: "gearshape")
+                            .font(SaveAtlasType.strong(15))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(minHeight: SaveLayout.minTap)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("profile.settings")
+                },
                 places: passportPlaces,
                 collectionMode: collectionMode,
                 onOpenPlace: onOpenPlace,
@@ -2333,20 +2344,24 @@ private struct ProfileAvatarView: View {
                             .resizable()
                             .scaledToFill()
                     default:
-                        Image("SavvyLogo")
-                            .resizable()
-                            .scaledToFill()
+                        neutralAvatar
                     }
                 }
             } else {
-                Image("SavvyLogo")
-                    .resizable()
-                    .scaledToFill()
+                neutralAvatar
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.6))
+    }
+
+    private var neutralAvatar: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .background(SaveAtlasPalette.kraft, in: Circle())
     }
 
     private var remoteURL: URL? {

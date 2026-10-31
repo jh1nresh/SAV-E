@@ -69,8 +69,15 @@ does not enter parity. `VisualParity.swift` still accepts only a
 1× 402 × 874 target. Unmasked Home uses the legacy composite; the
 optional `--mask` path reports position, size, color, and fontStyle
 sub-scores but is not applied to Home. The Map production target is the
-live Taipei Apple Maps CI capture (iPhone 16 Pro, 402pt, 3× 1206×2622)
-from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
+native Taipei CI raster personally approved on 2026-10-31 after the old/new
+comparison: PR #330, run `41150737985`, head
+`5dcf3a00a0298d201424a2a0ca4525ff52abdd1a`, artifact `13027256967`.
+`map.png` retains the exact 3× 1206×2622 CI pixels (402pt viewport), SHA-256
+`110d330a6aad69a7597f8396d1e66d5f34c342cf37cbe7dc4b114d477241bdf8`;
+it is not cropped or resampled. The selected native Cafe marker matches its
+card, with a stable bottom safe area for the overlaid search shelf. This
+supersedes the #298 light Map target. Dark Map and all other reference
+images remain unchanged; `map-mask.png` is not applied to the 0.90 score. Saves and
 Plan stay on their current locks until those Doodle PRs. The `0.90`
 threshold remains the CI gate for Home, Map, Saves, and Plan.
 
@@ -81,13 +88,15 @@ These five targets come from CI run `40654854143`, head
 state; approving its raster does not change prices, products or purchasing.
 No threshold, ignore region, mask or other reference image changed.
 
-The Passport light production target is the approved native 402×874 raster.
+The Passport light production target is the native raster personally approved
+on 2026-10-30 from PR #330 full CI run `40991924628`, head
+`9e13338daafe4f52ae9cd83d5e3c9c483627ce7e`, normalized from 1206×2622 to
+402×874 RGB with Lanczos resampling. Only `passport.png` was updated.
 Historical `passport-light.png` from `design/doodle-targets-2026-10-20` at
 `eade369` is archive only; `passport-dark.png` remains a DESIGN comparison.
-These rasters use 1× 402×874, not a crop. The locked
-face is stickers and cities: Passport + Beijing · 4 of 12, the kraft
-sticker grid, the city list, and the five-tab rail with Passport
-selected. `VisualParity.swift` still accepts only a 1× 402 × 874
+These rasters use 1× 402×874, not a crop. The light face shows identity,
+edit/settings actions above stickers and cities, with Passport selected
+in the five-tab rail. The former sticker-only layout is superseded. `VisualParity.swift` still accepts only a 1× 402 × 874
 target. The `0.90` threshold is a hard CI gate for Passport; there is
 no passport ignore mask.
 

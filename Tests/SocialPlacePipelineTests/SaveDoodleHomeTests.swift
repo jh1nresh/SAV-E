@@ -1966,7 +1966,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
         XCTAssertTrue(content.contains("SaveDoodleTabIcon("))
         XCTAssertFalse(content.contains("SavePixelChromeIcon("))
-        XCTAssertTrue(content.contains("private func showMapTab()"))
+        XCTAssertTrue(content.contains("private func showMapTab(preservingCamera: Bool = false)"))
         XCTAssertFalse(content.contains("abandonMiniMapHandoff()"))
         XCTAssertTrue(content.contains("preservesExactSearchClue: isExactSearchSessionActive"))
         XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
@@ -2028,7 +2028,7 @@ final class SaveDoodleHomeTests: XCTestCase {
             XCTAssertTrue(content.contains(name), name)
         }
         XCTAssertGreaterThanOrEqual(
-            content.components(separatedBy: "showMapTab()").count - 1,
+            content.components(separatedBy: "showMapTab(").count - 1,
             6,
             "Search, show-on-map, and list handoffs still open Map"
         )

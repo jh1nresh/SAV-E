@@ -1,3 +1,5 @@
+import MapKit
+import SwiftUI
 import UIKit
 import XCTest
 @testable import SAVE
@@ -21,7 +23,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("SaveDoodleMapPinStyle"))
         XCTAssertTrue(map.contains("case coralNumbered"))
         XCTAssertTrue(map.contains("case appleDefault"))
-        XCTAssertTrue(map.contains("static var current: Kind = .coralNumbered"))
+        XCTAssertTrue(map.contains("static var current: Kind = .appleDefault"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(map.contains("map.headerBand"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.paper"))
@@ -55,7 +57,8 @@ final class SaveDoodleMapTests: XCTestCase {
             "Numbered pins keep their coral fill; the separate place card may use paper."
         )
         XCTAssertTrue(map.contains("nativeUnsavedCandidates"))
-        XCTAssertTrue(map.contains("Marker(candidate.title, coordinate: candidate.coordinate)"))
+        XCTAssertTrue(map.contains("SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)"))
+        XCTAssertTrue(map.contains("item.place.status == .visited ? .triedMemory : .savedPlace"))
         XCTAssertFalse(map.contains("AsyncImage"))
         XCTAssertFalse(map.contains("photoURL"))
         XCTAssertFalse(map.contains("businessPhotoURLs"))
@@ -79,7 +82,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("map.peek.card"))
         XCTAssertTrue(map.contains("locksPointSize: true"))
         XCTAssertTrue(map.contains("shouldFocusOnUserLocation"))
-        XCTAssertTrue(map.contains("focusOnUserLocationOnLaunch()"))
+        XCTAssertFalse(map.contains("focusOnUserLocationOnLaunch()"))
         XCTAssertTrue(map.contains("map.providerBackedPlaces"))
         XCTAssertTrue(map.contains("ForEach(providerBackedPlaces)"))
         XCTAssertTrue(map.contains("map.providerBackedPlaces.\\(place.id.uuidString)"))
@@ -91,6 +94,130 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("map.tilePin."))
         XCTAssertTrue(root.contains(".accessibilityIdentifier(\"map.root\")"))
         XCTAssertTrue(root.contains("accessibilityElement(children: .contain)"))
+    }
+
+    func testNativeMarkerTitlesExposePlaceStateToMapKit() throws {
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let start = try XCTUnwrap(map.range(of: "private var mapCanvas"))
+        let end = try XCTUnwrap(map.range(of: "if let polyline", range: start.upperBound..<map.endIndex))
+        let markers = map[start.lowerBound..<end.lowerBound]
+        XCTAssertTrue(markers.contains("Marker(item.place.name, coordinate: item.place.coordinate)"))
+        XCTAssertTrue(markers.contains("coordinate: item.place.coordinate"))
+        XCTAssertFalse(
+            markers.contains(#"Marker("\(item.place.name), \(state.displayName(language: languageSettings.language))""#),
+            "The visible marker title is the place name; status is not drawn on the pin"
+        )
+        XCTAssertTrue(markers.contains("Marker(candidate.title, coordinate: candidate.coordinate)"))
+        XCTAssertTrue(markers.contains("coordinate: candidate.coordinate"))
+        XCTAssertFalse(
+            markers.contains(#"Marker("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))""#),
+            "Unsaved marker titles stay the place name"
+        )
+        XCTAssertTrue(map.contains("marker.accessibilityLabel = label"))
+        XCTAssertTrue(map.contains("marker.accessibilityValue = value"))
+        XCTAssertEqual(
+            SaveDoodleMapView.nativeMarkerAccessibilityLabel(placeName: "Cafe", stateName: "Visited Map Stamp"),
+            "Cafe, Visited Map Stamp"
+        )
+        XCTAssertEqual(
+            SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: "去過的地圖章"),
+            "去過的地圖章"
+        )
+        let candidateStart = try XCTUnwrap(markers.range(of: "ForEach(nativeUnsavedCandidates)"))
+        let candidates = markers[candidateStart.lowerBound...]
+        XCTAssertFalse(candidates.contains(".tint("), "Unsaved markers keep Apple's native color")
+    }
+
+    func testSelectedNativeMarkerDoesNotStackAnotherStampAtItsCoordinate() {
+        func stamp(_ name: String, latitude: Double = 25.04) -> Place {
+            Place(id: UUID(), name: name, address: "Taipei",
+                  latitude: latitude, longitude: 121.54, category: .cafe,
+                  status: .visited, sourcePlatform: .other, createdAt: Date())
+        }
+        let selected = stamp("Selected Cafe")
+        let collocated = stamp("Same-building Cafe")
+        let nearby = stamp("Nearby Cafe", latitude: 25.041)
+        let places = [collocated, selected, nearby].enumerated().map { index, place in
+            SaveDoodleListedPlace(place: place, index: index + 1, distance: nil)
+        }
+        XCTAssertEqual(SaveDoodleMapView.nativeSavedMarkers(places, selected: selected).map(\.id),
+                       [selected.id, nearby.id])
+        XCTAssertEqual(SaveDoodleMapView.nativeSavedMarkers(places, selected: nil), places,
+                       "Closing the card restores the complete collection")
+        XCTAssertEqual(SaveDoodleMapView.nativeSavedMarkers([places[0], places[2]], selected: selected),
+                       [places[0], places[2]], "An off-filter selection must not hide displayed stamps")
+        XCTAssertEqual(places.count, 3, "Rendering never removes saved places")
+    }
+
+    func testInitialFitIncludesDistantSavedPlacesWithPadding() {
+        let coordinates = [
+            CLLocationCoordinate2D(latitude: 25.03, longitude: 121.56),
+            CLLocationCoordinate2D(latitude: 35.68, longitude: 139.69),
+            CLLocationCoordinate2D(latitude: 48.86, longitude: 2.35)
+        ]
+        let region = SaveDoodleMapView.region(fitting: coordinates)
+        for coordinate in coordinates {
+            XCTAssertLessThan(abs(coordinate.latitude - region.center.latitude), region.span.latitudeDelta / 2)
+            XCTAssertLessThan(abs(coordinate.longitude - region.center.longitude), region.span.longitudeDelta / 2)
+        }
+    }
+
+    func testInitialFitHandlesOneOrNoSavedPlaces() {
+        let coordinate = CLLocationCoordinate2D(latitude: 25.03, longitude: 121.56)
+        let single = SaveDoodleMapView.region(fitting: [coordinate])
+        XCTAssertEqual(single.center.latitude, coordinate.latitude)
+        XCTAssertEqual(single.center.longitude, coordinate.longitude)
+        XCTAssertEqual(single.span.latitudeDelta, 0.012)
+        XCTAssertEqual(single.span.longitudeDelta, 0.012)
+        let located = SaveDoodleMapView.region(fitting: [], fallback: coordinate)
+        XCTAssertEqual(located.center.latitude, coordinate.latitude)
+        XCTAssertEqual(located.center.longitude, coordinate.longitude)
+        let empty = SaveDoodleMapView.region(fitting: [])
+        XCTAssertEqual(empty.center.latitude, 37.7749)
+        XCTAssertEqual(empty.center.longitude, -122.4194)
+        XCTAssertEqual(empty.span.latitudeDelta, 0.05)
+    }
+
+    func testDateLineFitUsesTheShortLongitudeArc() {
+        let coordinates = [
+            CLLocationCoordinate2D(latitude: 21.3, longitude: 179),
+            CLLocationCoordinate2D(latitude: 21.4, longitude: -179)
+        ]
+        let region = SaveDoodleMapView.region(fitting: coordinates)
+        XCTAssertLessThan(region.span.longitudeDelta, 30, "Date-line neighbors must not open at a global zoom")
+        let distanceToDateLine = min(abs(region.center.longitude - 180), abs(region.center.longitude + 180))
+        XCTAssertLessThan(distanceToDateLine, 2, "The fit centers on the date line, not Greenwich")
+        for coordinate in coordinates {
+            var delta = abs(coordinate.longitude - region.center.longitude).truncatingRemainder(dividingBy: 360)
+            delta = min(delta, 360 - delta)
+            XCTAssertLessThan(delta, region.span.longitudeDelta / 2)
+            XCTAssertLessThan(abs(coordinate.latitude - region.center.latitude), region.span.latitudeDelta / 2)
+        }
+        let ordinary = SaveDoodleMapView.longitudeFit([121.56, 139.69, 2.35])
+        XCTAssertEqual(ordinary.center, (2.35 + 139.69) / 2, accuracy: 0.001)
+        XCTAssertEqual(ordinary.span, 139.69 - 2.35, accuracy: 0.001)
+    }
+
+    func testInitialFitPreservesExplicitCommandsAndHasNoLateLocationOverride() throws {
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)"))
+        XCTAssertTrue(map.contains("session.mapFollowsHomeFilter = !initialOpening"))
+        let listStart = try XCTUnwrap(map.range(of: "private var displayedListedPlaces"))
+        let listEnd = try XCTUnwrap(map.range(of: "private var nativeUnsavedCandidates"))
+        let listed = map[listStart.lowerBound..<listEnd.lowerBound]
+        XCTAssertTrue(listed.contains("if !session.mapFollowsHomeFilter"))
+        XCTAssertTrue(listed.contains("return mapViewModel.places.enumerated().map"))
+        XCTAssertTrue(listed.contains("return SaveDoodleHomeCatalog.listedPlaces("))
+        XCTAssertTrue(map.contains(#"let pins = mapViewModel.places.filter(\.isMapKitMappable).map(\.coordinate)"#))
+        XCTAssertFalse(map.contains(".onChange(of: locationService.currentLocation"))
+        XCTAssertFalse(map.contains(".task(id: shouldFocusOnUserLocation)"))
+        XCTAssertTrue(map.contains("case .explicitCommand:"))
+        XCTAssertTrue(map.contains("case .changedFilters:\n                onClearSelection()\n                fitVisiblePlaces()"))
+        XCTAssertTrue(map.contains("Task { await mapViewModel.focusOnUserLocation() }"))
+        XCTAssertFalse(map.contains("peekTransition"))
+        XCTAssertFalse(map.contains(".transition("))
+        XCTAssertFalse(map.contains("stampPulse"))
+        XCTAssertTrue(map.contains("transaction.disablesAnimations = true"))
     }
 
     func testProductMapKeepsNativeAppleColors() throws {
@@ -341,7 +468,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("openingCityID("))
         XCTAssertTrue(map.contains("addresslessOpeningPins("))
         XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.nearbyRadius"))
-        XCTAssertTrue(map.contains("min(max((maxLat - minLat) * 1.6, 0.012), 0.45)"))
+        XCTAssertTrue(map.contains("min(max((maxLat - minLat) * 1.6, 0.012), 180)"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"298-3-home\")"))
         XCTAssertTrue(rail.contains("attach(app, name: \"298-3-map\")"))
@@ -408,7 +535,12 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(design.contains("0.90 visual-parity score is not evidence"))
         XCTAssertTrue(design.contains("Do not apply `map-mask.png` to the 0.90 score"))
         XCTAssertTrue(design.contains("Home and Map share one Eat/Go + city state"))
-        XCTAssertTrue(design.contains("pin count equals Home list rows"))
+        // Approved a5d62df8 contract: the first frame shows the whole collection.
+        // Pin-count equality with Home applies only after shared filtering.
+        XCTAssertTrue(design.contains("Map initially frames the whole saved collection"))
+        XCTAssertTrue(design.contains("HoP 298-3 applies in filtered mode: ordinary collection pin counts match"))
+        XCTAssertTrue(design.contains("their count matches Home under the same filters"))
+        XCTAssertFalse(design.contains("pin count equals Home list rows"))
         XCTAssertFalse(design.contains("Map always uses its own state"))
         XCTAssertTrue(design.contains("coral outline lollipops"))
         XCTAssertFalse(design.contains("SaveTileTownRootMap"))
@@ -547,6 +679,11 @@ final class SaveDoodleMapTests: XCTestCase {
         map.selectPlace(saved)
         XCTAssertEqual(map.selectedPlace?.id, saved.id)
         XCTAssertNil(map.selectedMapCandidate)
+        let viewport = MapCameraPosition.region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 25.04, longitude: 121.56),
+            span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
+        ))
+        map.cameraPosition = viewport
 
         SaveDoodleMapUnsavedMarker.select(candidate, on: map)
 
@@ -554,6 +691,74 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(map.selectedMapCandidate?.title, "Unsaved Night Market")
         XCTAssertNil(map.selectedPlace)
         XCTAssertTrue(map.visibleMapCandidates.contains { $0.id == candidate.id })
+        XCTAssertEqual(map.cameraPosition, viewport, "Marker taps must preserve the viewport")
+
+        map.selectMapCandidate(candidate)
+        XCTAssertEqual(map.cameraPosition.region?.center.latitude, candidate.latitude)
+        XCTAssertEqual(map.cameraPosition.region?.center.longitude, candidate.longitude)
+        XCTAssertEqual(map.cameraPosition.region?.span.latitudeDelta, 0.01,
+                       "Explicit candidate selection must still focus the camera")
+    }
+
+    func testPendingCollectionFitSurvivesMapReentryUntilViewportIsEstablished() throws {
+        let suite = "SaveDoodleMapLoading-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let session = SaveDoodleSession(defaults: defaults)
+
+        XCTAssertTrue(session.shouldFitMapCollection(hasVisibleRegion: false))
+        // MapKit reports the empty loading fallback, then Map unmounts. Places
+        // may load before reentry (no ID-change event) or after it: both still fit.
+        for _ in 0..<2 {
+            session.recordMapFilters()
+            XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+            XCTAssertTrue(session.shouldFitMapCollection(hasVisibleRegion: true))
+        }
+        session.mapHasEstablishedViewport = true // A nonempty fit, pan or explicit focus.
+        session.recordMapFilters()
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        XCTAssertFalse(session.shouldFitMapCollection(hasVisibleRegion: true))
+        XCTAssertTrue(session.shouldFitMapCollection(hasVisibleRegion: false))
+
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertFalse(map.contains("@State private var hasFittedCollection"))
+        XCTAssertTrue(map.contains("session.shouldFitMapCollection(hasVisibleRegion: mapViewModel.visibleMapRegion != nil)"))
+        XCTAssertTrue(map.contains("guard !session.mapHasEstablishedViewport, !cameraPosition.positionedByUser"))
+        XCTAssertTrue(map.contains("if cameraPosition.positionedByUser { session.mapHasEstablishedViewport = true }"))
+        XCTAssertTrue(map.contains("session.mapHasEstablishedViewport = !pins.isEmpty"))
+        XCTAssertTrue(map.contains("session.mapHasEstablishedViewport = false"))
+        XCTAssertFalse(SaveDoodleMapView.filterFitEstablishesViewport(matchingPinCount: 0),
+                       "An empty filter must leave the fit pending so a later load can refit")
+        XCTAssertTrue(SaveDoodleMapView.filterFitEstablishesViewport(matchingPinCount: 1))
+    }
+
+    func testMapEntryReconcilesFiltersAndConsumesExplicitCommand() throws {
+        let suite = "SaveDoodleMapEntry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let session = SaveDoodleSession(defaults: defaults)
+        XCTAssertFalse(session.mapFollowsHomeFilter, "First Map opening shows the whole saved collection")
+        session.city = .city("tokyo")
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        session.recordMapFilters() // Map -> Home; presentation mode is held by the session.
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        XCTAssertFalse(session.mapFollowsHomeFilter)
+
+        session.city = .city("taipei")
+        XCTAssertEqual(session.consumeMapEntry(), .changedFilters)
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        session.lens = .go
+        XCTAssertEqual(session.consumeMapEntry(), .changedFilters)
+
+        session.city = .city("tokyo")
+        session.pendingExplicitMapEntry = true
+        XCTAssertEqual(session.consumeMapEntry(), .explicitCommand)
+        XCTAssertFalse(session.pendingExplicitMapEntry)
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+
+        session.lens = .eat
+        session.recordMapFilters() // Filters changed while Map was mounted.
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
     }
 
     private func source(at relativePath: String) throws -> String {

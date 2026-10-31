@@ -206,8 +206,9 @@ Rules:
   and stamp labels clear the tab bar on landing. Tapping a stamp opens that
   place. Friend author rows open that friend's Passport, including review-demo.
 - Passport identity uses the chosen photo saved for the current account on this
-  device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
-  avatar representation and does not sync between devices.
+  device when available; missing, loading or failed photos use the neutral
+  `person.crop.circle.fill` symbol with muted/kraft theme tokens. This photo
+  has no cloud avatar representation and does not sync between devices.
 
 ### Evidence Receipt
 
@@ -542,7 +543,10 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-Source: product Map uses coral numbered pins via `SaveDoodleMapPinStyle`
+2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. Photo pins come in a follow-up PR, and the coral pin and pop animation rules below are deferred to that follow-up. Product Map keeps the native Marker and the stationary preview card.
+2026-11-01 clarification: selection uses Apple's own enlarged native marker. At the selected stamp's exact coordinate, other saved markers are temporarily hidden so a second pin cannot show underneath it; nearby markers remain native and saved records are unchanged.
+
+Source: product Map previously used coral numbered pins via `SaveDoodleMapPinStyle`
 on `SaveDoodleMapView`. Trip / Navigate MapKit still uses
 `SAV-E/Views/Map/MapView.swift`.
 
@@ -770,11 +774,29 @@ prices, or purchase availability. All 0.90 thresholds, masks, interaction
 tests, and the other reference images remain unchanged. Future target
 changes still require the founder's personal raster approval.
 
+2026-11-01 Passport reference approval: founder ledger L368 records that the founder inspected the actual
+`five-tab-passport` raster and explicitly approved it as the
+new Passport target. `ProductionTargets/passport.png` is that 1206×2622 raster
+normalized to 402×874 RGB with Lanczos resampling. It shows account identity,
+edit/settings actions, then the sticker collection. Only the Passport light
+reference changes; all other targets, masks, interactions and the 0.90 threshold
+stay unchanged. The older sticker-only target is superseded for this surface.
+
+2026-10-31 Map reference approval: the founder inspected the old reference and
+actual native Map raster from PR #330 full CI run `41150737985`, head
+`5dcf3a00a0298d201424a2a0ca4525ff52abdd1a`, and explicitly approved the new Map
+target. `ProductionTargets/map.png` is the exact 1206×2622 CI raster, SHA-256
+`110d330a6aad69a7597f8396d1e66d5f34c342cf37cbe7dc4b114d477241bdf8`.
+The selected native Cafe marker matches its card; the stable bottom safe area
+keeps collection fitting clear of the search shelf. This supersedes the #298
+light Map target. Only the light Map reference changes; Passport, dark Map,
+all other targets, masks, interactions and the 0.90 threshold stay unchanged.
+
 ### Passport (Doodle v1)
 
-Root Passport shows stickers and cities. Collected is the posts
+Root Passport shows account identity, edit and settings actions above stickers and cities. Collected is the posts
 sub-page. Missions, streak, and the stamp ledger stay flagged off.
-Settings live on Collected. Wordmark is Caveat SemiBold 34 locked;
+Settings are directly reachable from the root and Collected. Wordmark is Caveat SemiBold 34 locked;
 the city line is Caveat 20 with a 2pt coral underline under the city
 word only. Body copy stays `SaveAtlasType`.
 
@@ -785,8 +807,7 @@ archive only; `passport-dark.png` remains a manual dark-mode reference. Grade
 position, size, color and font style by side-by-side comparison; a
 0.90 gate score is not Passport sign-off. v1 is retired. The face is
 Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the
-five-tab rail with Passport selected. It is not the profile header,
-quests, or shared-post grid.
+five-tab rail with Passport selected. The 2026-10-30 usability correction restores identity above the sticker grid; the historical sticker-only reference no longer owns that root layout.
 
 The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
 to three columns on 375/390pt phones after the 24pt screen and panel
@@ -866,11 +887,16 @@ Rules:
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium. Home's shared Eat/Go +
   city (`SaveDoodleSession`) are one source of truth, synced both ways.
-  Map draws only saved places that match the current Eat/Go + city.
-  Unsaved places keep native Apple Markers. Pin count equals Home list
-  rows under the same filters; pin numbers do not have to match the Home
-  list. Map Eat/Go (`map.eat` / `map.go`) and city (`map.city`) write the
-  same session Home reads.
+  Map initially displays the entire saved collection. Choosing Map city or
+  Eat/Go, or returning after a Home filter change, activates shared filtering.
+  In filtered mode, ordinary collection pins match the current Eat/Go + city
+  and their count matches Home under the same filters. Unsaved places keep
+  native Apple Markers. Map Eat/Go (`map.eat` / `map.go`) and city (`map.city`)
+  write the same session Home reads. Explicit filtered intent survives late
+  collection loading and remounts; unchanged filters preserve the viewport.
+  An empty loading fallback does not complete the initial collection fit;
+  that pending fit survives tab changes until stamps arrive, unless a user
+  gesture or explicit camera command has established the viewport.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
@@ -1204,18 +1230,19 @@ stickers drawn in SwiftUI.
 ### Doodle Map verification boundary
 
 HoP 298-7 / B-4: Home and Map share one Eat/Go + city state, synced both
-ways. HoP 298-3: Map draws only saved places matching those filters;
-pin count equals Home list rows; pin numbers need not match the Home
-list. Unsaved places keep native Apple Markers.
-HoP P-4 (founder 2026-10-24): `map.png` / `map-dark.png` are live
-Taipei Apple Maps screenshots from #298 CI iPhone 16 Pro (402pt / 3×
-1206×2622) head `ae37a7d1` (Taipei fixture `298-10` / `M1`, English
-`dark-map`). Do not apply `map-mask.png` to the 0.90 score. Head
-`8ea05f5e` ios `40048795885` scored map `0.999988` against that
-Taipei golden with no mask (298-10, iPhone 16 Pro 402pt). Home and
+ways. Map initially frames the whole saved collection; Map city/Eat-Go
+choices or returning after changed Home filters activate shared filtering.
+HoP 298-3 applies in filtered mode: ordinary collection pin counts match
+Home under the same filters. Unsaved places keep native Apple Markers.
+HoP P-4 originally approved the live Taipei Apple Maps #298 captures on
+2026-10-24 (iPhone 16 Pro, 402pt / 3× 1206×2622). The light `map.png` target
+is superseded by the personally approved 2026-10-31 native recovery capture
+recorded above; `map-dark.png` remains the historical DESIGN comparison.
+Do not apply `map-mask.png` to the 0.90 score. Home and
 Map still fail CI below 0.90. DESIGN still signs off on city / Eat-Go /
 sheet / tab chrome. City and Eat/Go sit on a cream `paper` header band,
-not on the live map. Pins are coral outline lollipops. The place sheet
+not on the live map. Pins use native Apple markers with state-bearing
+accessibility labels. The place sheet
 uses a 64pt official DESIGN sticker (color die-cut when visited, pencil
 outline when not) and a 12pt text gap. Do not replace default Apple
 MapKit `.standard` with a paper or hand-drawn basemap. City strip, place

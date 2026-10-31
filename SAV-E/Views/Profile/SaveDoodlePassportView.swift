@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Doodle v1 Passport: sticker grid, city list, and Collected (spec §7.4).
-struct SaveDoodlePassportPage: View {
+struct SaveDoodlePassportPage<Identity: View>: View {
+    let identity: Identity
     @Environment(\.appLanguageSettings) private var languageSettings
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
@@ -27,6 +28,11 @@ struct SaveDoodlePassportPage: View {
                 header
                     .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.lg)
                     .padding(.bottom, SaveSpace.sm)
+
+                identity
+                    .padding(.bottom, SaveLayout.sectionGap)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("profile.cover")
 
                 subtitle
                     .padding(.bottom, SaveSpace.xl)
@@ -542,6 +548,7 @@ struct SaveDoodleSolidCaret: View {
 private struct SaveDoodlePassportPreview: View {
     var body: some View {
         SaveDoodlePassportPage(
+            identity: EmptyView(),
             places: ReviewDemoSeed.places()
         )
         .environmentObject(SaveDoodleSession(defaults: UserDefaults(suiteName: "save.doodle.passport.preview") ?? .standard))
