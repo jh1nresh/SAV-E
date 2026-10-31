@@ -123,6 +123,9 @@ final class SaveDoodleMapTests: XCTestCase {
             SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: "去過的地圖章"),
             "去過的地圖章"
         )
+        XCTAssertFalse(map.contains("CADisplayLink"), "Marker state is applied from map events, not every frame")
+        XCTAssertTrue(map.contains("func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView])"))
+        XCTAssertTrue(map.contains("func mapViewDidChangeVisibleRegion(_ mapView: MKMapView)"))
         let candidateStart = try XCTUnwrap(markers.range(of: "ForEach(nativeUnsavedCandidates)"))
         let candidates = markers[candidateStart.lowerBound...]
         XCTAssertFalse(candidates.contains(".tint("), "Unsaved markers keep Apple's native color")
@@ -176,6 +179,38 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(empty.center.latitude, 37.7749)
         XCTAssertEqual(empty.center.longitude, -122.4194)
         XCTAssertEqual(empty.span.latitudeDelta, 0.05)
+    }
+
+    func testSameNameMarkersMatchAccessibilityStateByCoordinate() {
+        let east = SaveMapMarkerAccessibilityEntry(
+            placeName: "Cafe",
+            stateName: "Map Stamp",
+            coordinate: CLLocationCoordinate2D(latitude: 25.04, longitude: 121.50)
+        )
+        let west = SaveMapMarkerAccessibilityEntry(
+            placeName: "Cafe",
+            stateName: "Visited Map Stamp",
+            coordinate: CLLocationCoordinate2D(latitude: 25.04, longitude: 121.55)
+        )
+        let entries = [east, west]
+        XCTAssertEqual(
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: east.coordinate, in: entries)?.stateName,
+            "Map Stamp"
+        )
+        XCTAssertEqual(
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: west.coordinate, in: entries)?.stateName,
+            "Visited Map Stamp"
+        )
+        let nearby = CLLocationCoordinate2D(latitude: 25.04005, longitude: 121.50)
+        XCTAssertEqual(
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: nearby, in: [east])?.stateName,
+            "Map Stamp"
+        )
+        let otherPlace = CLLocationCoordinate2D(latitude: 25.05, longitude: 121.50)
+        XCTAssertNil(
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: otherPlace, in: [east]),
+            "A same-name Apple POI at another coordinate must not inherit this stamp's state"
+        )
     }
 
     func testDateLineFitUsesTheShortLongitudeArc() {

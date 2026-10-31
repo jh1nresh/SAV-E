@@ -1198,6 +1198,33 @@ struct SaveDoodleMapView: View {
     static func nativeMarkerAccessibilityValue(stateName: String) -> String {
         stateName
     }
+
+    /// Same title is not enough: Apple POIs reuse place names. The annotation
+    /// must sit on that saved coordinate.
+    static let nativeMarkerStateMatchTolerance: CLLocationDistance = 30
+
+    static func accessibilityEntry(
+        matchingName name: String,
+        coordinate: CLLocationCoordinate2D,
+        in entries: [SaveMapMarkerAccessibilityEntry]
+    ) -> SaveMapMarkerAccessibilityEntry? {
+        entries
+            .filter { entry in
+                entry.placeName == name
+                    && coordinateDistance(entry.coordinate, coordinate) <= nativeMarkerStateMatchTolerance
+            }
+            .min { lhs, rhs in
+                coordinateDistance(lhs.coordinate, coordinate) < coordinateDistance(rhs.coordinate, coordinate)
+            }
+    }
+
+    static func coordinateDistance(
+        _ lhs: CLLocationCoordinate2D,
+        _ rhs: CLLocationCoordinate2D
+    ) -> CLLocationDistance {
+        CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+            .distance(from: CLLocation(latitude: rhs.latitude, longitude: rhs.longitude))
+    }
 }
 
 struct SaveMapMarkerAccessibilityEntry: Equatable {
@@ -1235,32 +1262,23 @@ private struct SaveMapMarkerAccessibilityBridge: UIViewRepresentable {
 private final class SaveMapMarkerAccessibilityAnchor: UIView {
     var entries: [SaveMapMarkerAccessibilityEntry] = []
     private weak var cachedMapView: MKMapView?
-    private var displayLink: CADisplayLink?
+    private let mapEvents = SaveMapMarkerAccessibilityDelegate()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         isAccessibilityElement = false
+        mapEvents.owner = self
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         isAccessibilityElement = false
+        mapEvents.owner = self
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window == nil {
-            displayLink?.invalidate()
-            displayLink = nil
-        } else if displayLink == nil {
-            let link = CADisplayLink(target: self, selector: #selector(tick))
-            link.add(to: .main, forMode: .common)
-            displayLink = link
-        }
-        apply()
-    }
-
-    @objc private func tick() {
+        if window == nil { cachedMapView = nil }
         apply()
     }
 
@@ -1269,13 +1287,23 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         apply()
     }
 
+    private var isApplying = false
+
     func apply() {
+        if isApplying { return }
+        isApplying = true
+        defer { isApplying = false }
         guard let mapView = enclosingMapView() else { return }
+        installMapEvents(on: mapView)
         for annotation in mapView.annotations {
             guard let marker = mapView.view(for: annotation),
                   let title = annotation.title ?? nil,
                   !title.isEmpty,
-                  let entry = entry(matching: title, coordinate: annotation.coordinate) else { continue }
+                  let entry = SaveDoodleMapView.accessibilityEntry(
+                    matchingName: title,
+                    coordinate: annotation.coordinate,
+                    in: entries
+                  ) else { continue }
             let label = SaveDoodleMapView.nativeMarkerAccessibilityLabel(
                 placeName: entry.placeName,
                 stateName: entry.stateName
@@ -1286,13 +1314,10 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         }
     }
 
-    private func entry(matching title: String, coordinate: CLLocationCoordinate2D) -> SaveMapMarkerAccessibilityEntry? {
-        let named = entries.filter { $0.placeName == title }
-        guard let first = named.first else { return nil }
-        if named.count == 1 { return first }
-        return named.min { lhs, rhs in
-            Self.distance(lhs.coordinate, coordinate) < Self.distance(rhs.coordinate, coordinate)
-        }
+    private func installMapEvents(on mapView: MKMapView) {
+        if mapView.delegate === mapEvents { return }
+        mapEvents.forwarded = mapView.delegate
+        mapView.delegate = mapEvents
     }
 
     private func enclosingMapView() -> MKMapView? {
@@ -1318,10 +1343,37 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         return nil
     }
 
-    private static func distance(_ lhs: CLLocationCoordinate2D, _ rhs: CLLocationCoordinate2D) -> CLLocationDistance {
-        let left = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
-        let right = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
-        return left.distance(from: right)
+}
+
+/// Forwards SwiftUI's map delegate and applies marker state when MapKit adds
+/// annotation views or moves the visible region. Idle frames do not scan.
+private final class SaveMapMarkerAccessibilityDelegate: NSObject, MKMapViewDelegate {
+    weak var owner: SaveMapMarkerAccessibilityAnchor?
+    weak var forwarded: (any MKMapViewDelegate)?
+
+    func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
+        owner?.apply()
+        forwarded?.mapView?(mapView, didAdd: views)
+    }
+
+    func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
+        owner?.apply()
+        forwarded?.mapViewDidChangeVisibleRegion?(mapView)
+    }
+
+    func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+        owner?.apply()
+        forwarded?.mapView?(mapView, regionDidChangeAnimated: animated)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if super.responds(to: aSelector) { return true }
+        return forwarded?.responds(to: aSelector) ?? false
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        if super.responds(to: aSelector) { return nil }
+        return forwarded
     }
 }
 
