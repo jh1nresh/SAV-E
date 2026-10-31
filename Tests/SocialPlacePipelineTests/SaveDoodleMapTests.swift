@@ -101,20 +101,27 @@ final class SaveDoodleMapTests: XCTestCase {
         let start = try XCTUnwrap(map.range(of: "private var mapCanvas"))
         let end = try XCTUnwrap(map.range(of: "if let polyline", range: start.upperBound..<map.endIndex))
         let markers = map[start.lowerBound..<end.lowerBound]
-        XCTAssertTrue(markers.contains("Text(item.place.name)"))
-        XCTAssertTrue(markers.contains(#".accessibilityLabel("\(item.place.name), \(stateName)")"#))
-        XCTAssertTrue(markers.contains(".accessibilityValue(stateName)"))
+        XCTAssertTrue(markers.contains("Marker(item.place.name, coordinate: item.place.coordinate)"))
         XCTAssertTrue(markers.contains("coordinate: item.place.coordinate"))
         XCTAssertFalse(
             markers.contains(#"Marker("\(item.place.name), \(state.displayName(language: languageSettings.language))""#),
             "The visible marker title is the place name; status is not drawn on the pin"
         )
-        XCTAssertTrue(markers.contains("Text(candidate.title)"))
-        XCTAssertTrue(markers.contains(#".accessibilityLabel("\(candidate.title), \(stateName)")"#))
+        XCTAssertTrue(markers.contains("Marker(candidate.title, coordinate: candidate.coordinate)"))
         XCTAssertTrue(markers.contains("coordinate: candidate.coordinate"))
         XCTAssertFalse(
             markers.contains(#"Marker("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))""#),
             "Unsaved marker titles stay the place name"
+        )
+        XCTAssertTrue(map.contains("marker.accessibilityLabel = label"))
+        XCTAssertTrue(map.contains("marker.accessibilityValue = value"))
+        XCTAssertEqual(
+            SaveDoodleMapView.nativeMarkerAccessibilityLabel(placeName: "Cafe", stateName: "Visited Map Stamp"),
+            "Cafe, Visited Map Stamp"
+        )
+        XCTAssertEqual(
+            SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: "去過的地圖章"),
+            "去過的地圖章"
         )
         let candidateStart = try XCTUnwrap(markers.range(of: "ForEach(nativeUnsavedCandidates)"))
         let candidates = markers[candidateStart.lowerBound...]
@@ -169,6 +176,26 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(empty.center.latitude, 37.7749)
         XCTAssertEqual(empty.center.longitude, -122.4194)
         XCTAssertEqual(empty.span.latitudeDelta, 0.05)
+    }
+
+    func testDateLineFitUsesTheShortLongitudeArc() {
+        let coordinates = [
+            CLLocationCoordinate2D(latitude: 21.3, longitude: 179),
+            CLLocationCoordinate2D(latitude: 21.4, longitude: -179)
+        ]
+        let region = SaveDoodleMapView.region(fitting: coordinates)
+        XCTAssertLessThan(region.span.longitudeDelta, 30, "Date-line neighbors must not open at a global zoom")
+        let distanceToDateLine = min(abs(region.center.longitude - 180), abs(region.center.longitude + 180))
+        XCTAssertLessThan(distanceToDateLine, 2, "The fit centers on the date line, not Greenwich")
+        for coordinate in coordinates {
+            var delta = abs(coordinate.longitude - region.center.longitude).truncatingRemainder(dividingBy: 360)
+            delta = min(delta, 360 - delta)
+            XCTAssertLessThan(delta, region.span.longitudeDelta / 2)
+            XCTAssertLessThan(abs(coordinate.latitude - region.center.latitude), region.span.latitudeDelta / 2)
+        }
+        let ordinary = SaveDoodleMapView.longitudeFit([121.56, 139.69, 2.35])
+        XCTAssertEqual(ordinary.center, (2.35 + 139.69) / 2, accuracy: 0.001)
+        XCTAssertEqual(ordinary.span, 139.69 - 2.35, accuracy: 0.001)
     }
 
     func testInitialFitPreservesExplicitCommandsAndHasNoLateLocationOverride() throws {

@@ -543,7 +543,7 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. Photo pins come in a follow-up PR. The coral pin and pop animation rules below apply.
+2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. Photo pins come in a follow-up PR, and the coral pin and pop animation rules below are deferred to that follow-up. Product Map keeps the native Marker and the stationary preview card.
 2026-11-01 clarification: selection uses Apple's own enlarged native marker. At the selected stamp's exact coordinate, other saved markers are temporarily hidden so a second pin cannot show underneath it; nearby markers remain native and saved records are unchanged.
 
 Source: product Map previously used coral numbered pins via `SaveDoodleMapPinStyle`

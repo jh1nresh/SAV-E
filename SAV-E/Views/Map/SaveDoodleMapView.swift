@@ -118,6 +118,11 @@ struct SaveDoodleMapView: View {
             ZStack(alignment: .top) {
                 mapCanvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay {
+                        SaveMapMarkerAccessibilityBridge(entries: markerAccessibilityEntries)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
 
                 if !providerBackedPlaces.isEmpty {
                     providerBackedPlacesControl
@@ -281,15 +286,9 @@ struct SaveDoodleMapView: View {
             if SaveDoodleMapPinStyle.current == .appleDefault {
                 ForEach(Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)) { item in
                     if item.place.isMapKitMappable {
-                        let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
-                        let stateName = state.displayName(language: languageSettings.language)
-                        // The marker title is the on-screen name. Status stays
-                        // in accessibility so it is not drawn beside the pin.
-                        Marker(coordinate: item.place.coordinate) {
-                            Text(item.place.name)
-                                .accessibilityLabel("\(item.place.name), \(stateName)")
-                                .accessibilityValue(stateName)
-                        }
+                        // The Marker string is the drawn title. MapKit does not
+                        // copy SwiftUI accessibility modifiers onto that balloon.
+                        Marker(item.place.name, coordinate: item.place.coordinate)
                             .tint(item.place.status == .visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
                             .tag(SaveDoodleNativeMapSelection.saved(item.place.id))
                     }
@@ -322,12 +321,7 @@ struct SaveDoodleMapView: View {
             }
 
             ForEach(nativeUnsavedCandidates) { candidate in
-                let stateName = SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)
-                Marker(coordinate: candidate.coordinate) {
-                    Text(candidate.title)
-                        .accessibilityLabel("\(candidate.title), \(stateName)")
-                        .accessibilityValue(stateName)
-                }
+                Marker(candidate.title, coordinate: candidate.coordinate)
                     .tag(SaveDoodleNativeMapSelection.candidate(candidate.id))
             }
 
@@ -726,6 +720,30 @@ struct SaveDoodleMapView: View {
             locationDenied: locationService.isAuthorizationDenied,
             including: mapViewModel.selectedPlace
         )
+    }
+
+    private var markerAccessibilityEntries: [SaveMapMarkerAccessibilityEntry] {
+        var entries: [SaveMapMarkerAccessibilityEntry] = []
+        if SaveDoodleMapPinStyle.current == .appleDefault {
+            for item in Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)
+            where item.place.isMapKitMappable {
+                let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
+                entries.append(SaveMapMarkerAccessibilityEntry(
+                    placeName: item.place.name,
+                    stateName: state.displayName(language: languageSettings.language),
+                    coordinate: item.place.coordinate
+                ))
+            }
+        }
+        let unsaved = SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)
+        for candidate in nativeUnsavedCandidates {
+            entries.append(SaveMapMarkerAccessibilityEntry(
+                placeName: candidate.title,
+                stateName: unsaved,
+                coordinate: candidate.coordinate
+            ))
+        }
+        return entries
     }
 
     /// HoP 298-10: unsaved search/POI results stay native Markers.
@@ -1128,23 +1146,182 @@ struct SaveDoodleMapView: View {
         }
         var minLat = first.latitude
         var maxLat = first.latitude
-        var minLon = first.longitude
-        var maxLon = first.longitude
         for coordinate in coordinates.dropFirst() {
             minLat = min(minLat, coordinate.latitude)
             maxLat = max(maxLat, coordinate.latitude)
-            minLon = min(minLon, coordinate.longitude)
-            maxLon = max(maxLon, coordinate.longitude)
         }
+        let longitudes = longitudeFit(coordinates.map(\.longitude))
         let center = CLLocationCoordinate2D(
             latitude: (minLat + maxLat) / 2,
-            longitude: (minLon + maxLon) / 2
+            longitude: longitudes.center
         )
         let span = MKCoordinateSpan(
             latitudeDelta: min(max((maxLat - minLat) * 1.6, 0.012), 180),
-            longitudeDelta: min(max((maxLon - minLon) * 1.6, 0.012), 360)
+            longitudeDelta: min(max(longitudes.span * 1.6, 0.012), 360)
         )
         return MKCoordinateRegion(center: center, span: span)
+    }
+
+    /// Smallest arc that contains every longitude, including a date-line crossing.
+    static func longitudeFit(_ longitudes: [CLLocationDegrees]) -> (center: CLLocationDegrees, span: CLLocationDegrees) {
+        let sorted = longitudes.map(normalizeLongitude).sorted()
+        guard let first = sorted.first else { return (0, 0) }
+        if sorted.count == 1 { return (first, 0) }
+        var maxGap = (sorted[0] + 360) - sorted[sorted.count - 1]
+        var eastOfGap = sorted[0]
+        for index in 0..<(sorted.count - 1) {
+            let gap = sorted[index + 1] - sorted[index]
+            if gap > maxGap {
+                maxGap = gap
+                eastOfGap = sorted[index + 1]
+            }
+        }
+        let span = 360 - maxGap
+        var center = eastOfGap + span / 2
+        if center > 180 { center -= 360 }
+        if center < -180 { center += 360 }
+        return (center, span)
+    }
+
+    static func normalizeLongitude(_ longitude: CLLocationDegrees) -> CLLocationDegrees {
+        var value = longitude.truncatingRemainder(dividingBy: 360)
+        if value > 180 { value -= 360 }
+        if value <= -180 { value += 360 }
+        return value
+    }
+
+    /// VoiceOver name for a native marker. The drawn title stays the place name.
+    static func nativeMarkerAccessibilityLabel(placeName: String, stateName: String) -> String {
+        "\(placeName), \(stateName)"
+    }
+
+    static func nativeMarkerAccessibilityValue(stateName: String) -> String {
+        stateName
+    }
+}
+
+struct SaveMapMarkerAccessibilityEntry: Equatable {
+    var placeName: String
+    var stateName: String
+    var coordinate: CLLocationCoordinate2D
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.placeName == rhs.placeName
+            && lhs.stateName == rhs.stateName
+            && lhs.coordinate.latitude == rhs.coordinate.latitude
+            && lhs.coordinate.longitude == rhs.coordinate.longitude
+    }
+}
+
+/// Writes place state onto MapKit's marker views. SwiftUI `Marker` draws
+/// `annotation.title` and ignores accessibility modifiers on its label.
+private struct SaveMapMarkerAccessibilityBridge: UIViewRepresentable {
+    var entries: [SaveMapMarkerAccessibilityEntry]
+
+    func makeUIView(context: Context) -> SaveMapMarkerAccessibilityAnchor {
+        let view = SaveMapMarkerAccessibilityAnchor()
+        view.isUserInteractionEnabled = false
+        view.backgroundColor = .clear
+        view.entries = entries
+        return view
+    }
+
+    func updateUIView(_ uiView: SaveMapMarkerAccessibilityAnchor, context: Context) {
+        uiView.entries = entries
+        uiView.apply()
+    }
+}
+
+private final class SaveMapMarkerAccessibilityAnchor: UIView {
+    var entries: [SaveMapMarkerAccessibilityEntry] = []
+    private weak var cachedMapView: MKMapView?
+    private var displayLink: CADisplayLink?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = false
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        isAccessibilityElement = false
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil {
+            displayLink?.invalidate()
+            displayLink = nil
+        } else if displayLink == nil {
+            let link = CADisplayLink(target: self, selector: #selector(tick))
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+        apply()
+    }
+
+    @objc private func tick() {
+        apply()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        apply()
+    }
+
+    func apply() {
+        guard let mapView = enclosingMapView() else { return }
+        for annotation in mapView.annotations {
+            guard let marker = mapView.view(for: annotation),
+                  let title = annotation.title ?? nil,
+                  !title.isEmpty,
+                  let entry = entry(matching: title, coordinate: annotation.coordinate) else { continue }
+            let label = SaveDoodleMapView.nativeMarkerAccessibilityLabel(
+                placeName: entry.placeName,
+                stateName: entry.stateName
+            )
+            let value = SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: entry.stateName)
+            if marker.accessibilityLabel != label { marker.accessibilityLabel = label }
+            if (marker.accessibilityValue as? String) != value { marker.accessibilityValue = value }
+        }
+    }
+
+    private func entry(matching title: String, coordinate: CLLocationCoordinate2D) -> SaveMapMarkerAccessibilityEntry? {
+        let named = entries.filter { $0.placeName == title }
+        guard let first = named.first else { return nil }
+        if named.count == 1 { return first }
+        return named.min { lhs, rhs in
+            Self.distance(lhs.coordinate, coordinate) < Self.distance(rhs.coordinate, coordinate)
+        }
+    }
+
+    private func enclosingMapView() -> MKMapView? {
+        if let cachedMapView, cachedMapView.window != nil { return cachedMapView }
+        var ancestor = superview
+        var depth = 0
+        while let current = ancestor, depth < 12 {
+            if let mapView = Self.findMapView(in: current) {
+                cachedMapView = mapView
+                return mapView
+            }
+            ancestor = current.superview
+            depth += 1
+        }
+        return nil
+    }
+
+    private static func findMapView(in view: UIView) -> MKMapView? {
+        if let mapView = view as? MKMapView { return mapView }
+        for subview in view.subviews {
+            if let mapView = findMapView(in: subview) { return mapView }
+        }
+        return nil
+    }
+
+    private static func distance(_ lhs: CLLocationCoordinate2D, _ rhs: CLLocationCoordinate2D) -> CLLocationDistance {
+        let left = CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+        let right = CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)
+        return left.distance(from: right)
     }
 }
 
