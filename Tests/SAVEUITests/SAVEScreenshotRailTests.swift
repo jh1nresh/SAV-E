@@ -1373,13 +1373,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        // The parity seed has several named stamps at identical coordinates.
-        // Programmatic preselection must promote the card's own native marker.
-        let selectedCard = app.buttons["map.peek.card"]
-        XCTAssertTrue(selectedCard.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(selectedCard.label, "Taipei Window Cafe")
-        XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: selectedCard.label)),
-                      "The selected card's marker must remain tappable among collocated stamps")
         attach(app, name: "atlas-map")
 
         openRootTab("Friends", app: app)
@@ -5006,6 +4999,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
         XCTAssertTrue(app.buttons["map.eat"].isSelected || app.buttons["map.go"].isSelected,
                       "298-11: Eat/Go must expose isSelected")
+        // This isolated memory fixture puts multiple named stamps at identical
+        // coordinates. Its preselected card must own the visible native marker.
+        let selectedCard = app.buttons["map.peek.card"]
+        XCTAssertTrue(selectedCard.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(selectedCard.label, "Taipei Window Cafe")
+        XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: selectedCard.label)),
+                      "The selected card's marker must remain tappable among collocated stamps")
         if language == "zh-Hant" {
             attach(app, name: "298-12-zh")
         } else {
