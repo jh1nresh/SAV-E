@@ -1349,7 +1349,9 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
 /// annotation views or moves the visible region. Idle frames do not scan.
 private final class SaveMapMarkerAccessibilityDelegate: NSObject, MKMapViewDelegate {
     weak var owner: SaveMapMarkerAccessibilityAnchor?
-    weak var forwarded: (any MKMapViewDelegate)?
+    /// Read from nonisolated `NSObject` overrides. MapKit calls those off the
+    /// main-actor method table; the pointer is only swapped on the main actor.
+    nonisolated(unsafe) weak var forwarded: (any MKMapViewDelegate)?
 
     func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
         owner?.apply()
@@ -1366,12 +1368,12 @@ private final class SaveMapMarkerAccessibilityDelegate: NSObject, MKMapViewDeleg
         forwarded?.mapView?(mapView, regionDidChangeAnimated: animated)
     }
 
-    override func responds(to aSelector: Selector!) -> Bool {
+    nonisolated override func responds(to aSelector: Selector!) -> Bool {
         if super.responds(to: aSelector) { return true }
         return forwarded?.responds(to: aSelector) ?? false
     }
 
-    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
         if super.responds(to: aSelector) { return nil }
         return forwarded
     }
