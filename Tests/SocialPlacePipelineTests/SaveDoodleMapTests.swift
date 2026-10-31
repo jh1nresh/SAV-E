@@ -124,8 +124,9 @@ final class SaveDoodleMapTests: XCTestCase {
             "去過的地圖章"
         )
         XCTAssertFalse(map.contains("CADisplayLink"), "Marker state is applied from map events, not every frame")
-        XCTAssertTrue(map.contains("func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView])"))
-        XCTAssertTrue(map.contains("func mapViewDidChangeVisibleRegion(_ mapView: MKMapView)"))
+        XCTAssertFalse(map.contains("mapView.delegate"), "Do not replace SwiftUI Map's internal delegate")
+        XCTAssertTrue(map.contains("visibleRegion: markerAccessibilityCamera"))
+        XCTAssertTrue(map.contains("markerAccessibilityCamera = context.region"))
         let candidateStart = try XCTUnwrap(markers.range(of: "ForEach(nativeUnsavedCandidates)"))
         let candidates = markers[candidateStart.lowerBound...]
         XCTAssertFalse(candidates.contains(".tint("), "Unsaved markers keep Apple's native color")

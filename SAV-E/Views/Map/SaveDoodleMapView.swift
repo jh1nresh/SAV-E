@@ -100,6 +100,7 @@ struct SaveDoodleMapView: View {
     @State private var lastGestureCamera: MapCameraPosition?
     @State private var nativeMapSelection: SaveDoodleNativeMapSelection?
     @State private var showsCityPicker = false
+    @State private var markerAccessibilityCamera: MKCoordinateRegion?
     @State private var visitError: String?
     private static let collapsedChromeClearance: CGFloat = 160
 
@@ -119,9 +120,12 @@ struct SaveDoodleMapView: View {
                 mapCanvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay {
-                        SaveMapMarkerAccessibilityBridge(entries: markerAccessibilityEntries)
-                            .allowsHitTesting(false)
-                            .accessibilityHidden(true)
+                        SaveMapMarkerAccessibilityBridge(
+                            entries: markerAccessibilityEntries,
+                            visibleRegion: markerAccessibilityCamera
+                        )
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                     }
 
                 if !providerBackedPlaces.isEmpty {
@@ -357,6 +361,7 @@ struct SaveDoodleMapView: View {
             let snapshot = MapCameraPosition.region(context.region)
             lastGestureCamera = snapshot
             mapViewModel.cameraPosition = snapshot
+            markerAccessibilityCamera = context.region
         }
         .accessibilityIdentifier("map.liveSurface")
     }
@@ -1242,38 +1247,42 @@ struct SaveMapMarkerAccessibilityEntry: Equatable {
 
 /// Writes place state onto MapKit's marker views. SwiftUI `Marker` draws
 /// `annotation.title` and ignores accessibility modifiers on its label.
+/// Updates come from place data and the public camera callback, not from
+/// replacing SwiftUI's map delegate.
 private struct SaveMapMarkerAccessibilityBridge: UIViewRepresentable {
     var entries: [SaveMapMarkerAccessibilityEntry]
+    var visibleRegion: MKCoordinateRegion?
 
     func makeUIView(context: Context) -> SaveMapMarkerAccessibilityAnchor {
         let view = SaveMapMarkerAccessibilityAnchor()
         view.isUserInteractionEnabled = false
         view.backgroundColor = .clear
         view.entries = entries
+        view.visibleRegion = visibleRegion
         return view
     }
 
     func updateUIView(_ uiView: SaveMapMarkerAccessibilityAnchor, context: Context) {
         uiView.entries = entries
-        uiView.apply()
+        uiView.visibleRegion = visibleRegion
+        uiView.applyAfterInputChange()
     }
 }
 
 private final class SaveMapMarkerAccessibilityAnchor: UIView {
     var entries: [SaveMapMarkerAccessibilityEntry] = []
+    var visibleRegion: MKCoordinateRegion?
     private weak var cachedMapView: MKMapView?
-    private let mapEvents = SaveMapMarkerAccessibilityDelegate()
+    private var followUpScheduled = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         isAccessibilityElement = false
-        mapEvents.owner = self
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         isAccessibilityElement = false
-        mapEvents.owner = self
     }
 
     override func didMoveToWindow() {
@@ -1287,6 +1296,19 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         apply()
     }
 
+    /// Place data or the public camera region changed. One follow-up covers
+    /// annotation views MapKit creates on the next turn; it does not repeat.
+    func applyAfterInputChange() {
+        if entries.isEmpty, visibleRegion == nil { return }
+        apply()
+        guard !followUpScheduled, unlabeledEntryRemains() else { return }
+        followUpScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.followUpScheduled = false
+            self?.apply()
+        }
+    }
+
     private var isApplying = false
 
     func apply() {
@@ -1294,7 +1316,6 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         isApplying = true
         defer { isApplying = false }
         guard let mapView = enclosingMapView() else { return }
-        installMapEvents(on: mapView)
         for annotation in mapView.annotations {
             guard let marker = mapView.view(for: annotation),
                   let title = annotation.title ?? nil,
@@ -1314,10 +1335,23 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         }
     }
 
-    private func installMapEvents(on mapView: MKMapView) {
-        if mapView.delegate === mapEvents { return }
-        mapEvents.forwarded = mapView.delegate
-        mapView.delegate = mapEvents
+    private func unlabeledEntryRemains() -> Bool {
+        guard let mapView = enclosingMapView() else { return true }
+        for entry in entries {
+            let labeled = mapView.annotations.contains { annotation in
+                guard let title = annotation.title ?? nil, title == entry.placeName,
+                      SaveDoodleMapView.coordinateDistance(annotation.coordinate, entry.coordinate)
+                        <= SaveDoodleMapView.nativeMarkerStateMatchTolerance,
+                      let marker = mapView.view(for: annotation) else { return false }
+                let label = SaveDoodleMapView.nativeMarkerAccessibilityLabel(
+                    placeName: entry.placeName,
+                    stateName: entry.stateName
+                )
+                return marker.accessibilityLabel == label
+            }
+            if !labeled { return true }
+        }
+        return false
     }
 
     private func enclosingMapView() -> MKMapView? {
@@ -1343,40 +1377,6 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
         return nil
     }
 
-}
-
-/// Forwards SwiftUI's map delegate and applies marker state when MapKit adds
-/// annotation views or moves the visible region. Idle frames do not scan.
-private final class SaveMapMarkerAccessibilityDelegate: NSObject, MKMapViewDelegate {
-    weak var owner: SaveMapMarkerAccessibilityAnchor?
-    /// Read from nonisolated `NSObject` overrides. MapKit calls those off the
-    /// main-actor method table; the pointer is only swapped on the main actor.
-    nonisolated(unsafe) weak var forwarded: (any MKMapViewDelegate)?
-
-    func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
-        owner?.apply()
-        forwarded?.mapView?(mapView, didAdd: views)
-    }
-
-    func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
-        owner?.apply()
-        forwarded?.mapViewDidChangeVisibleRegion?(mapView)
-    }
-
-    func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-        owner?.apply()
-        forwarded?.mapView?(mapView, regionDidChangeAnimated: animated)
-    }
-
-    nonisolated override func responds(to aSelector: Selector!) -> Bool {
-        if super.responds(to: aSelector) { return true }
-        return forwarded?.responds(to: aSelector) ?? false
-    }
-
-    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
-        if super.responds(to: aSelector) { return nil }
-        return forwarded
-    }
 }
 
 struct SaveDoodleCoralPin: View {
