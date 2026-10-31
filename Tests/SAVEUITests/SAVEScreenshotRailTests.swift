@@ -5053,13 +5053,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func nativeMapMarker(_ app: XCUIApplication, name: String) -> XCUIElement {
-        // The visible title is the place name. Status is the accessibility
-        // value, and older builds also appended it to the accessibility label.
+        // Apple's own POIs can share the name. Require our localized state in
+        // the accessibility label or value, never a bare place-name match.
         let states = ["Map Stamp", "Visited Map Stamp", "Not saved yet",
                       "地圖章", "去過的地圖章", "尚未保存"]
-        var predicates = [NSPredicate(format: "label == %@ OR label BEGINSWITH %@", name, name + ",")]
-        predicates += states.map { state in
-            NSPredicate(format: "label == %@ AND value CONTAINS %@", name, state)
+        let predicates = states.flatMap { state in
+            let title = "\(name), \(state)"
+            return [
+                NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, title + ","),
+                NSPredicate(format: "(label == %@ OR label BEGINSWITH %@) AND value CONTAINS %@",
+                            name, name + ",", state)
+            ]
         }
         return app.maps.descendants(matching: .any).matching(
             NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
