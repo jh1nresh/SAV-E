@@ -851,8 +851,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func walkHomeEntries(suite: String) throws {
         let app = inkApp(suite: suite)
         try signedInInkHome(app)
-        let save = app.descendants(matching: .any)["ink.save.entry"]
-        XCTAssertTrue(save.waitForExistence(timeout: stepTimeout))
+        let save = requireInk("ink.save.entry", in: app)
         save.tap()
         XCTAssertTrue(app.descendants(matching: .any)["ink.save"].waitForExistence(timeout: stepTimeout))
         app.descendants(matching: .any)["ink.save.close"].tap()
@@ -940,23 +939,35 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             extra: ["--savvy-ink-empty-friends"]
         )
         try signedInInkHome(app)
-        let entry = app.descendants(matching: .any)["ink.friends.entry"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout))
+        let entry = requireInk("ink.friends.entry", in: app)
         assertInkHitTarget(entry, name: "ink.friends.entry")
         entry.tap()
-        let page = app.descendants(matching: .any)["ink.friends"]
-        let empty = app.descendants(matching: .any)["ink.friends.empty"]
-        let back = app.descendants(matching: .any)["ink.friends.back"]
-        XCTAssertTrue(page.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(empty.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
+        requireInk("ink.friends", in: app)
+        let empty = requireInk("ink.friends.empty", in: app)
+        let back = requireInk("ink.friends.back", in: app)
         XCTAssertFalse(app.descendants(matching: .any)["ink.friends.list"].exists)
         XCTAssertTrue(app.staticTexts["朋友還沒有分享造訪"].exists)
         assertInkHitTarget(back, name: "ink.friends.back")
         back.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        requireInk("ink.home", in: app)
         XCTAssertFalse(empty.exists)
         terminate(app)
+    }
+
+    /// Prints the accessibility tree when an ink identifier is missing.
+    @MainActor
+    private func requireInk(
+        _ identifier: String,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> XCUIElement {
+        let element = app.descendants(matching: .any)[identifier]
+        if element.waitForExistence(timeout: stepTimeout) {
+            return element
+        }
+        XCTFail("Missing \(identifier)\n\(app.debugDescription)", file: file, line: line)
+        return element
     }
 
     @MainActor

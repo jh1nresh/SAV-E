@@ -212,6 +212,7 @@ struct SaveInkCircleButton: View {
                     .stroke(SaveInkPalette.ink, lineWidth: 2)
             )
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
         .frame(minWidth: 46, minHeight: 46)
     }
@@ -240,6 +241,7 @@ struct SaveInkOutlineButton: View {
                         .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                 )
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
         .frame(minHeight: 44)
     }
@@ -310,6 +312,7 @@ struct SaveInkArriveButton: View {
                     .fill(SaveInkPalette.accent)
             )
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier("ink.arrived")
         .frame(minHeight: 44)
     }
@@ -330,6 +333,7 @@ struct SaveInkBackButton: View {
                         .stroke(SaveInkPalette.ink, lineWidth: 2)
                 )
         }
+        .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
         .accessibilityLabel("返回")
         .frame(minWidth: 44, minHeight: 44)

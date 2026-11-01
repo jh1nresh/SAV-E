@@ -42,6 +42,7 @@ struct SaveInkHomeScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveInkPalette.paper.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.home")
     }
 
@@ -222,6 +223,7 @@ struct SaveInkSaveSheet: View {
         .padding(.top, 10)
         .padding(.bottom, 28)
         .background(sheetBackground)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.save")
     }
 
@@ -272,6 +274,7 @@ struct SaveInkCheckInSheet: View {
             UnevenRoundedRectangle(topLeadingRadius: 30, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 30)
                 .fill(SaveInkPalette.paper)
         )
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.checkin.\(situation.id)")
     }
 
@@ -521,6 +524,7 @@ struct SaveInkPassportScreen: View {
             .padding(24)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.passport")
     }
 
@@ -602,6 +606,7 @@ struct SaveInkPlaceScreen: View {
             .padding(.bottom, 44)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.place")
     }
 
@@ -691,6 +696,7 @@ struct SaveInkArrivalScreen: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 44)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.arrival")
     }
 }
@@ -732,6 +738,7 @@ struct SaveInkFriendsScreen: View {
             .padding(.horizontal, 24)
             .padding(.top, 18)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.friends")
     }
 
@@ -751,6 +758,7 @@ struct SaveInkFriendsScreen: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.friends.empty")
     }
 
@@ -912,6 +920,7 @@ struct SaveInkReviewScreen: View {
                 .padding(24)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.review")
     }
 
@@ -1010,6 +1019,7 @@ struct SaveInkWelcomeScreen: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 28)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.welcome")
     }
 
