@@ -423,7 +423,7 @@ final class SaveDoodleMapTests: XCTestCase {
         )
         let approvedMap = try Data(contentsOf: targets.appendingPathComponent("map.png"))
         XCTAssertEqual(
-            Insecure.MD5.hash(approvedMap).map { String(format: "%02x", $0) }.joined(),
+            Insecure.MD5.hash(data: approvedMap).map { String(format: "%02x", $0) }.joined(),
             "711c9b3c54367281dab91b5fd094f047",
             "map.png stays the a5d62df8 approved visual reference"
         )

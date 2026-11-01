@@ -381,6 +381,9 @@ struct SaveInkCheckInSheet: View {
     private var buttons: some View {
         switch situation {
         case .verified:
+            SaveInkOutlineButton(title: "看這次的章", identifier: "ink.checkin.stamp", compact: true) {
+                store.beginArrival()
+            }
             SaveInkOutlineButton(title: "留一句評論", identifier: "ink.checkin.commentButton", compact: true) {
                 store.beginReview()
             }

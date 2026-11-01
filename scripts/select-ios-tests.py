@@ -10,7 +10,10 @@ from pathlib import Path
 
 RAIL = "SAVEUITests/SAVEScreenshotRailTests/"
 # Founder 2026-11-01: the five-tab shell is gone. The suite opens the ink notebook.
-INK = [RAIL + "testFreeCapE4Screenshots"]
+INK = [
+    RAIL + "testFreeCapE4Screenshots",
+    RAIL + "testInkNotebookReachesEveryScreenAndReturnsHome",
+]
 ONBOARDING = "SAVEUITests/SAVEOnboardingCarouselTests"
 PHOTO_ATTR = "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
 TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"

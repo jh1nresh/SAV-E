@@ -211,8 +211,8 @@ Rules:
   not count as proof.
 - Keep Passport as the navigation name; its behavior is a personal profile.
 - Passport uses a compact profile header, quests above a shared-post grid, and a separate settings entry.
-- Root Passport keeps a bottom inset (`rootTabScrollClearance`) so the bio
-  and stamp labels clear the tab bar on landing. Tapping a stamp opens that
+- The ink notebook has no tab bar. Passport keeps a bottom inset so the bio
+  and stamp labels stay clear of the screen edge on landing. Tapping a stamp opens that
   place. Friend author rows open that friend's Passport, including review-demo.
 - Passport identity uses the chosen photo saved for the current account on this
   device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
@@ -688,8 +688,8 @@ Savvy pin = Map Stamp, visited treatment = Visited Map Stamp, Apple POI = unsave
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
 - Trips remain a child route. Home no longer shows a More menu.
-- Planning and trip child pages have a back path to their parent. Plan has no
-  root tab bar; the conversation remains owned by the app shell across visits.
+- Planning and trip child pages have a back path to their parent. The ink
+  notebook has no tab bar. A plan conversation remains owned by the app shell across visits.
 
 ### Home (Doodle v1)
 

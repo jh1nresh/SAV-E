@@ -122,6 +122,16 @@ enum SaveInkPlaceBadge: Equatable {
     case saved
 }
 
+struct SaveInkSavedPlaceRecord: Codable, Equatable {
+    var id: String
+    var name: String
+    var stampName: String
+    var street: String
+    var blurb: String
+    var sourceLabel: String
+    var detailNote: String
+}
+
 struct SaveInkPlace: Identifiable, Equatable {
     var id: String
     var name: String
@@ -520,6 +530,7 @@ final class SaveInkNotebookStore: ObservableObject {
     let friendInputs: [SaveInkFriendVisitInput]
     private let defaults: UserDefaults
     private let storageKey = "save.ink.visits.v1"
+    private let placesKey = "save.ink.places.v1"
     private let now: () -> Date
     private let makeLocator: () -> any SaveInkLocating
     private var locator: (any SaveInkLocating)?
@@ -538,7 +549,7 @@ final class SaveInkNotebookStore: ObservableObject {
         self.now = now
         self.makeLocator = makeLocator
         let seededPlaces = SaveInkFixture.places
-        self.places = seededPlaces
+        self.places = seededPlaces + Self.loadSavedPlaces(defaults: defaults, key: placesKey)
         self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
         if let stored = Self.load(defaults: defaults, key: storageKey) {
             self.visits = stored
@@ -740,6 +751,7 @@ final class SaveInkNotebookStore: ObservableObject {
                 places[index].badge = .saved
             }
         }
+        persistPlaces()
         sheet = nil
     }
 
@@ -790,6 +802,48 @@ final class SaveInkNotebookStore: ObservableObject {
 
     private func persist() {
         Self.save(visits, defaults: defaults, key: storageKey)
+    }
+
+    private func persistPlaces() {
+        let records = places.filter { $0.id.hasPrefix("saved-") }.map {
+            SaveInkSavedPlaceRecord(
+                id: $0.id,
+                name: $0.name,
+                stampName: $0.stampName,
+                street: $0.street,
+                blurb: $0.blurb,
+                sourceLabel: $0.sourceLabel,
+                detailNote: $0.detailNote
+            )
+        }
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        defaults.set(data, forKey: placesKey)
+    }
+
+    private static func loadSavedPlaces(defaults: UserDefaults, key: String) -> [SaveInkPlace] {
+        guard let data = defaults.data(forKey: key),
+              let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
+        else { return [] }
+        return records.map {
+            SaveInkPlace(
+                id: $0.id,
+                name: $0.name,
+                stampName: $0.stampName,
+                street: $0.street,
+                distanceMeters: nil,
+                blurb: $0.blurb,
+                sourceLabel: $0.sourceLabel,
+                badge: .saved,
+                detailNote: $0.detailNote,
+                friendUsualCount: 0,
+                walkMinutes: nil,
+                addressLine: nil,
+                videoTitle: nil,
+                videoSource: nil,
+                shopLatitude: nil,
+                shopLongitude: nil
+            )
+        }
     }
 
     private static func load(defaults: UserDefaults, key: String) -> [SaveInkVisitRecord]? {

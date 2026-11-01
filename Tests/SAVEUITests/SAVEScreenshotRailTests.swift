@@ -809,6 +809,127 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         terminate(app)
     }
 
+    /// Walks screens 02–13 from the ink home and returns. Screen 06 is first launch.
+    @MainActor
+    func testInkNotebookReachesEveryScreenAndReturnsHome() throws {
+        let suite = "ink-nav-\(UUID().uuidString)"
+        try walkHomeEntries(suite: suite)
+        try openWelcomeThenHome(suite: suite)
+        try openCheckIn(suite: "\(suite)-verified", fix: "verified", identifier: "ink.checkin.verified")
+        try openStampThenHome()
+        try openReviewThenHome()
+        for (fix, identifier) in [
+            ("failed", "ink.checkin.failed"),
+            ("denied", "ink.checkin.permission"),
+            ("approximate", "ink.checkin.approximate"),
+            ("tooFar", "ink.checkin.far-320"),
+        ] {
+            try openCheckIn(suite: "\(suite)-\(fix)", fix: fix, identifier: identifier)
+        }
+    }
+
+    @MainActor
+    private func inkApp(suite: String, extra: [String] = []) -> XCUIApplication {
+        makeApp(launchArguments: [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--savvy-ink-skip-welcome",
+            "--savvy-ink-suite=\(suite)",
+            "-save.appLanguage", "zh-Hant",
+        ] + extra)
+    }
+
+    @MainActor
+    private func signedInInkHome(_ app: XCUIApplication) throws {
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: launchTimeout))
+    }
+
+    @MainActor
+    private func walkHomeEntries(suite: String) throws {
+        let app = inkApp(suite: suite)
+        try signedInInkHome(app)
+        app.descendants(matching: .any)["ink.save.entry"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.save"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.save.close"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.passport.entry"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.passport"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.back"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.place.dingtai"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.place"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.back"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.friends.entry"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.friends"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.friends.back"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        terminate(app)
+    }
+
+    @MainActor
+    private func openWelcomeThenHome(suite: String) throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--savvy-ink-show-welcome",
+            "--savvy-ink-suite=\(suite)-welcome",
+            "-save.appLanguage", "zh-Hant",
+        ])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["ink.welcome"].waitForExistence(timeout: launchTimeout))
+        app.descendants(matching: .any)["ink.welcome.start"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        terminate(app)
+    }
+
+    @MainActor
+    private func openCheckIn(suite: String, fix: String, identifier: String) throws {
+        let app = inkApp(suite: suite, extra: ["--savvy-ink-fix=\(fix)"])
+        try signedInInkHome(app)
+        app.descendants(matching: .any)["ink.arrived"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout))
+        if app.descendants(matching: .any)["ink.checkin.cancel"].exists {
+            app.descendants(matching: .any)["ink.checkin.cancel"].tap()
+        } else if app.descendants(matching: .any)["ink.checkin.done"].exists {
+            app.descendants(matching: .any)["ink.checkin.done"].tap()
+        }
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        terminate(app)
+    }
+
+    @MainActor
+    private func openStampThenHome() throws {
+        let app = inkApp(suite: "ink-stamp-\(UUID().uuidString)", extra: ["--savvy-ink-fix=verified"])
+        try signedInInkHome(app)
+        app.descendants(matching: .any)["ink.arrived"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.checkin.stamp"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.checkin.stamp"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.arrival"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.arrival.done"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        terminate(app)
+    }
+
+    @MainActor
+    private func openReviewThenHome() throws {
+        let app = inkApp(suite: "ink-review-\(UUID().uuidString)", extra: ["--savvy-ink-fix=verified"])
+        try signedInInkHome(app)
+        app.descendants(matching: .any)["ink.arrived"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.checkin.commentButton"].waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["ink.checkin.commentButton"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.review"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["這則造訪和評論要給誰看？"].exists)
+        app.descendants(matching: .any)["ink.review.done"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        terminate(app)
+    }
+
     /// Width lanes still use the old filenames. The screen is the ink notebook.
     @MainActor
     private func captureInkNotebookWidth(name: String) throws {
@@ -1103,6 +1224,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 // E4 Settings Map Stamp signal: home.place.* needs a resolved city.
                 "--uitest-location-denied",
+                "--savvy-ink-skip-welcome",
             ] + extraArguments + [
                 "-save.appLanguage", "en",
             ]
@@ -4407,7 +4529,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func signInViaReviewDemoRequired(app: XCUIApplication) throws {
         let emailField = app.textFields["signin.emailField"]
         if !emailField.waitForExistence(timeout: timeout(20)) {
-            if app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout) {
+            if app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout)
+                || app.descendants(matching: .any)["ink.welcome"].exists {
                 return
             }
             XCTAssertTrue(

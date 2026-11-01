@@ -7,6 +7,55 @@ enum SaveInkLaunchMode: Equatable {
 }
 
 enum SaveInkLaunch {
+    static var defaults: UserDefaults {
+        guard let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--savvy-ink-suite=") }) else {
+            return .standard
+        }
+        let name = String(raw.dropFirst("--savvy-ink-suite=".count))
+        return UserDefaults(suiteName: name) ?? .standard
+    }
+
+    static func showsWelcome(seen: Bool) -> Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--savvy-ink-skip-welcome") { return false }
+        if arguments.contains("--savvy-ink-show-welcome") { return true }
+        return !seen
+    }
+
+    static func makeLocator() -> any SaveInkLocating {
+        if let fix = scriptedFix {
+            return SaveInkScriptedLocator(fix: fix)
+        }
+        return SaveInkOneShotLocator()
+    }
+
+    /// UI-test locations. `isSimulated` stays false so an in-range fix can verify.
+    static var scriptedFix: SaveInkFix? {
+        guard let raw = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--savvy-ink-fix=") }) else {
+            return nil
+        }
+        switch String(raw.dropFirst("--savvy-ink-fix=".count)) {
+        case "verified":
+            return .inRange(meters: 18)
+        case "tooFar":
+            return .inRange(meters: 320)
+        case "denied":
+            var fix = SaveInkFix.inRange()
+            fix.authorization = .denied
+            return fix
+        case "approximate":
+            var fix = SaveInkFix.inRange()
+            fix.precise = false
+            return fix
+        case "failed":
+            var fix = SaveInkFix.inRange()
+            fix.timedOut = true
+            return fix
+        default:
+            return nil
+        }
+    }
+
     /// Screenshot stills. The notebook is the main screen without a feature flag.
     static var previewScreen: SaveInkPreviewScreen? {
         let arguments = ProcessInfo.processInfo.arguments
@@ -32,10 +81,21 @@ struct SaveInkNotebookRoot: View {
 }
 
 private struct SaveInkOwnedNotebook: View {
-    @StateObject private var store = SaveInkNotebookStore()
+    @AppStorage("save.ink.welcome.seen.v1") private var welcomeSeen = false
+    @StateObject private var store = SaveInkNotebookStore(
+        defaults: SaveInkLaunch.defaults,
+        makeLocator: { SaveInkLaunch.makeLocator() }
+    )
 
     var body: some View {
-        SaveInkNavigator(store: store)
+        if SaveInkLaunch.showsWelcome(seen: welcomeSeen) {
+            SaveInkWelcomeScreen(
+                onStart: { welcomeSeen = true },
+                onSignIn: { welcomeSeen = true }
+            )
+        } else {
+            SaveInkNavigator(store: store)
+        }
     }
 }
 

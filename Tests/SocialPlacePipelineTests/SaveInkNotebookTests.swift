@@ -143,6 +143,118 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(text.contains("25.0327"))
     }
 
+    func testF5SoftCheckInUsesAScriptedFix() async {
+        let verified = await checkInStore(fix: .inRange(meters: 18))
+        XCTAssertEqual(verified.sheet, .checkIn(.verified, placeID: SaveInkFixture.dingtai))
+        let far = await checkInStore(fix: .inRange(meters: 320))
+        XCTAssertEqual(far.sheet, .checkIn(.tooFar(meters: 320), placeID: SaveInkFixture.dingtai))
+        var denied = SaveInkFix.inRange()
+        denied.authorization = .denied
+        let blocked = await checkInStore(fix: denied)
+        XCTAssertEqual(blocked.sheet, .checkIn(.permissionDenied, placeID: SaveInkFixture.dingtai))
+        var approximate = SaveInkFix.inRange()
+        approximate.precise = false
+        let coarse = await checkInStore(fix: approximate)
+        XCTAssertEqual(coarse.sheet, .checkIn(.approximateOnly, placeID: SaveInkFixture.dingtai))
+    }
+
+    func testF6VisibilityIsSharedByTheVisitAndItsComment() async {
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.f6.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) }
+        )
+        await store.checkIn(placeID: SaveInkFixture.dingtai)
+        let created = store.latestVisit(for: SaveInkFixture.dingtai)
+        XCTAssertEqual(created?.visibility, .public)
+        XCTAssertEqual(created?.comment, "")
+        store.draftComment = "只有我"
+        store.draftVisibility = .private
+        store.commitDraft()
+        let saved = store.latestVisit(for: SaveInkFixture.dingtai)
+        XCTAssertEqual(saved?.visibility, .private)
+        XCTAssertEqual(saved?.comment, "只有我")
+        let cards = SaveInkFriends.cards(from: [
+            SaveInkFriendVisitInput(
+                authorID: "a",
+                authorName: "我",
+                placeID: SaveInkFixture.dingtai,
+                placeName: "店",
+                street: "街",
+                comment: saved?.comment ?? "",
+                visitedAt: saved?.visitedAt ?? SaveInkClock.previewNow,
+                verification: .verified,
+                visibility: saved?.visibility ?? .public
+            ),
+        ])
+        XCTAssertTrue(cards.isEmpty)
+        XCTAssertEqual(SaveInkProvisional.defaultVisibility, .public)
+    }
+
+    func testF7FriendsSortVerifiedCountThenRecencyAndDoNotUseDistance() {
+        let now = SaveInkClock.previewNow
+        let cards = SaveInkFriends.cards(from: [
+            friend("near", "近但少", count: 1, daysAgo: 1, verification: .verified, now: now),
+            friend("far", "遠但多", count: 4, daysAgo: 9, verification: .verified, now: now),
+            friend("new", "未驗證新", count: 1, daysAgo: 0, verification: .unverified, now: now),
+            friend("old", "未驗證舊", count: 3, daysAgo: 6, verification: .unverified, now: now),
+        ].flatMap { $0 })
+        XCTAssertEqual(cards.map(\.authorName), ["遠但多", "近但少", "未驗證新", "未驗證舊"])
+        XCTAssertEqual(cards.map(\.segment), [.verified, .verified, .unverified, .unverified])
+    }
+
+    func testF8PlaceRelatedCheckIsNotImplemented() throws {
+        let model = try source("SAV-E/Views/InkNotebook/SaveInkNotebookModel.swift")
+        XCTAssertFalse(model.contains("classifyPlace"))
+        XCTAssertFalse(model.contains("placeRelated"))
+        let suite = "save.ink.f8.\(UUID().uuidString)"
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: suite)!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        store.saveQuery = "https://www.youtube.com/watch?v=not-a-place"
+        store.commitSave()
+        XCTAssertTrue(store.places.contains { $0.name.contains("youtube.com") })
+    }
+
+    func testF9SavesVisitsStampsAndBundledFriendsSurviveReload() async {
+        let suite = "save.ink.f9.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let now = SaveInkClock.previewNow
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { now },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) }
+        )
+        let seededVisits = store.totalVisits()
+        await store.checkIn(placeID: SaveInkFixture.dingtai)
+        store.saveQuery = "測試小店"
+        store.commitSave()
+        XCTAssertGreaterThan(store.totalVisits(), seededVisits)
+        let visits = store.totalVisits()
+        let stamps = store.stampedPlaceIDs()
+        let friends = store.friendCards().map(\.authorName)
+        XCTAssertFalse(friends.isEmpty)
+        let reloaded = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { now },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        XCTAssertEqual(reloaded.totalVisits(), visits)
+        XCTAssertEqual(reloaded.stampedPlaceIDs(), stamps)
+        XCTAssertTrue(reloaded.places.contains { $0.name == "測試小店" })
+        XCTAssertEqual(reloaded.friendCards().map(\.authorName), friends)
+        XCTAssertEqual(
+            reloaded.latestVisit(for: SaveInkFixture.dingtai)?.visitedAt,
+            store.latestVisit(for: SaveInkFixture.dingtai)?.visitedAt
+        )
+    }
+
     func testOpeningFriendsDoesNotRequestLocation() {
         var made = 0
         let store = SaveInkNotebookStore(
@@ -400,6 +512,17 @@ final class SaveInkNotebookTests: XCTestCase {
             XCTAssertEqual([UInt8](data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10], name)
             XCTAssertGreaterThan(data.count, 8_000, name)
         }
+    }
+
+    private func checkInStore(fix: SaveInkFix) async -> SaveInkNotebookStore {
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.f5.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator(fix: fix) }
+        )
+        await store.checkIn(placeID: SaveInkFixture.dingtai)
+        return store
     }
 
     private func decision(_ fix: SaveInkFix) -> SaveInkCheckInDecision {

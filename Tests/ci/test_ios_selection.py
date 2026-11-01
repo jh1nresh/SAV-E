@@ -17,7 +17,7 @@ class CoverageTests(unittest.TestCase):
     def test_full_matches_frozen_baseline_without_plan_extras(self):
         full = selection.select([], full=True)
         self.assertEqual(full["profile"], "ink")
-        self.assertEqual(full["tests"], [selection.RAIL + "testFreeCapE4Screenshots"])
+        self.assertEqual(full["tests"], selection.INK)
         self.assertFalse(full["trip"])
         self.assertTrue(full["units"])
 
@@ -35,7 +35,7 @@ class CoverageTests(unittest.TestCase):
     def test_known_map_change_keeps_parity_and_related_navigation(self):
         plan = selection.select(["SAV-E/Views/Map/SaveMapDrawerPanel.swift"])
         self.assertEqual(plan["profile"], "map")
-        self.assertEqual(plan["tests"], [selection.RAIL + "testFreeCapE4Screenshots"])
+        self.assertEqual(plan["tests"], selection.INK)
         self.assertFalse(plan["trip"])
 
     def test_shared_place_detail_keeps_full_integration(self):
@@ -46,23 +46,22 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(plan["tests"], selection.select([], full=True)["tests"])
 
     def test_every_ui_route_keeps_parity_and_five_tab_home(self):
-        ink = selection.RAIL + "testFreeCapE4Screenshots"
         for path in (*selection.SURFACES,):
             plan = selection.select([path])
             with self.subTest(path=path):
                 self.assertTrue(plan["ui"])
-                self.assertEqual(plan["tests"], [ink])
-        self.assertEqual(selection.select([], full=True)["tests"], [ink])
+                self.assertEqual(plan["tests"], selection.INK)
+        self.assertEqual(selection.select([], full=True)["tests"], selection.INK)
 
     def test_onboarding_keeps_entire_carousel_class_and_replay(self):
         plan = selection.select(["SAV-E/Views/Onboarding/OnboardingView.swift"])
-        self.assertEqual(plan["tests"], [selection.RAIL + "testFreeCapE4Screenshots"])
+        self.assertEqual(plan["tests"], selection.INK)
         self.assertFalse(plan["trip"])
 
     def test_plan_keeps_confirmation_persistence_and_trip_sheets(self):
         plan = selection.select(["SAV-E/Views/Plan/SavePlanView.swift"])
         self.assertFalse(plan["trip"])
-        self.assertEqual(plan["tests"], [selection.RAIL + "testFreeCapE4Screenshots"])
+        self.assertEqual(plan["tests"], selection.INK)
 
     def test_multiple_surfaces_union_without_duplicates(self):
         plan = selection.select(list(selection.SURFACES))
@@ -142,7 +141,7 @@ class CoverageTests(unittest.TestCase):
         self.assertTrue(set(spec["tests"]) <= set(selection.FULL))
         self.assertFalse(spec["trip"])
         self.assertFalse(spec["units"])
-        self.assertEqual(spec["tests"], [selection.RAIL + "testFreeCapE4Screenshots"])
+        self.assertEqual(spec["tests"], selection.INK)
         self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
         self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
         self.assertNotIn(selection.RAIL + "testDoodlePaywallParity", spec["tests"])
