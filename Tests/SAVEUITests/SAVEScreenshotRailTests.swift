@@ -883,9 +883,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         ])
         launch(app)
         try signInViaReviewDemoRequired(app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["ink.welcome"].waitForExistence(timeout: launchTimeout))
+        requireInk("ink.welcome", in: app, timeout: launchTimeout)
         app.descendants(matching: .any)["ink.welcome.start"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        requireInk("ink.home", in: app)
         terminate(app)
     }
 
@@ -959,11 +959,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func requireInk(
         _ identifier: String,
         in app: XCUIApplication,
+        timeout: TimeInterval? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> XCUIElement {
         let element = app.descendants(matching: .any)[identifier]
-        if element.waitForExistence(timeout: stepTimeout) {
+        if element.waitForExistence(timeout: timeout ?? stepTimeout) {
             return element
         }
         XCTFail("Missing \(identifier)\n\(app.debugDescription)", file: file, line: line)

@@ -87,6 +87,7 @@ struct SaveInkNotebookRoot: View {
 
 private struct SaveInkOwnedNotebook: View {
     @AppStorage("save.ink.welcome.seen.v1") private var welcomeSeen = false
+    @State private var dismissedWelcome = false
     @StateObject private var store = SaveInkNotebookStore(
         defaults: SaveInkLaunch.defaults,
         friendInputs: SaveInkLaunch.emptyFriends ? [] : nil,
@@ -94,10 +95,16 @@ private struct SaveInkOwnedNotebook: View {
     )
 
     var body: some View {
-        if SaveInkLaunch.showsWelcome(seen: welcomeSeen) {
+        if !dismissedWelcome && SaveInkLaunch.showsWelcome(seen: welcomeSeen) {
             SaveInkWelcomeScreen(
-                onStart: { welcomeSeen = true },
-                onSignIn: { welcomeSeen = true }
+                onStart: {
+                    welcomeSeen = true
+                    dismissedWelcome = true
+                },
+                onSignIn: {
+                    welcomeSeen = true
+                    dismissedWelcome = true
+                }
             )
         } else {
             SaveInkNavigator(store: store)
