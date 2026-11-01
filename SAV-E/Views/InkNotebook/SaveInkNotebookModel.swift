@@ -494,6 +494,66 @@ enum SaveInkFriends {
     }
 }
 
+/// A pasted link is a place only when it names a venue, a map, or a known shop.
+/// A bare video, tool site, or article is not saved, mapped, or stampable.
+enum SaveInkPlaceLink {
+    static let notAPlaceMessage = "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。"
+
+    private static let videoHosts = ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com", "douyin.com"]
+    private static let toolHosts = ["github.com", "gitlab.com", "notion.so", "figma.com", "npmjs.com"]
+    private static let articleHosts = ["wikipedia.org", "medium.com", "nytimes.com", "bbc.com", "substack.com"]
+    private static let placeWords = ["咖啡", "餐廳", "小館", "飯店", "地址", "街", "cafe", "restaurant"]
+
+    static func rejects(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = firstURL(in: trimmed) else { return false }
+        let caption = trimmed.replacingOccurrences(of: url.absoluteString, with: "")
+        if containsPlaceWords(caption) || containsPlaceWords(url.absoluteString) { return false }
+        if isMapLink(url) { return false }
+        return isVideoToolOrArticle(url)
+    }
+
+    static func savedName(from text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = firstURL(in: trimmed) else { return trimmed }
+        let caption = trimmed
+            .replacingOccurrences(of: url.absoluteString, with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return caption.isEmpty ? trimmed : caption
+    }
+
+    private static func firstURL(in text: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        return detector.firstMatch(in: text, options: [], range: range)?.url
+    }
+
+    private static func containsPlaceWords(_ text: String) -> Bool {
+        let folded = text.lowercased()
+        return placeWords.contains { folded.contains($0) }
+    }
+
+    private static func isMapLink(_ url: URL) -> Bool {
+        let host = normalizedHost(url)
+        return host.contains("maps.") || host.contains("openstreetmap.org") || url.path.contains("/maps")
+    }
+
+    private static func isVideoToolOrArticle(_ url: URL) -> Bool {
+        let host = normalizedHost(url)
+        return matches(host, videoHosts) || matches(host, toolHosts) || matches(host, articleHosts)
+    }
+
+    private static func normalizedHost(_ url: URL) -> String {
+        (url.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "")
+    }
+
+    private static func matches(_ host: String, _ domains: [String]) -> Bool {
+        domains.contains { host == $0 || host.hasSuffix(".\($0)") }
+    }
+}
+
 protocol SaveInkLocating: AnyObject {
     func requestFix(for place: SaveInkPlace) async -> SaveInkFix
 }
@@ -523,6 +583,7 @@ final class SaveInkNotebookStore: ObservableObject {
     @Published var draftVisibility: SaveInkVisibility = SaveInkProvisional.defaultVisibility
     @Published var saveLink = ""
     @Published var saveQuery = ""
+    @Published var saveNotice: String?
     @Published var recognizedPlaceID: String?
     @Published var activePlaceID: String?
 
@@ -714,17 +775,25 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func recognizeQuery() {
-        let query = saveQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = [saveLink, saveQuery]
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
-        if let match = places.first(where: { query.contains($0.name) || $0.name.contains(query) || query.contains($0.street) }) {
+        if let match = places.first(where: { query.contains($0.name) || (!query.contains("://") && $0.name.contains(query)) || query.contains($0.street) }) {
             recognizedPlaceID = match.id
         }
     }
 
     func commitSave() {
         recognizeQuery()
+        let combined = [saveLink, saveQuery].joined(separator: " ")
+        if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined) {
+            saveNotice = SaveInkPlaceLink.notAPlaceMessage
+            return
+        }
+        saveNotice = nil
         if recognizedPlaceID == nil, !saveQuery.isEmpty {
-            let name = saveQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = SaveInkPlaceLink.savedName(from: saveQuery)
             let place = SaveInkPlace(
                 id: "saved-\(SaveInkSeed.of(name))",
                 name: name,

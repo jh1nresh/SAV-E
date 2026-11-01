@@ -332,6 +332,7 @@ struct SaveInkBackButton: View {
         }
         .frame(minWidth: 44, minHeight: 44)
         .accessibilityIdentifier(identifier)
+        .accessibilityLabel("返回")
     }
 }
 

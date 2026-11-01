@@ -16,7 +16,7 @@ The core judgment is conservative: Savvy should not pretend a clue is a real pla
 
 ## What ships in the iOS app
 
-- **Five-part app shell** — Home, Map, a raised Save control, Plan, and Passport use a compact Liquid Glass tab bar. Save opens capture without replacing the selected tab.
+- **Ink notebook** — the signed-in app opens on one home, the ink notebook. Saving, the passport, friends, and a place open from that home and return to it.
 - **Region-based Home** — confirmed saves are grouped by region and use a stored or enriched place photo when one is available. The denser Saves library remains a child screen rather than a root tab.
 - **Map + three-stage search drawer** — the map keeps current-location controls and confirmed Map Stamps while search expands through compact, medium, and large stages for results, review, and place actions.
 - **Save capture** — the centre control accepts URLs, pasted text, voice/text commands, and Google Takeout exports, then routes uncertain clues through Review.

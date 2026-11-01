@@ -206,6 +206,13 @@ struct SaveInkSaveSheet: View {
                 text: $store.saveQuery,
                 identifier: "ink.save.query"
             )
+            if let notice = store.saveNotice {
+                Text(notice)
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("ink.save.notice")
+            }
             SaveInkOutlineButton(title: "存起來", identifier: "ink.save.commit") {
                 store.commitSave()
             }

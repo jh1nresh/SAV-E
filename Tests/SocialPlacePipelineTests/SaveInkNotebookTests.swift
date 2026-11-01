@@ -190,6 +190,17 @@ final class SaveInkNotebookTests: XCTestCase {
         ])
         XCTAssertTrue(cards.isEmpty)
         XCTAssertEqual(SaveInkProvisional.defaultVisibility, .public)
+        let now = SaveInkClock.previewNow
+        let privateAccount = friend("b1", "阿哲", count: 2, daysAgo: 3, verification: .verified, now: now)
+            + friend("b2", "凱文", count: 2, daysAgo: 1, verification: .verified, now: now)
+            + friend("a", "我", count: 5, daysAgo: 0, verification: .verified, visibility: .private, now: now)
+        let hidden = SaveInkFriends.cards(from: privateAccount)
+        XCTAssertEqual(hidden.map(\.authorName), ["凱文", "阿哲"])
+        XCTAssertFalse(hidden.contains { $0.authorName == "我" })
+        let publicAccount = friend("b1", "阿哲", count: 2, daysAgo: 3, verification: .verified, now: now)
+            + friend("b2", "凱文", count: 2, daysAgo: 1, verification: .verified, now: now)
+            + friend("a", "我", count: 5, daysAgo: 0, verification: .verified, visibility: .public, now: now)
+        XCTAssertEqual(SaveInkFriends.cards(from: publicAccount).map(\.authorName).first, "我")
     }
 
     func testF7FriendsSortVerifiedCountThenRecencyAndDoNotUseDistance() {
@@ -197,27 +208,51 @@ final class SaveInkNotebookTests: XCTestCase {
         let cards = SaveInkFriends.cards(from: [
             friend("near", "近但少", count: 1, daysAgo: 1, verification: .verified, now: now),
             friend("far", "遠但多", count: 4, daysAgo: 9, verification: .verified, now: now),
+            friend("tieNew", "同次數新", count: 2, daysAgo: 1, verification: .verified, now: now),
+            friend("tieOld", "同次數舊", count: 2, daysAgo: 5, verification: .verified, now: now),
             friend("new", "未驗證新", count: 1, daysAgo: 0, verification: .unverified, now: now),
             friend("old", "未驗證舊", count: 3, daysAgo: 6, verification: .unverified, now: now),
         ].flatMap { $0 })
-        XCTAssertEqual(cards.map(\.authorName), ["遠但多", "近但少", "未驗證新", "未驗證舊"])
-        XCTAssertEqual(cards.map(\.segment), [.verified, .verified, .unverified, .unverified])
+        XCTAssertGreaterThanOrEqual(cards.filter { $0.segment == .verified }.count, 3)
+        XCTAssertEqual(cards.map(\.authorName), ["遠但多", "同次數新", "同次數舊", "近但少", "未驗證新", "未驗證舊"])
+        XCTAssertEqual(cards.map(\.segment), [.verified, .verified, .verified, .verified, .unverified, .unverified])
     }
 
-    func testF8PlaceRelatedCheckIsNotImplemented() throws {
-        let model = try source("SAV-E/Views/InkNotebook/SaveInkNotebookModel.swift")
-        XCTAssertFalse(model.contains("classifyPlace"))
-        XCTAssertFalse(model.contains("placeRelated"))
-        let suite = "save.ink.f8.\(UUID().uuidString)"
-        let store = SaveInkNotebookStore(
-            defaults: UserDefaults(suiteName: suite)!,
+    func testF8NonPlaceLinksAreNotSavedMappedOrStampable() async {
+        let links = [
+            "https://www.youtube.com/watch?v=not-a-place",
+            "https://github.com/jh1nresh/SAV-E",
+            "https://zh.wikipedia.org/wiki/Article",
+        ]
+        for link in links {
+            let store = SaveInkNotebookStore(
+                defaults: UserDefaults(suiteName: "save.ink.f8.\(UUID().uuidString)")!,
+                now: { SaveInkClock.previewNow },
+                seedFixture: false,
+                makeLocator: { SaveInkScriptedLocator() }
+            )
+            let ids = store.places.map(\.id)
+            store.saveQuery = link
+            store.commitSave()
+            XCTAssertEqual(store.places.map(\.id), ids, link)
+            XCTAssertEqual(store.saveNotice, SaveInkPlaceLink.notAPlaceMessage, link)
+            XCTAssertFalse(store.places.contains { $0.name.contains("youtube.com") || $0.name.contains("github.com") || $0.name.contains("wikipedia.org") })
+            await store.checkIn(placeID: "saved-\(SaveInkSeed.of(link))")
+            XCTAssertEqual(store.totalVisits(), 0, link)
+            XCTAssertTrue(store.stampedPlaceIDs().isEmpty, link)
+        }
+        let linked = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.f8.place.\(UUID().uuidString)")!,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
             makeLocator: { SaveInkScriptedLocator() }
         )
-        store.saveQuery = "https://www.youtube.com/watch?v=not-a-place"
-        store.commitSave()
-        XCTAssertTrue(store.places.contains { $0.name.contains("youtube.com") })
+        linked.saveQuery = "https://www.youtube.com/watch?v=shop-tour 青田七六咖啡"
+        linked.commitSave()
+        XCTAssertNil(linked.saveNotice)
+        XCTAssertEqual(linked.recognizedPlaceID, SaveInkFixture.qingtian)
+        XCTAssertEqual(linked.place(SaveInkFixture.qingtian)?.badge, .saved)
+        XCTAssertFalse(linked.places.contains { $0.name.contains("youtube.com") })
     }
 
     func testF9SavesVisitsStampsAndBundledFriendsSurviveReload() async {
@@ -232,6 +267,9 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         let seededVisits = store.totalVisits()
         await store.checkIn(placeID: SaveInkFixture.dingtai)
+        store.draftComment = "留下"
+        store.draftVisibility = .private
+        store.commitDraft()
         store.saveQuery = "測試小店"
         store.commitSave()
         XCTAssertGreaterThan(store.totalVisits(), seededVisits)
@@ -253,6 +291,22 @@ final class SaveInkNotebookTests: XCTestCase {
             reloaded.latestVisit(for: SaveInkFixture.dingtai)?.visitedAt,
             store.latestVisit(for: SaveInkFixture.dingtai)?.visitedAt
         )
+        XCTAssertEqual(reloaded.latestVisit(for: SaveInkFixture.dingtai)?.visibility, .private)
+        XCTAssertEqual(reloaded.latestVisit(for: SaveInkFixture.dingtai)?.comment, "留下")
+    }
+
+    func testF10InkControlsHaveLabelsHitTargetsAndAreNotColorOnly() throws {
+        let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
+        let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
+        XCTAssertTrue(chrome.contains(".accessibilityLabel(\"返回\")"))
+        XCTAssertTrue(chrome.contains(".frame(minWidth: 44, minHeight: 44)"))
+        XCTAssertTrue(chrome.contains("relativeTo:"))
+        XCTAssertTrue(screens.contains("ink.friends.entry"))
+        XCTAssertTrue(screens.contains(".frame(height: 50)"))
+        XCTAssertTrue(chrome.contains("ink.arrived"))
+        XCTAssertTrue(screens.contains("✓ 去過"))
+        XCTAssertTrue(screens.contains("△ 未驗證") || chrome.contains("△ 未驗證"))
+        XCTAssertTrue(screens.contains("○ 存了還沒去"))
     }
 
     func testOpeningFriendsDoesNotRequestLocation() {
