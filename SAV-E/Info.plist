@@ -40,6 +40,11 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Savvy needs your location to show nearby places on the map.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>SaveInkCheckIn</key>
+		<string>只在你按「我到了」時確認你在店裡，不會在背景追蹤，也不保存你的座標。</string>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Savvy uses the microphone when you talk to the command drawer.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -55,6 +60,7 @@
 	<array>
 		<string>DisplayFont/Caveat-SemiBold.ttf</string>
 		<string>DisplayFont/Iansui-SavvySubset.ttf</string>
+		<string>DisplayFont/Iansui-Ink.ttf</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>

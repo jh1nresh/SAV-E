@@ -226,6 +226,9 @@ struct SaveApp: App {
 
     @ViewBuilder
     private var rootContent: some View {
+        if let mode = SaveInkLaunch.mode {
+            SaveInkNotebookRoot(launch: mode)
+        } else {
 #if DEBUG
         if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()
@@ -256,6 +259,7 @@ struct SaveApp: App {
 #else
         standardRootContent
 #endif
+        }
     }
 
     @ViewBuilder

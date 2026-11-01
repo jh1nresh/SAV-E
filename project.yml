@@ -79,6 +79,7 @@ targets:
         UIAppFonts:
           - DisplayFont/Caveat-SemiBold.ttf
           - DisplayFont/Iansui-SavvySubset.ttf
+          - DisplayFont/Iansui-Ink.ttf
         UILaunchScreen:
           UIColorName: LaunchCanvas
         UISupportedInterfaceOrientations:
