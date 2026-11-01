@@ -790,8 +790,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try captureInkNotebookAsTheMainScreen()
     }
 
-    /// The signed-in app opens on the ink notebook. Screen 14 is the empty
-    /// friends state. Attachments are the rasters pending founder approval.
+    /// The signed-in app opens on the ink notebook, with no tab bar.
+    /// Screen 14 is covered by SaveInkNotebookTests ImageRenderer stills.
     @MainActor
     private func captureInkNotebookAsTheMainScreen() throws {
         let app = makeE4App()
@@ -807,15 +807,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["root.tab.profile"].exists)
         attach(app, name: "ink-main-signed-in")
         terminate(app)
-
-        let empty = makeE4App(extraArguments: ["--savvy-ink-screen=14-friends-empty"])
-        launch(empty)
-        XCTAssertTrue(
-            empty.descendants(matching: .any)["ink.friends.empty"].waitForExistence(timeout: launchTimeout)
-        )
-        XCTAssertFalse(empty.staticTexts["錯誤"].exists)
-        attach(empty, name: "ink-14-friends-empty")
-        terminate(empty)
     }
 
     @MainActor

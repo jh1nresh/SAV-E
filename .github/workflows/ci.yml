@@ -211,7 +211,7 @@ jobs:
 
           Expected files under xcattachments/:
             ink-main-signed-in — signed-in app opens on the ink notebook, no tab bar
-            ink-14-friends-empty — friends empty state (screen 14)
+          Screen 14, ink-14-friends-empty.png, is the SAVETests ImageRenderer still.
           These stills are pending founder approval.
           EOF
           if [[ -d "$RUNNER_TEMP/SAVE-E4.xcresult" ]]; then

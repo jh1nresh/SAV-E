@@ -117,8 +117,10 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(object["visibility"] as? String, "public")
         XCTAssertEqual(object["verification"] as? String, "verified")
         XCTAssertEqual(Set(object.keys), [
-            "anomaly", "comment", "id", "placeID", "sentiment", "verification", "visibility", "visitedAt",
+            "comment", "id", "placeID", "verification", "visibility", "visitedAt",
         ])
+        XCTAssertNil(object["sentiment"])
+        XCTAssertNil(object["anomaly"])
     }
 
     func testCheckInPersistsVerdictWithoutCoordinates() async throws {
