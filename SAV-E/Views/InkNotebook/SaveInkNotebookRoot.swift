@@ -217,9 +217,10 @@ final class SaveInkOneShotLocator: NSObject, SaveInkLocating, CLLocationManagerD
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
         Task { @MainActor in
             guard pending != nil else { return }
-            switch manager.authorizationStatus {
+            switch status {
             case .authorizedAlways, .authorizedWhenInUse:
                 requestPreciseThenLocation()
             case .denied:
