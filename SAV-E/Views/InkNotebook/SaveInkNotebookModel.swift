@@ -494,23 +494,26 @@ enum SaveInkFriends {
     }
 }
 
-/// A pasted link is a place only when it names a venue, a map, or a known shop.
-/// A bare video, tool site, or article is not saved, mapped, or stampable.
+/// A link is not a place unless the text names a known shop or is a map link.
 enum SaveInkPlaceLink {
     static let notAPlaceMessage = "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。"
 
-    private static let videoHosts = ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com", "douyin.com"]
-    private static let toolHosts = ["github.com", "gitlab.com", "notion.so", "figma.com", "npmjs.com"]
-    private static let articleHosts = ["wikipedia.org", "medium.com", "nytimes.com", "bbc.com", "substack.com"]
-    private static let placeWords = ["咖啡", "餐廳", "小館", "飯店", "地址", "街", "cafe", "restaurant"]
-
-    static func rejects(_ text: String) -> Bool {
+    static func rejects(_ text: String, knownPlaces: [SaveInkPlace]) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = firstURL(in: trimmed) else { return false }
-        let caption = trimmed.replacingOccurrences(of: url.absoluteString, with: "")
-        if containsPlaceWords(caption) || containsPlaceWords(url.absoluteString) { return false }
-        if isMapLink(url) { return false }
-        return isVideoToolOrArticle(url)
+        guard firstURL(in: trimmed) != nil else { return false }
+        return !hasPlaceEvidence(trimmed, knownPlaces: knownPlaces)
+    }
+
+    static func hasPlaceEvidence(_ text: String, knownPlaces: [SaveInkPlace]) -> Bool {
+        if linkedPlace(in: text, knownPlaces: knownPlaces) != nil { return true }
+        guard let url = firstURL(in: text) else { return false }
+        return isMapLink(url)
+    }
+
+    static func linkedPlace(in text: String, knownPlaces: [SaveInkPlace]) -> SaveInkPlace? {
+        knownPlaces.first { place in
+            text.contains(place.name) || (!place.street.isEmpty && text.contains(place.street))
+        }
     }
 
     static func savedName(from text: String) -> String {
@@ -530,27 +533,34 @@ enum SaveInkPlaceLink {
         return detector.firstMatch(in: text, options: [], range: range)?.url
     }
 
-    private static func containsPlaceWords(_ text: String) -> Bool {
-        let folded = text.lowercased()
-        return placeWords.contains { folded.contains($0) }
-    }
-
     private static func isMapLink(_ url: URL) -> Bool {
-        let host = normalizedHost(url)
+        let host = (url.host ?? "").lowercased()
         return host.contains("maps.") || host.contains("openstreetmap.org") || url.path.contains("/maps")
     }
+}
 
-    private static func isVideoToolOrArticle(_ url: URL) -> Bool {
-        let host = normalizedHost(url)
-        return matches(host, videoHosts) || matches(host, toolHosts) || matches(host, articleHosts)
-    }
+/// Visit JSON written before visibility existed. A missing field stays public.
+private struct SaveInkLegacyVisit: Decodable {
+    var id: UUID
+    var placeID: String
+    var visitedAt: Date
+    var verification: SaveInkVerification
+    var visibility: SaveInkVisibility?
+    var comment: String
+    var sentiment: SaveInkSentiment?
+    var anomaly: SaveInkAnomaly?
 
-    private static func normalizedHost(_ url: URL) -> String {
-        (url.host ?? "").lowercased().replacingOccurrences(of: "www.", with: "")
-    }
-
-    private static func matches(_ host: String, _ domains: [String]) -> Bool {
-        domains.contains { host == $0 || host.hasSuffix(".\($0)") }
+    var record: SaveInkVisitRecord {
+        SaveInkVisitRecord(
+            id: id,
+            placeID: placeID,
+            visitedAt: visitedAt,
+            verification: verification,
+            visibility: visibility ?? SaveInkProvisional.defaultVisibility,
+            comment: comment,
+            sentiment: sentiment,
+            anomaly: anomaly
+        )
     }
 }
 
@@ -787,7 +797,7 @@ final class SaveInkNotebookStore: ObservableObject {
     func commitSave() {
         recognizeQuery()
         let combined = [saveLink, saveQuery].joined(separator: " ")
-        if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined) {
+        if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined, knownPlaces: places) {
             saveNotice = SaveInkPlaceLink.notAPlaceMessage
             return
         }
@@ -917,7 +927,8 @@ final class SaveInkNotebookStore: ObservableObject {
 
     private static func load(defaults: UserDefaults, key: String) -> [SaveInkVisitRecord]? {
         guard let data = defaults.data(forKey: key) else { return nil }
-        return try? Self.decoder.decode([SaveInkVisitRecord].self, from: data)
+        guard let legacy = try? Self.decoder.decode([SaveInkLegacyVisit].self, from: data) else { return nil }
+        return legacy.map(\.record)
     }
 
     private static func save(_ visits: [SaveInkVisitRecord], defaults: UserDefaults, key: String) {

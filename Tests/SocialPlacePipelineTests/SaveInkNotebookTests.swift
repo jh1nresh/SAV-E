@@ -218,41 +218,42 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(cards.map(\.segment), [.verified, .verified, .verified, .verified, .unverified, .unverified])
     }
 
-    func testF8NonPlaceLinksAreNotSavedMappedOrStampable() async {
-        let links = [
-            "https://www.youtube.com/watch?v=not-a-place",
-            "https://github.com/jh1nresh/SAV-E",
-            "https://zh.wikipedia.org/wiki/Article",
-        ]
-        for link in links {
-            let store = SaveInkNotebookStore(
-                defaults: UserDefaults(suiteName: "save.ink.f8.\(UUID().uuidString)")!,
-                now: { SaveInkClock.previewNow },
-                seedFixture: false,
-                makeLocator: { SaveInkScriptedLocator() }
-            )
-            let ids = store.places.map(\.id)
-            store.saveQuery = link
-            store.commitSave()
-            XCTAssertEqual(store.places.map(\.id), ids, link)
-            XCTAssertEqual(store.saveNotice, SaveInkPlaceLink.notAPlaceMessage, link)
-            XCTAssertFalse(store.places.contains { $0.name.contains("youtube.com") || $0.name.contains("github.com") || $0.name.contains("wikipedia.org") })
-            await store.checkIn(placeID: "saved-\(SaveInkSeed.of(link))")
-            XCTAssertEqual(store.totalVisits(), 0, link)
-            XCTAssertTrue(store.stampedPlaceIDs().isEmpty, link)
-        }
-        let linked = SaveInkNotebookStore(
+    func testF8NonPlaceLinkIsRejected() async {
+        let link = "https://notes.example/article/how-to-film"
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.f8.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        let ids = store.places.map(\.id)
+        store.saveQuery = link
+        store.commitSave()
+        XCTAssertEqual(store.places.map(\.id), ids)
+        XCTAssertEqual(store.saveNotice, SaveInkPlaceLink.notAPlaceMessage)
+        XCTAssertFalse(store.places.contains { $0.name.contains("notes.example") })
+        await store.checkIn(placeID: "saved-\(SaveInkSeed.of(link))")
+        XCTAssertEqual(store.totalVisits(), 0)
+        XCTAssertTrue(store.stampedPlaceIDs().isEmpty)
+        XCTAssertFalse(
+            SaveInkPlaceLink.hasPlaceEvidence(link, knownPlaces: store.places)
+        )
+    }
+
+    func testF8ShopVideoStaysLinkedToThePlace() {
+        let store = SaveInkNotebookStore(
             defaults: UserDefaults(suiteName: "save.ink.f8.place.\(UUID().uuidString)")!,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
             makeLocator: { SaveInkScriptedLocator() }
         )
-        linked.saveQuery = "https://www.youtube.com/watch?v=shop-tour 青田七六咖啡"
-        linked.commitSave()
-        XCTAssertNil(linked.saveNotice)
-        XCTAssertEqual(linked.recognizedPlaceID, SaveInkFixture.qingtian)
-        XCTAssertEqual(linked.place(SaveInkFixture.qingtian)?.badge, .saved)
-        XCTAssertFalse(linked.places.contains { $0.name.contains("youtube.com") })
+        store.saveQuery = "https://www.youtube.com/watch?v=shop-tour 青田七六咖啡"
+        store.commitSave()
+        XCTAssertNil(store.saveNotice)
+        XCTAssertEqual(store.recognizedPlaceID, SaveInkFixture.qingtian)
+        XCTAssertEqual(store.place(SaveInkFixture.qingtian)?.badge, .saved)
+        XCTAssertFalse(store.places.contains { $0.id.hasPrefix("saved-") })
+        XCTAssertFalse(store.places.contains { $0.name.contains("youtube.com") })
     }
 
     func testF9SavesVisitsStampsAndBundledFriendsSurviveReload() async {
@@ -293,6 +294,61 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         XCTAssertEqual(reloaded.latestVisit(for: SaveInkFixture.dingtai)?.visibility, .private)
         XCTAssertEqual(reloaded.latestVisit(for: SaveInkFixture.dingtai)?.comment, "留下")
+    }
+
+    func testF9MainSchemaSurvivesUpgradeAndReload() throws {
+        let suite = "save.ink.f9.upgrade.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let visitID = UUID()
+        let visits = """
+        [{
+          "id": "\(visitID.uuidString)",
+          "placeID": "dingtai",
+          "visitedAt": "2026-10-28T04:00:00Z",
+          "verification": "verified",
+          "comment": "main 留下的"
+        }]
+        """
+        defaults.set(Data(visits.utf8), forKey: "save.ink.visits.v1")
+        let places = """
+        [{
+          "id": "saved-main-shop",
+          "name": "主線小店",
+          "stampName": "主線小店",
+          "street": "主線街",
+          "blurb": "升級前存的",
+          "sourceLabel": "來自 main",
+          "detailNote": "舊收藏沒有可見度欄位"
+        }]
+        """
+        defaults.set(Data(places.utf8), forKey: "save.ink.places.v1")
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        let visit = try XCTUnwrap(store.latestVisit(for: "dingtai"))
+        XCTAssertEqual(visit.id, visitID)
+        XCTAssertEqual(visit.visibility, .public)
+        XCTAssertEqual(visit.comment, "main 留下的")
+        XCTAssertEqual(store.totalVisits(), 1)
+        XCTAssertEqual(store.stampedPlaceIDs(), ["dingtai"])
+        XCTAssertTrue(store.places.contains { $0.name == "主線小店" })
+        let friends = store.friendCards().map(\.authorName)
+        XCTAssertFalse(friends.isEmpty)
+        let reloaded = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        XCTAssertEqual(reloaded.latestVisit(for: "dingtai")?.visibility, .public)
+        XCTAssertEqual(reloaded.latestVisit(for: "dingtai")?.comment, "main 留下的")
+        XCTAssertEqual(reloaded.totalVisits(), 1)
+        XCTAssertEqual(reloaded.stampedPlaceIDs(), ["dingtai"])
+        XCTAssertTrue(reloaded.places.contains { $0.name == "主線小店" })
+        XCTAssertEqual(reloaded.friendCards().map(\.authorName), friends)
     }
 
     func testF10InkControlsHaveLabelsHitTargetsAndAreNotColorOnly() throws {
