@@ -5072,7 +5072,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func nativeMapMarker(_ app: XCUIApplication, name: String) -> XCUIElement {
         app.maps.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier BEGINSWITH 'map.pin.' AND label == %@", name
+            format: "identifier BEGINSWITH 'map.pin.' AND NOT (identifier BEGINSWITH 'map.pin.saved.') AND label == %@", name
         )).firstMatch
     }
 
