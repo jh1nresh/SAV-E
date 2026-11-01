@@ -57,7 +57,7 @@ struct SaveInkHomeScreen: View {
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
-                SaveInkCircleButton(label: "人", identifier: "ink.passport.entry") {
+                SaveInkCircleButton(label: "人", identifier: "ink.passport.entry", personIcon: true) {
                     store.openPassport()
                 }
                 SaveInkCircleButton(label: "+", identifier: "ink.save.entry") {
@@ -201,12 +201,11 @@ struct SaveInkSaveSheet: View {
             Text("或直接搜店名")
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)
-            TextField("輸入店名，例如「赤峰街」", text: $store.saveQuery)
-                .font(SaveInkType.aux)
-                .padding(.horizontal, 16)
-                .frame(height: 54)
-                .background(field)
-                .accessibilityIdentifier("ink.save.query")
+            SaveInkLineField(
+                placeholder: "輸入店名，例如「赤峰街」",
+                text: $store.saveQuery,
+                identifier: "ink.save.query"
+            )
             SaveInkOutlineButton(title: "存起來", identifier: "ink.save.commit") {
                 store.commitSave()
             }
@@ -348,11 +347,12 @@ struct SaveInkCheckInSheet: View {
                     SaveInkBadge(text: "△ 未驗證造訪", verified: false)
                 }
             }
-            TextField("小籠包皮很薄，排隊 15 分鐘…", text: $store.draftComment, axis: .vertical)
-                .font(SaveInkType.body)
-                .foregroundStyle(SaveInkPalette.ink)
-                .lineLimit(2...4)
-                .accessibilityIdentifier("ink.checkin.comment")
+            SaveInkLineField(
+                placeholder: "小籠包皮很薄，排隊 15 分鐘…",
+                text: $store.draftComment,
+                identifier: "ink.checkin.comment",
+                minHeight: 72
+            )
         }
         .padding(16)
         .background(
@@ -416,6 +416,44 @@ struct SaveInkCheckInSheet: View {
     }
 }
 
+struct SaveInkStampGrid: View {
+    @ObservedObject var store: SaveInkNotebookStore
+
+    var body: some View {
+        let stamps = store.stampedPlaceIDs()
+        let empties = max(0, 6 - stamps.count)
+        let cells = stamps.count + empties
+        VStack(spacing: 14) {
+            ForEach(Array(stride(from: 0, to: cells, by: 3)), id: \.self) { start in
+                HStack(spacing: 14) {
+                    ForEach(start..<min(start + 3, cells), id: \.self) { index in
+                        stamp(at: index, stamps: stamps)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 112)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stamp(at index: Int, stamps: [String]) -> some View {
+        if index < stamps.count {
+            let id = stamps[index]
+            if let place = store.place(id), let visit = store.latestVisit(for: id) {
+                SaveInkStampMark(
+                    kind: visit.verification == .verified ? .verified : .unverified,
+                    name: place.stampName,
+                    date: SaveInkClock.shortDate(visit.visitedAt),
+                    seed: SaveInkSeed.of(id)
+                )
+            }
+        } else {
+            SaveInkStampMark(kind: .empty, seed: 80 &+ index)
+        }
+    }
+}
+
 struct SaveInkPassportScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
 
@@ -445,23 +483,7 @@ struct SaveInkPassportScreen: View {
                 }
                 Text("印章")
                     .font(SaveInkType.body)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3), spacing: 14) {
-                    ForEach(store.stampedPlaceIDs(), id: \.self) { id in
-                        if let place = store.place(id), let visit = store.latestVisit(for: id) {
-                            SaveInkStampMark(
-                                kind: visit.verification == .verified ? .verified : .unverified,
-                                name: place.stampName,
-                                date: SaveInkClock.shortDate(visit.visitedAt),
-                                seed: SaveInkSeed.of(id)
-                            )
-                            .frame(height: 112)
-                        }
-                    }
-                    ForEach(0..<max(0, 6 - store.stampedPlaceIDs().count), id: \.self) { index in
-                        SaveInkStampMark(kind: .empty, seed: 80 &+ index)
-                            .frame(height: 112)
-                    }
-                }
+                SaveInkStampGrid(store: store)
                 Text("去過的地方")
                     .font(SaveInkType.body)
                 VStack(spacing: 0) {
@@ -624,9 +646,12 @@ struct SaveInkArrivalScreen: View {
                     Text("留一句評論（選填）")
                         .font(SaveInkType.aux)
                         .foregroundStyle(SaveInkPalette.inkSub)
-                    TextField("小籠包皮很薄，排隊 15 分鐘…", text: $store.draftComment, axis: .vertical)
-                        .font(SaveInkType.body)
-                        .lineLimit(2...3)
+                    SaveInkLineField(
+                        placeholder: "小籠包皮很薄，排隊 15 分鐘…",
+                        text: $store.draftComment,
+                        identifier: "ink.arrival.comment",
+                        minHeight: 72
+                    )
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -812,10 +837,12 @@ struct SaveInkReviewScreen: View {
                         Text("評論（選填）")
                             .font(SaveInkType.aux)
                             .foregroundStyle(SaveInkPalette.inkSub)
-                        TextField("寫下這次的感想…", text: $store.draftComment, axis: .vertical)
-                            .font(SaveInkType.body)
-                            .lineLimit(3...6)
-                            .accessibilityIdentifier("ink.review.comment")
+                        SaveInkLineField(
+                            placeholder: "寫下這次的感想…",
+                            text: $store.draftComment,
+                            identifier: "ink.review.comment",
+                            minHeight: 96
+                        )
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)

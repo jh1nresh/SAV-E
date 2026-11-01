@@ -479,6 +479,8 @@ jobs:
 
       - name: Enforce Atlas production visual parity
         if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_INK_PRODUCT: "1"
         run: |
           # macOS runners ship a PEP 668 Homebrew Python. Install Pillow in a
           # throwaway venv so pip never touches the system interpreter.
@@ -644,7 +646,7 @@ jobs:
       - name: Capture T3 coral-token screens
         id: t3_screens
         timeout-minutes: 15
-        if: always() && steps.scope.outputs.ui == 'true'
+        if: always() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-T3-screens-tests.log
         run: |
@@ -678,7 +680,7 @@ jobs:
             --expect t3-paywall-light --expect t3-paywall-dark
 
       - name: Upload T3 coral-token screenshots
-        if: always() && steps.scope.outputs.ui == 'true'
+        if: always() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: save-coral-t3-screens-${{ github.sha }}
@@ -960,6 +962,10 @@ jobs:
           xcrun simctl shutdown "$udid" || true
           xcrun simctl list devices | grep -F "$udid" | grep -Fq '(Shutdown)'
           xcrun simctl delete "$udid"
+      - name: Note the ink notebook suite
+        if: steps.scope.outputs.ui == 'true'
+        run: mkdir -p "$RUNNER_TEMP/SAVE-First-Run" && echo ink > "$RUNNER_TEMP/SAVE-First-Run/ink-suite.txt"
+
       - name: Upload supplemental verification evidence
         if: always() && steps.scope.outputs.ui == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

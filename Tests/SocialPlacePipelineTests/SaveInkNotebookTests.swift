@@ -241,7 +241,8 @@ final class SaveInkNotebookTests: XCTestCase {
         let app = try source("SAV-E/App/SaveApp.swift")
         let launch = try source("SAV-E/Views/InkNotebook/SaveInkNotebookRoot.swift")
         XCTAssertTrue(app.contains("SaveInkNotebookRoot()"))
-        XCTAssertTrue(app.contains("--uitest-legacy-root"))
+        XCTAssertFalse(app.contains("ContentView("))
+        XCTAssertFalse(app.contains("--uitest-legacy-root"))
         XCTAssertFalse(app.contains("--savvy-ink-notebook"))
         XCTAssertFalse(launch.contains("--savvy-ink-notebook"))
         XCTAssertTrue(launch.contains("--savvy-ink-screen="))
@@ -312,6 +313,12 @@ final class SaveInkNotebookTests: XCTestCase {
             0.04,
             "review must draw the stamp and the comment field"
         )
+        let hashes = Set(rendered.values.map(sha256))
+        XCTAssertEqual(hashes.count, SaveInkPreviewScreen.allCases.count, "every ink still must be a different image")
+    }
+
+    private func sha256(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     /// `ImageRenderer` leaves `ScrollView` and `LazyVGrid` empty. A hosted

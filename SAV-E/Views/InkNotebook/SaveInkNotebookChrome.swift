@@ -189,18 +189,26 @@ struct SaveInkRoughFrame<Content: View>: View {
 struct SaveInkCircleButton: View {
     var label: String
     var identifier: String
+    var personIcon: Bool = false
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(SaveInkType.font(22, relativeTo: .title3))
-                .foregroundStyle(SaveInkPalette.ink)
-                .frame(width: 46, height: 46)
-                .background(
-                    SaveInkRoughCircle(seed: SaveInkSeed.of(identifier), amplitude: 0.4)
-                        .stroke(SaveInkPalette.ink, lineWidth: 2)
-                )
+            Group {
+                if personIcon {
+                    SaveInkPersonIcon()
+                        .frame(width: 22, height: 22)
+                } else {
+                    Text(label)
+                        .font(SaveInkType.font(22, relativeTo: .title3))
+                }
+            }
+            .foregroundStyle(SaveInkPalette.ink)
+            .frame(width: 46, height: 46)
+            .background(
+                SaveInkRoughCircle(seed: SaveInkSeed.of(identifier), amplitude: 0.4)
+                    .stroke(SaveInkPalette.ink, lineWidth: 2)
+            )
         }
         .frame(minWidth: 46, minHeight: 46)
         .accessibilityIdentifier(identifier)
@@ -231,6 +239,50 @@ struct SaveInkOutlineButton: View {
                 )
         }
         .frame(minHeight: 44)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+private struct SaveInkScreenshotKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var saveInkScreenshot: Bool {
+        get { self[SaveInkScreenshotKey.self] }
+        set { self[SaveInkScreenshotKey.self] = newValue }
+    }
+}
+
+/// Screenshot stand-in. A live `TextField` paints a yellow system field.
+struct SaveInkLineField: View {
+    var placeholder: String
+    @Binding var text: String
+    var identifier: String
+    var minHeight: CGFloat = 54
+    @Environment(\.saveInkScreenshot) private var screenshot
+
+    var body: some View {
+        Group {
+            if screenshot {
+                Text(text.isEmpty ? placeholder : text)
+                    .font(SaveInkType.body)
+                    .foregroundStyle(text.isEmpty ? SaveInkPalette.inkSub : SaveInkPalette.ink)
+                    .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+            } else {
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .font(SaveInkType.body)
+                    .foregroundStyle(SaveInkPalette.ink)
+                    .lineLimit(2...4)
+                    .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+            }
+        }
+        .padding(16)
+        .background(SaveInkPalette.card)
+        .overlay(
+            SaveInkRoughRoundedRect(cornerRadius: 18, seed: SaveInkSeed.of(identifier))
+                .stroke(SaveInkPalette.ink, lineWidth: 2)
+        )
         .accessibilityIdentifier(identifier)
     }
 }

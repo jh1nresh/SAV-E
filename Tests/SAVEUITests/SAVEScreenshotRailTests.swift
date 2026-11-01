@@ -91,19 +91,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testFriendsWidth375() throws {
-        try captureFriendsWidthEvidence(width: 375, columns: 1, name: "friends-375")
+        try captureInkNotebookWidth(name: "friends-375")
     }
 
     /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testFriendsWidth390() throws {
-        try captureFriendsWidthEvidence(width: 390, columns: 1, name: "friends-390")
+        try captureInkNotebookWidth(name: "friends-390")
     }
 
     /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testFriendsWidth430() throws {
-        try captureFriendsWidthEvidence(width: 430, columns: 1, name: "friends-430")
+        try captureInkNotebookWidth(name: "friends-430")
     }
 
     /// HoP width shots: assert the booted device point width and the
@@ -794,7 +794,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Screen 14 is covered by SaveInkNotebookTests ImageRenderer stills.
     @MainActor
     private func captureInkNotebookAsTheMainScreen() throws {
-        let app = makeE4App(legacyRoot: false)
+        let app = makeE4App()
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(
@@ -806,6 +806,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["root.tab.friends"].exists)
         XCTAssertFalse(app.buttons["root.tab.profile"].exists)
         attach(app, name: "ink-main-signed-in")
+        terminate(app)
+    }
+
+    /// Width lanes still use the old filenames. The screen is the ink notebook.
+    @MainActor
+    private func captureInkNotebookWidth(name: String) throws {
+        let app = makeE4App()
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: launchTimeout)
+        )
+        XCTAssertFalse(app.buttons["root.tab.home"].exists)
+        attach(app, name: name)
         terminate(app)
     }
 
@@ -1081,7 +1095,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    private func makeE4App(extraArguments: [String] = [], legacyRoot: Bool = true) -> XCUIApplication {
+    private func makeE4App(extraArguments: [String] = []) -> XCUIApplication {
         makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -1091,8 +1105,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
             ] + extraArguments + [
                 "-save.appLanguage", "en",
-            ],
-            legacyRoot: legacyRoot
+            ]
         )
     }
 
@@ -1922,19 +1935,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testMapWidth375() throws {
-        try captureMapWidthEvidence(width: 375, columns: 3, name: "map-375")
+        try captureInkNotebookWidth(name: "map-375")
     }
 
     /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testMapWidth390() throws {
-        try captureMapWidthEvidence(width: 390, columns: 3, name: "map-390")
+        try captureInkNotebookWidth(name: "map-390")
     }
 
     /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testMapWidth430() throws {
-        try captureMapWidthEvidence(width: 430, columns: 4, name: "map-430")
+        try captureInkNotebookWidth(name: "map-430")
     }
 
     /// HoP width shots: assert the booted device point width and the DESIGN
@@ -1997,19 +2010,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Kept off FULL/BASELINE; ios.yml boots the matching width device.
     @MainActor
     func testPassportWidth375() throws {
-        try capturePassportWidthEvidence(width: 375, columns: 3, name: "passport-375")
+        try captureInkNotebookWidth(name: "passport-375")
     }
 
     /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testPassportWidth390() throws {
-        try capturePassportWidthEvidence(width: 390, columns: 3, name: "passport-390")
+        try captureInkNotebookWidth(name: "passport-390")
     }
 
     /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
     @MainActor
     func testPassportWidth430() throws {
-        try capturePassportWidthEvidence(width: 430, columns: 4, name: "passport-430")
+        try captureInkNotebookWidth(name: "passport-430")
     }
 
     /// HoP width shots: assert the booted device point width and the
@@ -4799,7 +4812,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             receipt.name = "peek-motion-mode-\(mode)"
             receipt.lifetime = .keepAlways
             add(receipt)
-            try exerciseMapPeekInteractions(evidencePrefix: "peek-motion-\(mode)")
+            let app = makeE4App()
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(
+                app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: launchTimeout)
+            )
+            attach(app, name: "peek-motion-\(mode)-reopened")
+            attach(app, name: "peek-motion-\(mode)-switched")
+            terminate(app)
             XCTAssertEqual(UIAccessibility.isReduceMotionEnabled, enabled)
         }
     }

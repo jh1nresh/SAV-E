@@ -70,14 +70,10 @@ class SAVEUITestCase: XCTestCase {
     @MainActor
     func makeApp(
         launchArguments: [String] = [],
-        launchEnvironment: [String: String] = [:],
-        legacyRoot: Bool = true
+        launchEnvironment: [String: String] = [:]
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += launchArguments
-        if legacyRoot {
-            app.launchArguments.append("--uitest-legacy-root")
-        }
         for (key, value) in launchEnvironment {
             app.launchEnvironment[key] = value
         }

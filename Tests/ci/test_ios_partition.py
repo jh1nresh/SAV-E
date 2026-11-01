@@ -20,10 +20,9 @@ class PartitionTests(unittest.TestCase):
     def test_full_selection_preserved_exactly_once(self):
         lines = ["-only-testing:" + test for test in selection.select([], full=True)["tests"]]
         core, home = partition.partition(lines)
-        self.assertEqual(set(home), partition.HOME)
-        self.assertFalse(set(core) & set(home))
-        self.assertCountEqual(core + home, lines)
-        self.assertTrue(any("testMapSavedUnsavedVisitedTaipeiFixture" in x for x in core))
+        self.assertEqual(home, [])
+        self.assertEqual(core, lines)
+        self.assertTrue(any("testFreeCapE4Screenshots" in x for x in core))
 
     def test_empty_and_focused_selection_do_not_add_tests(self):
         self.assertEqual(partition.partition([]), ([], []))

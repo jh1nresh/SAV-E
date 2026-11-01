@@ -136,6 +136,7 @@ struct SaveInkScreenPreview: View {
         .clipped()
         .environment(\.colorScheme, .light)
         .environment(\.dynamicTypeSize, .large)
+        .environment(\.saveInkScreenshot, true)
     }
 }
 
