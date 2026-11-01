@@ -732,19 +732,17 @@ struct SaveDoodleMapView: View {
         if SaveDoodleMapPinStyle.current == .appleDefault {
             for item in Self.nativeSavedMarkers(displayedListedPlaces, selected: mapViewModel.selectedPlace)
             where item.place.isMapKitMappable {
-                let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
                 entries.append(SaveMapMarkerAccessibilityEntry(
                     placeName: item.place.name,
-                    stateName: state.displayName(language: languageSettings.language),
+                    accessibilityIdentifier: Self.nativeMarkerPinIdentifier(placeID: item.place.id.uuidString),
                     coordinate: item.place.coordinate
                 ))
             }
         }
-        let unsaved = SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)
         for candidate in nativeUnsavedCandidates {
             entries.append(SaveMapMarkerAccessibilityEntry(
                 placeName: candidate.title,
-                stateName: unsaved,
+                accessibilityIdentifier: Self.nativeMarkerPinIdentifier(placeID: candidate.id),
                 coordinate: candidate.coordinate
             ))
         }
@@ -1195,13 +1193,9 @@ struct SaveDoodleMapView: View {
         return value
     }
 
-    /// VoiceOver name for a native marker. The drawn title stays the place name.
-    static func nativeMarkerAccessibilityLabel(placeName: String, stateName: String) -> String {
-        "\(placeName), \(stateName)"
-    }
-
-    static func nativeMarkerAccessibilityValue(stateName: String) -> String {
-        stateName
+    /// XCUITest handle for one native marker. VoiceOver still speaks the Marker title.
+    static func nativeMarkerPinIdentifier(placeID: String) -> String {
+        "map.pin.\(placeID)"
     }
 
     /// Same title is not enough: Apple POIs reuse place names. The annotation
@@ -1234,12 +1228,12 @@ struct SaveDoodleMapView: View {
 
 struct SaveMapMarkerAccessibilityEntry: Equatable {
     var placeName: String
-    var stateName: String
+    var accessibilityIdentifier: String
     var coordinate: CLLocationCoordinate2D
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.placeName == rhs.placeName
-            && lhs.stateName == rhs.stateName
+            && lhs.accessibilityIdentifier == rhs.accessibilityIdentifier
             && lhs.coordinate.latitude == rhs.coordinate.latitude
             && lhs.coordinate.longitude == rhs.coordinate.longitude
     }
@@ -1325,31 +1319,24 @@ private final class SaveMapMarkerAccessibilityAnchor: UIView {
                     coordinate: annotation.coordinate,
                     in: entries
                   ) else { continue }
-            let label = SaveDoodleMapView.nativeMarkerAccessibilityLabel(
-                placeName: entry.placeName,
-                stateName: entry.stateName
-            )
-            let value = SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: entry.stateName)
-            if marker.accessibilityLabel != label { marker.accessibilityLabel = label }
-            if (marker.accessibilityValue as? String) != value { marker.accessibilityValue = value }
+            let identifier = entry.accessibilityIdentifier
+            if marker.accessibilityIdentifier != identifier {
+                marker.accessibilityIdentifier = identifier
+            }
         }
     }
 
     private func unlabeledEntryRemains() -> Bool {
         guard let mapView = enclosingMapView() else { return true }
         for entry in entries {
-            let labeled = mapView.annotations.contains { annotation in
+            let identified = mapView.annotations.contains { annotation in
                 guard let title = annotation.title ?? nil, title == entry.placeName,
                       SaveDoodleMapView.coordinateDistance(annotation.coordinate, entry.coordinate)
                         <= SaveDoodleMapView.nativeMarkerStateMatchTolerance,
                       let marker = mapView.view(for: annotation) else { return false }
-                let label = SaveDoodleMapView.nativeMarkerAccessibilityLabel(
-                    placeName: entry.placeName,
-                    stateName: entry.stateName
-                )
-                return marker.accessibilityLabel == label
+                return marker.accessibilityIdentifier == entry.accessibilityIdentifier
             }
-            if !labeled { return true }
+            if !identified { return true }
         }
         return false
     }

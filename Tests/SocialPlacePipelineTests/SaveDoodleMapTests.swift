@@ -113,15 +113,11 @@ final class SaveDoodleMapTests: XCTestCase {
             markers.contains(#"Marker("\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))""#),
             "Unsaved marker titles stay the place name"
         )
-        XCTAssertTrue(map.contains("marker.accessibilityLabel = label"))
-        XCTAssertTrue(map.contains("marker.accessibilityValue = value"))
+        XCTAssertTrue(map.contains("marker.accessibilityIdentifier = identifier"))
+        XCTAssertFalse(map.contains("marker.accessibilityLabel = label"))
         XCTAssertEqual(
-            SaveDoodleMapView.nativeMarkerAccessibilityLabel(placeName: "Cafe", stateName: "Visited Map Stamp"),
-            "Cafe, Visited Map Stamp"
-        )
-        XCTAssertEqual(
-            SaveDoodleMapView.nativeMarkerAccessibilityValue(stateName: "去過的地圖章"),
-            "去過的地圖章"
+            SaveDoodleMapView.nativeMarkerPinIdentifier(placeID: "cafe-1"),
+            "map.pin.cafe-1"
         )
         XCTAssertFalse(map.contains("CADisplayLink"), "Marker state is applied from map events, not every frame")
         XCTAssertFalse(map.contains("mapView.delegate"), "Do not replace SwiftUI Map's internal delegate")
@@ -185,27 +181,27 @@ final class SaveDoodleMapTests: XCTestCase {
     func testSameNameMarkersMatchAccessibilityStateByCoordinate() {
         let east = SaveMapMarkerAccessibilityEntry(
             placeName: "Cafe",
-            stateName: "Map Stamp",
+            accessibilityIdentifier: "map.pin.east",
             coordinate: CLLocationCoordinate2D(latitude: 25.04, longitude: 121.50)
         )
         let west = SaveMapMarkerAccessibilityEntry(
             placeName: "Cafe",
-            stateName: "Visited Map Stamp",
+            accessibilityIdentifier: "map.pin.west",
             coordinate: CLLocationCoordinate2D(latitude: 25.04, longitude: 121.55)
         )
         let entries = [east, west]
         XCTAssertEqual(
-            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: east.coordinate, in: entries)?.stateName,
-            "Map Stamp"
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: east.coordinate, in: entries)?.accessibilityIdentifier,
+            "map.pin.east"
         )
         XCTAssertEqual(
-            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: west.coordinate, in: entries)?.stateName,
-            "Visited Map Stamp"
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: west.coordinate, in: entries)?.accessibilityIdentifier,
+            "map.pin.west"
         )
         let nearby = CLLocationCoordinate2D(latitude: 25.04005, longitude: 121.50)
         XCTAssertEqual(
-            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: nearby, in: [east])?.stateName,
-            "Map Stamp"
+            SaveDoodleMapView.accessibilityEntry(matchingName: "Cafe", coordinate: nearby, in: [east])?.accessibilityIdentifier,
+            "map.pin.east"
         )
         let otherPlace = CLLocationCoordinate2D(latitude: 25.05, longitude: 121.50)
         XCTAssertNil(

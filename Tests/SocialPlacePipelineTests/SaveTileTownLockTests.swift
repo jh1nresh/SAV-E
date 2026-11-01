@@ -452,7 +452,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(rail.contains("map.command.search"))
         XCTAssertTrue(rail.contains("nativeMapMarker(app, name: $0)"))
         XCTAssertTrue(rail.contains("nativeFixturePins.filter { $0.exists }.count"))
-        XCTAssertTrue(rail.contains("nativeMapMarker(app, name: \"Unsaved Night Market\")"))
+        XCTAssertTrue(rail.contains("nativeMapMarker(app, placeID: \"uitest-unsaved-taipei\")"))
         XCTAssertFalse(rail.contains("Product Map must show the tile-town base"))
         XCTAssertTrue(rail.contains("XCUIDevice.shared.appearance = appearance"))
         XCTAssertTrue(rail.contains("appearance: .dark"))

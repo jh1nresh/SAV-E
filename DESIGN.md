@@ -564,8 +564,9 @@ Rules:
   Never reduce these states to anonymous dots.
 - Review candidates use `ReviewCandidateMapPin` only when coordinates are reliable.
 - Source-only clues do not get pins.
-- Pins need accessibility labels that include the state, such as "Map Stamp" or
-  "Review Candidate".
+- Native Map pins: VoiceOver 只念店名. Each pin has its own
+  `map.pin.<placeId>` accessibility identifier so stacked stamps stay
+  separate elements. Do not put Map Stamp or Visited into the pin label.
 
 ### Memory Card
 
@@ -1241,8 +1242,8 @@ recorded above; `map-dark.png` remains the historical DESIGN comparison.
 Do not apply `map-mask.png` to the 0.90 score. Home and
 Map still fail CI below 0.90. DESIGN still signs off on city / Eat-Go /
 sheet / tab chrome. City and Eat/Go sit on a cream `paper` header band,
-not on the live map. Pins use native Apple markers with state-bearing
-accessibility labels. The place sheet
+not on the live map. Pins use native Apple markers. VoiceOver 只念店名.
+The place sheet
 uses a 64pt official DESIGN sticker (color die-cut when visited, pencil
 outline when not) and a 12pt text gap. Do not replace default Apple
 MapKit `.standard` with a paper or hand-drawn basemap. City strip, place
