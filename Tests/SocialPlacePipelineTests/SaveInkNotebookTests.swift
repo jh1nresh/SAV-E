@@ -121,7 +121,7 @@ final class SaveInkNotebookTests: XCTestCase {
         ])
     }
 
-    func testCheckInPersistsVerdictWithoutCoordinates() async {
+    func testCheckInPersistsVerdictWithoutCoordinates() async throws {
         let suite = "save.ink.checkin.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         let locator = SaveInkScriptedLocator(fix: .inRange(meters: 18))
