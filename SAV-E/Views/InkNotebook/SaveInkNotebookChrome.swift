@@ -5,8 +5,10 @@ import UIKit
 enum SaveInkPalette {
     static let ink = Color(hex: "1E1D1B")
     static let inkSub = Color(hex: "5F5B55")
-    static let paper = Color(hex: "FAF8F3")
+    static let paper = Color(hex: "FAF9F4")
     static let card = Color(hex: "FFFFFF")
+    /// sRGB. `UIColor(red:green:blue:alpha:)` is extended sRGB, and the still
+    /// renderer uses a standard-range bitmap so the pixels stay `#B8481F`.
     static let accent = Color(hex: "B8481F")
     static let unverifiedLine = Color(hex: "6B6862")
     static let unverifiedFill = Color(hex: "EFECE6")
@@ -413,6 +415,7 @@ struct SaveInkStampMark: View {
                 if !date.isEmpty {
                     Text(date)
                         .font(SaveInkType.minimum)
+                        .monospacedDigit()
                 }
             }
             .foregroundStyle(SaveInkPalette.ink)
@@ -439,6 +442,7 @@ struct SaveInkStampMark: View {
                 if !date.isEmpty {
                     Text(date)
                         .font(SaveInkType.minimum)
+                        .monospacedDigit()
                 }
             }
             .foregroundStyle(SaveInkPalette.inkSub)
@@ -546,6 +550,9 @@ struct SaveInkPinIcon: View {
 }
 
 struct SaveInkPersonIcon: View {
+    var lineWidth: CGFloat = 1.7
+    var color: Color = SaveInkPalette.ink
+
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
@@ -557,7 +564,28 @@ struct SaveInkPersonIcon: View {
                     control: CGPoint(x: side * 0.5, y: side * 0.48)
                 )
             }
-            .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 1.7, lineCap: .round))
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+        }
+    }
+}
+
+struct SaveInkLockIcon: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height)
+            let unit = side / 24
+            Path { path in
+                path.move(to: CGPoint(x: 7 * unit, y: 11 * unit))
+                path.addQuadCurve(
+                    to: CGPoint(x: 17 * unit, y: 11 * unit),
+                    control: CGPoint(x: 12 * unit, y: 2 * unit)
+                )
+                path.addRoundedRect(
+                    in: CGRect(x: 4 * unit, y: 11 * unit, width: 16 * unit, height: 10 * unit),
+                    cornerSize: CGSize(width: 2 * unit, height: 2 * unit)
+                )
+            }
+            .stroke(SaveInkPalette.inkSub, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
         }
     }
 }

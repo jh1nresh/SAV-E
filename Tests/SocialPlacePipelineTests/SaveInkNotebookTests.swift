@@ -322,7 +322,8 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(screens.contains("ink.friends.filter"))
         XCTAssertTrue(screens.contains("朋友去過的地方"))
         XCTAssertTrue(screens.contains("ink.friends.empty"))
-        XCTAssertTrue(screens.contains("還沒有朋友的造訪"))
+        XCTAssertTrue(screens.contains("朋友還沒有分享造訪"))
+        XCTAssertTrue(screens.contains("朋友把造訪設成公開後，就會出現在這裡"))
         XCTAssertFalse(screens.contains("ink.friends.error"))
         XCTAssertTrue(chrome.contains("B8481F"))
         XCTAssertEqual(chrome.components(separatedBy: "SaveInkPalette.accent").count - 1, 1)
@@ -392,6 +393,55 @@ final class SaveInkNotebookTests: XCTestCase {
         )
     }
 
+    func testInkTextContrastMeetsWCAG() throws {
+        let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
+        func hex(named name: String) throws -> (Double, Double, Double) {
+            let token = "static let \(name) = Color(hex: \""
+            let range = try XCTUnwrap(chrome.range(of: token), name)
+            let start = range.upperBound
+            let end = chrome.index(start, offsetBy: 6)
+            let value = try XCTUnwrap(UInt32(chrome[start..<end], radix: 16), name)
+            return (
+                Double((value >> 16) & 0xFF),
+                Double((value >> 8) & 0xFF),
+                Double(value & 0xFF)
+            )
+        }
+        let ink = try hex(named: "ink")
+        let inkSub = try hex(named: "inkSub")
+        let paper = try hex(named: "paper")
+        let card = try hex(named: "card")
+        let fill = try hex(named: "unverifiedFill")
+        let accent = try hex(named: "accent")
+        let white = (255.0, 255.0, 255.0)
+        let pairs: [(String, (Double, Double, Double), (Double, Double, Double))] = [
+            ("ink on paper", ink, paper),
+            ("ink on card", ink, card),
+            ("ink on unverified fill", ink, fill),
+            ("secondary text on paper", inkSub, paper),
+            ("secondary text on card", inkSub, card),
+            ("secondary text on unverified fill", inkSub, fill),
+            ("white on accent", white, accent),
+        ]
+        var lowest = Double.greatestFiniteMagnitude
+        var lowestName = ""
+        for (name, text, background) in pairs {
+            let ratio = wcagContrast(text, background)
+            if ratio < lowest {
+                lowest = ratio
+                lowestName = name
+            }
+            XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(name) \(ratio)")
+        }
+        XCTAssertGreaterThanOrEqual(lowest, 4.5, "lowest \(lowestName) \(lowest)")
+        XCTAssertEqual(paper.0, 250)
+        XCTAssertEqual(paper.1, 249)
+        XCTAssertEqual(paper.2, 244)
+        XCTAssertEqual(accent.0, 184)
+        XCTAssertEqual(accent.1, 72)
+        XCTAssertEqual(accent.2, 31)
+    }
+
     func testInkScreensRenderForTheSimulatorAttachment() throws {
         var rendered: [SaveInkPreviewScreen: Data] = [:]
         for screen in SaveInkPreviewScreen.allCases {
@@ -430,6 +480,25 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(hashes.count, SaveInkPreviewScreen.allCases.count, "every ink still must be a different image")
     }
 
+    private func wcagContrast(
+        _ text: (Double, Double, Double),
+        _ background: (Double, Double, Double)
+    ) -> Double {
+        func linear(_ channel: Double) -> Double {
+            let value = channel / 255
+            if value <= 0.04045 {
+                return value / 12.92
+            }
+            return pow((value + 0.055) / 1.055, 2.4)
+        }
+        func luminance(_ color: (Double, Double, Double)) -> Double {
+            0.2126 * linear(color.0) + 0.7152 * linear(color.1) + 0.0722 * linear(color.2)
+        }
+        let lighter = max(luminance(text), luminance(background))
+        let darker = min(luminance(text), luminance(background))
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
     private func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
@@ -454,6 +523,7 @@ final class SaveInkNotebookTests: XCTestCase {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 3
         format.opaque = true
+        format.preferredRange = .standard
         let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
             _ = host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
         }
@@ -489,7 +559,7 @@ final class SaveInkNotebookTests: XCTestCase {
                 let green = Int(pointer[offset + 1])
                 let blue = Int(pointer[offset + 2])
                 samples += 1
-                if abs(red - 250) > 14 || abs(green - 248) > 14 || abs(blue - 243) > 14 {
+                if abs(red - 250) > 14 || abs(green - 249) > 14 || abs(blue - 244) > 14 {
                     nonPaper += 1
                 }
             }

@@ -271,22 +271,22 @@ struct SaveInkCheckInSheet: View {
     private var title: String {
         switch situation {
         case .verified:
-            return "到了！已蓋章 ✓"
+            return "到了，已蓋章"
         case .locationFailed:
-            return "定位不到，先幫你記下。"
+            return "定位不到，先幫你記下"
         case .permissionDenied:
-            return "沒有定位權限，\n這次記成未驗證。"
+            return "沒有定位權限，\n這次記成未驗證"
         case .approximateOnly:
-            return "需要精確位置\n才能驗證這次造訪。"
+            return "需要精確位置\n才能驗證這次造訪"
         case .tooFar(let meters):
-            return "你好像離這裡還有 \(meters) m。"
+            return "你好像離這裡還有 \(meters) m"
         case .downgradedUnverified:
-            return "這次記成未驗證。"
+            return "這次記成未驗證"
         case .duplicate:
             if store.latestVisit(for: place.id)?.verification == .unverified {
-                return "這次記成未驗證。"
+                return "這次記成未驗證"
             }
-            return "到了！已蓋章 ✓"
+            return "到了，已蓋章"
         }
     }
 
@@ -447,7 +447,7 @@ struct SaveInkStampGrid: View {
                 SaveInkStampMark(
                     kind: visit.verification == .verified ? .verified : .unverified,
                     name: place.stampName,
-                    date: SaveInkClock.shortDate(visit.visitedAt),
+                    date: SaveInkClock.stampDate(visit.visitedAt),
                     seed: SaveInkSeed.of(id)
                 )
             }
@@ -475,12 +475,13 @@ struct SaveInkPassportScreen: View {
                     SaveInkRoughCircle(seed: 3, amplitude: 0.4)
                         .stroke(SaveInkPalette.ink, lineWidth: 2)
                         .frame(width: 54, height: 54)
-                        .overlay(Text("人").font(SaveInkType.body))
+                        .overlay(Text("小").font(SaveInkType.body).foregroundStyle(SaveInkPalette.ink))
                     VStack(alignment: .leading, spacing: 4) {
                         Text("小米")
                             .font(SaveInkType.sheetTitle)
                         Text("台北・已蓋 \(store.stampedPlaceIDs().count) 個章・去過 \(store.totalVisits()) 次")
                             .font(SaveInkType.aux)
+                            .monospacedDigit()
                             .foregroundStyle(SaveInkPalette.inkSub)
                     }
                 }
@@ -497,6 +498,7 @@ struct SaveInkPassportScreen: View {
                             Spacer()
                             Text(row.trailing)
                                 .font(SaveInkType.aux)
+                                .monospacedDigit()
                                 .foregroundStyle(SaveInkPalette.inkSub)
                         }
                         .padding(.vertical, 12)
@@ -609,7 +611,7 @@ struct SaveInkPlaceScreen: View {
 
     private func stat(_ value: String, _ caption: String) -> some View {
         VStack(spacing: 4) {
-            Text(value).font(SaveInkType.sheetTitle)
+            Text(value).font(SaveInkType.sheetTitle).monospacedDigit()
             Text(caption).font(SaveInkType.aux).foregroundStyle(SaveInkPalette.inkSub)
         }
         .frame(maxWidth: .infinity)
@@ -632,11 +634,12 @@ struct SaveInkArrivalScreen: View {
             SaveInkPalette.paper.ignoresSafeArea()
             VStack(spacing: 18) {
                 Spacer(minLength: 12)
-                Text("你到了  \(place?.name ?? "") ！")
+                Text("你到了\(place?.name ?? "")")
                     .font(SaveInkType.pageTitle)
                     .multilineTextAlignment(.center)
                 Text("距離店門 18 m・第 \(max(count, 1)) 次")
                     .font(SaveInkType.aux)
+                    .monospacedDigit()
                     .foregroundStyle(SaveInkPalette.inkSub)
                 SaveInkStampMark(
                     kind: .verified,
@@ -714,6 +717,8 @@ struct SaveInkFriendsScreen: View {
                         .padding(.top, 12)
                         .padding(.bottom, 24)
                     }
+                    .scrollContentBackground(.hidden)
+                    .background(SaveInkPalette.paper)
                     .accessibilityIdentifier("ink.friends.list")
                 }
             }
@@ -728,11 +733,11 @@ struct SaveInkFriendsScreen: View {
             SaveInkStampMark(kind: .empty, seed: 14)
                 .frame(width: 120, height: 120)
                 .padding(.top, 48)
-            Text("還沒有朋友的造訪")
+            Text("朋友還沒有分享造訪")
                 .font(SaveInkType.subpageTitle)
                 .foregroundStyle(SaveInkPalette.ink)
                 .multilineTextAlignment(.center)
-            Text("朋友公開記下的地方會出現在這裡。")
+            Text("朋友把造訪設成公開後，就會出現在這裡")
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.inkSub)
                 .multilineTextAlignment(.center)
@@ -748,7 +753,11 @@ struct SaveInkFriendsScreen: View {
                 SaveInkRoughCircle(seed: SaveInkSeed.of(card.authorName), amplitude: 0.35)
                     .stroke(SaveInkPalette.ink, lineWidth: 1.6)
                     .frame(width: 40, height: 40)
-                    .overlay(Text("人").font(SaveInkType.minimum))
+                    .overlay(
+                        Text(String(card.authorName.prefix(1)))
+                            .font(SaveInkType.minimum)
+                            .foregroundStyle(SaveInkPalette.ink)
+                    )
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(card.authorName).font(SaveInkType.body)
@@ -759,6 +768,7 @@ struct SaveInkFriendsScreen: View {
                     }
                     Text(card.subtitle(now: store.currentDate))
                         .font(SaveInkType.aux)
+                        .monospacedDigit()
                         .foregroundStyle(SaveInkPalette.inkSub)
                 }
                 Spacer(minLength: 8)
@@ -864,14 +874,14 @@ struct SaveInkReviewScreen: View {
                             body: "朋友會在「朋友推薦」看到",
                             selected: store.draftVisibility == .public,
                             identifier: "ink.review.public",
-                            icon: "人"
+                            icon: .person
                         ) { store.draftVisibility = .public }
                         visibilityCard(
                             title: "私密",
                             body: "只有你看得到",
                             selected: store.draftVisibility == .private,
                             identifier: "ink.review.private",
-                            icon: "鎖"
+                            icon: .lock
                         ) { store.draftVisibility = .private }
                     }
                     Text("ⓘ 私密的造訪和評論不會出現在朋友推薦頁，也不算進朋友看到的「去過 N 次」。")
@@ -902,13 +912,13 @@ struct SaveInkReviewScreen: View {
         body: String,
         selected: Bool,
         identifier: String,
-        icon: String,
+        icon: SaveInkVisibilityIcon,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(icon).font(SaveInkType.body)
+                    visibilityIcon(icon)
                     Spacer()
                     ZStack {
                         Circle()
@@ -938,6 +948,24 @@ struct SaveInkReviewScreen: View {
         .accessibilityIdentifier(identifier)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
+
+    private func visibilityIcon(_ icon: SaveInkVisibilityIcon) -> some View {
+        Group {
+            switch icon {
+            case .person:
+                SaveInkPersonIcon(lineWidth: 1.5, color: SaveInkPalette.inkSub)
+            case .lock:
+                SaveInkLockIcon()
+            }
+        }
+        .frame(width: 18, height: 18)
+        .accessibilityHidden(true)
+    }
+}
+
+private enum SaveInkVisibilityIcon {
+    case person
+    case lock
 }
 
 struct SaveInkWelcomeScreen: View {

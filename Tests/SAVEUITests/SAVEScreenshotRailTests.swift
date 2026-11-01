@@ -949,7 +949,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(empty.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["ink.friends.list"].exists)
-        XCTAssertTrue(app.staticTexts["還沒有朋友的造訪"].exists)
+        XCTAssertTrue(app.staticTexts["朋友還沒有分享造訪"].exists)
         assertInkHitTarget(back, name: "ink.friends.back")
         back.tap()
         XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
