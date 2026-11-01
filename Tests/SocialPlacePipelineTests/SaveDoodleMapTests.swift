@@ -420,20 +420,15 @@ final class SaveDoodleMapTests: XCTestCase {
         let targets = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets"
         )
-        for name in ["map.png", "map-light.png", "map-dark.png"] {
-            let image = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent(name).path))
-            XCTAssertEqual(Int(image.size.width), 1206, name)
-            XCTAssertEqual(Int(image.size.height), 2622, name)
+        for name in ["map.png", "map-light.png", "map-dark.png", "map-mask.png"] {
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: targets.appendingPathComponent(name).path),
+                "five-tab map baseline withdrawn: \(name)"
+            )
         }
-        let mask = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent("map-mask.png").path))
-        XCTAssertEqual(Int(mask.size.width), 402)
-        XCTAssertEqual(Int(mask.size.height), 874)
-        let light = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent("map.png").path))
-        XCTAssertGreaterThan(
-            light.pngData()?.count ?? 0,
-            50_000,
-            "Map target must be a live Taipei Apple Maps screenshot, not a generated composite"
-        )
+        let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
+        XCTAssertTrue(ink.contains("map.png"))
+        XCTAssertTrue(ink.contains("Reference/InkNotebook"))
     }
 
     func testPeekDuringExactSearchResolvesTheReviewClue() async throws {

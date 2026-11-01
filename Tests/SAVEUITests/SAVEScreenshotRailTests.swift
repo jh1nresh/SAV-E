@@ -787,11 +787,35 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// grow four more launches.
     @MainActor
     func testFreeCapE4Screenshots() throws {
-        try captureE4FiftyFirstSavePaywall()
-        try captureE4PaywallRetry()
-        try captureE4UnplacedCandidate()
-        try captureE4SettingsPaywall()
-        try captureE4AIQuotaNotice()
+        try captureInkNotebookAsTheMainScreen()
+    }
+
+    /// The signed-in app opens on the ink notebook. Screen 14 is the empty
+    /// friends state. Attachments are the rasters pending founder approval.
+    @MainActor
+    private func captureInkNotebookAsTheMainScreen() throws {
+        let app = makeE4App()
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: launchTimeout),
+            "The signed-in main screen is the ink notebook."
+        )
+        XCTAssertFalse(app.buttons["root.tab.home"].exists)
+        XCTAssertFalse(app.buttons["root.tab.map"].exists)
+        XCTAssertFalse(app.buttons["root.tab.friends"].exists)
+        XCTAssertFalse(app.buttons["root.tab.profile"].exists)
+        attach(app, name: "ink-main-signed-in")
+        terminate(app)
+
+        let empty = makeE4App(extraArguments: ["--savvy-ink-screen=14-friends-empty"])
+        launch(empty)
+        XCTAssertTrue(
+            empty.descendants(matching: .any)["ink.friends.empty"].waitForExistence(timeout: launchTimeout)
+        )
+        XCTAssertFalse(empty.staticTexts["錯誤"].exists)
+        attach(empty, name: "ink-14-friends-empty")
+        terminate(empty)
     }
 
     @MainActor
@@ -4378,9 +4402,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func signInViaReviewDemoRequired(app: XCUIApplication) throws {
         let emailField = app.textFields["signin.emailField"]
         if !emailField.waitForExistence(timeout: timeout(20)) {
+            if app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout) {
+                return
+            }
             XCTAssertTrue(
                 app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout),
-                "Email sign-in and Home were both unavailable."
+                "Email sign-in and the ink notebook were both unavailable."
             )
             return
         }

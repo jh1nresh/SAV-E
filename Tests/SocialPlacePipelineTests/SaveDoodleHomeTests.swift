@@ -1674,23 +1674,22 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(readme.contains("402×874") || readme.contains("402 x 874") || readme.contains("402 × 874"))
         XCTAssertFalse(readme.contains("padded with paper"))
         XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
-        let homeTarget = repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/home.png"
-        )
-        let homePNG = try Data(contentsOf: homeTarget)
-        XCTAssertEqual([UInt8](homePNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        XCTAssertEqual(pngDimension(homePNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(homePNG, at: 20), 874)
-        let homeDarkPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/home-dark.png"
-        ))
-        XCTAssertEqual(pngDimension(homeDarkPNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(homeDarkPNG, at: 20), 874)
-        XCTAssertFalse(FileManager.default.fileExists(
-            atPath: repositoryRoot.appendingPathComponent(
-                "Prototypes/AtlasPostcard/Reference/ProductionTargets/home-mask.png"
-            ).path
-        ))
+        for name in ["home.png", "home-dark.png", "map.png"] {
+            XCTAssertFalse(
+                FileManager.default.fileExists(
+                    atPath: repositoryRoot.appendingPathComponent(
+                        "Prototypes/AtlasPostcard/Reference/ProductionTargets/\(name)"
+                    ).path
+                ),
+                "five-tab baseline withdrawn: \(name)"
+            )
+        }
+        let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
+        XCTAssertTrue(ink.contains("Reference/InkNotebook"))
+        XCTAssertTrue(ink.contains("ink-01-main.png"))
+        let shipping = try source(at: "SAV-E/App/SaveApp.swift")
+        XCTAssertTrue(shipping.contains("SaveInkNotebookRoot()"))
+        XCTAssertFalse(shipping.contains("--savvy-ink-notebook"))
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         XCTAssertTrue(parity.contains("--mask"))
         XCTAssertTrue(parity.contains("white = ignore"))
@@ -1705,11 +1704,6 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(parityRunner.contains("extra_args"))
         XCTAssertTrue(parityRunner.contains("${#mask_args[@]}"))
         XCTAssertTrue(parityRunner.contains("${#extra_args[@]}"))
-        let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
-        ))
-        XCTAssertEqual(pngDimension(mapPNG, at: 16), 1206)
-        XCTAssertEqual(pngDimension(mapPNG, at: 20), 2622)
         XCTAssertTrue(root.contains("SaveDoodleHomeView("))
         XCTAssertFalse(root.contains("HomeAtlasScreen()"))
         XCTAssertTrue(root.contains("saves.trips"))
@@ -2145,14 +2139,6 @@ final class SaveDoodleHomeTests: XCTestCase {
             openingHours: nil,
             createdAt: createdAt
         )
-    }
-
-    private func pngDimension(_ data: Data, at offset: Int) -> UInt32 {
-        let bytes = [UInt8](data.subdata(in: offset..<(offset + 4)))
-        return UInt32(bytes[0]) << 24
-            | UInt32(bytes[1]) << 16
-            | UInt32(bytes[2]) << 8
-            | UInt32(bytes[3])
     }
 
     func testColdLaunchEmptyCollectionDoesNotWashPersistedCityToNearYou() {

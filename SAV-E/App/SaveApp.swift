@@ -226,9 +226,6 @@ struct SaveApp: App {
 
     @ViewBuilder
     private var rootContent: some View {
-        if let mode = SaveInkLaunch.mode {
-            SaveInkNotebookRoot(launch: mode)
-        } else {
 #if DEBUG
         if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()
@@ -254,11 +251,19 @@ struct SaveApp: App {
         } else if smokeHarnessActive {
             SaveSmokeHarnessView()
         } else {
-            standardRootContent
+            productRoot
         }
 #else
-        standardRootContent
+        productRoot
 #endif
+    }
+
+    @ViewBuilder
+    private var productRoot: some View {
+        if let screen = SaveInkLaunch.previewScreen {
+            SaveInkNotebookRoot(launch: .preview(screen))
+        } else {
+            standardRootContent
         }
     }
 
@@ -291,10 +296,6 @@ struct SaveApp: App {
                 AuthenticatedRootView(
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
-                    incomingPlaceReceipt: $incomingPlaceReceipt,
-                    requiresShareConfirmation: $requiresShareConfirmation,
-                    requiresListConfirmation: $requiresListConfirmation,
-                    pendingClipListSave: $pendingClipListSave,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
                     onVerificationChanged: updateVerifiedAccount
@@ -715,10 +716,6 @@ private struct AuthenticatedRootView: View {
 
     let sessionGeneration: Int
     let sessionOrigin: AccountSessionOrigin
-    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
-    @Binding var requiresShareConfirmation: Bool
-    @Binding var requiresListConfirmation: Bool
-    @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
@@ -770,41 +767,8 @@ private struct AuthenticatedRootView: View {
     }
 
     private var verifiedAccountContent: some View {
-        ContentView(
-            incomingPlaceReceipt: $incomingPlaceReceipt,
-            requiresShareConfirmation: $requiresShareConfirmation,
-            requiresListConfirmation: $requiresListConfirmation,
-            pendingClipListSave: $pendingClipListSave,
-            pendingOnboardingClue: pendingClueForVerifiedAccount,
-            storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
-        )
-        .onAppear(perform: claimPendingOnboardingClueIfNeeded)
-    }
-
-    private var pendingClueForVerifiedAccount: Binding<String> {
-        Binding(
-            get: {
-                guard PendingOnboardingClueAccess.isAvailable(
-                    text: pendingOnboardingClue,
-                    ownerUserID: pendingOnboardingClueOwnerID,
-                    currentUserID: authService.currentUserId
-                ) else { return "" }
-                return pendingOnboardingClue
-            },
-            set: { newValue in
-                guard let currentUserID = authService.currentUserId else { return }
-                guard PendingOnboardingClueAccess.canMutate(
-                    ownerUserID: pendingOnboardingClueOwnerID,
-                    currentUserID: currentUserID
-                ) else { return }
-                pendingOnboardingClue = newValue
-                pendingOnboardingClueOwnerID = PendingOnboardingClueAccess.ownerAfterMutation(
-                    newText: newValue,
-                    ownerUserID: pendingOnboardingClueOwnerID,
-                    currentUserID: currentUserID
-                )
-            }
-        )
+        SaveInkNotebookRoot()
+            .onAppear(perform: claimPendingOnboardingClueIfNeeded)
     }
 
     private func claimPendingOnboardingClueIfNeeded() {

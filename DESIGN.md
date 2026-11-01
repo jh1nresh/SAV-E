@@ -40,11 +40,13 @@ Assumptions locked by current code:
   still split clues, review candidates, and Map Stamps.
 - `ProfileView` is the Savvy Passport, not a generic settings page.
 
-The 2026-11-01 v2-a ink notebook (`SaveInkNotebookRoot`) is a separate draft
-surface: one home, no tab bar, Iansui body, and accent only on「我到了」.
-It does not replace `SaveDoodleHomeView`, `SaveDoodleMapView`, Friends, or
-Passport, and it does not change the founder-approved parity rasters.
-Launch it with `--savvy-ink-notebook`. Promotion waits for new approved rasters.
+The 2026-11-01 v2-a ink notebook (`SaveInkNotebookRoot`) is the only main
+screen: one home, no tab bar, Iansui body, and accent only on「我到了」.
+Founder 2026-11-01: the five-tab shell is not the shipping root, and
+`--savvy-ink-notebook` is not a launch gate. Screenshot baselines for this
+surface live in `Prototypes/AtlasPostcard/Reference/InkNotebook/` and are
+pending founder approval. The previous five-tab rasters, including
+`ProductionTargets/map.png`, are withdrawn.
 
 ## Design Thesis
 

@@ -7,15 +7,14 @@ enum SaveInkLaunchMode: Equatable {
 }
 
 enum SaveInkLaunch {
-    static var mode: SaveInkLaunchMode? {
+    /// Screenshot stills. The notebook is the main screen without a feature flag.
+    static var previewScreen: SaveInkPreviewScreen? {
         let arguments = ProcessInfo.processInfo.arguments
-        guard arguments.contains("--savvy-ink-notebook") else { return nil }
         guard let raw = arguments.first(where: { $0.hasPrefix("--savvy-ink-screen=") }) else {
-            return .interactive
+            return nil
         }
         let name = String(raw.dropFirst("--savvy-ink-screen=".count))
-        guard let screen = SaveInkPreviewScreen(rawValue: name) else { return .interactive }
-        return .preview(screen)
+        return SaveInkPreviewScreen(rawValue: name)
     }
 }
 
@@ -127,7 +126,7 @@ struct SaveInkScreenPreview: View {
                 SaveInkPlaceScreen(store: store, placeID: SaveInkFixture.dingtai)
             case .welcome:
                 SaveInkWelcomeScreen(onStart: {}, onSignIn: {})
-            case .friends:
+            case .friends, .friendsEmpty:
                 SaveInkFriendsScreen(store: store)
             case .reviewVisibility:
                 SaveInkReviewScreen(store: store, placeID: SaveInkFixture.dingtai)
@@ -149,6 +148,7 @@ enum SaveInkPreviewFactory {
             defaults: defaults,
             now: { SaveInkClock.previewNow },
             seedFixture: true,
+            friendInputs: screen == .friendsEmpty ? [] : nil,
             makeLocator: { SaveInkScriptedLocator() }
         )
         switch screen {
@@ -169,7 +169,7 @@ enum SaveInkPreviewFactory {
         case .reviewVisibility:
             store.activePlaceID = SaveInkFixture.dingtai
             store.draftVisibility = .public
-        case .main, .passport, .stampConfirm, .shopDetail, .welcome, .friends:
+        case .main, .passport, .stampConfirm, .shopDetail, .welcome, .friends, .friendsEmpty:
             break
         }
         return store

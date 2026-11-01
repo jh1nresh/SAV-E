@@ -299,7 +299,12 @@ final class SAVEProductionConfigTests: XCTestCase {
         let workflow = try source(at: ".github/workflows/ci.yml")
         XCTAssertTrue(workflow.contains("save-free-cap-e4-${{ github.sha }}"))
         XCTAssertTrue(workflow.contains("SAVEUITests/SAVEScreenshotRailTests/testFreeCapE4Screenshots"))
-        XCTAssertTrue(workflow.contains("e4-paywall-retry"))
+        XCTAssertTrue(workflow.contains("ink-main-signed-in"))
+        XCTAssertTrue(workflow.contains("ink-14-friends-empty"))
+        XCTAssertTrue(workflow.contains("pending founder approval"))
+        XCTAssertTrue(rail.contains("attach(app, name: \"ink-main-signed-in\")"))
+        XCTAssertTrue(rail.contains("The signed-in main screen is the ink notebook."))
+        XCTAssertTrue(rail.contains("ink.friends.empty"))
         XCTAssertFalse(
             try source(at: "scripts/select-ios-tests.py").contains("testFreeCapE4Screenshots"),
             "E4 stays off FULL so the required ios job does not grow four launches"

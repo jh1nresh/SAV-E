@@ -223,6 +223,7 @@ enum SaveInkPreviewScreen: String, CaseIterable {
     case checkInTooFar = "11-checkin-too-far"
     case friends = "12-friends"
     case reviewVisibility = "13-review-visibility"
+    case friendsEmpty = "14-friends-empty"
 }
 
 enum SaveInkClock {
@@ -530,6 +531,7 @@ final class SaveInkNotebookStore: ObservableObject {
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = { Date() },
         seedFixture: Bool = true,
+        friendInputs: [SaveInkFriendVisitInput]? = nil,
         makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() }
     ) {
         self.defaults = defaults
@@ -537,7 +539,7 @@ final class SaveInkNotebookStore: ObservableObject {
         self.makeLocator = makeLocator
         let seededPlaces = SaveInkFixture.places
         self.places = seededPlaces
-        self.friendInputs = SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
+        self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
         if let stored = Self.load(defaults: defaults, key: storageKey) {
             self.visits = stored
         } else if seedFixture {

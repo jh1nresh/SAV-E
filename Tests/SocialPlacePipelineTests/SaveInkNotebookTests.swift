@@ -207,6 +207,9 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(screens.contains("只看已驗證"))
         XCTAssertFalse(screens.contains("ink.friends.filter"))
         XCTAssertTrue(screens.contains("朋友去過的地方"))
+        XCTAssertTrue(screens.contains("ink.friends.empty"))
+        XCTAssertTrue(screens.contains("還沒有朋友的造訪"))
+        XCTAssertFalse(screens.contains("ink.friends.error"))
         XCTAssertTrue(chrome.contains("B8481F"))
         XCTAssertEqual(chrome.components(separatedBy: "SaveInkPalette.accent").count - 1, 1)
         XCTAssertTrue(model.contains("SaveInkCheckIn"))
@@ -214,18 +217,49 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(model.contains("var longitude"))
     }
 
-    func testApprovedParityBaselinesStayUntouched() throws {
-        let expected = [
-            "home.png": "a4d08600dfba758e1ac714894ef02728",
-            "map.png": "3896860e2cac75f99f5941c58f697498",
-            "friends.png": "57f8333514b59264275df327943b5a3a",
-            "passport.png": "3762875b7751fc0753bac13e3ab96fea",
+    func testEmptyFriendsIsAStateAndDoesNotRequestLocation() {
+        var made = 0
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.empty.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            friendInputs: [],
+            makeLocator: {
+                made += 1
+                return SaveInkScriptedLocator()
+            }
+        )
+        store.openFriends()
+        XCTAssertTrue(store.friendCards().isEmpty)
+        XCTAssertEqual(made, 0)
+        XCTAssertEqual(SaveInkPreviewScreen.friendsEmpty.rawValue, "14-friends-empty")
+    }
+
+    func testShippingRootIsTheInkNotebookWithoutAFlag() throws {
+        let app = try source("SAV-E/App/SaveApp.swift")
+        let launch = try source("SAV-E/Views/InkNotebook/SaveInkNotebookRoot.swift")
+        XCTAssertTrue(app.contains("SaveInkNotebookRoot()"))
+        XCTAssertFalse(app.contains("ContentView("))
+        XCTAssertFalse(app.contains("--savvy-ink-notebook"))
+        XCTAssertFalse(launch.contains("--savvy-ink-notebook"))
+        XCTAssertTrue(launch.contains("--savvy-ink-screen="))
+        XCTAssertTrue(app.contains("SaveInkLaunch.previewScreen"))
+    }
+
+    func testFiveTabScreenshotBaselinesAreWithdrawn() {
+        let names = [
+            "home.png", "home-dark.png",
+            "map.png", "map-light.png", "map-dark.png", "map-mask.png",
+            "friends.png", "friends-dark.png",
+            "passport.png", "passport-dark.png",
         ]
         let directory = repositoryRoot
             .appendingPathComponent("Prototypes/AtlasPostcard/Reference/ProductionTargets")
-        for (name, hash) in expected {
-            let data = try Data(contentsOf: directory.appendingPathComponent(name))
-            XCTAssertEqual(md5(data), hash, name)
+        for name in names {
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path),
+                name
+            )
         }
     }
 
@@ -241,9 +275,32 @@ final class SaveInkNotebookTests: XCTestCase {
                 .appendingPathComponent("ink-\(screen.rawValue).png")
             try data.write(to: url)
             let attachment = XCTAttachment(contentsOfFile: url)
-            attachment.name = url.lastPathComponent
+            attachment.name = "ink-\(screen.rawValue).png"
             attachment.lifetime = .keepAlways
             add(attachment)
+            let baseline = inkBaselineDirectory.appendingPathComponent("ink-\(screen.rawValue).png")
+            if FileManager.default.fileExists(atPath: baseline.path) {
+                let committed = try Data(contentsOf: baseline)
+                XCTAssertEqual(md5(committed), md5(data), screen.rawValue)
+            }
+        }
+    }
+
+    func testInkNotebookBaselinesAwaitFounderApproval() throws {
+        let names = SaveInkPreviewScreen.allCases.map { "ink-\($0.rawValue).png" }
+        XCTAssertTrue(names.contains("ink-01-main.png"))
+        XCTAssertTrue(names.contains("ink-03-passport.png"))
+        XCTAssertTrue(names.contains("ink-12-friends.png"))
+        XCTAssertTrue(names.contains("ink-14-friends-empty.png"))
+        let design = try source("DESIGN.md")
+        XCTAssertTrue(design.contains("pending founder approval"))
+        XCTAssertTrue(design.contains("Reference/InkNotebook"))
+        for name in names {
+            let baseline = inkBaselineDirectory.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: baseline.path) else { continue }
+            let data = try Data(contentsOf: baseline)
+            XCTAssertEqual([UInt8](data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10], name)
+            XCTAssertGreaterThan(data.count, 8_000, name)
         }
     }
 
@@ -294,6 +351,10 @@ final class SaveInkNotebookTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private var inkBaselineDirectory: URL {
+        repositoryRoot.appendingPathComponent("Prototypes/AtlasPostcard/Reference/InkNotebook")
     }
 
     private var repositoryRoot: URL {

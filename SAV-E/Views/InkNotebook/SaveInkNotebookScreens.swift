@@ -674,21 +674,43 @@ struct SaveInkFriendsScreen: View {
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .padding(.leading, 58)
-                ScrollView {
-                    VStack(spacing: 14) {
-                        ForEach(cards) { card in
-                            friendCard(card)
+                if cards.isEmpty {
+                    emptyFriends
+                } else {
+                    ScrollView {
+                        VStack(spacing: 14) {
+                            ForEach(cards) { card in
+                                friendCard(card)
+                            }
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
+                    .accessibilityIdentifier("ink.friends.list")
                 }
-                .accessibilityIdentifier("ink.friends.list")
             }
             .padding(.horizontal, 24)
             .padding(.top, 18)
         }
         .accessibilityIdentifier("ink.friends")
+    }
+
+    private var emptyFriends: some View {
+        VStack(spacing: 16) {
+            SaveInkStampMark(kind: .empty, seed: 14)
+                .frame(width: 120, height: 120)
+                .padding(.top, 48)
+            Text("還沒有朋友的造訪")
+                .font(SaveInkType.subpageTitle)
+                .foregroundStyle(SaveInkPalette.ink)
+                .multilineTextAlignment(.center)
+            Text("朋友公開記下的地方會出現在這裡。")
+                .font(SaveInkType.body)
+                .foregroundStyle(SaveInkPalette.inkSub)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityIdentifier("ink.friends.empty")
     }
 
     private func friendCard(_ card: SaveInkFriendCard) -> some View {
