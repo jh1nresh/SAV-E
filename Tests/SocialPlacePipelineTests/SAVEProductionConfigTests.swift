@@ -307,9 +307,15 @@ final class SAVEProductionConfigTests: XCTestCase {
         let inkTests = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
         XCTAssertTrue(inkTests.contains("ink.friends.empty"))
         XCTAssertTrue(inkTests.contains("ink-14-friends-empty.png"))
+        let selector = try source(at: "scripts/select-ios-tests.py")
+        XCTAssertTrue(
+            selector.contains("testFreeCapE4Screenshots"),
+            "The selected screenshot is the signed-in ink notebook. There is no ink paywall screen."
+        )
+        XCTAssertTrue(selector.contains("testInkNotebookReachesEveryScreenAndReturnsHome"))
         XCTAssertFalse(
-            try source(at: "scripts/select-ios-tests.py").contains("testFreeCapE4Screenshots"),
-            "E4 stays off FULL so the required ios job does not grow four launches"
+            selector.contains("BASELINE[:2]"),
+            "The required suite is the ink notebook, not the five-tab prefix."
         )
     }
 

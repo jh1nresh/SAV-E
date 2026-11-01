@@ -378,12 +378,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             )
         )
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
-        // select-ios-tests.py. The required `ios` job (now in ios.yml) must
-        // keep that wiring. The live five-tab Home capture must stay in
-        // BASELINE (every UI route) and the frozen full list, or visual
-        // parity falls back to the older atlas-home attachment.
+        // select-ios-tests.py. The required `ios` job still uses that wiring.
+        // Founder 2026-11-01: the suite that runs is the ink notebook.
         XCTAssertTrue(selector.contains("\"testCaptureFiveTabLanding\""))
-        XCTAssertTrue(selector.contains("BASELINE[:2]"))
+        XCTAssertTrue(selector.contains("FULL = list(INK)"))
+        XCTAssertFalse(selector.contains("BASELINE[:2]"))
         XCTAssertTrue(
             baseline.contains(
                 "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding"
@@ -407,9 +406,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
-        XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
+        XCTAssertTrue(selector.contains("testFreeCapE4Screenshots"))
+        XCTAssertTrue(selector.contains("testInkNotebookReachesEveryScreenAndReturnsHome"))
+        XCTAssertFalse(selector.contains("testHomeListProgressiveSearch"))
         XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
-        XCTAssertTrue(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
+        XCTAssertFalse(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
