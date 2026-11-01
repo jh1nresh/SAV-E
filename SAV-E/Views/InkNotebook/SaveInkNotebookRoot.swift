@@ -177,7 +177,7 @@ enum SaveInkPreviewFactory {
 }
 
 @MainActor
-final class SaveInkOneShotLocator: NSObject, SaveInkLocating, @preconcurrency CLLocationManagerDelegate {
+final class SaveInkOneShotLocator: NSObject, SaveInkLocating, CLLocationManagerDelegate {
     static let purposeKey = "SaveInkCheckIn"
 
     private let manager = CLLocationManager()

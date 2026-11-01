@@ -48,7 +48,7 @@ enum SaveInkType {
 }
 
 enum SaveInkRough {
-    static func jitter(seed: Int, index: Int, amplitude: CGFloat) -> CGFloat {
+    nonisolated static func jitter(seed: Int, index: Int, amplitude: CGFloat) -> CGFloat {
         var value = UInt64(bitPattern: Int64(seed &+ index &* 374761393))
         value = (value ^ (value >> 13)) &* 1274126177
         value ^= value >> 16
@@ -56,7 +56,7 @@ enum SaveInkRough {
         return CGFloat(unit) * amplitude
     }
 
-    static func quads(_ points: [CGPoint]) -> Path {
+    nonisolated static func quads(_ points: [CGPoint]) -> Path {
         var path = Path()
         guard points.count >= 3 else { return path }
         func mid(_ lhs: CGPoint, _ rhs: CGPoint) -> CGPoint {
@@ -72,7 +72,7 @@ enum SaveInkRough {
         return path
     }
 
-    static func roundedRect(
+    nonisolated static func roundedRect(
         _ rect: CGRect,
         radius: CGFloat,
         step: CGFloat,
@@ -122,7 +122,7 @@ enum SaveInkRough {
         }
     }
 
-    static func circle(_ rect: CGRect, seed: Int, amplitude: CGFloat) -> [CGPoint] {
+    nonisolated static func circle(_ rect: CGRect, seed: Int, amplitude: CGFloat) -> [CGPoint] {
         let radius = min(rect.width, rect.height) / 2
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let count = max(Int((2 * CGFloat.pi * radius) / 7), 12)
@@ -140,7 +140,7 @@ struct SaveInkRoughRoundedRect: Shape {
     var amplitude: CGFloat = 0.8
     var step: CGFloat = 7
 
-    func path(in rect: CGRect) -> Path {
+    nonisolated func path(in rect: CGRect) -> Path {
         SaveInkRough.quads(
             SaveInkRough.roundedRect(rect, radius: cornerRadius, step: step, seed: seed, amplitude: amplitude)
         )
@@ -151,7 +151,7 @@ struct SaveInkRoughCircle: Shape {
     var seed: Int
     var amplitude: CGFloat = 0.55
 
-    func path(in rect: CGRect) -> Path {
+    nonisolated func path(in rect: CGRect) -> Path {
         SaveInkRough.quads(SaveInkRough.circle(rect, seed: seed, amplitude: amplitude))
     }
 }
@@ -450,7 +450,7 @@ struct SaveInkStampMark: View {
 struct SaveInkInsetCircle: Shape {
     var amount: CGFloat
     var seed: Int
-    func path(in rect: CGRect) -> Path {
+    nonisolated func path(in rect: CGRect) -> Path {
         SaveInkRoughCircle(seed: seed, amplitude: 0.3).path(in: rect.insetBy(dx: amount, dy: amount))
     }
 }

@@ -15,7 +15,11 @@ const allowedAdvisories = new Map([
   ],
   [
     "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
-    "node-forge 1.4.0 is still the latest release; Savvy reaches it only through Expo CLI code signing.",
+    "Historical node-forge advisory. The lock is now 1.4.2; this entry stays so an older transitive copy does not fail the gate.",
+  ],
+  [
+    "https://github.com/advisories/GHSA-qr28-fpjm-wq7f",
+    "decode-uri-component 0.5.1 is ESM-only. WalletConnect/Reown still lock CJS 0.2.2 through query-string, and npm audit fix cannot move it without a breaking override.",
   ],
 ]);
 
