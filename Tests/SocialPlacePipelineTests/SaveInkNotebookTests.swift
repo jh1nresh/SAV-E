@@ -358,6 +358,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(app.contains("--savvy-ink-notebook"))
         XCTAssertFalse(launch.contains("--savvy-ink-notebook"))
         XCTAssertTrue(launch.contains("--savvy-ink-screen="))
+        XCTAssertTrue(launch.contains("--savvy-ink-empty-friends"))
         XCTAssertTrue(app.contains("SaveInkLaunch.previewScreen"))
     }
 

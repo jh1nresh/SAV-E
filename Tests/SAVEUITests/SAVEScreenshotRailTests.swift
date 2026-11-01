@@ -930,6 +930,39 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         terminate(app)
     }
 
+    /// Screen 14 is the friends page when a real launch has no friend visits.
+    @MainActor
+    func testInkNotebookEmptyFriendsReachesScreen14AndReturnsHome() throws {
+        let app = inkApp(
+            suite: "ink-empty-\(UUID().uuidString)",
+            extra: ["--savvy-ink-empty-friends"]
+        )
+        try signedInInkHome(app)
+        let entry = app.descendants(matching: .any)["ink.friends.entry"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout))
+        assertInkHitTarget(entry, name: "ink.friends.entry")
+        entry.tap()
+        let page = app.descendants(matching: .any)["ink.friends"]
+        let empty = app.descendants(matching: .any)["ink.friends.empty"]
+        let back = app.descendants(matching: .any)["ink.friends.back"]
+        XCTAssertTrue(page.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(empty.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["ink.friends.list"].exists)
+        XCTAssertTrue(app.staticTexts["還沒有朋友的造訪"].exists)
+        assertInkHitTarget(back, name: "ink.friends.back")
+        back.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(empty.exists)
+        terminate(app)
+    }
+
+    @MainActor
+    private func assertInkHitTarget(_ element: XCUIElement, name: String) {
+        XCTAssertGreaterThanOrEqual(element.frame.width + 0.01, 44, "\(name) width")
+        XCTAssertGreaterThanOrEqual(element.frame.height + 0.01, 44, "\(name) height")
+    }
+
     /// Width lanes still use the old filenames. The screen is the ink notebook.
     @MainActor
     private func captureInkNotebookWidth(name: String) throws {

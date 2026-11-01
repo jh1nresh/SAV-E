@@ -328,6 +328,7 @@ struct SaveInkBackButton: View {
                         .stroke(SaveInkPalette.ink, lineWidth: 2)
                 )
         }
+        .frame(minWidth: 44, minHeight: 44)
         .accessibilityIdentifier(identifier)
     }
 }

@@ -15,6 +15,11 @@ enum SaveInkLaunch {
         return UserDefaults(suiteName: name) ?? .standard
     }
 
+    /// A real launch with no friend visits. Screen 14 is that empty friends page.
+    static var emptyFriends: Bool {
+        ProcessInfo.processInfo.arguments.contains("--savvy-ink-empty-friends")
+    }
+
     static func showsWelcome(seen: Bool) -> Bool {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--savvy-ink-skip-welcome") { return false }
@@ -84,6 +89,7 @@ private struct SaveInkOwnedNotebook: View {
     @AppStorage("save.ink.welcome.seen.v1") private var welcomeSeen = false
     @StateObject private var store = SaveInkNotebookStore(
         defaults: SaveInkLaunch.defaults,
+        friendInputs: SaveInkLaunch.emptyFriends ? [] : nil,
         makeLocator: { SaveInkLaunch.makeLocator() }
     )
 
