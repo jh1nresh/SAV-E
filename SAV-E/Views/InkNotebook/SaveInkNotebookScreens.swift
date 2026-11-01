@@ -744,6 +744,7 @@ struct SaveInkFriendsScreen: View {
                 .font(SaveInkType.subpageTitle)
                 .foregroundStyle(SaveInkPalette.ink)
                 .multilineTextAlignment(.center)
+                .accessibilityIdentifier("ink.friends.empty")
             Text("朋友把造訪設成公開後，就會出現在這裡")
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.inkSub)
