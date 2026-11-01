@@ -851,7 +851,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func walkHomeEntries(suite: String) throws {
         let app = inkApp(suite: suite)
         try signedInInkHome(app)
-        app.descendants(matching: .any)["ink.save.entry"].tap()
+        let save = app.descendants(matching: .any)["ink.save.entry"]
+        XCTAssertTrue(save.waitForExistence(timeout: stepTimeout))
+        save.tap()
         XCTAssertTrue(app.descendants(matching: .any)["ink.save"].waitForExistence(timeout: stepTimeout))
         app.descendants(matching: .any)["ink.save.close"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
