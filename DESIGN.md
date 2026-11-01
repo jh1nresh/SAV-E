@@ -45,8 +45,9 @@ screen: one home, no tab bar, Iansui body, and accent only on「我到了」.
 Founder 2026-11-01: the five-tab shell is not the shipping root, and
 `--savvy-ink-notebook` is not a launch gate. Screenshot baselines for this
 surface live in `Prototypes/AtlasPostcard/Reference/InkNotebook/` and are
-pending founder approval. The previous five-tab rasters, including
-`ProductionTargets/map.png`, are withdrawn.
+pending founder approval. `ProductionTargets/map.png` from `a5d62df8`
+remains the approved map visual reference. The other five-tab rasters
+are withdrawn.
 
 ## Design Thesis
 

@@ -1674,7 +1674,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(readme.contains("402×874") || readme.contains("402 x 874") || readme.contains("402 × 874"))
         XCTAssertFalse(readme.contains("padded with paper"))
         XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
-        for name in ["home.png", "home-dark.png", "map.png"] {
+        for name in ["home.png", "home-dark.png"] {
             XCTAssertFalse(
                 FileManager.default.fileExists(
                     atPath: repositoryRoot.appendingPathComponent(

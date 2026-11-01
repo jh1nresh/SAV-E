@@ -251,7 +251,7 @@ final class SaveInkNotebookTests: XCTestCase {
     func testFiveTabScreenshotBaselinesAreWithdrawn() {
         let names = [
             "home.png", "home-dark.png",
-            "map.png", "map-light.png", "map-dark.png", "map-mask.png",
+            "map-light.png", "map-dark.png", "map-mask.png",
             "friends.png", "friends-dark.png",
             "passport.png", "passport-dark.png",
         ]
@@ -263,6 +263,18 @@ final class SaveInkNotebookTests: XCTestCase {
                 name
             )
         }
+    }
+
+    func testApprovedMapBaselineRemainsTheVisualReference() throws {
+        let map = repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
+        )
+        let data = try Data(contentsOf: map)
+        XCTAssertEqual(
+            md5(data),
+            "711c9b3c54367281dab91b5fd094f047",
+            "map.png stays the a5d62df8 approved visual reference"
+        )
     }
 
     func testInkScreensRenderForTheSimulatorAttachment() throws {
@@ -299,7 +311,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(design.contains("Reference/InkNotebook"))
         for name in names {
             let baseline = inkBaselineDirectory.appendingPathComponent(name)
-            guard FileManager.default.fileExists(atPath: baseline.path) else { continue }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: baseline.path), name)
             let data = try Data(contentsOf: baseline)
             XCTAssertEqual([UInt8](data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10], name)
             XCTAssertGreaterThan(data.count, 8_000, name)

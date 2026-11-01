@@ -1,3 +1,4 @@
+import CryptoKit
 import UIKit
 import XCTest
 @testable import SAVE
@@ -420,7 +421,13 @@ final class SaveDoodleMapTests: XCTestCase {
         let targets = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets"
         )
-        for name in ["map.png", "map-light.png", "map-dark.png", "map-mask.png"] {
+        let approvedMap = try Data(contentsOf: targets.appendingPathComponent("map.png"))
+        XCTAssertEqual(
+            Insecure.MD5.hash(approvedMap).map { String(format: "%02x", $0) }.joined(),
+            "711c9b3c54367281dab91b5fd094f047",
+            "map.png stays the a5d62df8 approved visual reference"
+        )
+        for name in ["map-light.png", "map-dark.png", "map-mask.png"] {
             XCTAssertFalse(
                 FileManager.default.fileExists(atPath: targets.appendingPathComponent(name).path),
                 "five-tab map baseline withdrawn: \(name)"
