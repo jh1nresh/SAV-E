@@ -428,9 +428,9 @@ final class SaveDoodleMapTests: XCTestCase {
             "map.png stays the a5d62df8 approved visual reference"
         )
         for name in ["map-light.png", "map-dark.png", "map-mask.png"] {
-            XCTAssertFalse(
+            XCTAssertTrue(
                 FileManager.default.fileExists(atPath: targets.appendingPathComponent(name).path),
-                "five-tab map baseline withdrawn: \(name)"
+                name
             )
         }
         let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")

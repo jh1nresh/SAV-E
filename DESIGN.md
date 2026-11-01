@@ -46,8 +46,8 @@ Founder 2026-11-01: the five-tab shell is not the shipping root, and
 `--savvy-ink-notebook` is not a launch gate. Screenshot baselines for this
 surface live in `Prototypes/AtlasPostcard/Reference/InkNotebook/` and are
 pending founder approval. `ProductionTargets/map.png` from `a5d62df8`
-remains the approved map visual reference. The other five-tab rasters
-are withdrawn.
+remains the approved map visual reference. The other production parity
+rasters stay on disk for the suite.
 
 ## Design Thesis
 

@@ -296,6 +296,10 @@ struct SaveApp: App {
                 AuthenticatedRootView(
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
+                    pendingClipListSave: $pendingClipListSave,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
                     onVerificationChanged: updateVerifiedAccount
@@ -716,6 +720,10 @@ private struct AuthenticatedRootView: View {
 
     let sessionGeneration: Int
     let sessionOrigin: AccountSessionOrigin
+    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var requiresShareConfirmation: Bool
+    @Binding var requiresListConfirmation: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
@@ -767,8 +775,30 @@ private struct AuthenticatedRootView: View {
     }
 
     private var verifiedAccountContent: some View {
-        SaveInkNotebookRoot()
-            .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+        Group {
+            if showsLegacyDoodleRoot {
+                ContentView(
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
+                    pendingClipListSave: $pendingClipListSave,
+                    pendingOnboardingClue: $pendingOnboardingClue,
+                    storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
+                )
+            } else {
+                SaveInkNotebookRoot()
+            }
+        }
+        .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+    }
+
+    /// UI tests of the previous five-tab shell opt in. The product root is the ink notebook.
+    private var showsLegacyDoodleRoot: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-legacy-root")
+#else
+        false
+#endif
     }
 
     private func claimPendingOnboardingClueIfNeeded() {

@@ -238,10 +238,7 @@ class VerifyToolTests(unittest.TestCase):
             self.assertRegex(shot["planned"], SHOT_NAME)
             self.assertEqual(shot["naming"], verify.SCREENSHOT_NAME)
             self.assertNotEqual(shot["status"], "PASS")
-            self.assertFalse(
-                parity.is_file(),
-                "five-tab home.png is withdrawn; ink baselines live under Reference/InkNotebook",
-            )
+            self.assertTrue(parity.is_file())
             ink = (ROOT / "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift").read_text(
                 encoding="utf-8"
             )

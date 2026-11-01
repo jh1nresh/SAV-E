@@ -1675,13 +1675,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(readme.contains("padded with paper"))
         XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
         for name in ["home.png", "home-dark.png"] {
-            XCTAssertFalse(
+            XCTAssertTrue(
                 FileManager.default.fileExists(
                     atPath: repositoryRoot.appendingPathComponent(
                         "Prototypes/AtlasPostcard/Reference/ProductionTargets/\(name)"
                     ).path
                 ),
-                "five-tab baseline withdrawn: \(name)"
+                name
             )
         }
         let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")

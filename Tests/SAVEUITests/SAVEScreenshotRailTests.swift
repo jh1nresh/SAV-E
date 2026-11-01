@@ -794,7 +794,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Screen 14 is covered by SaveInkNotebookTests ImageRenderer stills.
     @MainActor
     private func captureInkNotebookAsTheMainScreen() throws {
-        let app = makeE4App()
+        let app = makeE4App(legacyRoot: false)
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(
@@ -1081,7 +1081,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    private func makeE4App(extraArguments: [String] = []) -> XCUIApplication {
+    private func makeE4App(extraArguments: [String] = [], legacyRoot: Bool = true) -> XCUIApplication {
         makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -1091,7 +1091,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
             ] + extraArguments + [
                 "-save.appLanguage", "en",
-            ]
+            ],
+            legacyRoot: legacyRoot
         )
     }
 

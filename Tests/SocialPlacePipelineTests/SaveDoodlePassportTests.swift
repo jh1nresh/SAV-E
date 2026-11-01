@@ -357,13 +357,13 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(script.contains("screen=\"passport\""))
         XCTAssertTrue(script.contains("parity_screens=(home saves plan map friends capture paywall passport)"))
         for name in ["passport.png", "passport-dark.png"] {
-            XCTAssertFalse(
+            XCTAssertTrue(
                 FileManager.default.fileExists(
                     atPath: repositoryRoot.appendingPathComponent(
                         "Prototypes/AtlasPostcard/Reference/ProductionTargets/\(name)"
                     ).path
                 ),
-                "five-tab passport baseline withdrawn: \(name)"
+                name
             )
         }
         let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")

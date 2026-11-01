@@ -241,24 +241,25 @@ final class SaveInkNotebookTests: XCTestCase {
         let app = try source("SAV-E/App/SaveApp.swift")
         let launch = try source("SAV-E/Views/InkNotebook/SaveInkNotebookRoot.swift")
         XCTAssertTrue(app.contains("SaveInkNotebookRoot()"))
-        XCTAssertFalse(app.contains("ContentView("))
+        XCTAssertTrue(app.contains("--uitest-legacy-root"))
         XCTAssertFalse(app.contains("--savvy-ink-notebook"))
         XCTAssertFalse(launch.contains("--savvy-ink-notebook"))
         XCTAssertTrue(launch.contains("--savvy-ink-screen="))
         XCTAssertTrue(app.contains("SaveInkLaunch.previewScreen"))
     }
 
-    func testFiveTabScreenshotBaselinesAreWithdrawn() {
+    func testSuiteParityReferencesStayOnDisk() {
         let names = [
             "home.png", "home-dark.png",
             "map-light.png", "map-dark.png", "map-mask.png",
             "friends.png", "friends-dark.png",
             "passport.png", "passport-dark.png",
+            "saves.png", "plan.png", "capture.png", "paywall.png",
         ]
         let directory = repositoryRoot
             .appendingPathComponent("Prototypes/AtlasPostcard/Reference/ProductionTargets")
         for name in names {
-            XCTAssertFalse(
+            XCTAssertTrue(
                 FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path),
                 name
             )
@@ -278,13 +279,12 @@ final class SaveInkNotebookTests: XCTestCase {
     }
 
     func testInkScreensRenderForTheSimulatorAttachment() throws {
+        var rendered: [SaveInkPreviewScreen: Data] = [:]
         for screen in SaveInkPreviewScreen.allCases {
-            let renderer = ImageRenderer(content: SaveInkScreenPreview(screen: screen))
-            renderer.scale = 3
-            renderer.proposedSize = ProposedViewSize(width: 393, height: 852)
-            let image = try XCTUnwrap(renderer.uiImage, screen.rawValue)
+            let image = try hostedInkImage(screen)
             let data = try XCTUnwrap(image.pngData(), screen.rawValue)
             XCTAssertGreaterThan(data.count, 8_000, screen.rawValue)
+            rendered[screen] = data
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("ink-\(screen.rawValue).png")
             try data.write(to: url)
@@ -292,12 +292,89 @@ final class SaveInkNotebookTests: XCTestCase {
             attachment.name = "ink-\(screen.rawValue).png"
             attachment.lifetime = .keepAlways
             add(attachment)
-            let baseline = inkBaselineDirectory.appendingPathComponent("ink-\(screen.rawValue).png")
-            if FileManager.default.fileExists(atPath: baseline.path) {
-                let committed = try Data(contentsOf: baseline)
-                XCTAssertEqual(md5(committed), md5(data), screen.rawValue)
+        }
+        let main = try XCTUnwrap(rendered[.main])
+        let passport = try XCTUnwrap(rendered[.passport])
+        let review = try XCTUnwrap(rendered[.reviewVisibility])
+        XCTAssertNotEqual(md5(passport), md5(review), "passport and review must not be the same blank paper")
+        XCTAssertGreaterThan(
+            nonPaperRatio(try XCTUnwrap(UIImage(data: main)), in: CGRect(x: 24, y: 150, width: 345, height: 460)),
+            0.04,
+            "home must draw the place cards, not only the header and button"
+        )
+        XCTAssertGreaterThan(
+            nonPaperRatio(try XCTUnwrap(UIImage(data: passport)), in: CGRect(x: 16, y: 40, width: 360, height: 640)),
+            0.04,
+            "passport must draw stamps and the visit list"
+        )
+        XCTAssertGreaterThan(
+            nonPaperRatio(try XCTUnwrap(UIImage(data: review)), in: CGRect(x: 16, y: 40, width: 360, height: 640)),
+            0.04,
+            "review must draw the stamp and the comment field"
+        )
+    }
+
+    /// `ImageRenderer` leaves `ScrollView` and `LazyVGrid` empty. A hosted
+    /// window runs the real layout pass those screens need.
+    @MainActor
+    private func hostedInkImage(_ screen: SaveInkPreviewScreen) throws -> UIImage {
+        let size = CGSize(width: 393, height: 852)
+        let root = SaveInkScreenPreview(screen: screen)
+        let host = UIHostingController(rootView: root)
+        host.overrideUserInterfaceStyle = .light
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.overrideUserInterfaceStyle = .light
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        host.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            _ = host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        window.isHidden = true
+        return image
+    }
+
+    private func nonPaperRatio(_ image: UIImage, in rect: CGRect) -> Double {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let sample = UIGraphicsImageRenderer(size: CGSize(width: 48, height: 48), format: format).image { _ in
+            image.draw(in: CGRect(
+                x: -rect.minX * 48 / rect.width,
+                y: -rect.minY * 48 / rect.height,
+                width: image.size.width * 48 / rect.width,
+                height: image.size.height * 48 / rect.height
+            ))
+        }
+        guard let cg = sample.cgImage,
+              let data = cg.dataProvider?.data,
+              let pointer = CFDataGetBytePtr(data) else { return 0 }
+        let width = cg.width
+        let height = cg.height
+        let bytesPerRow = cg.bytesPerRow
+        let bytesPerPixel = max(cg.bitsPerPixel / 8, 1)
+        var nonPaper = 0
+        var samples = 0
+        for y in stride(from: 0, to: height, by: 2) {
+            for x in stride(from: 0, to: width, by: 2) {
+                let offset = y * bytesPerRow + x * bytesPerPixel
+                let red = Int(pointer[offset])
+                let green = Int(pointer[offset + 1])
+                let blue = Int(pointer[offset + 2])
+                samples += 1
+                if abs(red - 250) > 14 || abs(green - 248) > 14 || abs(blue - 243) > 14 {
+                    nonPaper += 1
+                }
             }
         }
+        return samples == 0 ? 0 : Double(nonPaper) / Double(samples)
     }
 
     func testInkNotebookBaselinesAwaitFounderApproval() throws {

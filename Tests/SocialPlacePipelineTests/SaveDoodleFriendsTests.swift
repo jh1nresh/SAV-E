@@ -231,13 +231,13 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(parity.contains("[--mask mask.png]"))
         XCTAssertFalse(parity.contains("[--ignore-rect x,y,w,h]"))
         for name in ["friends.png", "friends-dark.png"] {
-            XCTAssertFalse(
+            XCTAssertTrue(
                 FileManager.default.fileExists(
                     atPath: repositoryRoot.appendingPathComponent(
                         "Prototypes/AtlasPostcard/Reference/ProductionTargets/\(name)"
                     ).path
                 ),
-                "five-tab friends baseline withdrawn: \(name)"
+                name
             )
         }
         let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
