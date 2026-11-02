@@ -954,6 +954,36 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         terminate(app)
     }
 
+    /// F-10. Every tappable control on the ink home speaks Chinese.
+    @MainActor
+    func testF10HomeControlsSpeakChinese() throws {
+        let app = inkApp(suite: "ink-a11y-\(UUID().uuidString)")
+        try signedInInkHome(app)
+        let required = [
+            "ink.passport.entry",
+            "ink.save.entry",
+            "ink.friends.entry",
+            "ink.arrived",
+            "ink.place.dingtai",
+            "ink.place.qingtian",
+            "ink.place.chifeng",
+        ]
+        var checked = Set<String>()
+        for identifier in required {
+            let element = requireInk(identifier, in: app)
+            assertInkSpeaksChinese(element, name: identifier)
+            checked.insert(identifier)
+        }
+        for button in app.buttons.allElementsBoundByIndex where button.identifier.hasPrefix("ink.") {
+            guard checked.insert(button.identifier).inserted else { continue }
+            assertInkSpeaksChinese(button, name: button.identifier)
+        }
+        XCTAssertEqual(app.descendants(matching: .any)["ink.passport.entry"].label, "護照")
+        XCTAssertEqual(app.descendants(matching: .any)["ink.save.entry"].label, "存地點")
+        XCTAssertGreaterThanOrEqual(checked.count, required.count)
+        terminate(app)
+    }
+
     /// Prints the accessibility tree when an ink identifier is missing.
     @MainActor
     private func requireInk(
@@ -975,6 +1005,23 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func assertInkHitTarget(_ element: XCUIElement, name: String) {
         XCTAssertGreaterThanOrEqual(element.frame.width + 0.01, 44, "\(name) width")
         XCTAssertGreaterThanOrEqual(element.frame.height + 0.01, 44, "\(name) height")
+    }
+
+    @MainActor
+    private func assertInkSpeaksChinese(
+        _ element: XCUIElement,
+        name: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let label = element.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(label.isEmpty, "\(name) accessibility label is empty", file: file, line: line)
+        XCTAssertNotNil(
+            label.range(of: "\\p{Han}", options: .regularExpression),
+            "\(name) label has no Chinese: \(label)",
+            file: file,
+            line: line
+        )
     }
 
     /// Width lanes still use the old filenames. The screen is the ink notebook.

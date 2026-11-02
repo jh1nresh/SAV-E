@@ -192,6 +192,8 @@ struct SaveInkCircleButton: View {
     var label: String
     var identifier: String
     var personIcon: Bool = false
+    /// Spoken name. The drawn mark can stay a glyph such as 「+」.
+    var spoken: String? = nil
     var action: () -> Void
 
     var body: some View {
@@ -214,6 +216,7 @@ struct SaveInkCircleButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
+        .accessibilityLabel(spoken ?? label)
         .frame(minWidth: 46, minHeight: 46)
     }
 }
@@ -314,6 +317,7 @@ struct SaveInkArriveButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("ink.arrived")
+        .accessibilityLabel("我到了")
         .frame(minHeight: 44)
     }
 }

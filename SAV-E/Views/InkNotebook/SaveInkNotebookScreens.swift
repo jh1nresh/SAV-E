@@ -23,6 +23,7 @@ struct SaveInkHomeScreen: View {
                                 placeCard(place)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(place.name)
                             .accessibilityIdentifier("ink.place.\(place.id)")
                         }
                     }
@@ -58,10 +59,10 @@ struct SaveInkHomeScreen: View {
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
-                SaveInkCircleButton(label: "人", identifier: "ink.passport.entry", personIcon: true) {
+                SaveInkCircleButton(label: "人", identifier: "ink.passport.entry", personIcon: true, spoken: "護照") {
                     store.openPassport()
                 }
-                SaveInkCircleButton(label: "+", identifier: "ink.save.entry") {
+                SaveInkCircleButton(label: "+", identifier: "ink.save.entry", spoken: "存地點") {
                     store.openSave()
                 }
             }
@@ -98,6 +99,7 @@ struct SaveInkHomeScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("ink.friends.entry")
+        .accessibilityLabel("朋友推薦")
     }
 
     private func placeCard(_ place: SaveInkPlace) -> some View {

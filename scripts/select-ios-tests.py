@@ -14,6 +14,7 @@ INK = [
     RAIL + "testFreeCapE4Screenshots",
     RAIL + "testInkNotebookReachesEveryScreenAndReturnsHome",
     RAIL + "testInkNotebookEmptyFriendsReachesScreen14AndReturnsHome",
+    RAIL + "testF10HomeControlsSpeakChinese",
 ]
 ONBOARDING = "SAVEUITests/SAVEOnboardingCarouselTests"
 PHOTO_ATTR = "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
