@@ -299,10 +299,23 @@ final class SAVEProductionConfigTests: XCTestCase {
         let workflow = try source(at: ".github/workflows/ci.yml")
         XCTAssertTrue(workflow.contains("save-free-cap-e4-${{ github.sha }}"))
         XCTAssertTrue(workflow.contains("SAVEUITests/SAVEScreenshotRailTests/testFreeCapE4Screenshots"))
-        XCTAssertTrue(workflow.contains("e4-paywall-retry"))
+        XCTAssertTrue(workflow.contains("ink-main-signed-in"))
+        XCTAssertTrue(workflow.contains("ink-14-friends-empty"))
+        XCTAssertTrue(workflow.contains("pending founder approval"))
+        XCTAssertTrue(rail.contains("attach(app, name: \"ink-main-signed-in\")"))
+        XCTAssertTrue(rail.contains("The signed-in main screen is the ink notebook."))
+        let inkTests = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
+        XCTAssertTrue(inkTests.contains("ink.friends.empty"))
+        XCTAssertTrue(inkTests.contains("ink-14-friends-empty.png"))
+        let selector = try source(at: "scripts/select-ios-tests.py")
+        XCTAssertTrue(
+            selector.contains("testFreeCapE4Screenshots"),
+            "The selected screenshot is the signed-in ink notebook. There is no ink paywall screen."
+        )
+        XCTAssertTrue(selector.contains("testInkNotebookReachesEveryScreenAndReturnsHome"))
         XCTAssertFalse(
-            try source(at: "scripts/select-ios-tests.py").contains("testFreeCapE4Screenshots"),
-            "E4 stays off FULL so the required ios job does not grow four launches"
+            selector.contains("BASELINE[:2]"),
+            "The required suite is the ink notebook, not the five-tab prefix."
         )
     }
 

@@ -16,34 +16,10 @@ SPEC.loader.exec_module(selection)
 class CoverageTests(unittest.TestCase):
     def test_full_matches_frozen_baseline_without_plan_extras(self):
         full = selection.select([], full=True)
-        actual = set(full["tests"] + [selection.TRIP_SHEET])
-        baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
-        self.assertEqual(actual, baseline | {
-            selection.RAIL + "testHomeListProgressiveSearch",
-            selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
-            selection.RAIL + "testHomeCollectedKeepsOtherCitiesAndActualCounts",
-            selection.RAIL + "testSavesTripsBackReturnsToSaves",
-            selection.RAIL + "testHomeDesignProductStates",
-            selection.RAIL + "testHomeShowOnMapFocusesPlace",
-            selection.RAIL + "testHomeHintCountEvidence",
-            selection.RAIL + "testHomeTaipeiGrantedDistances",
-            selection.RAIL + "testHomeTPEAEvidence",
-            selection.RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
-            selection.RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
-        })
-        self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
-        self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])
-        self.assertTrue(full["trip"])
+        self.assertEqual(full["profile"], "ink")
+        self.assertEqual(full["tests"], selection.INK)
+        self.assertFalse(full["trip"])
         self.assertTrue(full["units"])
-        plan_only = (
-            selection.RAIL + "testPlanChatDraftAndConversationSurviveTabChange",
-            selection.RAIL + "testPlanTabDraftsFromSavedMapStamps",
-            selection.RAIL + "testPlanCandidateCanBeConfirmedSavedAndOpened",
-        )
-        plan = selection.select(["SAV-E/Views/Plan/SavePlanView.swift"])
-        for test in plan_only:
-            self.assertIn(test, plan["tests"])
-            self.assertNotIn(test, full["tests"])
 
     def test_selected_tests_exist_in_real_xctest_sources(self):
         catalog = list(dict.fromkeys(
@@ -59,42 +35,33 @@ class CoverageTests(unittest.TestCase):
     def test_known_map_change_keeps_parity_and_related_navigation(self):
         plan = selection.select(["SAV-E/Views/Map/SaveMapDrawerPanel.swift"])
         self.assertEqual(plan["profile"], "map")
-        self.assertIn(selection.RAIL + "testCaptureAtlasProductionParity", plan["tests"])
-        self.assertIn(selection.RAIL + "testCaptureFiveTabLanding", plan["tests"])
-        self.assertIn(selection.RAIL + "testMapSearchDrawerResizesThroughThreeStages", plan["tests"])
-        self.assertIn(selection.RAIL + "testTripMapMarkerDetailReturnsToScopedTabs", plan["tests"])
+        self.assertEqual(plan["tests"], selection.INK)
         self.assertFalse(plan["trip"])
-        self.assertLess(len(plan["tests"]), len(selection.FULL))
 
     def test_shared_place_detail_keeps_full_integration(self):
         plan = selection.select(["SAV-E/Views/Map/PlaceBottomSheet.swift"])
-        self.assertEqual(plan["profile"], "full")
+        self.assertEqual(plan["profile"], "ink")
         self.assertTrue(plan["units"])
-        self.assertTrue(plan["trip"])
+        self.assertFalse(plan["trip"])
         self.assertEqual(plan["tests"], selection.select([], full=True)["tests"])
 
     def test_every_ui_route_keeps_parity_and_five_tab_home(self):
-        parity = selection.RAIL + "testCaptureAtlasProductionParity"
-        five_tab = selection.RAIL + "testCaptureFiveTabLanding"
         for path in (*selection.SURFACES,):
             plan = selection.select([path])
             with self.subTest(path=path):
                 self.assertTrue(plan["ui"])
-                self.assertIn(parity, plan["tests"])
-                self.assertIn(five_tab, plan["tests"])
-        self.assertIn(five_tab, selection.select([], full=True)["tests"])
+                self.assertEqual(plan["tests"], selection.INK)
+        self.assertEqual(selection.select([], full=True)["tests"], selection.INK)
 
     def test_onboarding_keeps_entire_carousel_class_and_replay(self):
         plan = selection.select(["SAV-E/Views/Onboarding/OnboardingView.swift"])
-        self.assertIn(selection.ONBOARDING, plan["tests"])
-        self.assertIn(selection.RAIL + "testPassportTutorialReplaysWithoutAddingPlaces", plan["tests"])
+        self.assertEqual(plan["tests"], selection.INK)
         self.assertFalse(plan["trip"])
 
     def test_plan_keeps_confirmation_persistence_and_trip_sheets(self):
         plan = selection.select(["SAV-E/Views/Plan/SavePlanView.swift"])
-        self.assertTrue(plan["trip"])
-        self.assertIn(selection.RAIL + "testPlanCandidateCanBeConfirmedSavedAndOpened", plan["tests"])
-        self.assertIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", plan["tests"])
+        self.assertFalse(plan["trip"])
+        self.assertEqual(plan["tests"], selection.INK)
 
     def test_multiple_surfaces_union_without_duplicates(self):
         plan = selection.select(list(selection.SURFACES))
@@ -112,9 +79,9 @@ class CoverageTests(unittest.TestCase):
             "scripts/select-ios-tests.py", "unknown.json",
         ):
             with self.subTest(path=path):
-                self.assertEqual(selection.select([path])["profile"], "full")
-                self.assertEqual(selection.select([*selection.SURFACES, path])["profile"], "full")
-        self.assertEqual(selection.select([])["profile"], "full")
+                self.assertEqual(selection.select([path])["profile"], "ink")
+                self.assertEqual(selection.select([*selection.SURFACES, path])["profile"], "ink")
+        self.assertEqual(selection.select([])["profile"], "ink")
 
     def test_docs_and_backend_keep_existing_non_ios_route(self):
         plan = selection.select(["README.md", "docs/a.txt", "backend/server.js"])
@@ -153,7 +120,7 @@ class CoverageTests(unittest.TestCase):
                             "--output-dir", str(root)], cwd=root, env=env,
                            check=True, capture_output=True)
             plan = json.loads((root / "ios-test-selection.json").read_text())
-            self.assertEqual(plan["profile"], "full")
+            self.assertEqual(plan["profile"], "ink")
             self.assertIn("SAV-E/Views/Shared/Old.swift", plan["changed_paths"])
             self.assertIn("run=true", (root / "outputs").read_text())
 
@@ -167,23 +134,14 @@ class CoverageTests(unittest.TestCase):
                 subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
                                 "--output-dir", str(root)], cwd=ROOT, env=env,
                                check=True, capture_output=True)
-                self.assertEqual(json.loads((root / "ios-test-selection.json").read_text())["profile"], "full")
+                self.assertEqual(json.loads((root / "ios-test-selection.json").read_text())["profile"], "ink")
 
     def test_tile_town_home_focus_is_a_subset_of_full_without_trip_or_units(self):
         spec = selection.FOCUS_PROFILES["tile-town-home"]
         self.assertTrue(set(spec["tests"]) <= set(selection.FULL))
         self.assertFalse(spec["trip"])
         self.assertFalse(spec["units"])
-        for name in (
-            "testCaptureAtlasProductionParity",
-            "testCaptureFiveTabLanding",
-            "testAtlasHomeAndSavesRenderPersistedPlaceData",
-            "testCaptureMultipleResultsExcludeOlderClues",
-            "testCaptureAtlasTripsAndLiveMaps",
-            "testFriendsComingSoon",
-            "testHomeListProgressiveSearch",
-        ):
-            self.assertIn(selection.RAIL + name, spec["tests"])
+        self.assertEqual(spec["tests"], selection.INK)
         self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
         self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
         self.assertNotIn(selection.RAIL + "testDoodlePaywallParity", spec["tests"])
@@ -207,7 +165,7 @@ class CoverageTests(unittest.TestCase):
             self.assertFalse(plan["units"])
             self.assertIn("units=false", (root / "outputs").read_text())
             args = (root / "ios-ui-args.txt").read_text()
-            self.assertIn("-only-testing:SAVEUITests/SAVEScreenshotRailTests/testHomeListProgressiveSearch", args)
+            self.assertIn("-only-testing:SAVEUITests/SAVEScreenshotRailTests/testFreeCapE4Screenshots", args)
             self.assertNotIn("testTripStopEditorSurfaceIsReachable", args)
 
     def test_cli_ignores_focus_on_main_push(self):
@@ -221,9 +179,9 @@ class CoverageTests(unittest.TestCase):
                             "--output-dir", str(root)], cwd=ROOT, env=env,
                            check=True, capture_output=True)
             plan = json.loads((root / "ios-test-selection.json").read_text())
-            self.assertEqual(plan["profile"], "full")
+            self.assertEqual(plan["profile"], "ink")
             self.assertTrue(plan["units"])
-            self.assertTrue(plan["trip"])
+            self.assertFalse(plan["trip"])
             self.assertEqual(plan["tests"], selection.FULL)
 
     def test_workflow_focus_omits_single_test_iteration_flag(self):

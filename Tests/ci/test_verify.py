@@ -239,6 +239,11 @@ class VerifyToolTests(unittest.TestCase):
             self.assertEqual(shot["naming"], verify.SCREENSHOT_NAME)
             self.assertNotEqual(shot["status"], "PASS")
             self.assertTrue(parity.is_file())
+            ink = (ROOT / "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("Reference/InkNotebook", ink)
+            self.assertIn("ink-01-main.png", ink)
             copied = workspace / "screenshots" / "home.png"
             if copied.is_file():
                 self.fail("screenshot home must not copy ProductionTargets/home.png")

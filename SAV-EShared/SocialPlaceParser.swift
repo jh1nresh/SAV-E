@@ -3163,3 +3163,59 @@ struct SocialPlaceParser {
         }
     }
 }
+
+/// Shared by the ink save sheet and the share extension.
+/// A link is not a place unless it names a known shop or is a map link.
+enum SavePlaceLinkGate {
+    static let notAPlaceMessage = "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。"
+    static let placesKey = "save.ink.places.v1"
+
+    /// App and Share Extension both use this suite. `.standard` is per-process.
+    static func sharedPlacesDefaults() -> UserDefaults {
+        UserDefaults(suiteName: SAVEProductionConfig.appGroupSuiteName) ?? .standard
+    }
+
+    static func knownPlaceNames() -> [String] {
+        names(fromInkPlaces: sharedPlacesDefaults().data(forKey: placesKey))
+    }
+
+    static func rejects(urlString: String, evidence: String, knownPlaceNames: [String]) -> Bool {
+        let combined = [evidence, urlString].filter { !$0.isEmpty }.joined(separator: "\n")
+        guard let url = httpURL(in: urlString) ?? httpURL(in: combined) else { return false }
+        if isMapLink(url) { return false }
+        if linkedPlaceName(in: combined, knownPlaceNames: knownPlaceNames) != nil { return false }
+        return true
+    }
+
+    static func linkedPlaceName(in text: String, knownPlaceNames: [String]) -> String? {
+        knownPlaceNames
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 2 }
+            .first { text.contains($0) }
+    }
+
+    static func names(fromInkPlaces data: Data?) -> [String] {
+        guard let data,
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
+        return rows.compactMap { $0["name"] as? String }.filter { $0.count >= 2 }
+    }
+
+    private static func httpURL(in text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed), url.scheme == "http" || url.scheme == "https" {
+            return url
+        }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let url = detector.firstMatch(in: text, options: [], range: range)?.url else { return nil }
+        return (url.scheme == "http" || url.scheme == "https") ? url : nil
+    }
+
+    private static func isMapLink(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        return host.contains("maps.") || host.contains("openstreetmap.org") || url.path.contains("/maps")
+    }
+}

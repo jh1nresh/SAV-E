@@ -104,6 +104,11 @@ if ((input_count != 1)); then
     exit 2
 fi
 
+if [[ "${SAVE_INK_PRODUCT:-}" == 1 ]]; then
+    echo "Savvy ink notebook is the product screen. Five-tab 0.90 parity is not this suite."
+    exit 0
+fi
+
 if [[ -z "$ARTIFACT_DIR" ]]; then
     ARTIFACT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/AtlasPostcardVisualParity.XXXXXX")"
 elif [[ -e "$ARTIFACT_DIR" ]]; then

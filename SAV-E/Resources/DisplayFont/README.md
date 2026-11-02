@@ -39,3 +39,12 @@ Do not copy `Iansui-SavvySubset.ttf` into the Clip. See `11-iansui-proof.md`.
 
 Runtime registration is in `SaveDisplayType`. `UIAppFonts` also lists these
 files. Titles scale with Dynamic Type (`UIFontMetrics`).
+
+## Iansui Ink — v2-a notebook body
+
+- File: `Iansui-Ink.ttf`, the full Iansui Regular v1.020 outlines
+- PostScript name `Iansui-Ink` so it does not replace the locked
+  `Iansui-Regular` subset used by the doodle titles
+- Same SIL Open Font License 1.1 (`LICENSES/iansui/OFL.txt`)
+- The ink notebook asks for this face with Dynamic Type
+  (`Font.custom(_:size:relativeTo:)`), then PingFang TC, then the system font

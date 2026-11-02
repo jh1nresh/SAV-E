@@ -249,6 +249,11 @@
 		A10100000000000000000013 /* SharedPostViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* SharedPostViews.swift */; };
 		AA5100000000000000000001 /* ShareAnalysisClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5100000000000000000003 /* ShareAnalysisClient.swift */; };
 		AA5100000000000000000002 /* ShareAnalysisClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5100000000000000000003 /* ShareAnalysisClient.swift */; };
+		INK1A000000000000000002 /* SaveInkNotebookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000001 /* SaveInkNotebookModel.swift */; };
+		INK1A000000000000000004 /* SaveInkNotebookChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000003 /* SaveInkNotebookChrome.swift */; };
+		INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000005 /* SaveInkNotebookScreens.swift */; };
+		INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000007 /* SaveInkNotebookRoot.swift */; };
+		INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000A /* SaveInkNotebookTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -594,6 +599,11 @@
 		A10100000000000000000002 /* SharedPostsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostsStore.swift; sourceTree = "<group>"; };
 		A10100000000000000000003 /* SharedPostViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostViews.swift; sourceTree = "<group>"; };
 		AA5100000000000000000003 /* ShareAnalysisClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAnalysisClient.swift; sourceTree = "<group>"; };
+		INK1A000000000000000001 /* SaveInkNotebookModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookModel.swift; sourceTree = "<group>"; };
+		INK1A000000000000000003 /* SaveInkNotebookChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookChrome.swift; sourceTree = "<group>"; };
+		INK1A000000000000000005 /* SaveInkNotebookScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookScreens.swift; sourceTree = "<group>"; };
+		INK1A000000000000000007 /* SaveInkNotebookRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookRoot.swift; sourceTree = "<group>"; };
+		INK1A00000000000000000A /* SaveInkNotebookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -900,6 +910,7 @@
 		7588A6BDD6EE6C407B45B9C2 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				INK1A000000000000000009 /* InkNotebook */,
 				68F2C25133736DAABDAA1B57 /* Atlas */,
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
 				9139D454B1CF7369056FEAD9 /* Drawer */,
@@ -1046,6 +1057,7 @@
 				C8A10000000000000000000A /* ClipListSaveTests.swift */,
 				C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */,
 				D2E100000000000000000006 /* SaveDoodleHomeTests.swift */,
+				INK1A00000000000000000A /* SaveInkNotebookTests.swift */,
 				D2E200000000000000000008 /* SaveDoodlePassportTests.swift */,
 				F815A0000000000000000004 /* SaveDoodleFriendsTests.swift */,
 				D3E100000000000000000006 /* SaveDoodleMapTests.swift */,
@@ -1200,6 +1212,17 @@
 				7C91E2A04B5D638F1A2C9E04 /* SavePlanView.swift */,
 			);
 			path = Plan;
+			sourceTree = "<group>";
+		};
+		INK1A000000000000000009 /* InkNotebook */ = {
+			isa = PBXGroup;
+			children = (
+				INK1A000000000000000001 /* SaveInkNotebookModel.swift */,
+				INK1A000000000000000003 /* SaveInkNotebookChrome.swift */,
+				INK1A000000000000000005 /* SaveInkNotebookScreens.swift */,
+				INK1A000000000000000007 /* SaveInkNotebookRoot.swift */,
+			);
+			path = InkNotebook;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1638,6 +1661,7 @@
 				C8A10000000000000000000B /* ClipListSaveTests.swift in Sources */,
 				C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */,
 				D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */,
+				INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */,
 				D2E200000000000000000007 /* SaveDoodlePassportTests.swift in Sources */,
 				F815A0000000000000000003 /* SaveDoodleFriendsTests.swift in Sources */,
 				D3E100000000000000000005 /* SaveDoodleMapTests.swift in Sources */,
@@ -1813,6 +1837,10 @@
 				T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */,
 				T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */,
 				D2E100000000000000000001 /* SaveDoodleHomeView.swift in Sources */,
+				INK1A000000000000000002 /* SaveInkNotebookModel.swift in Sources */,
+				INK1A000000000000000004 /* SaveInkNotebookChrome.swift in Sources */,
+				INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */,
+				INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */,
 				D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */,
 				D2E100000000000000000007 /* SaveAddressLocality.swift in Sources */,
 				D3E100000000000000000001 /* SaveDoodleMapView.swift in Sources */,

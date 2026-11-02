@@ -207,14 +207,12 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/SAVE-E4/xcattachments"
           cat > "$RUNNER_TEMP/SAVE-E4/INDEX.txt" <<'EOF'
-          HoP E4 iPhone screenshots (XCTAttachments from testFreeCapE4Screenshots)
+          Ink notebook main screen (XCTAttachments from testFreeCapE4Screenshots)
 
           Expected files under xcattachments/:
-            e4-51st-save-paywall — 51st free save opens the paywall (keep-going line)
-            e4-paywall-retry — StoreKit miss / paywall.retry (not the not-for-sale state)
-            e4-unplaced-candidate — parked Unplaced Harbor Cafe as a Review Candidate
-            e4-settings-paywall — Settings / Passport Pro row (no keep-going line)
-            e4-ai-quota-notice — Share Analysis usage-limit message, not the paywall
+            ink-main-signed-in — signed-in app opens on the ink notebook, no tab bar
+          Screen 14, ink-14-friends-empty.png, is the SAVETests ImageRenderer still.
+          These stills are pending founder approval.
           EOF
           if [[ -d "$RUNNER_TEMP/SAVE-E4.xcresult" ]]; then
             xcrun xcresulttool export attachments \

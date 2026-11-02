@@ -356,24 +356,18 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("screen=\"passport\""))
         XCTAssertTrue(script.contains("parity_screens=(home saves plan map friends capture paywall passport)"))
-        let target = repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/passport.png"
-        )
-        XCTAssertTrue(FileManager.default.fileExists(atPath: target.path))
-        let png = try Data(contentsOf: target)
-        XCTAssertEqual([UInt8](png.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        XCTAssertEqual(pngDimension(png, at: 16), 402)
-        XCTAssertEqual(pngDimension(png, at: 20), 874)
-        XCTAssertEqual(png[25], 2, "Approved Passport target must stay RGB 8-bit.")
-        let darkTarget = repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/passport-dark.png"
-        )
-        XCTAssertTrue(FileManager.default.fileExists(atPath: darkTarget.path))
-        let darkPNG = try Data(contentsOf: darkTarget)
-        XCTAssertEqual([UInt8](darkPNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        XCTAssertEqual(pngDimension(darkPNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(darkPNG, at: 20), 874)
-        XCTAssertEqual(darkPNG[25], 2, "Passport dark target must stay RGB 8-bit, not a generated screenshot.")
+        for name in ["passport.png", "passport-dark.png"] {
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: repositoryRoot.appendingPathComponent(
+                        "Prototypes/AtlasPostcard/Reference/ProductionTargets/\(name)"
+                    ).path
+                ),
+                name
+            )
+        }
+        let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
+        XCTAssertTrue(ink.contains("ink-03-passport.png"))
         XCTAssertTrue(script.contains("THRESHOLD=\"0.90\""))
         XCTAssertFalse(script.contains("status=\"REVIEW\""))
         XCTAssertFalse(script.contains("The 0.90 score is not a CI gate."))
@@ -484,14 +478,6 @@ final class SaveDoodlePassportTests: XCTestCase {
             sourcePlatform: .other,
             createdAt: createdAt
         )
-    }
-
-    private func pngDimension(_ data: Data, at offset: Int) -> UInt32 {
-        let bytes = [UInt8](data.subdata(in: offset..<(offset + 4)))
-        return UInt32(bytes[0]) << 24
-            | UInt32(bytes[1]) << 16
-            | UInt32(bytes[2]) << 8
-            | UInt32(bytes[3])
     }
 
     private func source(at relativePath: String) throws -> String {

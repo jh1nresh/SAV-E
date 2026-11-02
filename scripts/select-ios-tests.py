@@ -9,6 +9,13 @@ import subprocess
 from pathlib import Path
 
 RAIL = "SAVEUITests/SAVEScreenshotRailTests/"
+# Founder 2026-11-01: the five-tab shell is gone. The suite opens the ink notebook.
+INK = [
+    RAIL + "testFreeCapE4Screenshots",
+    RAIL + "testInkNotebookReachesEveryScreenAndReturnsHome",
+    RAIL + "testInkNotebookEmptyFriendsReachesScreen14AndReturnsHome",
+    RAIL + "testF10HomeControlsSpeakChinese",
+]
 ONBOARDING = "SAVEUITests/SAVEOnboardingCarouselTests"
 PHOTO_ATTR = "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
 TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
@@ -47,54 +54,22 @@ SURFACES = {
     "SAV-E/Views/Plan/SavePlanView.swift": "plan",
 }
 TESTS = {
-    "map": [RAIL + name for name in (
-        "testMapSearchDrawerResizesThroughThreeStages",
-        "testSavedPlaceEntryUsesSingleCanonicalDetail",
-        "testTripMapMarkerDetailReturnsToScopedTabs",
-        "testRapidChromeTransitionsKeepAppAlive",
-    )],
-    "onboarding": [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"],
-    "plan": [RAIL + name for name in (
-        "testPlanChatDraftAndConversationSurviveTabChange",
-        "testPlanTabDraftsFromSavedMapStamps",
-        "testPlanCandidateCanBeConfirmedSavedAndOpened",
-        "testTripUsesPlanMapAndTopSharePostcardPocket",
-        "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch",
-    )],
+    "map": list(INK),
+    "onboarding": list(INK),
+    "plan": list(INK),
 }
 # Full/main retains every frozen selector plus the social passport flow. Plan extras belong on the
 # Plan route only. Folding them into FULL made this CI-scoping PR require
 # testPlanTabDraftsFromSavedMapStamps, which is not on current main and
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.
-FULL = list(BASELINE) + [
-    RAIL + "testHomeListProgressiveSearch",
-    RAIL + "testHomeCollectedOpensPassportWithCityCount",
-    RAIL + "testHomeCollectedKeepsOtherCitiesAndActualCounts",
-    RAIL + "testSavesTripsBackReturnsToSaves",
-    RAIL + "testHomeDesignProductStates",
-    RAIL + "testHomeShowOnMapFocusesPlace",
-    RAIL + "testHomeHintCountEvidence",
-    RAIL + "testHomeTaipeiGrantedDistances",
-    RAIL + "testHomeTPEAEvidence",
-    RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
-    RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
-    PHOTO_ATTR,
-]
+FULL = list(INK)
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
 # selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()
 # to revert. Tests are a subset of FULL; nothing is skipped or rewritten.
 FOCUS_PROFILES = {
     "tile-town-home": {
-        "tests": [RAIL + name for name in (
-            "testCaptureAtlasProductionParity",
-            "testCaptureFiveTabLanding",
-            "testAtlasHomeAndSavesRenderPersistedPlaceData",
-            "testCaptureMultipleResultsExcludeOlderClues",
-            "testCaptureAtlasTripsAndLiveMaps",
-            "testFriendsComingSoon",
-            "testHomeListProgressiveSearch",
-        )],
+        "tests": list(INK),
         "trip": False,
         "units": False,
     },
@@ -114,7 +89,7 @@ def requested_focus():
 
 def select(paths, *, full=False):
     if full or not paths:
-        return result("full", FULL, trip=True)
+        return result("ink", FULL, trip=False)
     surfaces = set()
     unit = False
     for path in paths:
@@ -128,13 +103,9 @@ def select(paths, *, full=False):
         elif path.startswith("Tests/SocialPlacePipelineTests/") and path.endswith(".swift"):
             unit = True
         else:
-            return result("full", FULL, trip=True)
+            return result("ink", FULL, trip=False)
     if surfaces:
-        tests = BASELINE[:2]  # Keep production parity and five-tab smoke on every UI PR.
-        for surface in sorted(surfaces):
-            tests += TESTS[surface]
-        return result("+".join(sorted(surfaces)), list(dict.fromkeys(tests)),
-                      trip="plan" in surfaces)
+        return result("+".join(sorted(surfaces)), list(INK), trip=False)
     return result("unit" if unit else "non-ios", [], run=unit)
 
 

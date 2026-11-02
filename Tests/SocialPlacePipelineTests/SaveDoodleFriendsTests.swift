@@ -230,17 +230,19 @@ final class SaveDoodleFriendsTests: XCTestCase {
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         XCTAssertTrue(parity.contains("[--mask mask.png]"))
         XCTAssertFalse(parity.contains("[--ignore-rect x,y,w,h]"))
-        let friendsPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
-        ))
-        XCTAssertEqual([UInt8](friendsPNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        XCTAssertEqual(pngDimension(friendsPNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(friendsPNG, at: 20), 874)
-        let friendsDarkPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends-dark.png"
-        ))
-        XCTAssertEqual(pngDimension(friendsDarkPNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(friendsDarkPNG, at: 20), 874)
+        for name in ["friends.png", "friends-dark.png"] {
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: repositoryRoot.appendingPathComponent(
+                        "Prototypes/AtlasPostcard/Reference/ProductionTargets/\(name)"
+                    ).path
+                ),
+                name
+            )
+        }
+        let ink = try source(at: "Tests/SocialPlacePipelineTests/SaveInkNotebookTests.swift")
+        XCTAssertTrue(ink.contains("ink-12-friends.png"))
+        XCTAssertTrue(ink.contains("ink-14-friends-empty.png"))
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("friends-light.png"))
         XCTAssertTrue(readme.contains("testCaptureFourLockedScreens"))
@@ -282,14 +284,6 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(workflow.contains("iPhone-16-Pro-Max"))
         XCTAssertTrue(workflow.contains("friends-375"))
         XCTAssertFalse(workflow.contains("--uitest-friends-width="))
-    }
-
-    private func pngDimension(_ data: Data, at offset: Int) -> UInt32 {
-        let bytes = [UInt8](data.subdata(in: offset..<(offset + 4)))
-        return UInt32(bytes[0]) << 24
-            | UInt32(bytes[1]) << 16
-            | UInt32(bytes[2]) << 8
-            | UInt32(bytes[3])
     }
 
     private func source(at relativePath: String) throws -> String {
