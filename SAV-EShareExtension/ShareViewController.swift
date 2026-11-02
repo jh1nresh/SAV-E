@@ -1295,6 +1295,28 @@ struct ShareExtensionView: View {
             return
         }
 
+        let shareEvidence = [sharedTitle, sharedText].filter { !$0.isEmpty }.joined(separator: "\n")
+        let shareURL = resolvedShareURLString.isEmpty ? content : resolvedShareURLString
+        let knownPlaceNames = SavePlaceLinkGate.names(
+            fromInkPlaces: UserDefaults.standard.data(forKey: "save.ink.places.v1")
+        )
+        if SavePlaceLinkGate.rejects(urlString: shareURL, evidence: shareEvidence, knownPlaceNames: knownPlaceNames) {
+            parseError = SavePlaceLinkGate.notAPlaceMessage
+            reviewCandidates = []
+            parsedPlace = nil
+            isParsing = false
+            return
+        }
+        if let linkedName = SavePlaceLinkGate.linkedPlaceName(
+            in: shareEvidence + "\n" + shareURL,
+            knownPlaceNames: knownPlaceNames
+        ) {
+            reviewCandidates = [linkedShareCandidate(name: linkedName, sourceURL: shareURL, text: shareEvidence)]
+            selectedCategory = reviewCandidates.first?.category ?? "food"
+            isParsing = false
+            return
+        }
+
         if let sourceURL = URL(string: resolvedShareURLString),
            isSocialURL(sourceURL) {
             sharedURL = resolvedShareURLString
@@ -1404,6 +1426,23 @@ struct ShareExtensionView: View {
             }
         }
         isParsing = false
+    }
+
+    private func linkedShareCandidate(name: String, sourceURL: String, text: String) -> PendingReviewCandidate {
+        PendingReviewCandidate(
+            candidateName: name,
+            address: "",
+            category: "food",
+            sourceURL: sourceURL.isEmpty ? nil : sourceURL,
+            sourceText: text.isEmpty ? nil : text,
+            evidence: [
+                "Linked to saved place: \(name)",
+                sourceURL.isEmpty ? nil : "Source URL: \(sourceURL)"
+            ].compactMap { $0 },
+            confidence: 0.8,
+            missingInfo: [],
+            savedAt: Date()
+        )
     }
 
     private func shareText(_ chinese: String, _ english: String) -> String {

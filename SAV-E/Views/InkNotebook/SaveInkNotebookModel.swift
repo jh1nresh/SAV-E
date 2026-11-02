@@ -499,9 +499,8 @@ enum SaveInkPlaceLink {
     static let notAPlaceMessage = "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。"
 
     static func rejects(_ text: String, knownPlaces: [SaveInkPlace]) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard firstURL(in: trimmed) != nil else { return false }
-        return !hasPlaceEvidence(trimmed, knownPlaces: knownPlaces)
+        let names = knownPlaces.flatMap { [$0.name, $0.street] }
+        return SavePlaceLinkGate.rejects(urlString: text, evidence: text, knownPlaceNames: names)
     }
 
     static func hasPlaceEvidence(_ text: String, knownPlaces: [SaveInkPlace]) -> Bool {

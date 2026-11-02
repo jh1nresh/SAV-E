@@ -206,6 +206,7 @@ struct SaveInkScreenPreview: View {
             }
         }
         .frame(width: 393, height: 852)
+        .background(SaveInkPalette.paper.ignoresSafeArea())
         .clipped()
         .environment(\.colorScheme, .light)
         .environment(\.dynamicTypeSize, .large)

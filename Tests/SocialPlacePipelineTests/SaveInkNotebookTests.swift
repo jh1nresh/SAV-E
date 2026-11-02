@@ -240,6 +240,26 @@ final class SaveInkNotebookTests: XCTestCase {
         )
     }
 
+    func testF8ShareMenuRejectsANonPlaceLinkAndLinksAShopVideo() throws {
+        let names = SavePlaceLinkGate.names(fromInkPlaces: Data("""
+        [{"name":"青田七六咖啡"}]
+        """.utf8))
+        XCTAssertEqual(names, ["青田七六咖啡"])
+        let video = "https://www.youtube.com/watch?v=shop-tour"
+        XCTAssertFalse(SavePlaceLinkGate.rejects(urlString: video, evidence: "青田七六咖啡", knownPlaceNames: names))
+        XCTAssertEqual(
+            SavePlaceLinkGate.linkedPlaceName(in: video + "\n青田七六咖啡", knownPlaceNames: names),
+            "青田七六咖啡"
+        )
+        let article = "https://notes.example/article/how-to-film"
+        XCTAssertTrue(SavePlaceLinkGate.rejects(urlString: article, evidence: "how to film", knownPlaceNames: names))
+        XCTAssertNil(SavePlaceLinkGate.linkedPlaceName(in: article, knownPlaceNames: names))
+        let share = try source("SAV-EShareExtension/ShareViewController.swift")
+        XCTAssertTrue(share.contains("SavePlaceLinkGate.rejects"))
+        XCTAssertTrue(share.contains("SavePlaceLinkGate.notAPlaceMessage"))
+        XCTAssertTrue(share.contains("SavePlaceLinkGate.linkedPlaceName"))
+    }
+
     func testF8ShopVideoStaysLinkedToThePlace() {
         let store = SaveInkNotebookStore(
             defaults: UserDefaults(suiteName: "save.ink.f8.place.\(UUID().uuidString)")!,
@@ -558,6 +578,7 @@ final class SaveInkNotebookTests: XCTestCase {
             let image = try hostedInkImage(screen)
             let data = try XCTUnwrap(image.pngData(), screen.rawValue)
             XCTAssertGreaterThan(data.count, 8_000, screen.rawValue)
+            XCTAssertTrue(topBandIsPaper(image), "\(screen.rawValue) status-bar band must be paper, not the hosting view's white")
             rendered[screen] = data
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("ink-\(screen.rawValue).png")
@@ -609,6 +630,36 @@ final class SaveInkNotebookTests: XCTestCase {
         return (lighter + 0.05) / (darker + 0.05)
     }
 
+    private func topBandIsPaper(_ image: UIImage) -> Bool {
+        guard let cg = image.cgImage,
+              let data = cg.dataProvider?.data,
+              let pointer = CFDataGetBytePtr(data) else { return false }
+        let width = cg.width
+        let rows = min(72, cg.height)
+        let bytesPerRow = cg.bytesPerRow
+        let bytesPerPixel = max(cg.bitsPerPixel / 8, 1)
+        var red = 0
+        var green = 0
+        var blue = 0
+        var count = 0
+        for y in 0..<rows {
+            for x in stride(from: 0, to: width, by: 8) {
+                let offset = y * bytesPerRow + x * bytesPerPixel
+                red += Int(pointer[offset])
+                green += Int(pointer[offset + 1])
+                blue += Int(pointer[offset + 2])
+                count += 1
+            }
+        }
+        guard count > 0 else { return false }
+        let meanRed = red / count
+        let meanGreen = green / count
+        let meanBlue = blue / count
+        let paperDistance = abs(meanRed - 250) + abs(meanGreen - 249) + abs(meanBlue - 244)
+        let whiteDistance = abs(meanRed - 255) + abs(meanGreen - 255) + abs(meanBlue - 255)
+        return paperDistance < whiteDistance
+    }
+
     private func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
@@ -621,10 +672,14 @@ final class SaveInkNotebookTests: XCTestCase {
         let root = SaveInkScreenPreview(screen: screen)
         let host = UIHostingController(rootView: root)
         host.overrideUserInterfaceStyle = .light
+        let paper = UIColor(red: 250.0 / 255, green: 249.0 / 255, blue: 244.0 / 255, alpha: 1)
         let window = UIWindow(frame: CGRect(origin: .zero, size: size))
         window.overrideUserInterfaceStyle = .light
+        window.backgroundColor = paper
         window.rootViewController = host
         window.makeKeyAndVisible()
+        host.view.backgroundColor = paper
+        host.view.isOpaque = true
         host.view.frame = window.bounds
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
