@@ -3168,6 +3168,16 @@ struct SocialPlaceParser {
 /// A link is not a place unless it names a known shop or is a map link.
 enum SavePlaceLinkGate {
     static let notAPlaceMessage = "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。"
+    static let placesKey = "save.ink.places.v1"
+
+    /// App and Share Extension both use this suite. `.standard` is per-process.
+    static func sharedPlacesDefaults() -> UserDefaults {
+        UserDefaults(suiteName: SAVEProductionConfig.appGroupSuiteName) ?? .standard
+    }
+
+    static func knownPlaceNames() -> [String] {
+        names(fromInkPlaces: sharedPlacesDefaults().data(forKey: placesKey))
+    }
 
     static func rejects(urlString: String, evidence: String, knownPlaceNames: [String]) -> Bool {
         let combined = [evidence, urlString].filter { !$0.isEmpty }.joined(separator: "\n")

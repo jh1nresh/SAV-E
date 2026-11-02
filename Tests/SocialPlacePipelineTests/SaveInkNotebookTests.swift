@@ -240,24 +240,43 @@ final class SaveInkNotebookTests: XCTestCase {
         )
     }
 
-    func testF8ShareMenuRejectsANonPlaceLinkAndLinksAShopVideo() throws {
-        let names = SavePlaceLinkGate.names(fromInkPlaces: Data("""
-        [{"name":"青田七六咖啡"}]
-        """.utf8))
-        XCTAssertEqual(names, ["青田七六咖啡"])
+    func testF8ShareMenuReadsPlacesTheAppSaved() {
+        let key = SavePlaceLinkGate.placesKey
+        let shared = SavePlaceLinkGate.sharedPlacesDefaults()
+        let legacy = UserDefaults.standard
+        let previousShared = shared.data(forKey: key)
+        let previousLegacy = legacy.data(forKey: key)
+        defer {
+            if let previousShared { shared.set(previousShared, forKey: key) } else { shared.removeObject(forKey: key) }
+            if let previousLegacy { legacy.set(previousLegacy, forKey: key) } else { legacy.removeObject(forKey: key) }
+        }
+        shared.removeObject(forKey: key)
+        legacy.removeObject(forKey: key)
+        let store = SaveInkNotebookStore(
+            defaults: .standard,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        store.saveQuery = "分享測試小店"
+        store.commitSave()
+        XCTAssertNil(legacy.data(forKey: key))
+        XCTAssertNotNil(shared.data(forKey: key))
+        let names = SavePlaceLinkGate.knownPlaceNames()
+        XCTAssertTrue(names.contains("分享測試小店"))
         let video = "https://www.youtube.com/watch?v=shop-tour"
-        XCTAssertFalse(SavePlaceLinkGate.rejects(urlString: video, evidence: "青田七六咖啡", knownPlaceNames: names))
+        XCTAssertFalse(SavePlaceLinkGate.rejects(
+            urlString: video,
+            evidence: "介紹分享測試小店",
+            knownPlaceNames: names
+        ))
         XCTAssertEqual(
-            SavePlaceLinkGate.linkedPlaceName(in: video + "\n青田七六咖啡", knownPlaceNames: names),
-            "青田七六咖啡"
+            SavePlaceLinkGate.linkedPlaceName(in: "介紹分享測試小店\n\(video)", knownPlaceNames: names),
+            "分享測試小店"
         )
         let article = "https://notes.example/article/how-to-film"
         XCTAssertTrue(SavePlaceLinkGate.rejects(urlString: article, evidence: "how to film", knownPlaceNames: names))
         XCTAssertNil(SavePlaceLinkGate.linkedPlaceName(in: article, knownPlaceNames: names))
-        let share = try source("SAV-EShareExtension/ShareViewController.swift")
-        XCTAssertTrue(share.contains("SavePlaceLinkGate.rejects"))
-        XCTAssertTrue(share.contains("SavePlaceLinkGate.notAPlaceMessage"))
-        XCTAssertTrue(share.contains("SavePlaceLinkGate.linkedPlaceName"))
     }
 
     func testF8ShopVideoStaysLinkedToThePlace() {
@@ -369,6 +388,47 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(reloaded.stampedPlaceIDs(), ["dingtai"])
         XCTAssertTrue(reloaded.places.contains { $0.name == "主線小店" })
         XCTAssertEqual(reloaded.friendCards().map(\.authorName), friends)
+    }
+
+    func testF9StandardPlacesMigrateIntoTheSharedStore() throws {
+        let key = SavePlaceLinkGate.placesKey
+        let shared = SavePlaceLinkGate.sharedPlacesDefaults()
+        let legacy = UserDefaults.standard
+        let previousShared = shared.data(forKey: key)
+        let previousLegacy = legacy.data(forKey: key)
+        defer {
+            if let previousShared { shared.set(previousShared, forKey: key) } else { shared.removeObject(forKey: key) }
+            if let previousLegacy { legacy.set(previousLegacy, forKey: key) } else { legacy.removeObject(forKey: key) }
+        }
+        shared.removeObject(forKey: key)
+        let places = """
+        [{
+          "id": "saved-main-shop",
+          "name": "主線小店",
+          "stampName": "主線小店",
+          "street": "主線街",
+          "blurb": "升級前存的",
+          "sourceLabel": "來自 main",
+          "detailNote": "舊收藏在 App 容器"
+        }]
+        """
+        legacy.set(Data(places.utf8), forKey: key)
+        let store = SaveInkNotebookStore(
+            defaults: .standard,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        XCTAssertTrue(store.places.contains { $0.name == "主線小店" })
+        XCTAssertNotNil(shared.data(forKey: key))
+        let reloaded = SaveInkNotebookStore(
+            defaults: .standard,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        XCTAssertTrue(reloaded.places.contains { $0.name == "主線小店" })
+        XCTAssertEqual(SavePlaceLinkGate.knownPlaceNames().contains("主線小店"), true)
     }
 
     func testF10InkControlsHaveLabelsHitTargetsAndAreNotColorOnly() throws {

@@ -599,8 +599,9 @@ final class SaveInkNotebookStore: ObservableObject {
     let city = "大安區"
     let friendInputs: [SaveInkFriendVisitInput]
     private let defaults: UserDefaults
+    private let placesDefaults: UserDefaults
     private let storageKey = "save.ink.visits.v1"
-    private let placesKey = "save.ink.places.v1"
+    private let placesKey = SavePlaceLinkGate.placesKey
     private let now: () -> Date
     private let makeLocator: () -> any SaveInkLocating
     private var locator: (any SaveInkLocating)?
@@ -616,10 +617,12 @@ final class SaveInkNotebookStore: ObservableObject {
         makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() }
     ) {
         self.defaults = defaults
+        let placesDefaults = Self.placesDefaults(for: defaults)
+        self.placesDefaults = placesDefaults
         self.now = now
         self.makeLocator = makeLocator
         let seededPlaces = SaveInkFixture.places
-        self.places = seededPlaces + Self.loadSavedPlaces(defaults: defaults, key: placesKey)
+        self.places = seededPlaces + Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
         self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
         if let stored = Self.load(defaults: defaults, key: storageKey) {
             self.visits = stored
@@ -895,7 +898,19 @@ final class SaveInkNotebookStore: ObservableObject {
             )
         }
         guard let data = try? JSONEncoder().encode(records) else { return }
-        defaults.set(data, forKey: placesKey)
+        placesDefaults.set(data, forKey: placesKey)
+    }
+
+    /// Production places live in the App Group. A private test suite stays isolated.
+    /// Places saved by the previous app container are copied across once.
+    private static func placesDefaults(for defaults: UserDefaults) -> UserDefaults {
+        guard defaults === UserDefaults.standard else { return defaults }
+        let shared = SavePlaceLinkGate.sharedPlacesDefaults()
+        let key = SavePlaceLinkGate.placesKey
+        if shared.data(forKey: key) == nil, let legacy = defaults.data(forKey: key) {
+            shared.set(legacy, forKey: key)
+        }
+        return shared
     }
 
     private static func loadSavedPlaces(defaults: UserDefaults, key: String) -> [SaveInkPlace] {

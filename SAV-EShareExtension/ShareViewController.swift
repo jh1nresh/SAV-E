@@ -1297,9 +1297,7 @@ struct ShareExtensionView: View {
 
         let shareEvidence = [sharedTitle, sharedText].filter { !$0.isEmpty }.joined(separator: "\n")
         let shareURL = resolvedShareURLString.isEmpty ? content : resolvedShareURLString
-        let knownPlaceNames = SavePlaceLinkGate.names(
-            fromInkPlaces: UserDefaults.standard.data(forKey: "save.ink.places.v1")
-        )
+        let knownPlaceNames = SavePlaceLinkGate.knownPlaceNames()
         if SavePlaceLinkGate.rejects(urlString: shareURL, evidence: shareEvidence, knownPlaceNames: knownPlaceNames) {
             parseError = SavePlaceLinkGate.notAPlaceMessage
             reviewCandidates = []
