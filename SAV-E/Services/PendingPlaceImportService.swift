@@ -1068,20 +1068,33 @@ final class PendingPlaceImportService {
     }
 
     /// Keep a failed upload on this account so another sign-in cannot claim it.
-    func bindPendingPlaces(keys: Set<String>, to owner: String) {
-        guard !keys.isEmpty, !owner.isEmpty,
-              let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return }
+    /// False when the queue file could not be rewritten. Callers must not treat
+    /// the row as owned in that case.
+    @discardableResult
+    func bindPendingPlaces(keys: Set<String>, to owner: String) -> Bool {
+        guard !keys.isEmpty, !owner.isEmpty else { return true }
+        guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return false }
+        var failed = false
         coordinate(url: url, purpose: "bind \(SAVEProductionConfig.pendingPlacesFileName)") {
             guard fileManager.fileExists(atPath: url.path) else { return }
-            guard var items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
+            guard var items = try? loadArray([PendingSharedPlace].self, from: url) else {
+                failed = true
+                return
+            }
             var changed = false
             for index in items.indices where keys.contains(items[index].deduplicationKey) && items[index].ownerSubject != owner {
                 items[index].ownerSubject = owner
                 changed = true
             }
-            guard changed, let data = try? JSONEncoder().encode(items) else { return }
-            try? data.write(to: url, options: [.atomic])
+            guard changed else { return }
+            do {
+                let data = try JSONEncoder().encode(items)
+                try data.write(to: url, options: [.atomic])
+            } catch {
+                failed = true
+            }
         }
+        return !failed
     }
 
     /// Drop queue rows that this account has confirmed, so a later account

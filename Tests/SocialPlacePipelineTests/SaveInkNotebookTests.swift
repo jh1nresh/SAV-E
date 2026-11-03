@@ -1983,6 +1983,33 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.dishes), [["新菜"]])
     }
 
+    func testUnwritableQueueDoesNotKeepAnOwnerlessStamp() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-unwritable-\(UUID().uuidString)")
+        let queueDirectory = root.appendingPathComponent("queue")
+        try FileManager.default.createDirectory(at: queueDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queueDirectory.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let item = inkPending(name: "寫不進去", address: "酉路", latitude: 25.20, longitude: 121.70, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: queueDirectory)
+        queue.restorePendingPlaces([item])
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: queueDirectory.path)
+        let remote = SaveInkRemoteFake()
+        remote.saveError = URLError(.networkConnectionLost)
+        let vault = SaveLocalVaultService(overrideVaultURL: root.appendingPathComponent("vault.json"))
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        let loaded = await engine.load(ink: [])
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queueDirectory.path)
+        XCTAssertFalse(loaded.places.contains { $0.name == "寫不進去" })
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        XCTAssertFalse(stored.contains { $0.name == "寫不進去" })
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["寫不進去"])
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: queueDirectory.path)
+        XCTAssertFalse(queue.bindPendingPlaces(keys: [item.deduplicationKey], to: "account-a"))
+    }
+
     func testMatchingShareUpdatesTheServerStampBeforeClaiming() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-remote-evidence-\(UUID().uuidString)")

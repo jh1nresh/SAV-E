@@ -475,10 +475,9 @@ struct SaveInkLivePlaceEngine {
         }
         mirrorMissing(confirmed, owner: owner)
         var claimedItems: [PendingSharedPlace] = []
-        func retain(_ item: PendingSharedPlace) {
-            if item.ownerSubject == nil, let owner, !owner.isEmpty {
-                pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
-            }
+        func retain(_ item: PendingSharedPlace) -> Bool {
+            guard item.ownerSubject == nil, let owner, !owner.isEmpty else { return true }
+            return pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
         }
         if admitQueue {
             queue: for item in queued {
@@ -503,9 +502,9 @@ struct SaveInkLivePlaceEngine {
                             claimedItems.append(item)
                             remoteIDs.formUnion(payload.savedIDs)
                         case .retryLater:
-                            retain(item)
+                            if !retain(item) { break queue }
                         case .stop:
-                            retain(item)
+                            if !retain(item) { break queue }
                             break queue
                         }
                         continue
@@ -515,9 +514,9 @@ struct SaveInkLivePlaceEngine {
                         claimedItems.append(item)
                         remoteIDs.formUnion(merged.savedIDs)
                     case .retryLater:
-                        retain(item)
+                        if !retain(item) { break queue }
                     case .stop:
-                        retain(item)
+                        if !retain(item) { break queue }
                         let minted = Self.queueStampIDs(owner: owner, item: item)
                         if !existing.savedIDs.isDisjoint(with: minted) {
                             for id in minted where existing.savedIDs.contains(id) {
@@ -533,7 +532,7 @@ struct SaveInkLivePlaceEngine {
                     continue
                 }
                 guard canConfirmAnother(Self.visibleStampCount(confirmed: confirmed, ink: ink)) else {
-                    retain(item)
+                    if !retain(item) { break queue }
                     continue
                 }
                 guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
@@ -542,10 +541,13 @@ struct SaveInkLivePlaceEngine {
                     claimedItems.append(item)
                     remoteIDs.insert(candidate.id)
                 case .retryLater:
-                    retain(item)
+                    if !retain(item) {
+                        dropQueueStamp(candidate.id, owner: owner)
+                        break queue
+                    }
                 case .stop:
                     dropQueueStamp(candidate.id, owner: owner)
-                    retain(item)
+                    _ = retain(item)
                     break queue
                 }
                 guard stillHere() else { break }
@@ -557,7 +559,7 @@ struct SaveInkLivePlaceEngine {
         if stillHere(), !pending.removeProcessedPendingPlaces(claimedItems) {
             let ownerless = Set(claimedItems.filter { $0.ownerSubject == nil }.map(\.deduplicationKey))
             if let owner, !owner.isEmpty {
-                pending.bindPendingPlaces(keys: ownerless, to: owner)
+                _ = pending.bindPendingPlaces(keys: ownerless, to: owner)
             }
         }
         guard stillHere() else {
