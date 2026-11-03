@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SaveInkHomeScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
+    @Environment(\.scenePhase) private var scenePhase
 
     private var picks: [SaveInkPlace] {
         if store.usesLivePlaces {
@@ -38,7 +39,7 @@ struct SaveInkHomeScreen: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
-                SaveInkArriveButton {
+                SaveInkArriveButton(isEnabled: !store.usesLivePlaces || !picks.isEmpty) {
                     let fallback = store.usesLivePlaces ? nil : SaveInkFixture.dingtai
                     guard let id = picks.first?.id ?? fallback else { return }
                     Task { await store.checkIn(placeID: id) }
@@ -51,6 +52,10 @@ struct SaveInkHomeScreen: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.home")
         .task { await store.refreshLivePlaces() }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await store.refreshLivePlaces() }
+        }
     }
 
     private var header: some View {
@@ -1015,7 +1020,7 @@ struct SaveInkWelcomeScreen: View {
                 step("存", "存", "貼上抖音、小紅書連結，自動抓出地點")
                 step("去", "去", "附近值得去的，一張張排給你")
                 step("章", "蓋章", "到了按「我到了」，蓋一個印章")
-                Text("只在你按「我到了」時確認你在店裡，不會在背景追蹤，也不保存你的座標。")
+                Text("首頁用你的位置算距離和步行時間，可能先問一次定位。只在按「我到了」時確認你在店裡，不會在背景追蹤，也不保存座標。")
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .fixedSize(horizontal: false, vertical: true)

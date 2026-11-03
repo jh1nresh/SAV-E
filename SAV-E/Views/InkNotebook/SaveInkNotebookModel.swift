@@ -131,6 +131,8 @@ struct SaveInkSavedPlaceRecord: Codable, Equatable {
     var blurb: String
     var sourceLabel: String
     var detailNote: String
+    /// Nil on records saved before accounts were recorded, and while signed out.
+    var ownerSubject: String? = nil
 }
 
 struct SaveInkPlace: Identifiable, Equatable {
@@ -608,6 +610,7 @@ final class SaveInkNotebookStore: ObservableObject {
     private let now: () -> Date
     private let makeLocator: () -> any SaveInkLocating
     private let liveLoader: SaveInkLivePlaceLoader
+    private let liveOwner: () -> String?
     private var locator: (any SaveInkLocating)?
     private var pendingSituation: SaveInkCheckInSituation?
     private var liveGeneration = 0
@@ -621,7 +624,8 @@ final class SaveInkNotebookStore: ObservableObject {
         friendInputs: [SaveInkFriendVisitInput]? = nil,
         makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() },
         usesLivePlaces: Bool = false,
-        liveLoader: SaveInkLivePlaceLoader? = nil
+        liveLoader: SaveInkLivePlaceLoader? = nil,
+        liveOwner: @escaping () -> String? = { PrivyAuthService.shared.currentUserId }
     ) {
         self.defaults = defaults
         let placesDefaults = Self.placesDefaults(for: defaults)
@@ -631,7 +635,13 @@ final class SaveInkNotebookStore: ObservableObject {
         self.usesLivePlaces = usesLivePlaces
         let loader = liveLoader ?? (usesLivePlaces ? SaveInkLivePlaceLoader.production() : .inactive)
         self.liveLoader = loader
-        let saved = Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        self.liveOwner = liveOwner
+        let saved = Self.loadSavedPlaces(
+            defaults: placesDefaults,
+            key: placesKey,
+            owner: usesLivePlaces ? liveOwner() : nil,
+            scoped: usesLivePlaces
+        )
         // Vault and the share queue wait for refresh, which resolves the
         // signed-in owner first. Reading them here would show ownerless rows
         // before auth restores.
@@ -862,9 +872,16 @@ final class SaveInkNotebookStore: ObservableObject {
         guard usesLivePlaces else { return }
         liveGeneration += 1
         let generation = liveGeneration
-        let ink = places.filter { $0.id.hasPrefix("saved-") }
+        let owner = liveOwner()
+        let ink = Self.loadSavedPlaces(
+            defaults: placesDefaults,
+            key: placesKey,
+            owner: owner,
+            scoped: true
+        )
         let loaded = await liveLoader.load(ink)
         guard generation == liveGeneration else { return }
+        guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
     }
@@ -919,7 +936,8 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     private func persistPlaces() {
-        let records = places.filter { $0.id.hasPrefix("saved-") }.map {
+        let owner = usesLivePlaces ? liveOwner() : nil
+        let mine = places.filter { $0.id.hasPrefix("saved-") }.map {
             SaveInkSavedPlaceRecord(
                 id: $0.id,
                 name: $0.name,
@@ -927,8 +945,17 @@ final class SaveInkNotebookStore: ObservableObject {
                 street: $0.street,
                 blurb: $0.blurb,
                 sourceLabel: $0.sourceLabel,
-                detailNote: $0.detailNote
+                detailNote: $0.detailNote,
+                ownerSubject: owner
             )
+        }
+        let records: [SaveInkSavedPlaceRecord]
+        if usesLivePlaces,
+           let data = placesDefaults.data(forKey: placesKey),
+           let existing = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data) {
+            records = existing.filter { $0.ownerSubject != owner } + mine
+        } else {
+            records = mine
         }
         guard let data = try? JSONEncoder().encode(records) else { return }
         placesDefaults.set(data, forKey: placesKey)
@@ -946,11 +973,27 @@ final class SaveInkNotebookStore: ObservableObject {
         return shared
     }
 
-    private static func loadSavedPlaces(defaults: UserDefaults, key: String) -> [SaveInkPlace] {
+    /// Signed-in live launches see only that account's rows. Ownerless rows
+    /// stay hidden while an account is signed in, matching the vault.
+    static func visibleSavedRecords(
+        _ records: [SaveInkSavedPlaceRecord],
+        owner: String?,
+        scoped: Bool
+    ) -> [SaveInkSavedPlaceRecord] {
+        guard scoped else { return records }
+        return records.filter { $0.ownerSubject == owner }
+    }
+
+    private static func loadSavedPlaces(
+        defaults: UserDefaults,
+        key: String,
+        owner: String?,
+        scoped: Bool
+    ) -> [SaveInkPlace] {
         guard let data = defaults.data(forKey: key),
               let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
         else { return [] }
-        return records.map {
+        return visibleSavedRecords(records, owner: owner, scoped: scoped).map {
             SaveInkPlace(
                 id: $0.id,
                 name: $0.name,

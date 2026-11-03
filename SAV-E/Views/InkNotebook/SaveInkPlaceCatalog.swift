@@ -148,17 +148,20 @@ enum SaveInkPlaceSync {
     static func reconcile(
         local: [Place],
         userId: String?,
-        remote: any SaveInkPlaceRemote
+        remote: any SaveInkPlaceRemote,
+        stillCurrent: @MainActor () -> Bool = { true }
     ) async -> [Place] {
-        guard let userId, !userId.isEmpty, remote.isConfigured else { return local }
+        guard let userId, !userId.isEmpty, remote.isConfigured, stillCurrent() else { return local }
         let remotePlaces: [Place]
         do {
             remotePlaces = try await remote.fetchPlaces(for: userId)
         } catch {
             return local
         }
+        guard stillCurrent() else { return local }
         let merged = Place.consolidated(remotePlaces + local)
         for place in local where !remotePlaces.contains(where: { $0.matches(place) }) {
+            guard stillCurrent() else { return local }
             do {
                 try await remote.savePlace(place, userId: userId)
             } catch {
@@ -208,8 +211,20 @@ struct SaveInkLivePlaceEngine {
     var remote: any SaveInkPlaceRemote
     var userID: @MainActor () async -> String?
     var location: @MainActor () async -> CLLocation?
-    var resolveCoordinate: @MainActor (String, CLLocation?) async -> CLLocationCoordinate2D?
     var walkingMinutes: @MainActor (CLLocation, CLLocationCoordinate2D) async -> Int?
+    /// Owner and auth generation. A change after an await aborts writes.
+    var currentSession: @MainActor () -> (owner: String?, generation: Int) = {
+        (PrivyAuthService.shared.currentUserId, PrivyAuthService.shared.sessionGeneration)
+    }
+    /// False when a resolved free account is already at the saved-place cap.
+    /// Unresolved entitlement fails open so a Pro account is not parked as free.
+    var canConfirmAnother: @MainActor (Int) -> Bool = { count in
+        guard SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier else { return true }
+        return SavePlaceLimitGate.decide(
+            tier: SaveEntitlementStore.shared.tier,
+            savedPlaceCount: count
+        ) != .overFreeLimit
+    }
 
     static func production() -> SaveInkLivePlaceEngine {
         SaveInkLivePlaceEngine(
@@ -225,9 +240,6 @@ struct SaveInkLivePlaceEngine {
             location: {
                 await LocationService.shared.requestCurrentLocation()
             },
-            resolveCoordinate: { name, near in
-                await SaveInkMapKitLookup.coordinate(forName: name, near: near)
-            },
             walkingMinutes: { origin, destination in
                 await SaveInkMapKitLookup.walkingMinutes(from: origin, to: destination)
             }
@@ -242,54 +254,62 @@ struct SaveInkLivePlaceEngine {
     }
 
     func load(ink: [SaveInkPlace]) async -> SaveInkLivePlaceLoad {
+        let started = currentSession()
         let owner = await userID()
+        func stillHere() -> Bool {
+            let now = currentSession()
+            return now.generation == started.generation && now.owner == owner
+        }
+        guard stillHere() else {
+            return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
+        }
         var confirmed = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
         for item in queued {
+            guard stillHere() else { break }
             let candidate = Place.from(item)
             guard !confirmed.contains(where: { $0.matches(candidate) }) else { continue }
+            guard canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
             guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
             if let refreshed = try? vault.confirmedPlaces(limit: 500, belongingTo: owner) {
                 confirmed = refreshed
             }
         }
-        let reconciled = await SaveInkPlaceSync.reconcile(local: confirmed, userId: owner, remote: remote)
+        let reconciled: [Place]
+        if let owner, !owner.isEmpty {
+            reconciled = await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
+                await SaveInkPlaceSync.reconcile(
+                    local: confirmed,
+                    userId: owner,
+                    remote: remote,
+                    stillCurrent: stillHere
+                )
+            }
+        } else {
+            reconciled = confirmed
+        }
+        guard stillHere() else {
+            return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
+        }
         for place in reconciled where !confirmed.contains(where: { $0.matches(place) }) {
+            guard stillHere(), canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
             guard (try? vault.saveConfirmedPlace(place, ownerSubject: owner)) != nil else { continue }
             confirmed.append(place)
         }
         let userLocation = await location()
+        guard stillHere() else {
+            return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
+        }
         var rows = SaveInkPlaceCatalog.merge(
             ink: ink,
             confirmed: reconciled,
             pending: queued,
             userLocation: userLocation
         )
-        var resolved = 0
-        for index in rows.indices where rows[index].shopLatitude == nil && resolved < 5 {
-            let name = rows[index].name
-            guard let coordinate = await resolveCoordinate(name, userLocation) else { continue }
-            rows[index].shopLatitude = coordinate.latitude
-            rows[index].shopLongitude = coordinate.longitude
-            resolved += 1
-            let address = rows[index].addressLine ?? rows[index].street
-            let stamped = Place.from(PendingSharedPlace(
-                name: name,
-                address: address,
-                category: PlaceCategory.fromClipSnapshot(name).rawValue,
-                latitude: coordinate.latitude,
-                longitude: coordinate.longitude,
-                dishes: [],
-                savedAt: Date()
-            ))
-            if (try? vault.saveConfirmedPlace(stamped, ownerSubject: owner)) != nil {
-                _ = await SaveInkPlaceSync.reconcile(local: [stamped], userId: owner, remote: remote)
-            }
-        }
-        rows = SaveInkPlaceCatalog.applyingDistance(rows, from: userLocation)
         if let userLocation {
             var walks = 0
             for index in rows.indices where walks < 8 {
+                guard stillHere() else { break }
                 guard let latitude = rows[index].shopLatitude, let longitude = rows[index].shopLongitude else { continue }
                 walks += 1
                 let destination = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -297,6 +317,9 @@ struct SaveInkLivePlaceEngine {
                     rows[index].walkMinutes = minutes
                 }
             }
+        }
+        guard stillHere() else {
+            return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
         return SaveInkLivePlaceLoad(
             places: SaveInkPlaceCatalog.sortedByDistance(rows),
@@ -306,26 +329,6 @@ struct SaveInkLivePlaceEngine {
 }
 
 enum SaveInkMapKitLookup {
-    static func coordinate(forName name: String, near location: CLLocation?) async -> CLLocationCoordinate2D? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = trimmed
-        if let location {
-            request.region = MKCoordinateRegion(
-                center: location.coordinate,
-                latitudinalMeters: 25_000,
-                longitudinalMeters: 25_000
-            )
-        }
-        guard let response = try? await MKLocalSearch(request: request).start(),
-              let item = response.mapItems.first else { return nil }
-        let coordinate = item.placemark.coordinate
-        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
-        guard coordinate.latitude != 0 || coordinate.longitude != 0 else { return nil }
-        return coordinate
-    }
-
     static func walkingMinutes(from origin: CLLocation, to destination: CLLocationCoordinate2D) async -> Int? {
         guard let route = await walkingRoute(from: origin.coordinate, to: destination) else { return nil }
         return SaveInkPlaceCatalog.minutes(fromTravelTime: route.expectedTravelTime)
@@ -370,8 +373,8 @@ enum SaveInkMapCamera {
             longitude: (minLon + maxLon) / 2
         )
         let span = MKCoordinateSpan(
-            latitudeDelta: max((maxLat - minLat) * 1.6, 0.008),
-            longitudeDelta: max((maxLon - minLon) * 1.6, 0.008)
+            latitudeDelta: min(max((maxLat - minLat) * 1.6, 0.008), 180),
+            longitudeDelta: min(max((maxLon - minLon) * 1.6, 0.008), 360)
         )
         return MKCoordinateRegion(center: center, span: span)
     }
