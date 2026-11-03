@@ -788,11 +788,11 @@ final class SaveLocalVaultService: Sendable {
             guard case .rows(var rows) = readUnboundShares() else { return false }
             rows.removeAll { $0.key == key }
             rows.append(UnboundShareClaim(key: key, owner: owner))
+            guard case .rows(let storedFallback) = readUnboundShareFallback() else { return false }
             if saveUnboundShares(rows) {
-                _ = saveUnboundShareFallback(readUnboundShareFallback().filter { $0.key != key })
-                return true
+                return saveUnboundShareFallback(storedFallback.filter { $0.key != key })
             }
-            var fallback = readUnboundShareFallback()
+            var fallback = storedFallback
             fallback.removeAll { $0.key == key }
             fallback.append(UnboundShareClaim(key: key, owner: owner))
             return saveUnboundShareFallback(fallback)
@@ -803,7 +803,8 @@ final class SaveLocalVaultService: Sendable {
         guard !key.isEmpty else { return nil }
         return withLock {
             guard case .rows(let rows) = readUnboundShares() else { return nil }
-            if let held = readUnboundShareFallback().first(where: { $0.key == key })?.owner {
+            guard case .rows(let fallback) = readUnboundShareFallback() else { return nil }
+            if let held = fallback.first(where: { $0.key == key })?.owner {
                 return held
             }
             return rows.first { $0.key == key }?.owner
@@ -815,6 +816,7 @@ final class SaveLocalVaultService: Sendable {
     func unboundShareLedgerIsReadable() -> Bool {
         withLock {
             if case .unreadable = readUnboundShares() { return false }
+            if case .unreadable = readUnboundShareFallback() { return false }
             return true
         }
     }
@@ -826,7 +828,7 @@ final class SaveLocalVaultService: Sendable {
                 rows.removeAll { $0.key == key }
                 _ = saveUnboundShares(rows)
             }
-            var fallback = readUnboundShareFallback()
+            guard case .rows(var fallback) = readUnboundShareFallback() else { return }
             fallback.removeAll { $0.key == key }
             _ = saveUnboundShareFallback(fallback)
         }
@@ -844,16 +846,18 @@ final class SaveLocalVaultService: Sendable {
             case .rows(var rows):
                 let before = rows.count
                 rows.removeAll { $0.owner == owner }
-                var fallback = readUnboundShareFallback()
+                guard case .rows(var fallback) = readUnboundShareFallback() else {
+                    throw SaveLocalVaultError.storageUnavailable
+                }
                 let fallbackBefore = fallback.count
                 fallback.removeAll { $0.owner == owner }
-                guard rows.count != before || fallback.count != fallbackBefore else { return }
                 if rows.count != before, !saveUnboundShares(rows) {
                     throw SaveLocalVaultError.storageUnavailable
                 }
-                guard saveUnboundShareFallback(fallback) else {
+                if fallback.count != fallbackBefore, !saveUnboundShareFallback(fallback) {
                     throw SaveLocalVaultError.storageUnavailable
                 }
+                try removeCapRejectedStamps(belongingTo: owner)
             }
         }
     }
@@ -911,11 +915,31 @@ final class SaveLocalVaultService: Sendable {
         return UserDefaults(suiteName: "ink-unbound-\(String(hash, radix: 16))")
     }
 
-    private func readUnboundShareFallback() -> [UnboundShareClaim] {
-        guard let data = unboundShareDefaults()?.data(forKey: "claims"),
-              let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else { return [] }
-        return rows
+    private func readUnboundShareFallback() -> UnboundShareRead {
+        guard let defaults = unboundShareDefaults() else { return .unreadable }
+        guard let data = defaults.data(forKey: "claims") else { return .rows([]) }
+        guard let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else {
+            return .unreadable
+        }
+        return .rows(rows)
     }
+
+    private func removeCapRejectedStamps(belongingTo owner: String) throws {
+        guard let defaults = unboundShareDefaults() else {
+            throw SaveLocalVaultError.storageUnavailable
+        }
+        let key = capRejectedDefaultsKey(owner: owner)
+        defaults.removeObject(forKey: key)
+        if defaults.data(forKey: key) != nil {
+            throw SaveLocalVaultError.storageUnavailable
+        }
+    }
+
+#if DEBUG
+    func testingStoreOpaqueUnboundShareFallback(_ data: Data) {
+        unboundShareDefaults()?.set(data, forKey: "claims")
+    }
+#endif
 
     private func saveUnboundShareFallback(_ rows: [UnboundShareClaim]) -> Bool {
         guard let defaults = unboundShareDefaults() else { return false }

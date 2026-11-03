@@ -2320,6 +2320,39 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["超額寫不進"])
     }
 
+    func testOpaqueShareFallbackBlocksTheQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-bad-fallback-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "備援壞了", address: "午路", latitude: 25.30, longitude: 121.80, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        vault.testingStoreOpaqueUnboundShareFallback(Data("not-json".utf8))
+        XCTAssertFalse(vault.unboundShareLedgerIsReadable())
+        XCTAssertFalse(vault.claimUnboundShare(key: item.deduplicationKey, owner: "account-b"))
+        let remote = SaveInkRemoteFake()
+        let engine = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: remote)
+        let loaded = await engine.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "備援壞了" })
+        XCTAssertTrue(remote.saved.isEmpty)
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["備援壞了"])
+    }
+
+    func testAccountDeletionRemovesCapRejectionMarkers() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-purge-rejected-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        XCTAssertTrue(vault.rememberCapRejectedStamp(UUID(), owner: "account-a"))
+        XCTAssertTrue(vault.rememberCapRejectedStamp(UUID(), owner: "account-b"))
+        try vault.purgeUnboundShares(belongingTo: "account-a")
+        XCTAssertTrue(vault.capRejectedStampIDs(owner: "account-a").isEmpty)
+        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-b").count, 1)
+    }
+
     func testLedgerFileFailureStillHoldsTheShare() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-ledger-fallback-\(UUID().uuidString)")
