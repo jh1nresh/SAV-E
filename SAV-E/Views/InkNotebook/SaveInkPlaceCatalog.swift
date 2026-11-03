@@ -464,7 +464,7 @@ struct SaveInkLivePlaceEngine {
             for id in hidden {
                 _ = dropQueueStamp(id, owner: owner)
             }
-            let stillHidden = vault.capRejectedStampIDs(owner: owner)
+            let stillHidden = vault.capRejectedStampIDs(owner: owner) ?? hidden
             confirmed.removeAll { !$0.savedIDs.isDisjoint(with: stillHidden) }
         }
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
