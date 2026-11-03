@@ -686,7 +686,13 @@ final class SaveInkNotebookStore: ObservableObject {
         } else {
             self.places = SaveInkFixture.places + saved
         }
-        self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
+        if let friendInputs {
+            self.friendInputs = friendInputs
+        } else if usesLivePlaces {
+            self.friendInputs = []
+        } else {
+            self.friendInputs = SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
+        }
         let visitKey = usesLivePlaces ? Self.visitsKey(owner: liveOwner()) : storageKey
         if let stored = Self.load(defaults: defaults, key: visitKey) {
             self.visits = stored
@@ -874,8 +880,26 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func pasteExampleLink() {
+        if usesLivePlaces {
+            paste(liveText: UIPasteboard.general.string)
+            return
+        }
         saveLink = "https://短影音連結/v/8f2k…"
         recognizedPlaceID = SaveInkFixture.qingtian
+    }
+
+    /// Live 「貼上」 reads the clipboard. It does not insert the fixture link
+    /// or point at the fixture place. An empty clipboard leaves the field alone.
+    func paste(liveText: String?) {
+        guard usesLivePlaces else {
+            pasteExampleLink()
+            return
+        }
+        let pasted = liveText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !pasted.isEmpty else { return }
+        saveLink = pasted
+        recognizedPlaceID = nil
+        recognizeQuery()
     }
 
     func recognizeQuery() {

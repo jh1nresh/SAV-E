@@ -1728,6 +1728,60 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(store.places.contains { $0.name == "還沒核對" })
     }
 
+    func testLiveHomeDoesNotShowFixtureFriends() {
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.no-friends.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { nil }
+        )
+        XCTAssertTrue(store.friendCards().isEmpty)
+        let fixture = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.fixture-friends.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        XCTAssertFalse(fixture.friendCards().isEmpty)
+    }
+
+    func testLivePasteReadsTheClipboardAndDoesNotSelectTheFixturePlace() async {
+        let defaults = UserDefaults(suiteName: "save.ink.paste.\(UUID().uuidString)")!
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" },
+            liveSavedPlaceTierIsAuthoritative: { true }
+        )
+        await store.refreshLivePlaces()
+        store.sheet = .save
+        store.paste(liveText: "   ")
+        XCTAssertTrue(store.saveLink.isEmpty)
+        XCTAssertNil(store.recognizedPlaceID)
+        store.paste(liveText: "https://notes.example/article/how-to-film")
+        XCTAssertEqual(store.saveLink, "https://notes.example/article/how-to-film")
+        XCTAssertNil(store.recognizedPlaceID)
+        store.commitSave()
+        XCTAssertEqual(store.saveNotice, SaveInkPlaceLink.notAPlaceMessage)
+        XCTAssertEqual(store.sheet, .save)
+        XCTAssertFalse(store.places.contains { $0.id == SaveInkFixture.qingtian })
+        let fixture = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.paste-fixture.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        fixture.pasteExampleLink()
+        XCTAssertEqual(fixture.recognizedPlaceID, SaveInkFixture.qingtian)
+    }
+
     func testLiveSaveWaitsUntilTheSavedPlaceTierIsKnown() async {
         let store = SaveInkNotebookStore(
             defaults: UserDefaults(suiteName: "save.ink.wait-tier.\(UUID().uuidString)")!,
