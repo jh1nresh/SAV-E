@@ -120,6 +120,7 @@ struct SaveInkVisitRecord: Codable, Equatable, Identifiable {
 enum SaveInkPlaceBadge: Equatable {
     case visited
     case saved
+    case unverified
 }
 
 struct SaveInkSavedPlaceRecord: Codable, Equatable {
@@ -719,6 +720,12 @@ final class SaveInkNotebookStore: ObservableObject {
 
     func verifiedCount(for placeID: String) -> Int {
         visits.filter { $0.placeID == placeID && $0.verification == .verified }.count
+    }
+
+    func homeBadge(for place: SaveInkPlace) -> SaveInkPlaceBadge {
+        guard !includesSampleCatalog else { return place.badge }
+        if verifiedCount(for: place.id) > 0 { return .visited }
+        return latestVisit(for: place.id) == nil ? .saved : .unverified
     }
 
     func totalVisits() -> Int {

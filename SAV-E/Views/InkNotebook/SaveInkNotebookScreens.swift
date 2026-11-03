@@ -113,14 +113,18 @@ struct SaveInkHomeScreen: View {
     }
 
     private func placeCard(_ place: SaveInkPlace) -> some View {
-        let saved = place.badge == .saved
+        let badge = store.homeBadge(for: place)
+        let saved = badge == .saved
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 Text(place.name)
                     .font(SaveInkType.shop)
                     .foregroundStyle(SaveInkPalette.ink)
                 Spacer(minLength: 8)
-                SaveInkBadge(text: saved ? "○ 存了還沒去" : "✓ 去過", verified: !saved)
+                SaveInkBadge(
+                    text: badge == .unverified ? "△ 未驗證造訪" : (saved ? "○ 存了還沒去" : "✓ 去過"),
+                    verified: badge == .visited
+                )
             }
             Text(place.meta)
                 .font(SaveInkType.aux)

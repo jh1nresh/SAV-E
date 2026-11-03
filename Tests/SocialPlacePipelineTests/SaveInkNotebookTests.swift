@@ -755,7 +755,9 @@ final class SaveInkNotebookTests: XCTestCase {
         store.saveQuery = "沒有座標的小店"
         store.commitSave()
         let id = try XCTUnwrap(store.homePlaces().first?.id)
+        XCTAssertEqual(store.homeBadge(for: try XCTUnwrap(store.place(id))), .saved)
         store.recordUnverifiedVisit(placeID: id)
+        XCTAssertEqual(store.homeBadge(for: try XCTUnwrap(store.place(id))), .unverified)
         XCTAssertEqual(locator.calls, 0)
         XCTAssertEqual(store.latestVisit(for: id)?.verification, .unverified)
         XCTAssertNil(store.latestVisit(for: id)?.anomaly)
@@ -767,6 +769,7 @@ final class SaveInkNotebookTests: XCTestCase {
         let reloaded = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
         XCTAssertEqual(reloaded.latestVisit(for: id)?.verification, .unverified)
         XCTAssertEqual(reloaded.stampedPlaceIDs(), [id])
+        XCTAssertEqual(reloaded.homeBadge(for: try XCTUnwrap(reloaded.place(id))), .unverified)
     }
 
     func testPasteExampleLinkStaysInsideTheFixtureCatalog() {
