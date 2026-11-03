@@ -838,6 +838,29 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(store.places.contains { $0.id == SaveInkFixture.qingtian })
     }
 
+    func testExplicitSavePromotesARetainedPlaceAndKeepsItsVisit() throws {
+        let defaults = inkSuite("retained-place-save")
+        let visit = inkVisit(placeID: SaveInkFixture.qingtian, comment: "自己寫的到訪")
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertTrue(store.homePlaces().isEmpty)
+        store.saveQuery = "青田七六咖啡"
+        store.recognizeQuery()
+        store.commitSave()
+        let saved = try XCTUnwrap(store.homePlaces().first)
+        XCTAssertEqual(saved.name, "青田七六咖啡")
+        XCTAssertTrue(saved.id.hasPrefix("saved-"))
+        XCTAssertEqual(store.latestVisit(for: saved.id)?.id, visit.id)
+        XCTAssertEqual(store.latestVisit(for: saved.id)?.comment, visit.comment)
+        store.recognizeQuery()
+        store.commitSave()
+        XCTAssertEqual(store.homePlaces().count, 1)
+        let reloaded = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(reloaded.homePlaces().map(\.id), [saved.id])
+        XCTAssertEqual(reloaded.latestVisit(for: saved.id)?.id, visit.id)
+        XCTAssertEqual(reloaded.latestVisit(for: saved.id)?.comment, visit.comment)
+    }
+
     func testCorruptVisitPayloadIsNotDeleted() {
         let defaults = inkSuite("corrupt")
         let payload = Data("not-json".utf8)

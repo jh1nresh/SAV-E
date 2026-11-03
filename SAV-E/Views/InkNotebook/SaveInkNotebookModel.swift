@@ -880,6 +880,19 @@ final class SaveInkNotebookStore: ObservableObject {
         if let id = recognizedPlaceID, place(id) == nil {
             recognizedPlaceID = nil
         }
+        if !includesSampleCatalog, let id = recognizedPlaceID,
+           !id.hasPrefix("saved-"), var retained = place(id) {
+            let savedID = "saved-\(id)"
+            if place(savedID) == nil {
+                retained.id = savedID
+                places.append(retained)
+            }
+            for index in visits.indices where visits[index].placeID == id {
+                visits[index].placeID = savedID
+            }
+            persist()
+            recognizedPlaceID = savedID
+        }
         recognizeQuery()
         let combined = [saveLink, saveQuery].joined(separator: " ")
         if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined, knownPlaces: places) {
