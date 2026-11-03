@@ -1617,6 +1617,65 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(row.savedRecommendedItems.map(\.name), ["奶油麵包"])
     }
 
+    func testLiveHomeArrivalIgnoresAnUnlocatedList() {
+        var alpha = inkRow(id: "alpha", name: "甲店", street: "甲")
+        var beta = inkRow(id: "beta", name: "乙店", street: "乙")
+        alpha.distanceMeters = nil
+        beta.distanceMeters = nil
+        let unlocated = livePlaceStore(places: [alpha, beta])
+        XCTAssertNil(unlocated.liveArrivalPlaceID())
+        var near = inkRow(id: "near", name: "近店", street: "近")
+        var far = inkRow(id: "far", name: "遠店", street: "遠")
+        near.distanceMeters = 40
+        far.distanceMeters = 900
+        let located = livePlaceStore(places: [near, far])
+        XCTAssertEqual(located.liveArrivalPlaceID(), "near")
+    }
+
+    func testOpenDetailFollowsTheConsolidatedPlaceID() async {
+        let local = inkRow(id: "local-id", name: "合併店", street: "街")
+        var remote = inkRow(id: "remote-id", name: "合併店", street: "街")
+        remote.aliasIDs = ["local-id"]
+        var showedLocal = true
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in showedLocal ? [local] : [remote] },
+            load: { _ in
+                showedLocal = false
+                return SaveInkLivePlaceLoad(places: [remote], userCoordinate: nil)
+            }
+        )
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.alias.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: loader,
+            liveOwner: { "account-a" }
+        )
+        store.openPlace("local-id")
+        XCTAssertEqual(store.path, [.place("local-id")])
+        await store.refreshLivePlaces()
+        XCTAssertEqual(store.place("local-id")?.id, "remote-id")
+        XCTAssertEqual(store.path, [.place("remote-id")])
+    }
+
+    private func livePlaceStore(places: [SaveInkPlace]) -> SaveInkNotebookStore {
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in places },
+            load: { _ in SaveInkLivePlaceLoad(places: places, userCoordinate: nil) }
+        )
+        return SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.arrival.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: loader,
+            liveOwner: { "account-a" }
+        )
+    }
+
     private func uploadedOwnerlessID(owner: String, item: PendingSharedPlace) async throws -> UUID {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-id-\(owner)-\(UUID().uuidString)")

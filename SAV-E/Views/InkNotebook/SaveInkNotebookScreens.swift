@@ -39,9 +39,8 @@ struct SaveInkHomeScreen: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
-                SaveInkArriveButton(isEnabled: !store.usesLivePlaces || !picks.isEmpty) {
-                    let fallback = store.usesLivePlaces ? nil : SaveInkFixture.dingtai
-                    guard let id = picks.first?.id ?? fallback else { return }
+                SaveInkArriveButton(isEnabled: homeArrivalID != nil) {
+                    guard let id = homeArrivalID else { return }
                     Task { await store.checkIn(placeID: id) }
                 }
                 .padding(.horizontal, 24)
@@ -56,6 +55,13 @@ struct SaveInkHomeScreen: View {
             guard phase == .active else { return }
             Task { await store.refreshLivePlaces() }
         }
+    }
+
+    /// Fixture Home can check in the featured place. Live Home checks in only
+    /// the nearest located stamp. Without a distance, the person opens a card.
+    private var homeArrivalID: String? {
+        if store.usesLivePlaces { return store.liveArrivalPlaceID() }
+        return picks.first?.id ?? SaveInkFixture.dingtai
     }
 
     private var header: some View {

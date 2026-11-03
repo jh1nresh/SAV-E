@@ -678,8 +678,9 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func openPlace(_ id: String) {
-        activePlaceID = id
-        path.append(.place(id))
+        let resolved = place(id)?.id ?? id
+        activePlaceID = resolved
+        path.append(.place(resolved))
     }
 
     func openWelcome() {
@@ -696,7 +697,15 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func place(_ id: String) -> SaveInkPlace? {
-        places.first { $0.id == id }
+        if let exact = places.first(where: { $0.id == id }) { return exact }
+        return places.first { $0.aliasIDs.contains(id) }
+    }
+
+    /// The Home「我到了」target. Live mode uses it only when a place has a
+    /// measured distance, so a denied location cannot check in the first name.
+    func liveArrivalPlaceID() -> String? {
+        guard usesLivePlaces, let nearest = places.first, nearest.distanceMeters != nil else { return nil }
+        return nearest.id
     }
 
     func verifiedCount(for placeID: String) -> Int {
@@ -916,6 +925,7 @@ final class SaveInkNotebookStore: ObservableObject {
         guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
+        retargetOpenPlaces()
         let visitKey = Self.visitsKey(owner: owner)
         if let stored = Self.load(defaults: defaults, key: visitKey) {
             visits = stored
@@ -986,6 +996,26 @@ final class SaveInkNotebookStore: ObservableObject {
             var copy = place
             copy.badge = .visited
             return copy
+        }
+    }
+
+    private func retargetOpenPlaces() {
+        path = path.map(retarget)
+        if case .checkIn(let situation, let placeID) = sheet, let resolved = place(placeID)?.id, resolved != placeID {
+            sheet = .checkIn(situation, placeID: resolved)
+        }
+    }
+
+    private func retarget(_ route: SaveInkRoute) -> SaveInkRoute {
+        switch route {
+        case .place(let id):
+            return .place(place(id)?.id ?? id)
+        case .review(let id):
+            return .review(place(id)?.id ?? id)
+        case .arrival(let id):
+            return .arrival(place(id)?.id ?? id)
+        case .passport, .friends, .welcome:
+            return route
         }
     }
 
