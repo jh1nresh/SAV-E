@@ -495,6 +495,15 @@ struct SaveInkLivePlaceEngine {
         if admitQueue {
             queue: for item in queued {
                 guard stillHere() else { break }
+                if let owner, !owner.isEmpty, let heldBy = vault.unboundShareOwner(for: item.deduplicationKey) {
+                    if heldBy != owner { continue }
+                    if retain(item) {
+                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                    } else if pending.removeProcessedPendingPlaces([item]) {
+                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                        continue
+                    }
+                }
                 let candidate = Place.from(
                     item,
                     id: SaveInkPlaceCatalog.stablePlaceID(for: "\(owner ?? "")|\(item.deduplicationKey)")
@@ -560,7 +569,13 @@ struct SaveInkLivePlaceEngine {
                     }
                 case .stop:
                     dropQueueStamp(candidate.id, owner: owner)
-                    _ = retain(item)
+                    if retain(item) {
+                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                    } else if pending.removeProcessedPendingPlaces([item]) {
+                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                    } else if let owner, !owner.isEmpty {
+                        _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
+                    }
                     break queue
                 }
                 guard stillHere() else { break }

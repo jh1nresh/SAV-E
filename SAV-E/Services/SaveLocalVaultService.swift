@@ -775,6 +775,72 @@ final class SaveLocalVaultService: Sendable {
         return try result.get()
     }
 
+    /// A share this account tried to claim while the queue file could not be rewritten.
+    /// Another account must not import the same key. The ledger sits beside the vault,
+    /// so an unwritable queue directory does not block it.
+    func claimUnboundShare(key: String, owner: String) -> Bool {
+        guard !key.isEmpty, !owner.isEmpty else { return false }
+        return withLock {
+            var rows = loadUnboundShares()
+            rows.removeAll { $0.key == key }
+            rows.append(UnboundShareClaim(key: key, owner: owner))
+            return saveUnboundShares(rows)
+        }
+    }
+
+    func unboundShareOwner(for key: String) -> String? {
+        guard !key.isEmpty else { return nil }
+        return withLock {
+            loadUnboundShares().first { $0.key == key }?.owner
+        }
+    }
+
+    func releaseUnboundShare(key: String) {
+        guard !key.isEmpty else { return }
+        withLock {
+            var rows = loadUnboundShares()
+            rows.removeAll { $0.key == key }
+            _ = saveUnboundShares(rows)
+        }
+    }
+
+    private struct UnboundShareClaim: Codable, Equatable {
+        var key: String
+        var owner: String
+    }
+
+    private func unboundShareURL() -> URL? {
+        vaultURL()?.deletingLastPathComponent().appendingPathComponent("save.ink.unbound-shares.json")
+    }
+
+    private func loadUnboundShares() -> [UnboundShareClaim] {
+        guard let url = unboundShareURL(),
+              let data = try? Data(contentsOf: url),
+              let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else { return [] }
+        return rows
+    }
+
+    private func saveUnboundShares(_ rows: [UnboundShareClaim]) -> Bool {
+        guard let url = unboundShareURL() else { return false }
+        if rows.isEmpty {
+            if FileManager.default.fileExists(atPath: url.path) {
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    return false
+                }
+            }
+            return true
+        }
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(rows).write(to: url, options: [.atomic])
+            return true
+        } catch {
+            return false
+        }
+    }
+
     private func vaultURL() -> URL? {
         if let overrideVaultURL { return overrideVaultURL }
         if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) {

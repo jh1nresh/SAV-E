@@ -642,7 +642,14 @@ final class SaveInkNotebookStore: ObservableObject {
         makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() },
         usesLivePlaces: Bool = false,
         liveLoader: SaveInkLivePlaceLoader? = nil,
-        liveOwner: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
+        liveOwner: @escaping () -> String? = {
+            let auth = PrivyAuthService.shared
+            return SaveInkNotebookStore.resolvedLiveOwner(
+                authUnknown: auth.authState == .unknown,
+                currentUserId: auth.currentUserId,
+                cachedOwner: SavePlaceLimitHandoff.cachedActiveOwner()
+            )
+        },
         canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace,
         parkCappedLiveSave: (@MainActor (String) -> Bool)? = nil
     ) {
@@ -888,6 +895,7 @@ final class SaveInkNotebookStore: ObservableObject {
             return
         }
         saveNotice = nil
+        var appendedIndex: Int?
         if recognizedPlaceID == nil, !saveQuery.isEmpty {
             let name = SaveInkPlaceLink.savedName(from: saveQuery)
             if usesLivePlaces, refreshTask != nil || !liveCatalogAuthoritative {
@@ -921,17 +929,34 @@ final class SaveInkNotebookStore: ObservableObject {
             )
             places.append(place)
             recognizedPlaceID = place.id
+            appendedIndex = places.count - 1
         }
         if let id = recognizedPlaceID, let index = places.firstIndex(where: { $0.id == id }) {
             if places[index].badge != .visited {
                 places[index].badge = .saved
             }
         }
-        persistPlaces()
+        guard persistPlaces() else {
+            if let appendedIndex, places.indices.contains(appendedIndex) {
+                let removed = places.remove(at: appendedIndex)
+                if recognizedPlaceID == removed.id {
+                    recognizedPlaceID = nil
+                }
+            }
+            saveNotice = "這次沒有存下來。請稍後再試。"
+            return
+        }
         sheet = nil
         if usesLivePlaces {
             Task { await refreshLivePlaces() }
         }
+    }
+
+    /// While sign-in is still restoring, the cached account is the owner.
+    /// `currentUserId` is nil until that finishes, so the two must not diverge.
+    static func resolvedLiveOwner(authUnknown: Bool, currentUserId: String?, cachedOwner: String?) -> String? {
+        if authUnknown { return cachedOwner }
+        return currentUserId
     }
 
     /// Same cap as the share queue. Unresolved entitlement fails open.
@@ -1132,8 +1157,11 @@ final class SaveInkNotebookStore: ObservableObject {
         return "save.ink.visits.v1.\(owner)"
     }
 
-    private func persistPlaces() {
-        if usesLivePlaces, liveOwner() != catalogOwner { return }
+    /// False when this account's rows could not be written. A file that exists
+    /// but cannot be decoded is left untouched, so one bad value cannot erase
+    /// every account's ink saves.
+    private func persistPlaces() -> Bool {
+        if usesLivePlaces, liveOwner() != catalogOwner { return false }
         let owner = usesLivePlaces ? liveOwner() : nil
         let mine = places.filter { $0.id.hasPrefix("saved-") }.map {
             SaveInkSavedPlaceRecord(
@@ -1148,15 +1176,17 @@ final class SaveInkNotebookStore: ObservableObject {
             )
         }
         let records: [SaveInkSavedPlaceRecord]
-        if usesLivePlaces,
-           let data = placesDefaults.data(forKey: placesKey),
-           let existing = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data) {
+        if usesLivePlaces, let data = placesDefaults.data(forKey: placesKey) {
+            guard let existing = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data) else {
+                return false
+            }
             records = existing.filter { $0.ownerSubject != owner } + mine
         } else {
             records = mine
         }
-        guard let data = try? JSONEncoder().encode(records) else { return }
+        guard let data = try? JSONEncoder().encode(records) else { return false }
         placesDefaults.set(data, forKey: placesKey)
+        return true
     }
 
     /// Production places live in the App Group. A private test suite stays isolated.
