@@ -632,8 +632,11 @@ final class SaveInkNotebookStore: ObservableObject {
         let loader = liveLoader ?? (usesLivePlaces ? SaveInkLivePlaceLoader.production() : .inactive)
         self.liveLoader = loader
         let saved = Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        // Vault and the share queue wait for refresh, which resolves the
+        // signed-in owner first. Reading them here would show ownerless rows
+        // before auth restores.
         if usesLivePlaces {
-            self.places = loader.localPlaces(saved)
+            self.places = saved
         } else {
             self.places = SaveInkFixture.places + saved
         }
