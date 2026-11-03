@@ -1269,6 +1269,37 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-b"))
     }
 
+    func testLiveCatalogScreensRenderForQA() throws {
+        let unlocated = inkRow(id: "saved-long-name", name: "這是一間有很長店名而且沒有座標的小店", street: "店名待補地址")
+        var located = inkRow(id: "saved-located", name: "已存的地點", street: "測試街")
+        located.shopLatitude = 25.0327
+        located.shopLongitude = 121.5294
+        let rows = [unlocated, located, inkRow(id: "saved-third", name: "另一個已存地點", street: "測試街二段")]
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in rows },
+            load: { _ in SaveInkLivePlaceLoad(places: rows, userCoordinate: nil) }
+        )
+        let store = SaveInkNotebookStore(defaults: inkSuite("live-catalog-render"), now: { SaveInkClock.previewNow },
+                                         usesLivePlaces: true, liveLoader: loader, liveOwner: { "account-a" })
+        store.recordUnverifiedVisit(placeID: unlocated.id)
+        store.commitDraft()
+        let empty = SaveInkNotebookStore(defaults: inkSuite("live-empty-render"), now: { SaveInkClock.previewNow },
+                                         usesLivePlaces: true, liveLoader: .inactive, liveOwner: { "account-a" })
+        for width: CGFloat in [375, 390, 430] {
+            for (name, image) in [
+                ("home", try hostedInkImage(SaveInkHomeScreen(store: store), width: width)),
+                ("empty", try hostedInkImage(SaveInkHomeScreen(store: empty), width: width)),
+                ("place-unverified", try hostedInkImage(SaveInkPlaceScreen(store: store, placeID: unlocated.id), width: width)),
+            ] {
+                XCTAssertGreaterThan(try XCTUnwrap(image.pngData()).count, 8_000)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ink-live-\(name)-\(Int(width))"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
     func testCatalogDedupesVaultPendingAndInkAndKeepsCoordinates() throws {
         let confirmed = Place.from(inkPending(
             name: "青田七六咖啡",
