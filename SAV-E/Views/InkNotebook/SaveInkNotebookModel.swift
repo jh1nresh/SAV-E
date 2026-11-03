@@ -551,7 +551,7 @@ enum SaveInkPlaceLink {
     static func mapPlaceName(in text: String) -> String? {
         guard let url = firstURL(in: text), isMapLink(url) else { return nil }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-        for key in ["q", "query", "address", "name"] {
+        for key in ["q", "query", "name", "address"] {
             guard let value = items.first(where: { $0.name.caseInsensitiveCompare(key) == .orderedSame })?.value?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
                   !value.isEmpty,

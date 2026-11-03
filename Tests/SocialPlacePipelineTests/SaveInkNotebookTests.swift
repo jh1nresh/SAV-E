@@ -1841,6 +1841,10 @@ final class SaveInkNotebookTests: XCTestCase {
         store.paste(liveText: "https://maps.apple.com/?q=青田麵店")
         store.commitSave()
         XCTAssertTrue(store.places.contains { $0.name == "青田麵店" })
+        XCTAssertEqual(
+            SaveInkPlaceLink.mapPlaceName(in: "Check out Grand Central Market https://maps.apple.com/place?address=317%20S%20Broadway,%20Los%20Angeles,%20CA%2090013&coordinate=34.050536,-118.248981&name=Grand%20Central%20Market"),
+            "Grand Central Market"
+        )
         XCTAssertNil(store.sheet)
         let saved = try? String(decoding: XCTUnwrap(defaults.data(forKey: SavePlaceLinkGate.placesKey)), as: UTF8.self)
         XCTAssertTrue(saved?.contains("青田麵店") == true)
