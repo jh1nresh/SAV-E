@@ -99,6 +99,7 @@ final class SaveLocalVaultService: Sendable {
     nonisolated(unsafe) var removeReviewCandidateError: Error?
     nonisolated(unsafe) var saveReviewCandidateError: Error?
     nonisolated(unsafe) var purgeAccountDeletionRecordsError: Error?
+    nonisolated(unsafe) var removeConfirmedPlaceError: Error?
 #endif
 
     init(overrideVaultURL: URL? = nil) {
@@ -662,6 +663,9 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func removeConfirmedPlace(_ place: Place, belongingTo currentUserId: String?) throws {
+#if DEBUG
+        if let removeConfirmedPlaceError { throw removeConfirmedPlaceError }
+#endif
         try removeConfirmedPlace(place, belongingTo: currentUserId, scopedToActiveAccount: true)
     }
 
@@ -784,7 +788,14 @@ final class SaveLocalVaultService: Sendable {
             guard case .rows(var rows) = readUnboundShares() else { return false }
             rows.removeAll { $0.key == key }
             rows.append(UnboundShareClaim(key: key, owner: owner))
-            return saveUnboundShares(rows)
+            if saveUnboundShares(rows) {
+                _ = saveUnboundShareFallback(readUnboundShareFallback().filter { $0.key != key })
+                return true
+            }
+            var fallback = readUnboundShareFallback()
+            fallback.removeAll { $0.key == key }
+            fallback.append(UnboundShareClaim(key: key, owner: owner))
+            return saveUnboundShareFallback(fallback)
         }
     }
 
@@ -792,6 +803,9 @@ final class SaveLocalVaultService: Sendable {
         guard !key.isEmpty else { return nil }
         return withLock {
             guard case .rows(let rows) = readUnboundShares() else { return nil }
+            if let held = readUnboundShareFallback().first(where: { $0.key == key })?.owner {
+                return held
+            }
             return rows.first { $0.key == key }?.owner
         }
     }
@@ -808,9 +822,13 @@ final class SaveLocalVaultService: Sendable {
     func releaseUnboundShare(key: String) {
         guard !key.isEmpty else { return }
         withLock {
-            guard case .rows(var rows) = readUnboundShares() else { return }
-            rows.removeAll { $0.key == key }
-            _ = saveUnboundShares(rows)
+            if case .rows(var rows) = readUnboundShares() {
+                rows.removeAll { $0.key == key }
+                _ = saveUnboundShares(rows)
+            }
+            var fallback = readUnboundShareFallback()
+            fallback.removeAll { $0.key == key }
+            _ = saveUnboundShareFallback(fallback)
         }
     }
 
@@ -826,12 +844,37 @@ final class SaveLocalVaultService: Sendable {
             case .rows(var rows):
                 let before = rows.count
                 rows.removeAll { $0.owner == owner }
-                guard rows.count != before else { return }
-                guard saveUnboundShares(rows) else {
+                var fallback = readUnboundShareFallback()
+                let fallbackBefore = fallback.count
+                fallback.removeAll { $0.owner == owner }
+                guard rows.count != before || fallback.count != fallbackBefore else { return }
+                if rows.count != before, !saveUnboundShares(rows) {
+                    throw SaveLocalVaultError.storageUnavailable
+                }
+                guard saveUnboundShareFallback(fallback) else {
                     throw SaveLocalVaultError.storageUnavailable
                 }
             }
         }
+    }
+
+    func rememberCapRejectedStamp(_ id: UUID, owner: String?) -> Bool {
+        var ids = capRejectedStampIDs(owner: owner)
+        ids.insert(id)
+        return saveCapRejectedStamps(ids, owner: owner)
+    }
+
+    func capRejectedStampIDs(owner: String?) -> Set<UUID> {
+        let key = capRejectedDefaultsKey(owner: owner)
+        guard let data = unboundShareDefaults()?.data(forKey: key),
+              let ids = try? JSONDecoder().decode(Set<UUID>.self, from: data) else { return [] }
+        return ids
+    }
+
+    func forgetCapRejectedStamp(_ id: UUID, owner: String?) {
+        var ids = capRejectedStampIDs(owner: owner)
+        ids.remove(id)
+        _ = saveCapRejectedStamps(ids, owner: owner)
     }
 
     private struct UnboundShareClaim: Codable, Equatable {
@@ -856,6 +899,49 @@ final class SaveLocalVaultService: Sendable {
             return .unreadable
         }
         return .rows(rows)
+    }
+
+    private func unboundShareDefaults() -> UserDefaults? {
+        let path = vaultURL()?.deletingLastPathComponent().path ?? "shared"
+        var hash: UInt64 = 1469598103934665603
+        for byte in path.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1099511628211
+        }
+        return UserDefaults(suiteName: "ink-unbound-\(String(hash, radix: 16))")
+    }
+
+    private func readUnboundShareFallback() -> [UnboundShareClaim] {
+        guard let data = unboundShareDefaults()?.data(forKey: "claims"),
+              let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else { return [] }
+        return rows
+    }
+
+    private func saveUnboundShareFallback(_ rows: [UnboundShareClaim]) -> Bool {
+        guard let defaults = unboundShareDefaults() else { return false }
+        if rows.isEmpty {
+            defaults.removeObject(forKey: "claims")
+            return true
+        }
+        guard let data = try? JSONEncoder().encode(rows) else { return false }
+        defaults.set(data, forKey: "claims")
+        return true
+    }
+
+    private func capRejectedDefaultsKey(owner: String?) -> String {
+        "rejected.\(owner ?? "signed-out")"
+    }
+
+    private func saveCapRejectedStamps(_ ids: Set<UUID>, owner: String?) -> Bool {
+        guard let defaults = unboundShareDefaults() else { return false }
+        let key = capRejectedDefaultsKey(owner: owner)
+        if ids.isEmpty {
+            defaults.removeObject(forKey: key)
+            return true
+        }
+        guard let data = try? JSONEncoder().encode(ids) else { return false }
+        defaults.set(data, forKey: key)
+        return true
     }
 
     private func saveUnboundShares(_ rows: [UnboundShareClaim]) -> Bool {

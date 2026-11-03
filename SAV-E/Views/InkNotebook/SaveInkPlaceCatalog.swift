@@ -367,7 +367,8 @@ struct SaveInkLivePlaceEngine {
 
     /// Drops one vault record by id. An empty name keeps `matches` from
     /// deleting a different stamp at the same venue.
-    private func dropQueueStamp(_ id: UUID, owner: String?) {
+    @discardableResult
+    private func dropQueueStamp(_ id: UUID, owner: String?) -> Bool {
         let probe = Place.from(
             PendingSharedPlace(
                 name: "",
@@ -380,7 +381,14 @@ struct SaveInkLivePlaceEngine {
             ),
             id: id
         )
-        try? vault.removeConfirmedPlace(probe, belongingTo: owner)
+        do {
+            try vault.removeConfirmedPlace(probe, belongingTo: owner)
+            vault.forgetCapRejectedStamp(id, owner: owner)
+            return true
+        } catch {
+            _ = vault.rememberCapRejectedStamp(id, owner: owner)
+            return false
+        }
     }
 
     private func mirrorMissing(_ places: [Place], owner: String?) {
@@ -449,6 +457,14 @@ struct SaveInkLivePlaceEngine {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
         var confirmed = (try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? []
+        let hidden = vault.capRejectedStampIDs(owner: owner)
+        if !hidden.isEmpty {
+            for id in hidden {
+                _ = dropQueueStamp(id, owner: owner)
+            }
+            let stillHidden = vault.capRejectedStampIDs(owner: owner)
+            confirmed.removeAll { !$0.savedIDs.isDisjoint(with: stillHidden) }
+        }
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
         let signedIn = owner?.isEmpty == false
         var admitQueue = signedIn && !remote.isConfigured
