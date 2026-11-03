@@ -152,7 +152,8 @@ enum SaveInkPlaceCatalog {
             videoTitle: ink?.videoTitle,
             videoSource: ink?.videoSource,
             shopLatitude: mappable ? place.latitude : ink?.shopLatitude,
-            shopLongitude: mappable ? place.longitude : ink?.shopLongitude
+            shopLongitude: mappable ? place.longitude : ink?.shopLongitude,
+            aliasIDs: (place.mergedPlaceIDs ?? []).map(\.uuidString)
         )
     }
 
@@ -243,7 +244,17 @@ struct SaveInkLivePlaceEngine {
     var walkingMinutes: @MainActor (CLLocation, CLLocationCoordinate2D) async -> Int?
     /// Owner and auth generation. A change after an await aborts writes.
     var currentSession: @MainActor () -> (owner: String?, generation: Int) = {
-        (PrivyAuthService.shared.currentUserId, PrivyAuthService.shared.sessionGeneration)
+        Self.liveSession()
+    }
+
+    /// While auth is still restoring, the cached owner is the account. `currentUserId`
+    /// is nil until restore finishes, so the two must not be compared as different owners.
+    static func liveSession() -> (owner: String?, generation: Int) {
+        let auth = PrivyAuthService.shared
+        if auth.authState == .unknown {
+            return (SavePlaceLimitHandoff.cachedActiveOwner(), auth.sessionGeneration)
+        }
+        return (auth.currentUserId, auth.sessionGeneration)
     }
     /// False when a resolved free account is already at the saved-place cap.
     /// Unresolved entitlement fails open so a Pro account is not parked as free.
@@ -273,6 +284,13 @@ struct SaveInkLivePlaceEngine {
                 await SaveInkMapKitLookup.walkingMinutes(from: origin, to: destination)
             }
         )
+    }
+
+    private func mirrorMissing(_ places: [Place], owner: String?) {
+        let existing = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
+        for place in places where !existing.contains(where: { $0.matches(place) }) {
+            try? vault.saveConfirmedPlace(place, ownerSubject: owner)
+        }
     }
 
     func localPlaces(ink: [SaveInkPlace]) -> [SaveInkPlace] {
@@ -309,7 +327,8 @@ struct SaveInkLivePlaceEngine {
                 admitQueue = false
             }
         }
-        let baseline = confirmed
+        mirrorMissing(confirmed, owner: owner)
+        var claimedKeys = Set<String>()
         if admitQueue {
             for item in queued {
                 guard stillHere() else { break }
@@ -320,6 +339,7 @@ struct SaveInkLivePlaceEngine {
                 guard !confirmed.contains(where: { $0.matches(candidate) }) else { continue }
                 guard canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
                 guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
+                var keep = true
                 if let owner, !owner.isEmpty, remote.isConfigured {
                     do {
                         try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
@@ -327,43 +347,30 @@ struct SaveInkLivePlaceEngine {
                         }
                     } catch is SavePlaceLimitError {
                         try? vault.removeConfirmedPlace(candidate, belongingTo: owner)
+                        keep = false
                         break
                     } catch {
                         // The count was already known. Keep the local stamp if the upload itself failed.
                     }
                 }
+                if keep { claimedKeys.insert(item.deduplicationKey) }
                 guard stillHere() else { break }
                 if let refreshed = try? vault.confirmedPlaces(limit: 500, belongingTo: owner) {
-                    confirmed = refreshed
+                    confirmed = Place.consolidated(confirmed + refreshed)
                 }
             }
         }
-        let reconciled: [Place]
-        if let owner, !owner.isEmpty, remote.isConfigured, admitQueue {
-            reconciled = await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
-                await SaveInkPlaceSync.reconcile(
-                    local: baseline,
-                    userId: owner,
-                    remote: remote,
-                    stillCurrent: stillHere
-                )
-            }
-        } else {
-            reconciled = confirmed
+        if stillHere() {
+            pending.removePendingPlaces(withKeys: claimedKeys)
         }
         guard stillHere() else {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
-        }
-        for place in reconciled where !confirmed.contains(where: { $0.matches(place) }) {
-            guard stillHere(), canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
-            guard (try? vault.saveConfirmedPlace(place, ownerSubject: owner)) != nil else { continue }
-            confirmed.append(place)
         }
         let userLocation = await location()
         guard stillHere() else {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
-        let display = Place.consolidated(confirmed + reconciled)
+        let display = Place.consolidated(confirmed)
         var rows = SaveInkPlaceCatalog.merge(
             ink: ink,
             confirmed: display,

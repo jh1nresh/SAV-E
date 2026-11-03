@@ -153,6 +153,8 @@ struct SaveInkPlace: Identifiable, Equatable {
     /// Shop position used only to measure a one-shot fix. Not written onto a visit.
     var shopLatitude: Double?
     var shopLongitude: Double?
+    /// Former stamp ids folded into this row by `Place.consolidated`.
+    var aliasIDs: [String] = []
 
     var meta: String {
         let streetText = street
@@ -717,7 +719,9 @@ final class SaveInkNotebookStore: ObservableObject {
     func checkIn(placeID: String) async {
         guard let place = place(placeID) else { return }
         activePlaceID = placeID
+        let ownerAtStart = usesLivePlaces ? liveOwner() : nil
         let fix = await locatorOrMake().requestFix(for: place)
+        if usesLivePlaces, liveOwner() != ownerAtStart { return }
         let previous = previousShop(before: placeID)
         let speed = SaveInkCheckIn.impliedSpeedKmh(
             from: previous,
@@ -906,6 +910,7 @@ final class SaveInkNotebookStore: ObservableObject {
         guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
+        rekeyVisits(using: loaded.places)
         let visitKey = Self.visitsKey(owner: owner)
         if let stored = Self.load(defaults: defaults, key: visitKey) {
             visits = stored
@@ -959,13 +964,32 @@ final class SaveInkNotebookStore: ObservableObject {
         return (previous.visitedAt, latitude, longitude)
     }
 
+    private func rekeyVisits(using places: [SaveInkPlace]) {
+        var aliasToPrimary: [String: String] = [:]
+        for place in places {
+            for alias in place.aliasIDs where alias != place.id {
+                aliasToPrimary[alias] = place.id
+            }
+        }
+        guard !aliasToPrimary.isEmpty else { return }
+        var changed = false
+        for index in visits.indices {
+            guard let primary = aliasToPrimary[visits[index].placeID] else { continue }
+            visits[index].placeID = primary
+            changed = true
+        }
+        if changed { persist() }
+    }
+
     private func persist() {
         let key = usesLivePlaces ? Self.visitsKey(owner: liveOwner()) : storageKey
         Self.save(visits, defaults: defaults, key: key)
     }
 
     private static func visitsKey(owner: String?) -> String {
-        guard let owner, !owner.isEmpty else { return "save.ink.visits.v1" }
+        // Signed-out live launches must not read fixture visits stored on the
+        // base key. Those rows are not migrated: the account is unknown.
+        guard let owner, !owner.isEmpty else { return "save.ink.visits.live.signed-out" }
         return "save.ink.visits.v1.\(owner)"
     }
 

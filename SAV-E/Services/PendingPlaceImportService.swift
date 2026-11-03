@@ -1069,6 +1069,23 @@ final class PendingPlaceImportService {
 
     /// Read the share queue without removing it. Home shows these places even
     /// when the legacy importer has not drained the file yet.
+    /// Drop queue rows that this account has confirmed, so a later account
+    /// cannot import the same ownerless save.
+    func removePendingPlaces(withKeys keys: Set<String>) {
+        guard !keys.isEmpty, let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return }
+        coordinate(url: url, purpose: "claim \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
+            let kept = items.filter { !keys.contains($0.deduplicationKey) }
+            guard kept.count != items.count else { return }
+            if kept.isEmpty {
+                try? fileManager.removeItem(at: url)
+            } else if let data = try? JSONEncoder().encode(kept) {
+                try? data.write(to: url, options: [.atomic])
+            }
+        }
+    }
+
     func peekPendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
         guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return [] }
         var result: [PendingSharedPlace] = []
