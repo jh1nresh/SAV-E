@@ -629,8 +629,12 @@ final class SaveInkNotebookStore: ObservableObject {
     @Published var draftComment = ""
     @Published var draftSentiment: SaveInkSentiment?
     @Published var draftVisibility: SaveInkVisibility = SaveInkProvisional.defaultVisibility
-    @Published var saveLink = ""
-    @Published var saveQuery = ""
+    @Published var saveLink = "" {
+        didSet { if saveLink != oldValue { recognizedPlaceID = nil } }
+    }
+    @Published var saveQuery = "" {
+        didSet { if saveQuery != oldValue { recognizedPlaceID = nil } }
+    }
     @Published var saveNotice: String?
     @Published var recognizedPlaceID: String?
     @Published var activePlaceID: String?
@@ -861,11 +865,15 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func checkIn(placeID: String) async {
+        let ownerAtStart = usesLivePlaces ? liveOwner() : nil
+        if usesLivePlaces, ownerAtStart != catalogOwner {
+            sheet = nil
+            return
+        }
         guard let place = place(placeID) else { return }
         activePlaceID = placeID
-        let ownerAtStart = usesLivePlaces ? liveOwner() : nil
         let fix = await locatorOrMake().requestFix(for: place)
-        if usesLivePlaces, liveOwner() != ownerAtStart { return }
+        if usesLivePlaces, liveOwner() != ownerAtStart || catalogOwner != ownerAtStart { return }
         checkInOwner = ownerAtStart
         let previous = previousShop(before: placeID)
         let speed = SaveInkCheckIn.impliedSpeedKmh(
@@ -885,9 +893,6 @@ final class SaveInkNotebookStore: ObservableObject {
             now: now(),
             visits: &visits
         )
-        persist(owner: ownerAtStart)
-        if case .inserted = outcome { markVisited(placeID) }
-        if case .upgraded = outcome { markVisited(placeID) }
         switch outcome {
         case .ignored:
             if case .tooFar(_) = decision.situation {
@@ -898,6 +903,8 @@ final class SaveInkNotebookStore: ObservableObject {
             pendingSituation = .duplicate
             sheet = .checkIn(.duplicate, placeID: placeID)
         case .inserted(_), .upgraded(_):
+            persist(owner: ownerAtStart)
+            markVisited(placeID)
             pendingSituation = decision.situation
             prepareDraft(placeID: placeID)
             sheet = .checkIn(decision.situation, placeID: placeID)
@@ -933,7 +940,7 @@ final class SaveInkNotebookStore: ObservableObject {
 
     func saveAnyway() {
         guard case .checkIn(.tooFar(_), let placeID)? = sheet else { return }
-        if usesLivePlaces, liveOwner() != checkInOwner {
+        if usesLivePlaces, liveOwner() != checkInOwner || catalogOwner != checkInOwner {
             sheet = nil
             pendingSituation = nil
             return
@@ -984,7 +991,7 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitDraft() {
-        if usesLivePlaces, liveOwner() != checkInOwner {
+        if usesLivePlaces, liveOwner() != checkInOwner || catalogOwner != checkInOwner {
             sheet = nil
             path.removeAll()
             return

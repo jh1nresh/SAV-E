@@ -1814,7 +1814,9 @@ final class SaveInkNotebookTests: XCTestCase {
         let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
         let saved = Place.from(inkPending(name: "甲店", address: "甲街", latitude: 25.03, longitude: 121.53, owner: owner))
         _ = try vault.saveConfirmedPlace(saved, ownerSubject: owner)
-        let loader = liveLoader(owner: owner, directory: directory, vault: vault, queue: [], remote: SaveInkRemoteFake())
+        let remote = SaveInkRemoteFake()
+        remote.places = [saved] // This fixture represents a place that still exists remotely.
+        let loader = liveLoader(owner: owner, directory: directory, vault: vault, queue: [], remote: remote)
         let store = SaveInkNotebookStore(
             defaults: defaults,
             now: { SaveInkClock.previewNow },
@@ -2551,6 +2553,67 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(signedOut.places.contains { $0.name == "升級前的店" })
     }
 
+    func testChangingSaveInputInvalidatesThePreviousRecognition() throws {
+        let store = SaveInkNotebookStore(defaults: inkSuite("recognition-input"))
+        store.saveQuery = "第一間小店"
+        store.commitSave()
+        let first = try XCTUnwrap(store.recognizedPlaceID)
+        store.saveQuery = "第二間小店"
+        XCTAssertNil(store.recognizedPlaceID)
+        store.commitSave()
+        XCTAssertNotEqual(store.recognizedPlaceID, first)
+        XCTAssertEqual(Set(store.places.map(\.name)), ["第一間小店", "第二間小店"])
+        store.saveLink = "https://maps.apple.com/?q=第三間小店"
+        XCTAssertNil(store.recognizedPlaceID)
+    }
+
+    func testStaleLiveCatalogCannotStartAnotherAccountsCheckIn() async {
+        var row = inkRow(id: "owner-a-place", name: "甲店", street: "甲街")
+        row.shopLatitude = 25.03
+        row.shopLongitude = 121.53
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in [row] },
+            load: { _ in SaveInkLivePlaceLoad(places: [row], userCoordinate: nil) }
+        )
+        let defaults = inkSuite("stale-checkin")
+        let locator = SaveInkScriptedLocator()
+        var owner = "account-a"
+        let store = SaveInkNotebookStore(
+            defaults: defaults, makeLocator: { locator }, usesLivePlaces: true,
+            liveLoader: loader, liveOwner: { owner }
+        )
+        owner = "account-b"
+        await store.checkIn(placeID: row.id)
+        XCTAssertEqual(locator.calls, 0)
+        XCTAssertTrue(store.visits.isEmpty)
+        XCTAssertNil(store.sheet)
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-a"))
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-b"))
+    }
+
+    func testIgnoredCheckInPreservesUnreadableStoredVisitBytes() async {
+        var row = inkRow(id: "located-place", name: "甲店", street: "甲街")
+        row.shopLatitude = 25.03
+        row.shopLongitude = 121.53
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in [row] },
+            load: { _ in SaveInkLivePlaceLoad(places: [row], userCoordinate: nil) }
+        )
+        let defaults = inkSuite("ignored-checkin-bytes")
+        let raw = Data("unreadable visits retained for recovery".utf8)
+        defaults.set(raw, forKey: "save.ink.visits.v1.account-a")
+        var far = SaveInkFix.inRange()
+        far.distanceMeters = 400
+        let store = SaveInkNotebookStore(
+            defaults: defaults, makeLocator: { SaveInkScriptedLocator(fix: far) },
+            usesLivePlaces: true, liveLoader: loader, liveOwner: { "account-a" }
+        )
+        await store.checkIn(placeID: row.id)
+        XCTAssertTrue(store.visits.isEmpty)
+        XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1.account-a"), raw)
+        XCTAssertEqual(store.sheet, .checkIn(.tooFar(meters: 400), placeID: row.id))
+    }
+
     func testSaveAnywayRefusesAfterTheAccountChanges() async {
         let defaults = UserDefaults(suiteName: "save.ink.anyway.\(UUID().uuidString)")!
         let places = """
@@ -3091,7 +3154,9 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: file), before)
         queue.forceCoordinationFailure = false
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["協調失敗"])
-        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: "account-a").isEmpty)
+        let eligible = queue.peekPendingPlaces(ownerSubject: "account-a")
+        XCTAssertEqual(eligible.count, 1)
+        XCTAssertNil(eligible.first?.ownerSubject, "A failed bind leaves the row eligible, not owned by account-a")
     }
 
     func testSuccessfulUploadHoldsAnOwnerlessRowWhenTheQueueCannotBeRewritten() async throws {
