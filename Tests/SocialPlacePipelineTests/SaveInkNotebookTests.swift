@@ -791,6 +791,27 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertNil(production.recognizedPlaceID)
     }
 
+    func testUnlocatedVisitScreensRenderForQA() throws {
+        let store = SaveInkNotebookStore(defaults: inkSuite("unlocated-render"), now: { SaveInkClock.previewNow })
+        store.saveQuery = "沒有座標的長店名小店"
+        store.commitSave()
+        let id = try XCTUnwrap(store.homePlaces().first?.id)
+        store.recordUnverifiedVisit(placeID: id)
+        for width: CGFloat in [375, 390, 430] {
+            for (name, image) in [
+                ("home", try hostedInkImage(SaveInkHomeScreen(store: store), width: width)),
+                ("place", try hostedInkImage(SaveInkPlaceScreen(store: store, placeID: id), width: width)),
+            ] {
+                let data = try XCTUnwrap(image.pngData())
+                XCTAssertGreaterThan(data.count, 8_000)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ink-unverified-\(name)-\(Int(width))"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
     func testRetainedSampleVisitDoesNotEnableFixturePaste() throws {
         let defaults = inkSuite("retained-sample-paste")
         let visit = inkVisit(placeID: SaveInkFixture.qingtian, comment: "自己寫的")
@@ -1065,8 +1086,12 @@ final class SaveInkNotebookTests: XCTestCase {
     /// window runs the real layout pass those screens need.
     @MainActor
     private func hostedInkImage(_ screen: SaveInkPreviewScreen) throws -> UIImage {
-        let size = CGSize(width: 393, height: 852)
-        let root = SaveInkScreenPreview(screen: screen)
+        try hostedInkImage(SaveInkScreenPreview(screen: screen))
+    }
+
+    @MainActor
+    private func hostedInkImage<Content: View>(_ root: Content, width: CGFloat = 393) throws -> UIImage {
+        let size = CGSize(width: width, height: 852)
         let host = UIHostingController(rootView: root)
         host.overrideUserInterfaceStyle = .light
         let paper = UIColor(red: 250.0 / 255, green: 249.0 / 255, blue: 244.0 / 255, alpha: 1)
