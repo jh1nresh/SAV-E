@@ -853,8 +853,8 @@ final class SaveInkNotebookTests: XCTestCase {
         let inkQingtian = try XCTUnwrap(rows.first { $0.id == "saved-qingtian" })
         XCTAssertNil(inkQingtian.shopLatitude)
         let stamped = try XCTUnwrap(rows.first { $0.name == "青田七六咖啡" && $0.id != "saved-qingtian" })
-        XCTAssertEqual(stamped.shopLatitude, 25.0272, accuracy: 0.0001)
-        XCTAssertEqual(stamped.shopLongitude, 121.5328, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(stamped.shopLatitude), 25.0272, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(stamped.shopLongitude), 121.5328, accuracy: 0.0001)
         XCTAssertEqual(rows.first { $0.name == "赤峰街麵店" }?.shopLatitude ?? 0, 25.0562, accuracy: 0.0001)
         XCTAssertLessThan(rows[0].distanceMeters ?? 0, rows[1].distanceMeters ?? 1)
     }
