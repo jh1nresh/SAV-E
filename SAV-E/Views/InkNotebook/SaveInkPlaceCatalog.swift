@@ -206,9 +206,14 @@ protocol SaveInkPlaceRemote {
     var isConfigured: Bool { get }
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
+    func updatePlace(_ place: Place, userId: String) async throws
 }
 
-extension SupabaseService: SaveInkPlaceRemote {}
+extension SupabaseService: SaveInkPlaceRemote {
+    func updatePlace(_ place: Place, userId: String) async throws {
+        try await updatePlace(place)
+    }
+}
 
 struct SaveInkLivePlaceLoad {
     var places: [SaveInkPlace]
@@ -306,6 +311,27 @@ struct SaveInkLivePlaceEngine {
         do {
             try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
                 try await remote.savePlace(place, userId: owner)
+            }
+            return .uploaded
+        } catch is SavePlaceLimitError {
+            return .stop
+        } catch {
+            return .retryLater
+        }
+    }
+
+    /// Writes new evidence onto a stamp the server already has. The queue row
+    /// is claimed only after this succeeds.
+    private func updateRemote(
+        _ place: Place,
+        owner: String?,
+        generation: Int,
+        remoteConfigured: Bool
+    ) async -> UploadResult {
+        guard let owner, !owner.isEmpty, remoteConfigured else { return .uploaded }
+        do {
+            try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                try await remote.updatePlace(place, userId: owner)
             }
             return .uploaded
         } catch is SavePlaceLimitError {
@@ -462,7 +488,18 @@ struct SaveInkLivePlaceEngine {
                         confirmed[index] = merged
                     }
                     if !merged.savedIDs.isDisjoint(with: remoteIDs) {
-                        claimedKeys.insert(item.deduplicationKey)
+                        let remoteID = merged.savedIDs.first { remoteIDs.contains($0) } ?? merged.id
+                        let payload = merged.id == remoteID ? merged : merged.rekeyed(to: remoteID)
+                        switch await updateRemote(payload, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
+                        case .uploaded:
+                            claimedKeys.insert(item.deduplicationKey)
+                            remoteIDs.formUnion(payload.savedIDs)
+                        case .retryLater:
+                            retain(item)
+                        case .stop:
+                            retain(item)
+                            break queue
+                        }
                         continue
                     }
                     switch await upload(merged, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {

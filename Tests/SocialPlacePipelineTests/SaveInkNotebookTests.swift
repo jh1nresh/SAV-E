@@ -1740,6 +1740,36 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.dishes), [["新菜"]])
     }
 
+    func testMatchingShareUpdatesTheServerStampBeforeClaiming() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-remote-evidence-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let local = Place.from(inkPending(name: "遠端證據", address: "未路", latitude: 25.18, longitude: 121.68))
+        _ = try vault.saveConfirmedPlace(local, ownerSubject: "account-a")
+        var item = inkPending(name: "遠端證據", address: "未路", latitude: 25.18, longitude: 121.68, owner: "account-a")
+        item.sourceURL = "https://example.com/post/remote-evidence"
+        item.dishes = ["豆花"]
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let remote = SaveInkRemoteFake()
+        remote.places = [local]
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        _ = await engine.load(ink: [])
+        let updated = try XCTUnwrap(remote.updated.first { $0.name == "遠端證據" })
+        XCTAssertEqual(updated.sourceUrl, "https://example.com/post/remote-evidence")
+        XCTAssertTrue(updated.savedRecommendedItems.contains { $0.name == "豆花" })
+        XCTAssertTrue(remote.saved.isEmpty)
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: "account-a").isEmpty)
+        remote.updated = []
+        remote.saveError = URLError(.networkConnectionLost)
+        queue.restorePendingPlaces([item])
+        _ = await engine.load(ink: [])
+        XCTAssertTrue(remote.updated.isEmpty)
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["遠端證據"])
+    }
+
     func testMatchingShareKeepsTheNewSourceOnTheStamp() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-evidence-\(UUID().uuidString)")
@@ -1998,6 +2028,7 @@ private final class SaveInkRemoteFake: SaveInkPlaceRemote {
     var isConfigured: Bool { configured }
     var places: [Place] = []
     var saved: [Place] = []
+    var updated: [Place] = []
     var fetchError: Error?
     var saveError: Error?
     var beforeFetch: (() -> Void)?
@@ -2011,5 +2042,10 @@ private final class SaveInkRemoteFake: SaveInkPlaceRemote {
     func savePlace(_ place: Place, userId: String) async throws {
         if let saveError { throw saveError }
         saved.append(place)
+    }
+
+    func updatePlace(_ place: Place, userId: String) async throws {
+        if let saveError { throw saveError }
+        updated.append(place)
     }
 }
