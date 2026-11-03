@@ -2171,6 +2171,53 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["超額寫不進"])
     }
 
+    func testUnreadableUnboundShareLedgerBlocksEveryAccount() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-bad-ledger-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "帳本壞了", address: "子路", latitude: 25.24, longitude: 121.74, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let ledger = directory.appendingPathComponent("save.ink.unbound-shares.json")
+        let opaque = Data("not-json".utf8)
+        try opaque.write(to: ledger)
+        XCTAssertFalse(vault.unboundShareLedgerIsReadable())
+        let remote = SaveInkRemoteFake()
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        let loaded = await engine.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "帳本壞了" })
+        XCTAssertTrue(remote.saved.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: ledger), opaque)
+        XCTAssertFalse(vault.claimUnboundShare(key: item.deduplicationKey, owner: "account-a"))
+        XCTAssertEqual(try Data(contentsOf: ledger), opaque)
+        let otherRemote = SaveInkRemoteFake()
+        let other = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: otherRemote)
+        let second = await other.load(ink: [])
+        XCTAssertFalse(second.places.contains { $0.name == "帳本壞了" })
+        XCTAssertTrue(otherRemote.saved.isEmpty)
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["帳本壞了"])
+    }
+
+    func testAccountDeletionRemovesOnlyThatAccountsUnboundShare() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-purge-ledger-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        XCTAssertTrue(vault.claimUnboundShare(key: "share-a", owner: "account-a"))
+        XCTAssertTrue(vault.claimUnboundShare(key: "share-b", owner: "account-b"))
+        try vault.purgeUnboundShares(belongingTo: "account-a")
+        XCTAssertNil(vault.unboundShareOwner(for: "share-a"))
+        XCTAssertEqual(vault.unboundShareOwner(for: "share-b"), "account-b")
+        let ledger = directory.appendingPathComponent("save.ink.unbound-shares.json")
+        let opaque = Data("not-json".utf8)
+        try opaque.write(to: ledger)
+        XCTAssertThrowsError(try vault.purgeUnboundShares(belongingTo: "account-a"))
+        XCTAssertEqual(try Data(contentsOf: ledger), opaque)
+    }
+
     func testMatchingShareUpdatesTheServerStampBeforeClaiming() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-remote-evidence-\(UUID().uuidString)")

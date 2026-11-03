@@ -492,7 +492,7 @@ struct SaveInkLivePlaceEngine {
             guard item.ownerSubject == nil, let owner, !owner.isEmpty else { return true }
             return pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
         }
-        if admitQueue {
+        if admitQueue, vault.unboundShareLedgerIsReadable() {
             queue: for item in queued {
                 guard stillHere() else { break }
                 if let owner, !owner.isEmpty, let heldBy = vault.unboundShareOwner(for: item.deduplicationKey) {

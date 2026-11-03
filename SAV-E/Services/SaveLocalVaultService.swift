@@ -781,7 +781,7 @@ final class SaveLocalVaultService: Sendable {
     func claimUnboundShare(key: String, owner: String) -> Bool {
         guard !key.isEmpty, !owner.isEmpty else { return false }
         return withLock {
-            var rows = loadUnboundShares()
+            guard case .rows(var rows) = readUnboundShares() else { return false }
             rows.removeAll { $0.key == key }
             rows.append(UnboundShareClaim(key: key, owner: owner))
             return saveUnboundShares(rows)
@@ -791,16 +791,46 @@ final class SaveLocalVaultService: Sendable {
     func unboundShareOwner(for key: String) -> String? {
         guard !key.isEmpty else { return nil }
         return withLock {
-            loadUnboundShares().first { $0.key == key }?.owner
+            guard case .rows(let rows) = readUnboundShares() else { return nil }
+            return rows.first { $0.key == key }?.owner
+        }
+    }
+
+    /// Missing file is readable and empty. A file that exists but cannot be
+    /// decoded is not "no claims": callers must not import ownerless shares.
+    func unboundShareLedgerIsReadable() -> Bool {
+        withLock {
+            if case .unreadable = readUnboundShares() { return false }
+            return true
         }
     }
 
     func releaseUnboundShare(key: String) {
         guard !key.isEmpty else { return }
         withLock {
-            var rows = loadUnboundShares()
+            guard case .rows(var rows) = readUnboundShares() else { return }
             rows.removeAll { $0.key == key }
             _ = saveUnboundShares(rows)
+        }
+    }
+
+    /// Drops this account's fallback claims. Other accounts stay. A missing
+    /// file is already clean. An unreadable or unwritable file throws so
+    /// account deletion can retry instead of forgetting the hold.
+    func purgeUnboundShares(belongingTo owner: String) throws {
+        guard !owner.isEmpty else { return }
+        try withLock {
+            switch readUnboundShares() {
+            case .unreadable:
+                throw SaveLocalVaultError.storageUnavailable
+            case .rows(var rows):
+                let before = rows.count
+                rows.removeAll { $0.owner == owner }
+                guard rows.count != before else { return }
+                guard saveUnboundShares(rows) else {
+                    throw SaveLocalVaultError.storageUnavailable
+                }
+            }
         }
     }
 
@@ -809,15 +839,23 @@ final class SaveLocalVaultService: Sendable {
         var owner: String
     }
 
+    private enum UnboundShareRead {
+        case rows([UnboundShareClaim])
+        case unreadable
+    }
+
     private func unboundShareURL() -> URL? {
         vaultURL()?.deletingLastPathComponent().appendingPathComponent("save.ink.unbound-shares.json")
     }
 
-    private func loadUnboundShares() -> [UnboundShareClaim] {
-        guard let url = unboundShareURL(),
-              let data = try? Data(contentsOf: url),
-              let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else { return [] }
-        return rows
+    private func readUnboundShares() -> UnboundShareRead {
+        guard let url = unboundShareURL() else { return .unreadable }
+        guard FileManager.default.fileExists(atPath: url.path) else { return .rows([]) }
+        guard let data = try? Data(contentsOf: url),
+              let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else {
+            return .unreadable
+        }
+        return .rows(rows)
     }
 
     private func saveUnboundShares(_ rows: [UnboundShareClaim]) -> Bool {
