@@ -293,8 +293,9 @@ struct SaveInkLivePlaceEngine {
     }
 
     /// Uploads one stamp. A place-limit rejection stops the queue. The caller
-    /// removes only a row it just added; an already saved stamp stays put.
-    /// Any other failure leaves the queue row for a later try.
+    /// removes a stamp this queue created and binds an ownerless row to this
+    /// account. A stamp the person already had stays put. Any other failure
+    /// leaves the queue row for a later try.
     private func upload(
         _ place: Place,
         owner: String?,
@@ -312,6 +313,39 @@ struct SaveInkLivePlaceEngine {
         } catch {
             return .retryLater
         }
+    }
+
+    /// Ids this account would assign while admitting this queue row.
+    /// Binding an ownerless row changes its deduplication key, so the key from
+    /// before that bind counts too.
+    private static func queueStampIDs(owner: String?, item: PendingSharedPlace) -> Set<UUID> {
+        guard let owner, !owner.isEmpty else { return [] }
+        var keys = [item.deduplicationKey]
+        if item.ownerSubject == owner {
+            let suffix = item.deduplicationKey.dropFirst(owner.count)
+            if suffix.first == "|" {
+                keys.append(String(suffix))
+            }
+        }
+        return Set(keys.map { SaveInkPlaceCatalog.stablePlaceID(for: "\(owner)|\($0)") })
+    }
+
+    /// Drops one vault record by id. An empty name keeps `matches` from
+    /// deleting a different stamp at the same venue.
+    private func dropQueueStamp(_ id: UUID, owner: String?) {
+        let probe = Place.from(
+            PendingSharedPlace(
+                name: "",
+                address: "",
+                category: "food",
+                latitude: 0,
+                longitude: 0,
+                dishes: [],
+                savedAt: Date()
+            ),
+            id: id
+        )
+        try? vault.removeConfirmedPlace(probe, belongingTo: owner)
     }
 
     private func mirrorMissing(_ places: [Place], owner: String?) {
@@ -384,6 +418,16 @@ struct SaveInkLivePlaceEngine {
                         retain(item)
                     case .stop:
                         retain(item)
+                        let minted = Self.queueStampIDs(owner: owner, item: item)
+                        if !existing.savedIDs.isDisjoint(with: minted) {
+                            for id in minted where existing.savedIDs.contains(id) {
+                                dropQueueStamp(id, owner: owner)
+                            }
+                            confirmed.removeAll { place in
+                                let ids = place.savedIDs
+                                return !ids.isDisjoint(with: minted) && ids.subtracting(minted).isEmpty
+                            }
+                        }
                         break queue
                     }
                     continue
@@ -397,7 +441,8 @@ struct SaveInkLivePlaceEngine {
                 case .retryLater:
                     retain(item)
                 case .stop:
-                    try? vault.removeConfirmedPlace(candidate, belongingTo: owner)
+                    dropQueueStamp(candidate.id, owner: owner)
+                    retain(item)
                     break queue
                 }
                 guard stillHere() else { break }
