@@ -492,6 +492,14 @@ struct SaveInkLivePlaceEngine {
             guard item.ownerSubject == nil, let owner, !owner.isEmpty else { return true }
             return pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
         }
+        func holdUnbound(_ item: PendingSharedPlace) {
+            guard let owner, !owner.isEmpty else { return }
+            if retain(item) {
+                vault.releaseUnboundShare(key: item.deduplicationKey)
+                return
+            }
+            _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
+        }
         if admitQueue, vault.unboundShareLedgerIsReadable() {
             queue: for item in queued {
                 guard stillHere() else { break }
@@ -524,9 +532,15 @@ struct SaveInkLivePlaceEngine {
                             claimedItems.append(item)
                             remoteIDs.formUnion(payload.savedIDs)
                         case .retryLater:
-                            if !retain(item) { break queue }
+                            if !retain(item) {
+                                holdUnbound(item)
+                                break queue
+                            }
                         case .stop:
-                            if !retain(item) { break queue }
+                            if !retain(item) {
+                                holdUnbound(item)
+                                break queue
+                            }
                             break queue
                         }
                         continue
@@ -536,9 +550,15 @@ struct SaveInkLivePlaceEngine {
                         claimedItems.append(item)
                         remoteIDs.formUnion(merged.savedIDs)
                     case .retryLater:
-                        if !retain(item) { break queue }
+                        if !retain(item) {
+                            holdUnbound(item)
+                            break queue
+                        }
                     case .stop:
-                        if !retain(item) { break queue }
+                        if !retain(item) {
+                            holdUnbound(item)
+                            break queue
+                        }
                         let minted = Self.queueStampIDs(owner: owner, item: item)
                         if !existing.savedIDs.isDisjoint(with: minted) {
                             for id in minted where existing.savedIDs.contains(id) {
@@ -573,6 +593,7 @@ struct SaveInkLivePlaceEngine {
                 case .retryLater:
                     if !retain(item) {
                         dropQueueStamp(candidate.id, owner: owner)
+                        holdUnbound(item)
                         break queue
                     }
                 case .stop:
