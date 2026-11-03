@@ -880,9 +880,11 @@ final class SaveInkNotebookStore: ObservableObject {
         if let id = recognizedPlaceID, place(id) == nil {
             recognizedPlaceID = nil
         }
+        recognizeQuery()
         if !includesSampleCatalog, let id = recognizedPlaceID,
            !id.hasPrefix("saved-"), var retained = place(id) {
             let savedID = "saved-\(id)"
+            places.removeAll { $0.id == id }
             if place(savedID) == nil {
                 retained.id = savedID
                 places.append(retained)
@@ -890,10 +892,18 @@ final class SaveInkNotebookStore: ObservableObject {
             for index in visits.indices where visits[index].placeID == id {
                 visits[index].placeID = savedID
             }
+            if activePlaceID == id { activePlaceID = savedID }
+            path = path.map { route in
+                switch route {
+                case .place(id): .place(savedID)
+                case .review(id): .review(savedID)
+                case .arrival(id): .arrival(savedID)
+                default: route
+                }
+            }
             persist()
             recognizedPlaceID = savedID
         }
-        recognizeQuery()
         let combined = [saveLink, saveQuery].joined(separator: " ")
         if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined, knownPlaces: places) {
             saveNotice = SaveInkPlaceLink.notAPlaceMessage
