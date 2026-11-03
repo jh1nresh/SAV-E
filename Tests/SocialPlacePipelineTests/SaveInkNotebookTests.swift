@@ -748,6 +748,27 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(fixture.arrivalPlaceID(), SaveInkFixture.dingtai)
     }
 
+    func testUnlocatedVisitIsExplicitlyUnverifiedAndNeverRequestsLocation() throws {
+        let defaults = inkSuite("unlocated-visit")
+        let locator = SaveInkScriptedLocator(fix: .inRange())
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow }, makeLocator: { locator })
+        store.saveQuery = "沒有座標的小店"
+        store.commitSave()
+        let id = try XCTUnwrap(store.homePlaces().first?.id)
+        store.recordUnverifiedVisit(placeID: id)
+        XCTAssertEqual(locator.calls, 0)
+        XCTAssertEqual(store.latestVisit(for: id)?.verification, .unverified)
+        XCTAssertNil(store.latestVisit(for: id)?.anomaly)
+        XCTAssertEqual(store.verifiedCount(for: id), 0)
+        XCTAssertEqual(store.sheet, .checkIn(.downgradedUnverified, placeID: id))
+        store.recordUnverifiedVisit(placeID: id)
+        XCTAssertEqual(store.totalVisits(), 1)
+        XCTAssertEqual(store.sheet, .checkIn(.duplicate, placeID: id))
+        let reloaded = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(reloaded.latestVisit(for: id)?.verification, .unverified)
+        XCTAssertEqual(reloaded.stampedPlaceIDs(), [id])
+    }
+
     func testPasteExampleLinkStaysInsideTheFixtureCatalog() {
         let fixture = SaveInkNotebookStore(
             defaults: inkSuite("paste-fixture"),

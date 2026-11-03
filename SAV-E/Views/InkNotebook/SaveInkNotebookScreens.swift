@@ -38,6 +38,12 @@ struct SaveInkHomeScreen: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 44)
+                } else if let place = picks.first {
+                    SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.arrived.unverified") {
+                        store.recordUnverifiedVisit(placeID: place.id)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 44)
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -407,8 +413,10 @@ struct SaveInkCheckInSheet: View {
                 store.commitDraft()
             }
         case .locationFailed, .downgradedUnverified:
-            SaveInkOutlineButton(title: "重試", identifier: "ink.checkin.retry", compact: true) {
-                Task { await store.retryCheckIn() }
+            if place.shopLatitude != nil, place.shopLongitude != nil {
+                SaveInkOutlineButton(title: "重試", identifier: "ink.checkin.retry", compact: true) {
+                    Task { await store.retryCheckIn() }
+                }
             }
             SaveInkOutlineButton(title: "完成", identifier: "ink.checkin.done", compact: true) {
                 store.commitDraft()
@@ -606,6 +614,10 @@ struct SaveInkPlaceScreen: View {
                 if place?.shopLatitude != nil, place?.shopLongitude != nil {
                     SaveInkArriveButton {
                         Task { await store.checkIn(placeID: placeID) }
+                    }
+                } else if place != nil {
+                    SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.place.arrived.unverified") {
+                        store.recordUnverifiedVisit(placeID: placeID)
                     }
                 }
             }

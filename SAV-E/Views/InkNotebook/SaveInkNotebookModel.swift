@@ -776,6 +776,25 @@ final class SaveInkNotebookStore: ObservableObject {
         }
     }
 
+    /// The user explicitly records a visit without claiming location proof.
+    func recordUnverifiedVisit(placeID: String) {
+        guard let place = place(placeID),
+              place.shopLatitude == nil || place.shopLongitude == nil else { return }
+        activePlaceID = placeID
+        let outcome = SaveInkVisitBook.apply(
+            decision: SaveInkCheckInDecision(
+                situation: .downgradedUnverified, recordsVisit: true,
+                verification: .unverified, anomaly: nil
+            ),
+            placeID: placeID, now: now(), visits: &visits
+        )
+        persist()
+        prepareDraft(placeID: placeID)
+        let situation: SaveInkCheckInSituation = outcome == .suppressed ? .duplicate : .downgradedUnverified
+        pendingSituation = situation
+        sheet = .checkIn(situation, placeID: placeID)
+    }
+
     func saveAnyway() {
         guard case .checkIn(.tooFar(_), let placeID)? = sheet else { return }
         let decision = SaveInkCheckInDecision(
