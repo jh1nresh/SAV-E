@@ -1731,7 +1731,7 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1.account-a")
         defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1.account-b")
-        SaveInkNotebookStore.purgeAccount("account-a", defaults: defaults)
+        try SaveInkNotebookStore.purgeAccount("account-a", defaults: defaults)
         let store = SaveInkNotebookStore(
             defaults: defaults,
             now: { SaveInkClock.previewNow },
@@ -1754,6 +1754,13 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         XCTAssertTrue(other.places.contains { $0.name == "乙的店" })
         XCTAssertNotNil(defaults.data(forKey: "save.ink.visits.v1.account-b"))
+    }
+
+    func testAccountDeletionFailsWhenInkPlacesCannotBeRead() {
+        let defaults = UserDefaults(suiteName: "save.ink.purge-bad.\(UUID().uuidString)")!
+        defaults.set(Data("not-json".utf8), forKey: SavePlaceLinkGate.placesKey)
+        XCTAssertThrowsError(try SaveInkNotebookStore.purgeAccount("account-a", defaults: defaults))
+        XCTAssertEqual(defaults.data(forKey: SavePlaceLinkGate.placesKey), Data("not-json".utf8))
     }
 
     func testLegacyInkSaveIsClaimedByTheSignedInAccount() throws {

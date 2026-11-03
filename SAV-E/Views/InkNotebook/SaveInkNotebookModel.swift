@@ -118,6 +118,10 @@ struct SaveInkVisitRecord: Codable, Equatable, Identifiable {
     var anomaly: SaveInkAnomaly?
 }
 
+enum SaveInkAccountPurgeError: Error {
+    case unreadablePlaces
+}
+
 enum SaveInkPlaceBadge: Equatable {
     case visited
     case saved
@@ -1134,21 +1138,25 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     /// Removes this account's ink visits and name saves. Other accounts' rows stay.
-    static func purgeAccount(_ owner: String, defaults: UserDefaults = .standard) {
+    static func purgeAccount(_ owner: String, defaults: UserDefaults = .standard) throws {
         guard !owner.isEmpty else { return }
         defaults.removeObject(forKey: "save.ink.visits.v1.\(owner)")
         let store = placesDefaults(for: defaults)
         let key = SavePlaceLinkGate.placesKey
-        guard let data = store.data(forKey: key),
-              let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
-        else { return }
+        guard let data = store.data(forKey: key) else { return }
+        guard let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data) else {
+            throw SaveInkAccountPurgeError.unreadablePlaces
+        }
         let kept = records.filter { $0.ownerSubject != owner }
         guard kept.count != records.count else { return }
         if kept.isEmpty {
             store.removeObject(forKey: key)
-        } else if let encoded = try? JSONEncoder().encode(kept) {
-            store.set(encoded, forKey: key)
+            return
         }
+        guard let encoded = try? JSONEncoder().encode(kept) else {
+            throw SaveInkAccountPurgeError.unreadablePlaces
+        }
+        store.set(encoded, forKey: key)
     }
 
     /// Rows saved before `ownerSubject` existed decode as nil. The signed-in

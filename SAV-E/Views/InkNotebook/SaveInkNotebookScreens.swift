@@ -635,9 +635,11 @@ struct SaveInkPlaceScreen: View {
     }
 
     private func walkLabel(_ place: SaveInkPlace) -> String {
-        let minutes = place.walkMinutes ?? 5
         let distance = place.distanceMeters.map(SaveInkClock.distance) ?? ""
-        return "步行 \(minutes) 分・\(distance)"
+        guard let minutes = place.walkMinutes else {
+            return distance.isEmpty ? "步行時間還沒算" : "步行時間還沒算・\(distance)"
+        }
+        return distance.isEmpty ? "步行 \(minutes) 分" : "步行 \(minutes) 分・\(distance)"
     }
 
     private func lastDate(_ place: SaveInkPlace) -> String {
