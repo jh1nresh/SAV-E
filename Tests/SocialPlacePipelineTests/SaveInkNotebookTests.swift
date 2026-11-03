@@ -848,7 +848,8 @@ final class SaveInkNotebookTests: XCTestCase {
             pending: [duplicate, shared],
             userLocation: CLLocation(latitude: 25.0260, longitude: 121.5320)
         )
-        XCTAssertEqual(rows.map(\.name).sorted(), ["青田七六咖啡", "赤峰街麵店"])
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(Set(rows.map(\.name)), Set(["青田七六咖啡", "赤峰街麵店"]))
         let qingtian = rows.first { $0.id == "saved-qingtian" }
         XCTAssertEqual(qingtian?.shopLatitude ?? 0, 25.0272, accuracy: 0.0001)
         XCTAssertEqual(qingtian?.shopLongitude ?? 0, 121.5328, accuracy: 0.0001)
