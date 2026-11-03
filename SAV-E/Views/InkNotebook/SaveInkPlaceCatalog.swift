@@ -436,18 +436,45 @@ enum SaveInkMapCamera {
         }
         guard !points.isEmpty else { return nil }
         let latitudes = points.map(\.latitude)
-        let longitudes = points.map(\.longitude)
-        guard let minLat = latitudes.min(), let maxLat = latitudes.max(),
-              let minLon = longitudes.min(), let maxLon = longitudes.max() else { return nil }
+        guard let minLat = latitudes.min(), let maxLat = latitudes.max() else { return nil }
+        let longitudes = wrappedLongitude(points.map(\.longitude))
         let center = CLLocationCoordinate2D(
             latitude: (minLat + maxLat) / 2,
-            longitude: (minLon + maxLon) / 2
+            longitude: longitudes.center
         )
         let span = MKCoordinateSpan(
             latitudeDelta: min(max((maxLat - minLat) * 1.6, 0.008), 180),
-            longitudeDelta: min(max((maxLon - minLon) * 1.6, 0.008), 360)
+            longitudeDelta: min(max(longitudes.delta * 1.6, 0.008), 360)
         )
         return MKCoordinateRegion(center: center, span: span)
+    }
+
+    /// Smallest longitude interval, including a cluster that crosses 180°.
+    static func wrappedLongitude(_ longitudes: [Double]) -> (center: Double, delta: Double) {
+        let normalized = longitudes.map { value -> Double in
+            var longitude = value.truncatingRemainder(dividingBy: 360)
+            if longitude < -180 { longitude += 360 }
+            if longitude >= 180 { longitude -= 360 }
+            return longitude
+        }.sorted()
+        guard let first = normalized.first else { return (0, 0) }
+        guard normalized.count > 1 else { return (first, 0) }
+        var largestGap = 0.0
+        var clusterStart = first
+        for index in 0..<normalized.count {
+            let start = normalized[index]
+            let end = index + 1 < normalized.count ? normalized[index + 1] : normalized[0] + 360
+            let gap = end - start
+            if gap > largestGap {
+                largestGap = gap
+                clusterStart = end
+            }
+        }
+        let delta = 360 - largestGap
+        var center = clusterStart + delta / 2
+        while center > 180 { center -= 360 }
+        while center <= -180 { center += 360 }
+        return (center, delta)
     }
 
     private static func isUsable(_ coordinate: CLLocationCoordinate2D) -> Bool {

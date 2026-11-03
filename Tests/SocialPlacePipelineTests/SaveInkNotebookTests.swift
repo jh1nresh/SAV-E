@@ -881,6 +881,16 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         XCTAssertLessThanOrEqual(wide?.span.latitudeDelta ?? 999, 180)
         XCTAssertLessThanOrEqual(wide?.span.longitudeDelta ?? 999, 360)
+        let dateline = SaveInkMapCamera.region(
+            around: [
+                CLLocationCoordinate2D(latitude: -18, longitude: 179),
+                CLLocationCoordinate2D(latitude: -18.2, longitude: -179),
+            ],
+            user: nil,
+            focused: nil
+        )
+        XCTAssertLessThan(dateline?.span.longitudeDelta ?? 360, 20)
+        XCTAssertGreaterThan(abs(dateline?.center.longitude ?? 0), 170)
     }
 
     func testSupabaseSyncKeepsLocalPlacesWhenTheServerFails() async {

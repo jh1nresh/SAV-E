@@ -740,7 +740,7 @@ final class SaveInkNotebookStore: ObservableObject {
             now: now(),
             visits: &visits
         )
-        persist()
+        persist(owner: ownerAtStart)
         switch outcome {
         case .ignored:
             if case .tooFar(_) = decision.situation {
@@ -978,11 +978,11 @@ final class SaveInkNotebookStore: ObservableObject {
             visits[index].placeID = primary
             changed = true
         }
-        if changed { persist() }
+        if changed { persist(owner: liveOwner()) }
     }
 
-    private func persist() {
-        let key = usesLivePlaces ? Self.visitsKey(owner: liveOwner()) : storageKey
+    private func persist(owner explicitOwner: String? = nil) {
+        let key = usesLivePlaces ? Self.visitsKey(owner: explicitOwner ?? liveOwner()) : storageKey
         Self.save(visits, defaults: defaults, key: key)
     }
 
