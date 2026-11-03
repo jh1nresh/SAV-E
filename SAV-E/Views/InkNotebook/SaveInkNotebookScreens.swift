@@ -598,80 +598,122 @@ struct SaveInkPlaceScreen: View {
         let place = store.place(placeID)
         ZStack {
             SaveInkPalette.paper.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    SaveInkBackButton(action: store.goBack)
-                    Text(place.map { "\($0.name)・\($0.street)" } ?? "")
-                        .font(SaveInkType.subpageTitle)
-                        .foregroundStyle(SaveInkPalette.ink)
-                        .lineLimit(1)
+            if showsLiveMap {
+                VStack(spacing: 0) {
+                    heading(place)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 18)
+                    ScrollView {
+                        liveDetails(place)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 16)
+                            .padding(.bottom, 16)
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
+                    arrive
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .padding(.bottom, 44)
                 }
-                if let place {
-                    if showsLiveMap {
-                        SaveInkLiveMap(
-                            places: [place],
-                            userCoordinate: store.userCoordinate,
-                            focusPlaceID: place.id,
-                            showsRoute: true,
-                            onSelect: { _ in }
-                        )
-                        if SaveInkAppleMaps.canOpen(place) {
-                            SaveInkOutlineButton(
-                                title: "用 Apple 地圖打開",
-                                identifier: "ink.place.openMaps",
-                                compact: true
-                            ) {
-                                SaveInkAppleMaps.open(place)
-                            }
-                        }
-                    } else {
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    heading(place)
+                    if let place {
                         SaveInkWalkMap(label: walkLabel(place))
+                        facts(place)
                     }
-                    HStack(spacing: 10) {
-                        stat("\(store.verifiedCount(for: place.id)) 次", "你去過")
-                        stat("\(place.friendUsualCount) 人", "朋友常去")
-                        stat(lastDate(place), "上次蓋章")
-                    }
-                    Text(place.detailNote)
-                        .font(SaveInkType.body)
-                        .foregroundStyle(SaveInkPalette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let title = place.videoTitle {
-                        Text("來源影片")
-                            .font(SaveInkType.body)
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(SaveInkPalette.ink, lineWidth: 1.6)
-                                .frame(width: 54, height: 54)
-                                .overlay(Text("▶").font(SaveInkType.body))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("「\(title)」")
-                                    .font(SaveInkType.body)
-                                Text(place.videoSource ?? "")
-                                    .font(SaveInkType.aux)
-                                    .foregroundStyle(SaveInkPalette.inkSub)
-                            }
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(
-                            SaveInkRoughRoundedRect(cornerRadius: 18, seed: 15)
-                                .stroke(SaveInkPalette.ink, lineWidth: 2)
-                        )
-                    }
+                    Spacer()
+                    arrive
                 }
-                Spacer()
-                SaveInkArriveButton {
-                    Task { await store.checkIn(placeID: placeID) }
-                }
+                .padding(.horizontal, 24)
+                .padding(.top, 18)
+                .padding(.bottom, 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
-            .padding(.bottom, 44)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.place")
+    }
+
+    private var arrive: some View {
+        SaveInkArriveButton {
+            Task { await store.checkIn(placeID: placeID) }
+        }
+    }
+
+    private func heading(_ place: SaveInkPlace?) -> some View {
+        HStack(spacing: 12) {
+            SaveInkBackButton(action: store.goBack)
+            Text(place.map { "\($0.name)・\($0.street)" } ?? "")
+                .font(SaveInkType.subpageTitle)
+                .foregroundStyle(SaveInkPalette.ink)
+                .lineLimit(1)
+        }
+    }
+
+    /// Map, Apple Maps, and the note scroll. The title and「我到了」stay on screen.
+    private func liveDetails(_ place: SaveInkPlace?) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let place {
+                SaveInkLiveMap(
+                    places: [place],
+                    userCoordinate: store.userCoordinate,
+                    focusPlaceID: place.id,
+                    showsRoute: true,
+                    onSelect: { _ in }
+                )
+                if SaveInkAppleMaps.canOpen(place) {
+                    SaveInkOutlineButton(
+                        title: "用 Apple 地圖打開",
+                        identifier: "ink.place.openMaps",
+                        compact: true
+                    ) {
+                        SaveInkAppleMaps.open(place)
+                    }
+                }
+                facts(place)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func facts(_ place: SaveInkPlace) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                stat("\(store.verifiedCount(for: place.id)) 次", "你去過")
+                stat("\(place.friendUsualCount) 人", "朋友常去")
+                stat(lastDate(place), "上次蓋章")
+            }
+            Text(place.detailNote)
+                .font(SaveInkType.body)
+                .foregroundStyle(SaveInkPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let title = place.videoTitle {
+                Text("來源影片")
+                    .font(SaveInkType.body)
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(SaveInkPalette.ink, lineWidth: 1.6)
+                        .frame(width: 54, height: 54)
+                        .overlay(Text("▶").font(SaveInkType.body))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("「\(title)」")
+                            .font(SaveInkType.body)
+                        Text(place.videoSource ?? "")
+                            .font(SaveInkType.aux)
+                            .foregroundStyle(SaveInkPalette.inkSub)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(
+                    SaveInkRoughRoundedRect(cornerRadius: 18, seed: 15)
+                        .stroke(SaveInkPalette.ink, lineWidth: 2)
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func walkLabel(_ place: SaveInkPlace) -> String {
