@@ -1041,6 +1041,10 @@ final class PendingPlaceImportService {
 
     private let fileManager: FileManager
     private let overrideContainerURL: URL?
+#if DEBUG
+    /// When set, coordinated queue writes report failure without touching the file.
+    var forceCoordinationFailure = false
+#endif
 
     init(fileManager: FileManager = .default, overrideContainerURL: URL? = nil) {
         self.fileManager = fileManager
@@ -1075,7 +1079,7 @@ final class PendingPlaceImportService {
         guard !keys.isEmpty, !owner.isEmpty else { return true }
         guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return false }
         var failed = false
-        coordinate(url: url, purpose: "bind \(SAVEProductionConfig.pendingPlacesFileName)") {
+        let coordinated = coordinate(url: url, purpose: "bind \(SAVEProductionConfig.pendingPlacesFileName)") {
             guard fileManager.fileExists(atPath: url.path) else { return }
             guard var items = try? loadArray([PendingSharedPlace].self, from: url) else {
                 failed = true
@@ -1094,7 +1098,7 @@ final class PendingPlaceImportService {
                 failed = true
             }
         }
-        return !failed
+        return coordinated && !failed
     }
 
     /// Drop queue rows that this account has confirmed, so a later account
@@ -1106,7 +1110,7 @@ final class PendingPlaceImportService {
         guard !processed.isEmpty, let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return true }
         let fingerprints = Set(processed.map(Self.pendingContentFingerprint))
         var failed = false
-        coordinate(url: url, purpose: "claim \(SAVEProductionConfig.pendingPlacesFileName)") {
+        let coordinated = coordinate(url: url, purpose: "claim \(SAVEProductionConfig.pendingPlacesFileName)") {
             guard fileManager.fileExists(atPath: url.path) else { return }
             guard let items = try? loadArray([PendingSharedPlace].self, from: url) else {
                 failed = true
@@ -1125,7 +1129,7 @@ final class PendingPlaceImportService {
                 failed = true
             }
         }
-        return !failed
+        return coordinated && !failed
     }
 
     private static func pendingContentFingerprint(_ item: PendingSharedPlace) -> String {
@@ -1348,7 +1352,11 @@ final class PendingPlaceImportService {
         return try JSONDecoder().decode(type, from: data)
     }
 
-    private func coordinate(url: URL, purpose: String, _ work: () -> Void) {
+    @discardableResult
+    private func coordinate(url: URL, purpose: String, _ work: () -> Void) -> Bool {
+#if DEBUG
+        if forceCoordinationFailure { return false }
+#endif
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         coordinator.coordinate(writingItemAt: url, options: [], error: &coordinationError) { _ in
@@ -1356,7 +1364,9 @@ final class PendingPlaceImportService {
         }
         if let coordinationError {
             print("PendingPlaceImportService: failed to coordinate \(purpose): \(coordinationError)")
+            return false
         }
+        return true
     }
 
     private func pendingFileURL(named fileName: String) -> URL? {

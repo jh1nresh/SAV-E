@@ -2250,6 +2250,25 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["超額寫不進"])
     }
 
+    func testCoordinationFailureDoesNotClaimTheQueueRow() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-coordinate-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "協調失敗", address: "寅路", latitude: 25.26, longitude: 121.76, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let file = directory.appendingPathComponent(SAVEProductionConfig.pendingPlacesFileName)
+        let before = try Data(contentsOf: file)
+        queue.forceCoordinationFailure = true
+        XCTAssertFalse(queue.bindPendingPlaces(keys: [item.deduplicationKey], to: "account-a"))
+        XCTAssertFalse(queue.removeProcessedPendingPlaces([item]))
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        queue.forceCoordinationFailure = false
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["協調失敗"])
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: "account-a").isEmpty)
+    }
+
     func testSuccessfulUploadHoldsAnOwnerlessRowWhenTheQueueCannotBeRewritten() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-uploaded-unwritable-\(UUID().uuidString)")
