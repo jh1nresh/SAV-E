@@ -446,14 +446,21 @@ struct SaveInkLivePlaceEngine {
                     id: SaveInkPlaceCatalog.stablePlaceID(for: "\(owner ?? "")|\(item.deduplicationKey)")
                 )
                 if let existing = confirmed.first(where: { $0.matches(candidate) }) {
-                    if !existing.savedIDs.isDisjoint(with: remoteIDs) {
+                    let merged = existing.mergingSources(from: candidate)
+                    if Self.vaultIsStale(existing, comparedWith: merged) {
+                        guard (try? vault.saveConfirmedPlace(merged, ownerSubject: owner)) != nil else { continue }
+                    }
+                    if let index = confirmed.firstIndex(where: { !$0.savedIDs.isDisjoint(with: existing.savedIDs) }) {
+                        confirmed[index] = merged
+                    }
+                    if !merged.savedIDs.isDisjoint(with: remoteIDs) {
                         claimedKeys.insert(item.deduplicationKey)
                         continue
                     }
-                    switch await upload(existing, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
+                    switch await upload(merged, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
                     case .uploaded:
                         claimedKeys.insert(item.deduplicationKey)
-                        remoteIDs.formUnion(existing.savedIDs)
+                        remoteIDs.formUnion(merged.savedIDs)
                     case .retryLater:
                         retain(item)
                     case .stop:

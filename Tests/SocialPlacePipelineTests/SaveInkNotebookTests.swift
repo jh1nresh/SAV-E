@@ -1632,6 +1632,48 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(located.liveArrivalPlaceID(), "near")
     }
 
+    func testLiveSaveStopsAtThePlaceCap() {
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.cap-save.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" },
+            canSaveAnotherLivePlace: { _ in false }
+        )
+        store.saveQuery = "超額新店"
+        store.commitSave()
+        XCTAssertFalse(store.places.contains { $0.name == "超額新店" })
+        XCTAssertEqual(store.saveNotice, "已存 50 個地點，所以暫放，還沒放上地圖。")
+    }
+
+    func testMatchingShareKeepsTheNewSourceOnTheStamp() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-evidence-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let local = Place.from(inkPending(name: "證據店", address: "辰路", latitude: 25.15, longitude: 121.65))
+        _ = try vault.saveConfirmedPlace(local, ownerSubject: "account-a")
+        var item = inkPending(name: "證據店", address: "辰路", latitude: 25.15, longitude: 121.65, owner: "account-a")
+        item.sourceURL = "https://example.com/post/evidence"
+        item.dishes = ["紅燒肉"]
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let remote = SaveInkRemoteFake()
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        _ = await engine.load(ink: [])
+        let uploaded = try XCTUnwrap(remote.saved.first { $0.name == "證據店" })
+        XCTAssertEqual(uploaded.sourceUrl, "https://example.com/post/evidence")
+        XCTAssertTrue(uploaded.savedRecommendedItems.contains { $0.name == "紅燒肉" })
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        let row = try XCTUnwrap(stored.first { $0.name == "證據店" })
+        XCTAssertEqual(row.sourceUrl, "https://example.com/post/evidence")
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: "account-a").isEmpty)
+    }
+
     func testOpenDetailFollowsTheConsolidatedPlaceID() async {
         let local = inkRow(id: "local-id", name: "合併店", street: "街")
         var remote = inkRow(id: "remote-id", name: "合併店", street: "街")
