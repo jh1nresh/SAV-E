@@ -476,11 +476,19 @@ struct SaveInkLivePlaceEngine {
         var remoteIDs = Set<UUID>()
         if let owner, !owner.isEmpty, remote.isConfigured {
             do {
-                let remotePlaces = try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
+                let fetched = try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
                     try await remote.fetchPlaces(for: owner)
                 }
                 guard stillHere() else {
                     return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
+                }
+                let remotePlaces = fetched.map { place in
+                    var authoritative = place
+                    let aliases = confirmed.filter { $0.matches(place) }
+                        .reduce(into: place.savedIDs) { $0.formUnion($1.savedIDs) }
+                        .subtracting([place.id])
+                    authoritative.mergedPlaceIDs = aliases.isEmpty ? nil : aliases.sorted { $0.uuidString < $1.uuidString }
+                    return authoritative
                 }
                 remoteIDs = Set(remotePlaces.map(\.id))
                 let localOnly = confirmed.filter { place in
@@ -629,7 +637,13 @@ struct SaveInkLivePlaceEngine {
                 }
                 guard stillHere() else { break }
                 if let refreshed = try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner) {
+                    guard let suppressed = vault.capRejectedStampIDs(owner: owner) else {
+                        confirmed = []
+                        countIsAuthoritative = false
+                        break queue
+                    }
                     confirmed = Place.consolidated(confirmed + refreshed)
+                        .filter { $0.savedIDs.isDisjoint(with: suppressed) }
                 }
             }
         }

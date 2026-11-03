@@ -2258,6 +2258,59 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["還在排隊"])
     }
 
+    func testVaultRereadDoesNotRestoreASuppressedDeletedStamp() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-suppression-reread-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let removed = Place.from(inkPending(name: "已在遠端刪掉", address: "甲路", latitude: 25.1, longitude: 121.5))
+        _ = try vault.saveConfirmedPlace(removed, ownerSubject: "account-a")
+        vault.removeConfirmedPlaceError = SaveLocalVaultError.storageUnavailable
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([inkPending(name: "新分享", address: "乙路", latitude: 25.2, longitude: 121.6, owner: "account-a")])
+        let remote = SaveInkRemoteFake()
+        let loaded = await liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote).load(ink: [])
+        XCTAssertEqual(remote.saved.map(\.name), ["新分享"])
+        XCTAssertEqual(loaded.places.map(\.name), ["新分享"])
+        XCTAssertTrue(loaded.countIsAuthoritative)
+        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-a"), [removed.id])
+    }
+
+    func testRemoteAdoptionPreservesLocalAliasesAndVisitRoutes() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-remote-alias-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var local = Place.from(inkPending(name: "同一家", address: "甲路", latitude: 25.1, longitude: 121.5))
+        let oldAlias = UUID()
+        local.mergedPlaceIDs = [oldAlias]
+        _ = try vault.saveConfirmedPlace(local, ownerSubject: "account-a")
+        var server = local.rekeyed(to: UUID())
+        server.mergedPlaceIDs = nil
+        server.note = "遠端編輯"
+        let remote = SaveInkRemoteFake()
+        remote.places = [server]
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: PendingPlaceImportService(overrideContainerURL: directory), remote: remote)
+        let defaults = UserDefaults(suiteName: "save.ink.remote-alias.\(UUID().uuidString)")!
+        let visit = SaveInkVisitRecord(id: UUID(), placeID: oldAlias.uuidString, visitedAt: SaveInkClock.previewNow,
+                                       verification: .unverified, visibility: .private, comment: "真實紀錄", sentiment: nil, anomaly: nil)
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1.account-a")
+        let loader = SaveInkLivePlaceLoader(localPlaces: { engine.localPlaces(ink: $0) }, load: { await engine.load(ink: $0) })
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow }, usesLivePlaces: true,
+                                         liveLoader: loader, liveOwner: { "account-a" })
+        store.openPlace(local.id.uuidString)
+        await store.refreshLivePlaces()
+        XCTAssertEqual(store.place(local.id.uuidString)?.id, server.id.uuidString)
+        XCTAssertEqual(store.place(oldAlias.uuidString)?.id, server.id.uuidString)
+        XCTAssertEqual(store.latestVisit(for: server.id.uuidString)?.id, visit.id)
+        XCTAssertEqual(store.path, [.place(server.id.uuidString)])
+        XCTAssertEqual(store.place(server.id.uuidString)?.detailNote, "遠端編輯")
+        let persisted = try XCTUnwrap(try vault.confirmedPlaces(limit: 20, belongingTo: "account-a").first)
+        XCTAssertTrue(persisted.savedIDs.isSuperset(of: [local.id, oldAlias, server.id]))
+    }
+
     func testUnwritableQueueDoesNotKeepAnOwnerlessStamp() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-unwritable-\(UUID().uuidString)")
