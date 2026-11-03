@@ -1641,13 +1641,61 @@ final class SaveInkNotebookTests: XCTestCase {
             usesLivePlaces: true,
             liveLoader: .inactive,
             liveOwner: { "account-a" },
-            canSaveAnotherLivePlace: { _ in false }
+            canSaveAnotherLivePlace: { _ in false },
+            parkCappedLiveSave: { _ in true }
         )
         await store.refreshLivePlaces()
         store.saveQuery = "超額新店"
         store.commitSave()
         XCTAssertFalse(store.places.contains { $0.name == "超額新店" })
         XCTAssertEqual(store.saveNotice, "已存 50 個地點，所以暫放，還沒放上地圖。")
+    }
+
+    func testCappedSaveStaysOpenWhenParkingFails() async {
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.park-fail.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" },
+            canSaveAnotherLivePlace: { _ in false },
+            parkCappedLiveSave: { _ in false }
+        )
+        await store.refreshLivePlaces()
+        store.saveQuery = "沒停好"
+        store.commitSave()
+        XCTAssertFalse(store.places.contains { $0.name == "沒停好" })
+        XCTAssertEqual(store.saveNotice, "已存 50 個地點，這次沒有存下來。請稍後再試。")
+        XCTAssertEqual(store.saveQuery, "沒停好")
+    }
+
+    func testOfflineLoadKeepsMoreThanFiveHundredStamps() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-many-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        for index in 0..<501 {
+            let place = Place.from(inkPending(
+                name: "店\(index)",
+                address: "路\(index)",
+                latitude: 1 + Double(index) * 0.02,
+                longitude: 1
+            ))
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "account-a")
+        }
+        let remote = SaveInkRemoteFake()
+        remote.fetchError = URLError(.notConnectedToInternet)
+        let engine = liveEngine(
+            owner: "account-a",
+            vault: vault,
+            queue: PendingPlaceImportService(overrideContainerURL: directory),
+            remote: remote
+        )
+        let loaded = await engine.load(ink: [])
+        XCTAssertEqual(loaded.places.count, 501)
     }
 
     func testLiveSaveWaitsForTheAuthoritativePlaceCount() async {

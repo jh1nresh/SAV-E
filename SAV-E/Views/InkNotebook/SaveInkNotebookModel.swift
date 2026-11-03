@@ -618,6 +618,7 @@ final class SaveInkNotebookStore: ObservableObject {
     private let liveLoader: SaveInkLivePlaceLoader
     private let liveOwner: () -> String?
     private let canSaveAnotherLivePlace: @MainActor (Int) -> Bool
+    private let parkCappedLiveSave: (@MainActor (String) -> Bool)?
     private var refreshTask: Task<Void, Never>?
     private var refreshQueued = false
     private var locator: (any SaveInkLocating)?
@@ -642,7 +643,8 @@ final class SaveInkNotebookStore: ObservableObject {
         usesLivePlaces: Bool = false,
         liveLoader: SaveInkLivePlaceLoader? = nil,
         liveOwner: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
-        canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace
+        canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace,
+        parkCappedLiveSave: (@MainActor (String) -> Bool)? = nil
     ) {
         self.defaults = defaults
         let placesDefaults = Self.placesDefaults(for: defaults)
@@ -654,6 +656,7 @@ final class SaveInkNotebookStore: ObservableObject {
         self.liveLoader = loader
         self.liveOwner = liveOwner
         self.canSaveAnotherLivePlace = canSaveAnotherLivePlace
+        self.parkCappedLiveSave = parkCappedLiveSave
         if usesLivePlaces {
             catalogOwner = liveOwner()
         }
@@ -892,8 +895,10 @@ final class SaveInkNotebookStore: ObservableObject {
                 return
             }
             if usesLivePlaces, !canSaveAnotherLivePlace(places.count) {
-                parkLiveNameOffTheMap(name)
-                saveNotice = "已存 50 個地點，所以暫放，還沒放上地圖。"
+                let parked = parkCappedLiveSave?(name) ?? parkLiveNameOffTheMap(name)
+                saveNotice = parked
+                    ? "已存 50 個地點，所以暫放，還沒放上地圖。"
+                    : "已存 50 個地點，這次沒有存下來。請稍後再試。"
                 return
             }
             let place = SaveInkPlace(
@@ -939,7 +944,7 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     /// The 51st free save stays off the map. It is parked as a review item.
-    private func parkLiveNameOffTheMap(_ name: String) {
+    private func parkLiveNameOffTheMap(_ name: String) -> Bool {
         let pending = PendingSharedPlace(
             ownerSubject: liveOwner(),
             name: name,
@@ -954,7 +959,12 @@ final class SaveInkNotebookStore: ObservableObject {
             from: Place.from(pending),
             ownerSubject: liveOwner()
         )
-        try? SaveLocalVaultService.shared.saveReviewCandidate(candidate, preservingParkedContext: true)
+        do {
+            _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate, preservingParkedContext: true)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Reloads vault stamps, the share queue, and ink saves. Fixture launches

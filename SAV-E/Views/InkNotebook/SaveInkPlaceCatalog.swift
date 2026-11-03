@@ -246,6 +246,10 @@ struct SaveInkLivePlaceLoader {
 
 @MainActor
 struct SaveInkLivePlaceEngine {
+    /// Pro storage is unlimited. A short read would hide stamps past the cutoff
+    /// whenever the server list cannot be fetched.
+    private static let vaultReadLimit = 100_000
+
     var vault: SaveLocalVaultService
     var pending: PendingPlaceImportService
     var remote: any SaveInkPlaceRemote
@@ -380,7 +384,7 @@ struct SaveInkLivePlaceEngine {
     }
 
     private func mirrorMissing(_ places: [Place], owner: String?) {
-        let existing = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
+        let existing = (try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? []
         for place in places {
             if let match = existing.first(where: { $0.matches(place) }) {
                 guard Self.vaultIsStale(match, comparedWith: place) else { continue }
@@ -430,7 +434,7 @@ struct SaveInkLivePlaceEngine {
 
     func localPlaces(ink: [SaveInkPlace]) -> [SaveInkPlace] {
         let owner = currentSession().owner
-        let confirmed = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
+        let confirmed = (try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? []
         return SaveInkPlaceCatalog.merge(ink: ink, confirmed: confirmed, pending: [], userLocation: nil)
     }
 
@@ -444,7 +448,7 @@ struct SaveInkLivePlaceEngine {
         guard stillHere() else {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
-        var confirmed = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
+        var confirmed = (try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? []
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
         let signedIn = owner?.isEmpty == false
         var admitQueue = signedIn && !remote.isConfigured
@@ -560,7 +564,7 @@ struct SaveInkLivePlaceEngine {
                     break queue
                 }
                 guard stillHere() else { break }
-                if let refreshed = try? vault.confirmedPlaces(limit: 500, belongingTo: owner) {
+                if let refreshed = try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner) {
                     confirmed = Place.consolidated(confirmed + refreshed)
                 }
             }
