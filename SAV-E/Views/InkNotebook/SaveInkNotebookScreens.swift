@@ -4,6 +4,9 @@ struct SaveInkHomeScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
 
     private var picks: [SaveInkPlace] {
+        if store.usesLivePlaces {
+            return store.places
+        }
         let featured = [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
         let main = featured.compactMap { id in store.places.first { $0.id == id } }
         let added = store.places.filter { $0.id.hasPrefix("saved-") }
@@ -36,7 +39,9 @@ struct SaveInkHomeScreen: View {
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
                 SaveInkArriveButton {
-                    Task { await store.checkIn(placeID: picks.first?.id ?? SaveInkFixture.dingtai) }
+                    let fallback = store.usesLivePlaces ? nil : SaveInkFixture.dingtai
+                    guard let id = picks.first?.id ?? fallback else { return }
+                    Task { await store.checkIn(placeID: id) }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 44)
@@ -45,6 +50,7 @@ struct SaveInkHomeScreen: View {
         .background(SaveInkPalette.paper.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.home")
+        .task { await store.refreshLivePlaces() }
     }
 
     private var header: some View {
@@ -115,6 +121,11 @@ struct SaveInkHomeScreen: View {
             Text(place.meta)
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.inkSub)
+            if store.usesLivePlaces, let minutes = place.walkMinutes {
+                Text("步行 \(minutes) 分")
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.inkSub)
+            }
             Text(place.blurb)
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)

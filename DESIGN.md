@@ -48,6 +48,14 @@ surface live in `Prototypes/AtlasPostcard/Reference/InkNotebook/` and are
 pending founder approval. `ProductionTargets/map.png` from `a5d62df8`
 remains the approved map visual reference. The other production parity
 rasters stay on disk for the suite.
+Founder 2026-11-03: a normal ink launch reads confirmed local saves, the
+share-extension pending queue, and ink saves as one deduped Map Stamp list
+(saved or visited, never a review clue). Home and place detail then use
+Apple MapKit: muted emphasis, points of interest hidden, user location, the
+existing ink pin, and a light paper overlay. Walking time comes from MapKit.
+`--savvy-ink-` launches and screenshot stills keep the drawn walk map so the
+14 ink baselines stay put. `SaveDoodleMapView` stays default Apple MapKit
+without a paper basemap.
 
 ## Design Thesis
 

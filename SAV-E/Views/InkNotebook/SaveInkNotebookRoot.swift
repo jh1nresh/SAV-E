@@ -70,6 +70,16 @@ enum SaveInkLaunch {
         let name = String(raw.dropFirst("--savvy-ink-screen=".count))
         return SaveInkPreviewScreen(rawValue: name)
     }
+
+    /// Screenshot stills and ink UI tests pass `--savvy-ink-…` and keep the
+    /// fixture notebook. A normal launch reads real saved places.
+    static func usesLivePlaces(arguments: [String]) -> Bool {
+        !arguments.contains { $0.hasPrefix("--savvy-ink-") }
+    }
+
+    static var usesLivePlaces: Bool {
+        usesLivePlaces(arguments: ProcessInfo.processInfo.arguments)
+    }
 }
 
 struct SaveInkNotebookRoot: View {
@@ -90,8 +100,10 @@ private struct SaveInkOwnedNotebook: View {
     @State private var dismissedWelcome = false
     @StateObject private var store = SaveInkNotebookStore(
         defaults: SaveInkLaunch.defaults,
+        seedFixture: !SaveInkLaunch.usesLivePlaces,
         friendInputs: SaveInkLaunch.emptyFriends ? [] : nil,
-        makeLocator: { SaveInkLaunch.makeLocator() }
+        makeLocator: { SaveInkLaunch.makeLocator() },
+        usesLivePlaces: SaveInkLaunch.usesLivePlaces
     )
 
     var body: some View {

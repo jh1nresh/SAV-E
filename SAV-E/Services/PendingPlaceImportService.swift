@@ -1067,6 +1067,19 @@ final class PendingPlaceImportService {
         }
     }
 
+    /// Read the share queue without removing it. Home shows these places even
+    /// when the legacy importer has not drained the file yet.
+    func peekPendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
+        guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return [] }
+        var result: [PendingSharedPlace] = []
+        coordinate(url: url, purpose: "peek \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
+            result = items.filter { $0.ownerSubject == nil || $0.ownerSubject == ownerSubject }
+        }
+        return result
+    }
+
     func restorePendingPlaces(_ places: [PendingSharedPlace], restorationToken: PendingImportRestorationToken? = nil) {
         appendPendingArray(places, named: SAVEProductionConfig.pendingPlacesFileName,
             restorationToken: restorationToken, ownerSubject: { $0.ownerSubject })

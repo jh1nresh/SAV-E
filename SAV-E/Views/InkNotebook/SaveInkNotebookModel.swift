@@ -1,4 +1,5 @@
 import Combine
+import CoreLocation
 import Foundation
 import UIKit
 
@@ -595,6 +596,8 @@ final class SaveInkNotebookStore: ObservableObject {
     @Published var saveNotice: String?
     @Published var recognizedPlaceID: String?
     @Published var activePlaceID: String?
+    @Published private(set) var usesLivePlaces: Bool
+    @Published private(set) var userCoordinate: CLLocationCoordinate2D?
 
     let city = "大安區"
     let friendInputs: [SaveInkFriendVisitInput]
@@ -604,8 +607,10 @@ final class SaveInkNotebookStore: ObservableObject {
     private let placesKey = SavePlaceLinkGate.placesKey
     private let now: () -> Date
     private let makeLocator: () -> any SaveInkLocating
+    private let liveLoader: SaveInkLivePlaceLoader
     private var locator: (any SaveInkLocating)?
     private var pendingSituation: SaveInkCheckInSituation?
+    private var liveGeneration = 0
 
     var currentDate: Date { now() }
 
@@ -614,15 +619,24 @@ final class SaveInkNotebookStore: ObservableObject {
         now: @escaping () -> Date = { Date() },
         seedFixture: Bool = true,
         friendInputs: [SaveInkFriendVisitInput]? = nil,
-        makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() }
+        makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() },
+        usesLivePlaces: Bool = false,
+        liveLoader: SaveInkLivePlaceLoader? = nil
     ) {
         self.defaults = defaults
         let placesDefaults = Self.placesDefaults(for: defaults)
         self.placesDefaults = placesDefaults
         self.now = now
         self.makeLocator = makeLocator
-        let seededPlaces = SaveInkFixture.places
-        self.places = seededPlaces + Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        self.usesLivePlaces = usesLivePlaces
+        let loader = liveLoader ?? (usesLivePlaces ? SaveInkLivePlaceLoader.production() : .inactive)
+        self.liveLoader = loader
+        let saved = Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        if usesLivePlaces {
+            self.places = loader.localPlaces(saved)
+        } else {
+            self.places = SaveInkFixture.places + saved
+        }
         self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
         if let stored = Self.load(defaults: defaults, key: storageKey) {
             self.visits = stored
@@ -834,6 +848,22 @@ final class SaveInkNotebookStore: ObservableObject {
         }
         persistPlaces()
         sheet = nil
+        if usesLivePlaces {
+            Task { await refreshLivePlaces() }
+        }
+    }
+
+    /// Reloads vault stamps, the share queue, and ink saves. Fixture launches
+    /// no-op so screenshot baselines and ink UI tests keep their seeded rows.
+    func refreshLivePlaces() async {
+        guard usesLivePlaces else { return }
+        liveGeneration += 1
+        let generation = liveGeneration
+        let ink = places.filter { $0.id.hasPrefix("saved-") }
+        let loaded = await liveLoader.load(ink)
+        guard generation == liveGeneration else { return }
+        places = loaded.places
+        userCoordinate = loaded.userCoordinate
     }
 
     func openSave() {
