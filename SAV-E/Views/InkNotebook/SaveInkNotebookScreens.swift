@@ -5,13 +5,7 @@ struct SaveInkHomeScreen: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var picks: [SaveInkPlace] {
-        if store.usesLivePlaces {
-            return store.places
-        }
-        let featured = [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
-        let main = featured.compactMap { id in store.places.first { $0.id == id } }
-        let added = store.places.filter { $0.id.hasPrefix("saved-") }
-        return main + added
+        store.homePlaces()
     }
 
     var body: some View {
@@ -34,17 +28,29 @@ struct SaveInkHomeScreen: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
                 }
-                Text("輕點卡片，看地圖怎麼走")
+                Text(picks.isEmpty ? "存一個地點，到了再記" : "輕點卡片，看地圖怎麼走")
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
-                SaveInkArriveButton(isEnabled: homeArrivalID != nil) {
-                    guard let id = homeArrivalID else { return }
-                    Task { await store.checkIn(placeID: id) }
+                if let placeID = homeArrivalID {
+                    SaveInkArriveButton {
+                        Task { await store.checkIn(placeID: placeID) }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 44)
+                } else if let place = picks.first,
+                          place.shopLatitude == nil || place.shopLongitude == nil {
+                    SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.arrived.unverified") {
+                        store.recordUnverifiedVisit(placeID: place.id)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 44)
+                } else if !picks.isEmpty {
+                    SaveInkArriveButton(isEnabled: false) {}
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 44)
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 44)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveInkPalette.paper.ignoresSafeArea())
@@ -60,8 +66,7 @@ struct SaveInkHomeScreen: View {
     /// Fixture Home can check in the featured place. Live Home checks in only
     /// the nearest located stamp. Without a distance, the person opens a card.
     private var homeArrivalID: String? {
-        if store.usesLivePlaces { return store.liveArrivalPlaceID() }
-        return picks.first?.id ?? SaveInkFixture.dingtai
+        store.arrivalPlaceID()
     }
 
     private var header: some View {
@@ -70,11 +75,7 @@ struct SaveInkHomeScreen: View {
                 Text("附近值得去的")
                     .font(SaveInkType.pageTitle)
                     .foregroundStyle(SaveInkPalette.ink)
-                Text(store.usesLivePlaces
-                    ? "挑了 \(picks.count) 個給你"
-                    : "今天在\(store.city)，挑了 \(picks.count) 個給你")
-                    .font(SaveInkType.aux)
-                    .foregroundStyle(SaveInkPalette.inkSub)
+                homeCount
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
@@ -89,6 +90,13 @@ struct SaveInkHomeScreen: View {
         .padding(.horizontal, 24)
         .padding(.top, 18)
         .padding(.bottom, 16)
+    }
+
+    private var homeCount: some View {
+        Text(picks.isEmpty ? "還沒有地點" : (store.usesLivePlaces ? "挑了 \(picks.count) 個給你" : "今天在\(store.city)，挑了 \(picks.count) 個給你"))
+            .font(SaveInkType.aux)
+            .foregroundStyle(SaveInkPalette.inkSub)
+            .accessibilityIdentifier(picks.isEmpty ? "ink.home.empty" : "ink.home.count")
     }
 
     private var friendsEntry: some View {
@@ -122,14 +130,18 @@ struct SaveInkHomeScreen: View {
     }
 
     private func placeCard(_ place: SaveInkPlace) -> some View {
-        let saved = place.badge == .saved
+        let badge = store.homeBadge(for: place)
+        let saved = badge == .saved
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 Text(place.name)
                     .font(SaveInkType.shop)
                     .foregroundStyle(SaveInkPalette.ink)
                 Spacer(minLength: 8)
-                SaveInkBadge(text: saved ? "○ 存了還沒去" : "✓ 去過", verified: !saved)
+                SaveInkBadge(
+                    text: badge == .unverified ? "△ 未驗證造訪" : (saved ? "○ 存了還沒去" : "✓ 去過"),
+                    verified: badge == .visited
+                )
             }
             Text(place.meta)
                 .font(SaveInkType.aux)
@@ -427,8 +439,10 @@ struct SaveInkCheckInSheet: View {
                 store.commitDraft()
             }
         case .locationFailed, .downgradedUnverified:
-            SaveInkOutlineButton(title: "重試", identifier: "ink.checkin.retry", compact: true) {
-                Task { await store.retryCheckIn() }
+            if place.shopLatitude != nil, place.shopLongitude != nil {
+                SaveInkOutlineButton(title: "重試", identifier: "ink.checkin.retry", compact: true) {
+                    Task { await store.retryCheckIn() }
+                }
             }
             SaveInkOutlineButton(title: "完成", identifier: "ink.checkin.done", compact: true) {
                 store.commitDraft()
@@ -589,8 +603,11 @@ struct SaveInkPlaceScreen: View {
                 }
                 if let place {
                     SaveInkWalkMap(label: walkLabel(place))
+                    if !store.includesSampleCatalog, store.homeBadge(for: place) == .unverified {
+                        SaveInkBadge(text: "△ 未驗證造訪", verified: false)
+                    }
                     HStack(spacing: 10) {
-                        stat("\(store.verifiedCount(for: place.id)) 次", "你去過")
+                        stat("\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次", "你去過")
                         stat("\(place.friendUsualCount) 人", "朋友常去")
                         stat(lastDate(place), "上次蓋章")
                     }
@@ -623,8 +640,14 @@ struct SaveInkPlaceScreen: View {
                     }
                 }
                 Spacer()
-                SaveInkArriveButton {
-                    Task { await store.checkIn(placeID: placeID) }
+                if place?.shopLatitude != nil, place?.shopLongitude != nil {
+                    SaveInkArriveButton {
+                        Task { await store.checkIn(placeID: placeID) }
+                    }
+                } else if place != nil {
+                    SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.place.arrived.unverified") {
+                        store.recordUnverifiedVisit(placeID: placeID)
+                    }
                 }
             }
             .padding(.horizontal, 24)

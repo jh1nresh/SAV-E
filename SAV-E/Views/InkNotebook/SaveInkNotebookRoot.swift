@@ -20,6 +20,23 @@ enum SaveInkLaunch {
         ProcessInfo.processInfo.arguments.contains("--savvy-ink-empty-friends")
     }
 
+    /// Screenshot stills pass `--savvy-ink-screen=`. Ink UI tests pass
+    /// `--savvy-ink-suite=`. Debug, Release, and TestFlight pass neither.
+    static func usesFixtureData(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        arguments.contains { argument in
+            argument.hasPrefix("--savvy-ink-screen=") || argument.hasPrefix("--savvy-ink-suite=")
+        }
+    }
+
+    /// Fixture launches keep the designed friend cards. The empty-friends
+    /// screen and every normal launch leave the page empty.
+    static func friendInputs(arguments: [String] = ProcessInfo.processInfo.arguments) -> [SaveInkFriendVisitInput]? {
+        if arguments.contains("--savvy-ink-empty-friends") || !usesFixtureData(arguments: arguments) {
+            return []
+        }
+        return nil
+    }
+
     static func showsWelcome(seen: Bool) -> Bool {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--savvy-ink-skip-welcome") { return false }
@@ -71,10 +88,10 @@ enum SaveInkLaunch {
         return SaveInkPreviewScreen(rawValue: name)
     }
 
-    /// Screenshot stills and ink UI tests pass `--savvy-ink-…` and keep the
-    /// fixture notebook. A normal launch reads real saved places.
+    /// Only screenshot/suite launches use fixture data. Display-only flags
+    /// such as skip-welcome do not replace real saved places with samples.
     static func usesLivePlaces(arguments: [String]) -> Bool {
-        !arguments.contains { $0.hasPrefix("--savvy-ink-") }
+        !usesFixtureData(arguments: arguments)
     }
 
     static var usesLivePlaces: Bool {
@@ -100,8 +117,8 @@ private struct SaveInkOwnedNotebook: View {
     @State private var dismissedWelcome = false
     @StateObject private var store = SaveInkNotebookStore(
         defaults: SaveInkLaunch.defaults,
-        seedFixture: !SaveInkLaunch.usesLivePlaces,
-        friendInputs: SaveInkLaunch.emptyFriends ? [] : nil,
+        seedFixture: SaveInkLaunch.usesFixtureData(),
+        friendInputs: SaveInkLaunch.friendInputs(),
         makeLocator: { SaveInkLaunch.makeLocator() },
         usesLivePlaces: SaveInkLaunch.usesLivePlaces
     )
