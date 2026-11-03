@@ -566,12 +566,26 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         XCTAssertEqual(store.places.prefix(5).map(\.id), SaveInkFixture.places.map(\.id))
         XCTAssertEqual(store.friendCards().map(\.authorName), ["阿哲", "凱文", "茉茉", "小安"])
-        XCTAssertEqual(store.totalVisits(), SaveInkFixture.visits().count)
+        let seeded = SaveInkFixture.visits()
+        XCTAssertEqual(store.totalVisits(), seeded.count)
+        // 青田七六 is a saved shop in the catalog. It has no seeded check-in.
+        let seededPlaceIDs = Set(seeded.map(\.placeID))
+        XCTAssertEqual(
+            seededPlaceIDs,
+            [
+                SaveInkFixture.dingtai,
+                SaveInkFixture.chifeng,
+                SaveInkFixture.huashan,
+                SaveInkFixture.dadaocheng,
+            ]
+        )
+        XCTAssertFalse(seededPlaceIDs.contains(SaveInkFixture.qingtian))
         let stored = try XCTUnwrap(defaults.data(forKey: "save.ink.visits.v1"))
         let text = String(decoding: stored, as: UTF8.self)
-        for placeID in SaveInkFixture.samplePlaceIDs {
+        for placeID in seededPlaceIDs {
             XCTAssertTrue(text.contains(placeID), placeID)
         }
+        XCTAssertFalse(text.contains(SaveInkFixture.qingtian))
         XCTAssertFalse(text.contains("saved-"))
         XCTAssertFalse(defaults.bool(forKey: SaveInkNotebookStore.sampleCheckInMigrationKey))
     }
