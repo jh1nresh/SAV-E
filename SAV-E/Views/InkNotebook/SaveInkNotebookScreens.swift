@@ -93,7 +93,7 @@ struct SaveInkHomeScreen: View {
     }
 
     private var homeCount: some View {
-        Text(picks.isEmpty ? "還沒有地點" : (store.usesLivePlaces ? "挑了 \(picks.count) 個給你" : "今天在\(store.city)，挑了 \(picks.count) 個給你"))
+        Text(store.homeSummary(count: picks.count))
             .font(SaveInkType.aux)
             .foregroundStyle(SaveInkPalette.inkSub)
             .accessibilityIdentifier(picks.isEmpty ? "ink.home.empty" : "ink.home.count")
@@ -611,7 +611,7 @@ struct SaveInkPlaceScreen: View {
                         stat("\(place.friendUsualCount) 人", "朋友常去")
                         stat(lastDate(place), "上次蓋章")
                     }
-                    Text(place.detailNote)
+                    Text(store.detailNote(for: place))
                         .font(SaveInkType.body)
                         .foregroundStyle(SaveInkPalette.ink)
                         .fixedSize(horizontal: false, vertical: true)
