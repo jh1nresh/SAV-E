@@ -897,6 +897,28 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertGreaterThan(abs(dateline?.center.longitude ?? 0), 170)
     }
 
+    func testLiveMapStaysOffTheFixtureNotebook() throws {
+        let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
+        let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
+        XCTAssertTrue(chrome.contains("struct SaveInkWalkMap"))
+        XCTAssertTrue(chrome.contains("struct SaveInkLiveMap"))
+        XCTAssertTrue(chrome.contains("emphasis: .muted"))
+        XCTAssertTrue(chrome.contains("pointsOfInterest: .excludingAll"))
+        XCTAssertTrue(chrome.contains("UserAnnotation()"))
+        XCTAssertTrue(chrome.contains("SaveInkMapPin()"))
+        XCTAssertTrue(chrome.contains("PaperTexture"))
+        XCTAssertTrue(chrome.contains("openInMaps"))
+        XCTAssertTrue(chrome.contains("ink.home.map"))
+        XCTAssertTrue(chrome.contains("ink.place.map"))
+        XCTAssertTrue(screens.contains("showsLiveMap"))
+        XCTAssertTrue(screens.contains("SaveInkWalkMap(label:"))
+        XCTAssertTrue(screens.contains("ink.place.openMaps"))
+        XCTAssertTrue(screens.contains("用 Apple 地圖打開"))
+        let plist = try source("SAV-E/Info.plist")
+        XCTAssertTrue(plist.contains("NSLocationWhenInUseUsageDescription"))
+        XCTAssertFalse(plist.contains("NSLocationAlwaysAndWhenInUseUsageDescription"))
+    }
+
     func testSupabaseSyncKeepsLocalPlacesWhenTheServerFails() async {
         let local = Place.from(inkPending(name: "本地小店", address: "永康街", latitude: 25.03, longitude: 121.53))
         let remote = SaveInkRemoteFake()

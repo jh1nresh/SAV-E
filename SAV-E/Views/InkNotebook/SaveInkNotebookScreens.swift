@@ -2,7 +2,12 @@ import SwiftUI
 
 struct SaveInkHomeScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
+    @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     @Environment(\.scenePhase) private var scenePhase
+
+    private var showsLiveMap: Bool {
+        store.usesLivePlaces && !saveInkScreenshot
+    }
 
     private var picks: [SaveInkPlace] {
         if store.usesLivePlaces {
@@ -19,6 +24,15 @@ struct SaveInkHomeScreen: View {
                 header
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        if showsLiveMap {
+                            SaveInkLiveMap(
+                                places: picks,
+                                userCoordinate: store.userCoordinate,
+                                focusPlaceID: nil,
+                                showsRoute: false,
+                                onSelect: { store.openPlace($0) }
+                            )
+                        }
                         friendsEntry
                         ForEach(picks) { place in
                             Button {
@@ -573,7 +587,12 @@ struct SaveInkPassportScreen: View {
 
 struct SaveInkPlaceScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
+    @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     var placeID: String
+
+    private var showsLiveMap: Bool {
+        store.usesLivePlaces && !saveInkScreenshot
+    }
 
     var body: some View {
         let place = store.place(placeID)
@@ -588,7 +607,26 @@ struct SaveInkPlaceScreen: View {
                         .lineLimit(1)
                 }
                 if let place {
-                    SaveInkWalkMap(label: walkLabel(place))
+                    if showsLiveMap {
+                        SaveInkLiveMap(
+                            places: [place],
+                            userCoordinate: store.userCoordinate,
+                            focusPlaceID: place.id,
+                            showsRoute: true,
+                            onSelect: { _ in }
+                        )
+                        if place.shopLatitude != nil {
+                            SaveInkOutlineButton(
+                                title: "用 Apple 地圖打開",
+                                identifier: "ink.place.openMaps",
+                                compact: true
+                            ) {
+                                SaveInkAppleMaps.open(place)
+                            }
+                        }
+                    } else {
+                        SaveInkWalkMap(label: walkLabel(place))
+                    }
                     HStack(spacing: 10) {
                         stat("\(store.verifiedCount(for: place.id)) 次", "你去過")
                         stat("\(place.friendUsualCount) 人", "朋友常去")
