@@ -795,6 +795,7 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func pasteExampleLink() {
+        guard place(SaveInkFixture.qingtian) != nil else { return }
         saveLink = "https://短影音連結/v/8f2k…"
         recognizedPlaceID = SaveInkFixture.qingtian
     }
@@ -810,6 +811,9 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitSave() {
+        if let id = recognizedPlaceID, place(id) == nil {
+            recognizedPlaceID = nil
+        }
         recognizeQuery()
         let combined = [saveLink, saveQuery].joined(separator: " ")
         if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined, knownPlaces: places) {
@@ -954,8 +958,9 @@ final class SaveInkNotebookStore: ObservableObject {
 
     static let sampleCheckInMigrationKey = "save.ink.sampleCheckIns.removed.v1"
 
-    /// One pass. Drops visits whose place id is a sample shop and rewrites
-    /// storage only when a sample row was removed. Any other visit stays as stored.
+    /// One pass. Drops untouched seeded check-ins and rewrites storage only
+    /// when one of those rows was removed. A visit the user commented on,
+    /// hid, rated, or recorded on another date stays as stored.
     private static func visitsWithoutPersistedSamples(
         defaults: UserDefaults,
         key: String
@@ -968,7 +973,7 @@ final class SaveInkNotebookStore: ObservableObject {
             return []
         }
         let current = stored ?? []
-        let kept = current.filter { !SaveInkFixture.samplePlaceIDs.contains($0.placeID) }
+        let kept = current.filter { !SaveInkFixture.isUntouchedSeedVisit($0) }
         if stored != nil, kept.count != current.count {
             save(kept, defaults: defaults, key: key)
         }
@@ -1109,17 +1114,18 @@ enum SaveInkFixture {
         ),
     ]
 
+    private static let seedVisits: [(String, Int, Int, Int, SaveInkVerification)] = [
+        (dingtai, 2026, 8, 2, .verified),
+        (dingtai, 2026, 9, 18, .verified),
+        (dingtai, 2026, 10, 28, .verified),
+        (chifeng, 2026, 7, 3, .verified),
+        (chifeng, 2026, 10, 12, .verified),
+        (huashan, 2026, 9, 30, .verified),
+        (dadaocheng, 2026, 9, 14, .unverified),
+    ]
+
     static func visits() -> [SaveInkVisitRecord] {
-        let rows: [(String, Int, Int, Int, SaveInkVerification)] = [
-            (dingtai, 2026, 8, 2, .verified),
-            (dingtai, 2026, 9, 18, .verified),
-            (dingtai, 2026, 10, 28, .verified),
-            (chifeng, 2026, 7, 3, .verified),
-            (chifeng, 2026, 10, 12, .verified),
-            (huashan, 2026, 9, 30, .verified),
-            (dadaocheng, 2026, 9, 14, .unverified),
-        ]
-        return rows.map { placeID, year, month, day, verification in
+        seedVisits.map { placeID, year, month, day, verification in
             SaveInkVisitRecord(
                 id: UUID(),
                 placeID: placeID,
@@ -1130,6 +1136,20 @@ enum SaveInkFixture {
                 sentiment: nil,
                 anomaly: nil
             )
+        }
+    }
+
+    /// A row written by `visits()` that the user has not edited.
+    static func isUntouchedSeedVisit(_ record: SaveInkVisitRecord) -> Bool {
+        guard record.visibility == .public,
+              record.sentiment == nil,
+              record.anomaly == nil,
+              record.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        return seedVisits.contains { placeID, year, month, day, verification in
+            record.placeID == placeID
+                && record.verification == verification
+                && abs(record.visitedAt.timeIntervalSince(SaveInkClock.date(year, month, day))) < 1
         }
     }
 

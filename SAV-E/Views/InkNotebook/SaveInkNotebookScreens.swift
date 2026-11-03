@@ -35,12 +35,13 @@ struct SaveInkHomeScreen: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
-                SaveInkArriveButton {
-                    guard let placeID = picks.first?.id else { return }
-                    Task { await store.checkIn(placeID: placeID) }
+                if let placeID = picks.first?.id {
+                    SaveInkArriveButton {
+                        Task { await store.checkIn(placeID: placeID) }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 44)
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 44)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveInkPalette.paper.ignoresSafeArea())
