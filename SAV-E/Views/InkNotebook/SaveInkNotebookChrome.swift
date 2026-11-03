@@ -697,7 +697,7 @@ struct SaveInkLiveMap: View {
                     Button {
                         onSelect(pin.id)
                     } label: {
-                        SaveInkMapPin()
+                        SaveInkMapPin(visited: pin.visited)
                             .frame(width: 22, height: 30)
                             .frame(width: 44, height: 44)
                     }
@@ -848,15 +848,25 @@ enum SaveInkAppleMaps {
 }
 
 private struct SaveInkMapPin: View {
+    var visited = false
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            Path { path in
+            let head = Path { path in
                 path.addEllipse(in: CGRect(x: width * 0.12, y: 0, width: width * 0.76, height: width * 0.76))
-                path.move(to: CGPoint(x: width * 0.5, y: width * 0.7))
-                path.addLine(to: CGPoint(x: width * 0.5, y: proxy.size.height))
             }
-            .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            ZStack {
+                if visited {
+                    head.fill(SaveInkPalette.ink)
+                }
+                Path { path in
+                    path.addEllipse(in: CGRect(x: width * 0.12, y: 0, width: width * 0.76, height: width * 0.76))
+                    path.move(to: CGPoint(x: width * 0.5, y: width * 0.7))
+                    path.addLine(to: CGPoint(x: width * 0.5, y: proxy.size.height))
+                }
+                .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            }
         }
     }
 }

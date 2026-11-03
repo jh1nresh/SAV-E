@@ -906,6 +906,8 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(chrome.contains("pointsOfInterest: .excludingAll"))
         XCTAssertTrue(chrome.contains("UserAnnotation()"))
         XCTAssertTrue(chrome.contains("SaveInkMapPin()"))
+        XCTAssertTrue(chrome.contains("SaveInkMapPin(visited: pin.visited)"))
+        XCTAssertTrue(chrome.contains("head.fill(SaveInkPalette.ink)"))
         XCTAssertTrue(chrome.contains("PaperTexture"))
         XCTAssertTrue(chrome.contains("openInMaps"))
         XCTAssertTrue(chrome.contains("ink.home.map"))
