@@ -70,7 +70,9 @@ struct SaveInkHomeScreen: View {
                 Text("附近值得去的")
                     .font(SaveInkType.pageTitle)
                     .foregroundStyle(SaveInkPalette.ink)
-                Text("今天在\(store.city)，挑了 \(picks.count) 個給你")
+                Text(store.usesLivePlaces
+                    ? "挑了 \(picks.count) 個給你"
+                    : "今天在\(store.city)，挑了 \(picks.count) 個給你")
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
             }

@@ -624,6 +624,8 @@ final class SaveInkNotebookStore: ObservableObject {
     private var pendingSituation: SaveInkCheckInSituation?
     /// Account that opened the check-in sheet. 「還是記下」refuses a later account.
     private var checkInOwner: String?
+    /// Account whose places are on screen. A save refuses a different account.
+    private var catalogOwner: String?
     private var liveGeneration = 0
     /// True after a load that knew the full saved-place count. New live saves
     /// wait for that, so a partial local list cannot admit a 51st stamp.
@@ -652,6 +654,9 @@ final class SaveInkNotebookStore: ObservableObject {
         self.liveLoader = loader
         self.liveOwner = liveOwner
         self.canSaveAnotherLivePlace = canSaveAnotherLivePlace
+        if usesLivePlaces {
+            catalogOwner = liveOwner()
+        }
         let saved = Self.loadSavedPlaces(
             defaults: placesDefaults,
             key: placesKey,
@@ -837,12 +842,17 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitDraft() {
+        if usesLivePlaces, liveOwner() != checkInOwner {
+            sheet = nil
+            path.removeAll()
+            return
+        }
         let placeID = activePlaceID ?? ""
         if let index = visits.lastIndex(where: { $0.placeID == placeID }) {
             visits[index].comment = draftComment.trimmingCharacters(in: .whitespacesAndNewlines)
             visits[index].visibility = draftVisibility
             visits[index].sentiment = draftSentiment
-            persist()
+            persist(owner: usesLivePlaces ? checkInOwner : nil)
         }
         sheet = nil
         path.removeAll()
@@ -864,6 +874,10 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitSave() {
+        if usesLivePlaces, liveOwner() != catalogOwner {
+            sheet = nil
+            return
+        }
         recognizeQuery()
         let combined = [saveLink, saveQuery].joined(separator: " ")
         if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined, knownPlaces: places) {
@@ -978,6 +992,7 @@ final class SaveInkNotebookStore: ObservableObject {
         let loaded = await liveLoader.load(ink)
         guard generation == liveGeneration else { return }
         guard liveOwner() == owner else { return }
+        catalogOwner = owner
         places = loaded.places
         userCoordinate = loaded.userCoordinate
         liveCatalogAuthoritative = loaded.countIsAuthoritative
@@ -1108,6 +1123,7 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     private func persistPlaces() {
+        if usesLivePlaces, liveOwner() != catalogOwner { return }
         let owner = usesLivePlaces ? liveOwner() : nil
         let mine = places.filter { $0.id.hasPrefix("saved-") }.map {
             SaveInkSavedPlaceRecord(

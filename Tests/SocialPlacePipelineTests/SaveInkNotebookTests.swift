@@ -1834,6 +1834,75 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-a"))
     }
 
+    func testCommitSaveRefusesAfterTheAccountChanges() throws {
+        let defaults = UserDefaults(suiteName: "save.ink.save-owner.\(UUID().uuidString)")!
+        let places = """
+        [{
+          "id": "saved-a",
+          "name": "甲店",
+          "stampName": "甲店",
+          "street": "甲街",
+          "blurb": "甲",
+          "sourceLabel": "來自 甲",
+          "detailNote": "甲",
+          "ownerSubject": "account-a"
+        }]
+        """
+        defaults.set(Data(places.utf8), forKey: SavePlaceLinkGate.placesKey)
+        var owner: String? = "account-a"
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { owner }
+        )
+        owner = "account-b"
+        store.saveQuery = "乙的新店"
+        store.commitSave()
+        let saved = try XCTUnwrap(defaults.data(forKey: SavePlaceLinkGate.placesKey))
+        let text = String(decoding: saved, as: UTF8.self)
+        XCTAssertFalse(text.contains("account-b"))
+        XCTAssertFalse(text.contains("乙的新店"))
+        XCTAssertTrue(text.contains("account-a"))
+    }
+
+    func testCommitDraftRefusesAfterTheAccountChanges() async throws {
+        let defaults = UserDefaults(suiteName: "save.ink.draft-owner.\(UUID().uuidString)")!
+        let places = """
+        [{
+          "id": "saved-a",
+          "name": "甲店",
+          "stampName": "甲店",
+          "street": "甲街",
+          "blurb": "甲",
+          "sourceLabel": "來自 甲",
+          "detailNote": "甲",
+          "ownerSubject": "account-a"
+        }]
+        """
+        defaults.set(Data(places.utf8), forKey: SavePlaceLinkGate.placesKey)
+        var owner: String? = "account-a"
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { owner }
+        )
+        await store.checkIn(placeID: "saved-a")
+        store.draftComment = "不該過去"
+        owner = "account-b"
+        store.commitDraft()
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-b"))
+        let kept = try XCTUnwrap(defaults.data(forKey: "save.ink.visits.v1.account-a"))
+        XCTAssertFalse(String(decoding: kept, as: UTF8.self).contains("不該過去"))
+    }
+
     func testInkSavesCountTowardTheShareCap() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-cap-ink-\(UUID().uuidString)")
