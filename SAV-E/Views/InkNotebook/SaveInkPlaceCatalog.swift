@@ -585,9 +585,14 @@ struct SaveInkLivePlaceEngine {
             }
         }
         if stillHere(), !pending.removeProcessedPendingPlaces(claimedItems) {
-            let ownerless = Set(claimedItems.filter { $0.ownerSubject == nil }.map(\.deduplicationKey))
+            let ownerless = claimedItems.filter { $0.ownerSubject == nil }
             if let owner, !owner.isEmpty {
-                _ = pending.bindPendingPlaces(keys: ownerless, to: owner)
+                let keys = Set(ownerless.map(\.deduplicationKey))
+                if !keys.isEmpty, !pending.bindPendingPlaces(keys: keys, to: owner) {
+                    for item in ownerless {
+                        _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
+                    }
+                }
             }
         }
         guard stillHere() else {

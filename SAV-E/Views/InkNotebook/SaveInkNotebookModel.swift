@@ -618,6 +618,7 @@ final class SaveInkNotebookStore: ObservableObject {
     private let liveLoader: SaveInkLivePlaceLoader
     private let liveOwner: () -> String?
     private let canSaveAnotherLivePlace: @MainActor (Int) -> Bool
+    private let liveSavedPlaceTierIsAuthoritative: @MainActor () -> Bool
     private let parkCappedLiveSave: (@MainActor (String) -> Bool)?
     private var refreshTask: Task<Void, Never>?
     private var refreshQueued = false
@@ -651,6 +652,9 @@ final class SaveInkNotebookStore: ObservableObject {
             )
         },
         canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace,
+        liveSavedPlaceTierIsAuthoritative: @escaping @MainActor () -> Bool = {
+            SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier
+        },
         parkCappedLiveSave: (@MainActor (String) -> Bool)? = nil
     ) {
         self.defaults = defaults
@@ -663,6 +667,7 @@ final class SaveInkNotebookStore: ObservableObject {
         self.liveLoader = loader
         self.liveOwner = liveOwner
         self.canSaveAnotherLivePlace = canSaveAnotherLivePlace
+        self.liveSavedPlaceTierIsAuthoritative = liveSavedPlaceTierIsAuthoritative
         self.parkCappedLiveSave = parkCappedLiveSave
         if usesLivePlaces {
             catalogOwner = liveOwner()
@@ -902,6 +907,10 @@ final class SaveInkNotebookStore: ObservableObject {
                 saveNotice = "還在核對已存的地點，請稍後再存。"
                 return
             }
+            if usesLivePlaces, !liveSavedPlaceTierIsAuthoritative() {
+                saveNotice = "還在核對可以存幾個地點，請稍後再存。"
+                return
+            }
             if usesLivePlaces, !canSaveAnotherLivePlace(places.count) {
                 let parked = parkCappedLiveSave?(name) ?? parkLiveNameOffTheMap(name)
                 saveNotice = parked
@@ -959,7 +968,8 @@ final class SaveInkNotebookStore: ObservableObject {
         return currentUserId
     }
 
-    /// Same cap as the share queue. Unresolved entitlement fails open.
+    /// Same cap as the share queue. The caller waits until the tier is known.
+    /// This check fails open only after that, so a resolved Pro account is not parked.
     private static func allowsAnotherLivePlace(count: Int) -> Bool {
         guard SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier else { return true }
         return SavePlaceLimitGate.decide(

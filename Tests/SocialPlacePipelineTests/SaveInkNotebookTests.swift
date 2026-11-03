@@ -1642,6 +1642,7 @@ final class SaveInkNotebookTests: XCTestCase {
             liveLoader: .inactive,
             liveOwner: { "account-a" },
             canSaveAnotherLivePlace: { _ in false },
+            liveSavedPlaceTierIsAuthoritative: { true },
             parkCappedLiveSave: { _ in true }
         )
         await store.refreshLivePlaces()
@@ -1661,6 +1662,7 @@ final class SaveInkNotebookTests: XCTestCase {
             liveLoader: .inactive,
             liveOwner: { "account-a" },
             canSaveAnotherLivePlace: { _ in false },
+            liveSavedPlaceTierIsAuthoritative: { true },
             parkCappedLiveSave: { _ in false }
         )
         await store.refreshLivePlaces()
@@ -1726,6 +1728,27 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(store.places.contains { $0.name == "還沒核對" })
     }
 
+    func testLiveSaveWaitsUntilTheSavedPlaceTierIsKnown() async {
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.wait-tier.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" },
+            canSaveAnotherLivePlace: { _ in true },
+            liveSavedPlaceTierIsAuthoritative: { false }
+        )
+        await store.refreshLivePlaces()
+        store.sheet = .save
+        store.saveQuery = "方案還沒核對"
+        store.commitSave()
+        XCTAssertFalse(store.places.contains { $0.name == "方案還沒核對" })
+        XCTAssertEqual(store.saveNotice, "還在核對可以存幾個地點，請稍後再存。")
+        XCTAssertEqual(store.sheet, .save)
+    }
+
     func testFailedRefreshPausesLiveSavesAgain() async {
         var authoritative = true
         let loader = SaveInkLivePlaceLoader(
@@ -1744,7 +1767,8 @@ final class SaveInkNotebookTests: XCTestCase {
             usesLivePlaces: true,
             liveLoader: loader,
             liveOwner: { "account-a" },
-            canSaveAnotherLivePlace: { _ in true }
+            canSaveAnotherLivePlace: { _ in true },
+            liveSavedPlaceTierIsAuthoritative: { true }
         )
         await store.refreshLivePlaces()
         store.saveQuery = "核對過"
@@ -1822,7 +1846,8 @@ final class SaveInkNotebookTests: XCTestCase {
             makeLocator: { SaveInkScriptedLocator() },
             usesLivePlaces: true,
             liveLoader: .inactive,
-            liveOwner: { "account-a" }
+            liveOwner: { "account-a" },
+            liveSavedPlaceTierIsAuthoritative: { true }
         )
         await store.refreshLivePlaces()
         store.sheet = .save
@@ -2169,6 +2194,35 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertNil(vault.unboundShareOwner(for: item.deduplicationKey))
         XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: nil).isEmpty)
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["超額寫不進"])
+    }
+
+    func testSuccessfulUploadHoldsAnOwnerlessRowWhenTheQueueCannotBeRewritten() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-uploaded-unwritable-\(UUID().uuidString)")
+        let queueDirectory = root.appendingPathComponent("queue")
+        try FileManager.default.createDirectory(at: queueDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queueDirectory.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let item = inkPending(name: "傳了寫不進", address: "丑路", latitude: 25.25, longitude: 121.75, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: queueDirectory)
+        queue.restorePendingPlaces([item])
+        let remote = SaveInkRemoteFake()
+        remote.afterSave = {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: queueDirectory.path)
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: root.appendingPathComponent("vault.json"))
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        let loaded = await engine.load(ink: [])
+        XCTAssertTrue(loaded.places.contains { $0.name == "傳了寫不進" })
+        XCTAssertEqual(vault.unboundShareOwner(for: item.deduplicationKey), "account-a")
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["傳了寫不進"])
+        let otherRemote = SaveInkRemoteFake()
+        let other = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: otherRemote)
+        let second = await other.load(ink: [])
+        XCTAssertFalse(second.places.contains { $0.name == "傳了寫不進" })
+        XCTAssertTrue(otherRemote.saved.isEmpty)
     }
 
     func testUnreadableUnboundShareLedgerBlocksEveryAccount() async throws {
