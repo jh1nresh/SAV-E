@@ -615,7 +615,7 @@ struct SaveInkPlaceScreen: View {
                             showsRoute: true,
                             onSelect: { _ in }
                         )
-                        if place.shopLatitude != nil {
+                        if SaveInkAppleMaps.canOpen(place) {
                             SaveInkOutlineButton(
                                 title: "用 Apple 地圖打開",
                                 identifier: "ink.place.openMaps",

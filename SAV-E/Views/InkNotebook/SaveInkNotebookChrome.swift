@@ -825,15 +825,25 @@ struct SaveInkLiveMap: View {
 }
 
 enum SaveInkAppleMaps {
+    static func canOpen(_ place: SaveInkPlace) -> Bool {
+        coordinate(of: place) != nil
+    }
+
     static func open(_ place: SaveInkPlace) {
-        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return }
-        let item = MKMapItem(placemark: MKPlacemark(
-            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        ))
+        guard let coordinate = coordinate(of: place) else { return }
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
         item.name = place.name
         item.openInMaps(launchOptions: [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
         ])
+    }
+
+    private static func coordinate(of place: SaveInkPlace) -> CLLocationCoordinate2D? {
+        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return nil }
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
+        guard latitude != 0 || longitude != 0 else { return nil }
+        return coordinate
     }
 }
 
