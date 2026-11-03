@@ -581,8 +581,11 @@ struct SaveInkPlaceScreen: View {
                 }
                 if let place {
                     SaveInkWalkMap(label: walkLabel(place))
+                    if !store.includesSampleCatalog, store.homeBadge(for: place) == .unverified {
+                        SaveInkBadge(text: "△ 未驗證造訪", verified: false)
+                    }
                     HStack(spacing: 10) {
-                        stat("\(store.verifiedCount(for: place.id)) 次", "你去過")
+                        stat("\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次", "你去過")
                         stat("\(place.friendUsualCount) 人", "朋友常去")
                         stat(lastDate(place), "上次蓋章")
                     }

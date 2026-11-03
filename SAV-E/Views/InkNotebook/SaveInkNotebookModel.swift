@@ -722,6 +722,10 @@ final class SaveInkNotebookStore: ObservableObject {
         visits.filter { $0.placeID == placeID && $0.verification == .verified }.count
     }
 
+    func visitCount(for placeID: String) -> Int {
+        visits.filter { $0.placeID == placeID }.count
+    }
+
     func homeBadge(for place: SaveInkPlace) -> SaveInkPlaceBadge {
         guard !includesSampleCatalog else { return place.badge }
         if verifiedCount(for: place.id) > 0 { return .visited }
