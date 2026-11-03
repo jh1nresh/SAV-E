@@ -218,6 +218,9 @@ extension SupabaseService: SaveInkPlaceRemote {
 struct SaveInkLivePlaceLoad {
     var places: [SaveInkPlace]
     var userCoordinate: CLLocationCoordinate2D?
+    /// False while the server place count is still unknown. A failed fetch
+    /// stays false so a new save cannot slip in under a partial local list.
+    var countIsAuthoritative: Bool = false
 }
 
 @MainActor
@@ -227,7 +230,9 @@ struct SaveInkLivePlaceLoader {
 
     static let inactive = SaveInkLivePlaceLoader(
         localPlaces: { $0 },
-        load: { ink in SaveInkLivePlaceLoad(places: ink, userCoordinate: nil) }
+        load: { ink in
+            SaveInkLivePlaceLoad(places: ink, userCoordinate: nil, countIsAuthoritative: true)
+        }
     )
 
     static func production() -> SaveInkLivePlaceLoader {
@@ -443,6 +448,7 @@ struct SaveInkLivePlaceEngine {
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
         let signedIn = owner?.isEmpty == false
         var admitQueue = signedIn && !remote.isConfigured
+        var countIsAuthoritative = !signedIn || !remote.isConfigured
         var remoteIDs = Set<UUID>()
         if let owner, !owner.isEmpty, remote.isConfigured {
             do {
@@ -455,11 +461,13 @@ struct SaveInkLivePlaceEngine {
                 remoteIDs = Set(remotePlaces.map(\.id))
                 confirmed = Place.consolidated(remotePlaces + confirmed)
                 admitQueue = true
+                countIsAuthoritative = true
             } catch {
                 guard stillHere() else {
                     return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
                 }
                 admitQueue = false
+                countIsAuthoritative = false
             }
         }
         guard stillHere() else {
@@ -580,7 +588,8 @@ struct SaveInkLivePlaceEngine {
         }
         return SaveInkLivePlaceLoad(
             places: SaveInkPlaceCatalog.sortedByDistance(rows),
-            userCoordinate: userLocation?.coordinate
+            userCoordinate: userLocation?.coordinate,
+            countIsAuthoritative: countIsAuthoritative
         )
     }
 }

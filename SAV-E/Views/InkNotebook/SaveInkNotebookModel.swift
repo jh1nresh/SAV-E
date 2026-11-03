@@ -619,6 +619,9 @@ final class SaveInkNotebookStore: ObservableObject {
     private var locator: (any SaveInkLocating)?
     private var pendingSituation: SaveInkCheckInSituation?
     private var liveGeneration = 0
+    /// True after a load that knew the full saved-place count. New live saves
+    /// wait for that, so a partial local list cannot admit a 51st stamp.
+    private var liveCatalogAuthoritative = false
 
     var currentDate: Date { now() }
 
@@ -858,6 +861,10 @@ final class SaveInkNotebookStore: ObservableObject {
         saveNotice = nil
         if recognizedPlaceID == nil, !saveQuery.isEmpty {
             let name = SaveInkPlaceLink.savedName(from: saveQuery)
+            if usesLivePlaces, refreshTask != nil || !liveCatalogAuthoritative {
+                saveNotice = "還在核對已存的地點，請稍後再存。"
+                return
+            }
             if usesLivePlaces, !canSaveAnotherLivePlace(places.count) {
                 parkLiveNameOffTheMap(name)
                 saveNotice = "已存 50 個地點，所以暫放，還沒放上地圖。"
@@ -961,6 +968,9 @@ final class SaveInkNotebookStore: ObservableObject {
         guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
+        if loaded.countIsAuthoritative {
+            liveCatalogAuthoritative = true
+        }
         retargetOpenPlaces()
         let visitKey = Self.visitsKey(owner: owner)
         if let stored = Self.load(defaults: defaults, key: visitKey) {
@@ -1123,6 +1133,24 @@ final class SaveInkNotebookStore: ObservableObject {
             shared.set(legacy, forKey: key)
         }
         return shared
+    }
+
+    /// Removes this account's ink visits and name saves. Other accounts' rows stay.
+    static func purgeAccount(_ owner: String, defaults: UserDefaults = .standard) {
+        guard !owner.isEmpty else { return }
+        defaults.removeObject(forKey: "save.ink.visits.v1.\(owner)")
+        let store = placesDefaults(for: defaults)
+        let key = SavePlaceLinkGate.placesKey
+        guard let data = store.data(forKey: key),
+              let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
+        else { return }
+        let kept = records.filter { $0.ownerSubject != owner }
+        guard kept.count != records.count else { return }
+        if kept.isEmpty {
+            store.removeObject(forKey: key)
+        } else if let encoded = try? JSONEncoder().encode(kept) {
+            store.set(encoded, forKey: key)
+        }
     }
 
     /// Rows saved before `ownerSubject` existed decode as nil. The signed-in

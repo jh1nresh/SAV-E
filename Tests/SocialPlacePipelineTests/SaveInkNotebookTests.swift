@@ -1632,7 +1632,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(located.liveArrivalPlaceID(), "near")
     }
 
-    func testLiveSaveStopsAtThePlaceCap() {
+    func testLiveSaveStopsAtThePlaceCap() async {
         let store = SaveInkNotebookStore(
             defaults: UserDefaults(suiteName: "save.ink.cap-save.\(UUID().uuidString)")!,
             now: { SaveInkClock.previewNow },
@@ -1643,10 +1643,85 @@ final class SaveInkNotebookTests: XCTestCase {
             liveOwner: { "account-a" },
             canSaveAnotherLivePlace: { _ in false }
         )
+        await store.refreshLivePlaces()
         store.saveQuery = "超額新店"
         store.commitSave()
         XCTAssertFalse(store.places.contains { $0.name == "超額新店" })
         XCTAssertEqual(store.saveNotice, "已存 50 個地點，所以暫放，還沒放上地圖。")
+    }
+
+    func testLiveSaveWaitsForTheAuthoritativePlaceCount() async {
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in [] },
+            load: { ink in
+                SaveInkLivePlaceLoad(places: ink, userCoordinate: nil, countIsAuthoritative: false)
+            }
+        )
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.wait-count.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: loader,
+            liveOwner: { "account-a" },
+            canSaveAnotherLivePlace: { _ in true }
+        )
+        store.saveQuery = "還沒核對"
+        store.commitSave()
+        XCTAssertFalse(store.places.contains { $0.name == "還沒核對" })
+        XCTAssertEqual(store.saveNotice, "還在核對已存的地點，請稍後再存。")
+        await store.refreshLivePlaces()
+        store.saveNotice = nil
+        store.saveQuery = "還沒核對"
+        store.commitSave()
+        XCTAssertFalse(store.places.contains { $0.name == "還沒核對" })
+    }
+
+    func testAccountDeletionRemovesThatAccountsInkMemory() throws {
+        let defaults = UserDefaults(suiteName: "save.ink.purge.\(UUID().uuidString)")!
+        let places = """
+        [
+          {"id":"saved-a","name":"甲的店","stampName":"甲的店","street":"甲","blurb":"甲","sourceLabel":"來自 甲","detailNote":"甲","ownerSubject":"account-a"},
+          {"id":"saved-b","name":"乙的店","stampName":"乙的店","street":"乙","blurb":"乙","sourceLabel":"來自 乙","detailNote":"乙","ownerSubject":"account-b"}
+        ]
+        """
+        defaults.set(Data(places.utf8), forKey: SavePlaceLinkGate.placesKey)
+        let visit = SaveInkVisitRecord(
+            id: UUID(),
+            placeID: "saved-a",
+            visitedAt: SaveInkClock.previewNow,
+            verification: .verified,
+            visibility: .public,
+            comment: "要刪的",
+            sentiment: nil,
+            anomaly: nil
+        )
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1.account-a")
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1.account-b")
+        SaveInkNotebookStore.purgeAccount("account-a", defaults: defaults)
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" }
+        )
+        XCTAssertFalse(store.places.contains { $0.name == "甲的店" })
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-a"))
+        let other = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-b" }
+        )
+        XCTAssertTrue(other.places.contains { $0.name == "乙的店" })
+        XCTAssertNotNil(defaults.data(forKey: "save.ink.visits.v1.account-b"))
     }
 
     func testLegacyInkSaveIsClaimedByTheSignedInAccount() throws {

@@ -316,6 +316,7 @@ final class ProfileViewModel: ObservableObject {
             initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys,
             unreadableFileNames: intent.unreadableQueueFileNames
         )
+        SaveInkNotebookStore.purgeAccount(intent.owner)
         if intent.remoteOutcome == .succeeded {
             // SDK identity mismatch or a changed generation may make signOut
             // return without ending A's local session. Queues are already
