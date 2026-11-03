@@ -30,13 +30,14 @@ struct SaveInkHomeScreen: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
                 }
-                Text("輕點卡片，看地圖怎麼走")
+                Text(picks.isEmpty ? "存一個地點，到了再記" : "輕點卡片，看地圖怎麼走")
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
                 SaveInkArriveButton {
-                    Task { await store.checkIn(placeID: picks.first?.id ?? SaveInkFixture.dingtai) }
+                    guard let placeID = picks.first?.id else { return }
+                    Task { await store.checkIn(placeID: placeID) }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 44)
@@ -53,9 +54,7 @@ struct SaveInkHomeScreen: View {
                 Text("附近值得去的")
                     .font(SaveInkType.pageTitle)
                     .foregroundStyle(SaveInkPalette.ink)
-                Text("今天在\(store.city)，挑了 \(picks.count) 個給你")
-                    .font(SaveInkType.aux)
-                    .foregroundStyle(SaveInkPalette.inkSub)
+                homeCount
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
@@ -70,6 +69,13 @@ struct SaveInkHomeScreen: View {
         .padding(.horizontal, 24)
         .padding(.top, 18)
         .padding(.bottom, 16)
+    }
+
+    private var homeCount: some View {
+        Text(picks.isEmpty ? "還沒有地點" : "今天在\(store.city)，挑了 \(picks.count) 個給你")
+            .font(SaveInkType.aux)
+            .foregroundStyle(SaveInkPalette.inkSub)
+            .accessibilityIdentifier(picks.isEmpty ? "ink.home.empty" : "ink.home.count")
     }
 
     private var friendsEntry: some View {

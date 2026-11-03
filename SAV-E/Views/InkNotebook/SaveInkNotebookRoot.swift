@@ -20,6 +20,23 @@ enum SaveInkLaunch {
         ProcessInfo.processInfo.arguments.contains("--savvy-ink-empty-friends")
     }
 
+    /// Screenshot stills pass `--savvy-ink-screen=`. Ink UI tests pass
+    /// `--savvy-ink-suite=`. Debug, Release, and TestFlight pass neither.
+    static func usesFixtureData(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        arguments.contains { argument in
+            argument.hasPrefix("--savvy-ink-screen=") || argument.hasPrefix("--savvy-ink-suite=")
+        }
+    }
+
+    /// Fixture launches keep the designed friend cards. The empty-friends
+    /// screen and every normal launch leave the page empty.
+    static func friendInputs(arguments: [String] = ProcessInfo.processInfo.arguments) -> [SaveInkFriendVisitInput]? {
+        if arguments.contains("--savvy-ink-empty-friends") || !usesFixtureData(arguments: arguments) {
+            return []
+        }
+        return nil
+    }
+
     static func showsWelcome(seen: Bool) -> Bool {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--savvy-ink-skip-welcome") { return false }
@@ -90,7 +107,8 @@ private struct SaveInkOwnedNotebook: View {
     @State private var dismissedWelcome = false
     @StateObject private var store = SaveInkNotebookStore(
         defaults: SaveInkLaunch.defaults,
-        friendInputs: SaveInkLaunch.emptyFriends ? [] : nil,
+        seedFixture: SaveInkLaunch.usesFixtureData(),
+        friendInputs: SaveInkLaunch.friendInputs(),
         makeLocator: { SaveInkLaunch.makeLocator() }
     )
 

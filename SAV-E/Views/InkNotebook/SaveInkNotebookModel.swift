@@ -609,10 +609,14 @@ final class SaveInkNotebookStore: ObservableObject {
 
     var currentDate: Date { now() }
 
+    /// `seedFixture` is the screenshot and UI-test catalog: five sample shops,
+    /// friend cards, and first-launch check-ins. Normal launch leaves it false.
+    /// `includeSampleCatalog` keeps those shops in memory without writing check-ins.
     init(
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = { Date() },
-        seedFixture: Bool = true,
+        seedFixture: Bool = false,
+        includeSampleCatalog: Bool = false,
         friendInputs: [SaveInkFriendVisitInput]? = nil,
         makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() }
     ) {
@@ -621,16 +625,25 @@ final class SaveInkNotebookStore: ObservableObject {
         self.placesDefaults = placesDefaults
         self.now = now
         self.makeLocator = makeLocator
-        let seededPlaces = SaveInkFixture.places
-        self.places = seededPlaces + Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
-        self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
-        if let stored = Self.load(defaults: defaults, key: storageKey) {
-            self.visits = stored
+        let catalog = (seedFixture || includeSampleCatalog) ? SaveInkFixture.places : []
+        self.places = catalog + Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        if let friendInputs {
+            self.friendInputs = friendInputs
         } else if seedFixture {
-            self.visits = SaveInkFixture.visits()
-            Self.save(visits, defaults: defaults, key: storageKey)
+            self.friendInputs = SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
         } else {
-            self.visits = []
+            self.friendInputs = []
+        }
+        if seedFixture {
+            if let stored = Self.load(defaults: defaults, key: storageKey) {
+                self.visits = stored
+            } else {
+                let seeded = SaveInkFixture.visits()
+                self.visits = seeded
+                Self.save(seeded, defaults: defaults, key: storageKey)
+            }
+        } else {
+            self.visits = Self.visitsWithoutPersistedSamples(defaults: defaults, key: storageKey)
         }
     }
 
@@ -939,6 +952,30 @@ final class SaveInkNotebookStore: ObservableObject {
         }
     }
 
+    static let sampleCheckInMigrationKey = "save.ink.sampleCheckIns.removed.v1"
+
+    /// One pass. Drops visits whose place id is a sample shop and rewrites
+    /// storage only when a sample row was removed. Any other visit stays as stored.
+    private static func visitsWithoutPersistedSamples(
+        defaults: UserDefaults,
+        key: String
+    ) -> [SaveInkVisitRecord] {
+        let stored = load(defaults: defaults, key: key)
+        if defaults.bool(forKey: sampleCheckInMigrationKey) {
+            return stored ?? []
+        }
+        if defaults.data(forKey: key) != nil, stored == nil {
+            return []
+        }
+        let current = stored ?? []
+        let kept = current.filter { !SaveInkFixture.samplePlaceIDs.contains($0.placeID) }
+        if stored != nil, kept.count != current.count {
+            save(kept, defaults: defaults, key: key)
+        }
+        defaults.set(true, forKey: sampleCheckInMigrationKey)
+        return kept
+    }
+
     private static func load(defaults: UserDefaults, key: String) -> [SaveInkVisitRecord]? {
         guard let data = defaults.data(forKey: key) else { return nil }
         guard let legacy = try? Self.decoder.decode([SaveInkLegacyVisit].self, from: data) else { return nil }
@@ -977,6 +1014,7 @@ enum SaveInkFixture {
     static let chifeng = "chifeng"
     static let huashan = "huashan"
     static let dadaocheng = "dadaocheng"
+    static let samplePlaceIDs: Set<String> = [dingtai, qingtian, chifeng, huashan, dadaocheng]
 
     static let places: [SaveInkPlace] = [
         SaveInkPlace(
