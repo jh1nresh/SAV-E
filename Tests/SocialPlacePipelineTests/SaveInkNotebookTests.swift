@@ -1763,7 +1763,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: SavePlaceLinkGate.placesKey), Data("not-json".utf8))
     }
 
-    func testLegacyInkSaveIsClaimedByTheSignedInAccount() throws {
+    func testLegacyInkSaveStaysHiddenUntilAnOwnerIsKnown() {
         let defaults = UserDefaults(suiteName: "save.ink.legacy.\(UUID().uuidString)")!
         let legacy = """
         [{
@@ -1786,17 +1786,52 @@ final class SaveInkNotebookTests: XCTestCase {
             liveLoader: .inactive,
             liveOwner: { "account-a" }
         )
-        XCTAssertTrue(accountA.places.contains { $0.name == "升級前的店" })
-        let accountB = SaveInkNotebookStore(
+        XCTAssertFalse(accountA.places.contains { $0.name == "升級前的店" })
+        let signedOut = SaveInkNotebookStore(
             defaults: defaults,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
             makeLocator: { SaveInkScriptedLocator() },
             usesLivePlaces: true,
             liveLoader: .inactive,
-            liveOwner: { "account-b" }
+            liveOwner: { nil }
         )
-        XCTAssertFalse(accountB.places.contains { $0.name == "升級前的店" })
+        XCTAssertTrue(signedOut.places.contains { $0.name == "升級前的店" })
+    }
+
+    func testSaveAnywayRefusesAfterTheAccountChanges() async {
+        let defaults = UserDefaults(suiteName: "save.ink.anyway.\(UUID().uuidString)")!
+        let places = """
+        [{
+          "id": "saved-a",
+          "name": "甲店",
+          "stampName": "甲店",
+          "street": "甲街",
+          "blurb": "甲",
+          "sourceLabel": "來自 甲",
+          "detailNote": "甲",
+          "ownerSubject": "account-a"
+        }]
+        """
+        defaults.set(Data(places.utf8), forKey: SavePlaceLinkGate.placesKey)
+        var owner: String? = "account-a"
+        var far = SaveInkFix.inRange()
+        far.distanceMeters = 400
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator(fix: far) },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { owner }
+        )
+        await store.checkIn(placeID: "saved-a")
+        owner = "account-b"
+        store.saveAnyway()
+        XCTAssertNil(store.sheet)
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-b"))
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-a"))
     }
 
     func testInkSavesCountTowardTheShareCap() async throws {
@@ -1844,6 +1879,31 @@ final class SaveInkNotebookTests: XCTestCase {
             newer.savedAt = first.savedAt.addingTimeInterval(60)
             queue.restorePendingPlaces([newer])
         }
+        let engine = liveEngine(
+            owner: "account-a",
+            vault: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
+            queue: queue,
+            remote: remote
+        )
+        _ = await engine.load(ink: [])
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.dishes), [["新菜"]])
+    }
+
+    func testFailedDuplicateShareStaysQueued() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-dup-key-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var first = inkPending(name: "同鍵店", address: "申路", latitude: 25.19, longitude: 121.69, owner: "account-a")
+        first.sourceURL = "https://example.com/post/dup"
+        first.dishes = ["舊菜"]
+        var second = first
+        second.dishes = ["新菜"]
+        second.savedAt = first.savedAt.addingTimeInterval(30)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([first, second])
+        let remote = SaveInkRemoteFake()
+        remote.afterSave = { remote.saveError = URLError(.networkConnectionLost) }
         let engine = liveEngine(
             owner: "account-a",
             vault: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
@@ -2146,6 +2206,7 @@ private final class SaveInkRemoteFake: SaveInkPlaceRemote {
     var fetchError: Error?
     var saveError: Error?
     var beforeFetch: (() -> Void)?
+    var afterSave: (() -> Void)?
 
     func fetchPlaces(for userId: String) async throws -> [Place] {
         beforeFetch?()
@@ -2156,6 +2217,7 @@ private final class SaveInkRemoteFake: SaveInkPlaceRemote {
     func savePlace(_ place: Place, userId: String) async throws {
         if let saveError { throw saveError }
         saved.append(place)
+        afterSave?()
     }
 
     func updatePlace(_ place: Place, userId: String) async throws {

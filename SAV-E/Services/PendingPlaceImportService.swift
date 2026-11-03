@@ -1088,26 +1088,31 @@ final class PendingPlaceImportService {
     /// cannot import the same ownerless save.
     /// Drops the rows this pass actually processed. A later share that reused
     /// the same deduplication key, with new text or dishes, stays queued.
-    func removeProcessedPendingPlaces(_ processed: [PendingSharedPlace]) {
-        guard !processed.isEmpty, let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return }
-        var fingerprints: [String: String] = [:]
-        for item in processed {
-            fingerprints[item.deduplicationKey] = Self.pendingContentFingerprint(item)
-        }
+    @discardableResult
+    func removeProcessedPendingPlaces(_ processed: [PendingSharedPlace]) -> Bool {
+        guard !processed.isEmpty, let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return true }
+        let fingerprints = Set(processed.map(Self.pendingContentFingerprint))
+        var failed = false
         coordinate(url: url, purpose: "claim \(SAVEProductionConfig.pendingPlacesFileName)") {
             guard fileManager.fileExists(atPath: url.path) else { return }
-            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
-            let kept = items.filter { item in
-                guard let expected = fingerprints[item.deduplicationKey] else { return true }
-                return Self.pendingContentFingerprint(item) != expected
+            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else {
+                failed = true
+                return
             }
+            let kept = items.filter { !fingerprints.contains(Self.pendingContentFingerprint($0)) }
             guard kept.count != items.count else { return }
-            if kept.isEmpty {
-                try? fileManager.removeItem(at: url)
-            } else if let data = try? JSONEncoder().encode(kept) {
-                try? data.write(to: url, options: [.atomic])
+            do {
+                if kept.isEmpty {
+                    try fileManager.removeItem(at: url)
+                } else {
+                    let data = try JSONEncoder().encode(kept)
+                    try data.write(to: url, options: [.atomic])
+                }
+            } catch {
+                failed = true
             }
         }
+        return !failed
     }
 
     private static func pendingContentFingerprint(_ item: PendingSharedPlace) -> String {

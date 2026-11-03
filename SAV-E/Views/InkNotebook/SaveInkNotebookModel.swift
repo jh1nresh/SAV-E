@@ -622,6 +622,8 @@ final class SaveInkNotebookStore: ObservableObject {
     private var refreshQueued = false
     private var locator: (any SaveInkLocating)?
     private var pendingSituation: SaveInkCheckInSituation?
+    /// Account that opened the check-in sheet. 「還是記下」refuses a later account.
+    private var checkInOwner: String?
     private var liveGeneration = 0
     /// True after a load that knew the full saved-place count. New live saves
     /// wait for that, so a partial local list cannot admit a 51st stamp.
@@ -744,6 +746,7 @@ final class SaveInkNotebookStore: ObservableObject {
         let ownerAtStart = usesLivePlaces ? liveOwner() : nil
         let fix = await locatorOrMake().requestFix(for: place)
         if usesLivePlaces, liveOwner() != ownerAtStart { return }
+        checkInOwner = ownerAtStart
         let previous = previousShop(before: placeID)
         let speed = SaveInkCheckIn.impliedSpeedKmh(
             from: previous,
@@ -783,6 +786,11 @@ final class SaveInkNotebookStore: ObservableObject {
 
     func saveAnyway() {
         guard case .checkIn(.tooFar(_), let placeID)? = sheet else { return }
+        if usesLivePlaces, liveOwner() != checkInOwner {
+            sheet = nil
+            pendingSituation = nil
+            return
+        }
         let decision = SaveInkCheckInDecision(
             situation: .tooFar(meters: 0),
             recordsVisit: false,
@@ -796,7 +804,7 @@ final class SaveInkNotebookStore: ObservableObject {
             visits: &visits,
             recordTooFar: true
         )
-        persist(owner: usesLivePlaces ? liveOwner() : nil)
+        persist(owner: usesLivePlaces ? checkInOwner : nil)
         markVisited(placeID)
         prepareDraft(placeID: placeID)
         pendingSituation = .downgradedUnverified
@@ -1159,25 +1167,6 @@ final class SaveInkNotebookStore: ObservableObject {
         store.set(encoded, forKey: key)
     }
 
-    /// Rows saved before `ownerSubject` existed decode as nil. The signed-in
-    /// account that opens them claims those rows once. A later account does not.
-    static func claimLegacyInkRows(
-        _ records: [SaveInkSavedPlaceRecord],
-        owner: String?,
-        scoped: Bool
-    ) -> (records: [SaveInkSavedPlaceRecord], changed: Bool) {
-        guard scoped, let owner, !owner.isEmpty else { return (records, false) }
-        var changed = false
-        let next = records.map { record -> SaveInkSavedPlaceRecord in
-            guard record.ownerSubject == nil else { return record }
-            var copy = record
-            copy.ownerSubject = owner
-            changed = true
-            return copy
-        }
-        return (next, changed)
-    }
-
     /// Signed-in live launches see only that account's rows. Ownerless rows
     /// stay hidden while an account is signed in, matching the vault.
     static func visibleSavedRecords(
@@ -1198,11 +1187,7 @@ final class SaveInkNotebookStore: ObservableObject {
         guard let data = defaults.data(forKey: key),
               let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
         else { return [] }
-        let prepared = claimLegacyInkRows(records, owner: owner, scoped: scoped)
-        if prepared.changed, let encoded = try? JSONEncoder().encode(prepared.records) {
-            defaults.set(encoded, forKey: key)
-        }
-        return visibleSavedRecords(prepared.records, owner: owner, scoped: scoped).map {
+        return visibleSavedRecords(records, owner: owner, scoped: scoped).map {
             SaveInkPlace(
                 id: $0.id,
                 name: $0.name,

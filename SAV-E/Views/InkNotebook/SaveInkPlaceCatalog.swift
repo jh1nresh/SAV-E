@@ -474,7 +474,7 @@ struct SaveInkLivePlaceEngine {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
         mirrorMissing(confirmed, owner: owner)
-        var claimedKeys = Set<String>()
+        var claimedItems: [PendingSharedPlace] = []
         func retain(_ item: PendingSharedPlace) {
             if item.ownerSubject == nil, let owner, !owner.isEmpty {
                 pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
@@ -500,7 +500,7 @@ struct SaveInkLivePlaceEngine {
                         let payload = merged.id == remoteID ? merged : merged.rekeyed(to: remoteID)
                         switch await updateRemote(payload, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
                         case .uploaded:
-                            claimedKeys.insert(item.deduplicationKey)
+                            claimedItems.append(item)
                             remoteIDs.formUnion(payload.savedIDs)
                         case .retryLater:
                             retain(item)
@@ -512,7 +512,7 @@ struct SaveInkLivePlaceEngine {
                     }
                     switch await upload(merged, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
                     case .uploaded:
-                        claimedKeys.insert(item.deduplicationKey)
+                        claimedItems.append(item)
                         remoteIDs.formUnion(merged.savedIDs)
                     case .retryLater:
                         retain(item)
@@ -539,7 +539,7 @@ struct SaveInkLivePlaceEngine {
                 guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
                 switch await upload(candidate, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
                 case .uploaded:
-                    claimedKeys.insert(item.deduplicationKey)
+                    claimedItems.append(item)
                     remoteIDs.insert(candidate.id)
                 case .retryLater:
                     retain(item)
@@ -554,8 +554,11 @@ struct SaveInkLivePlaceEngine {
                 }
             }
         }
-        if stillHere() {
-            pending.removeProcessedPendingPlaces(queued.filter { claimedKeys.contains($0.deduplicationKey) })
+        if stillHere(), !pending.removeProcessedPendingPlaces(claimedItems) {
+            let ownerless = Set(claimedItems.filter { $0.ownerSubject == nil }.map(\.deduplicationKey))
+            if let owner, !owner.isEmpty {
+                pending.bindPendingPlaces(keys: ownerless, to: owner)
+            }
         }
         guard stillHere() else {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
