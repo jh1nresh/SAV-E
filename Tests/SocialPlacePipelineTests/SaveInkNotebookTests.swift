@@ -1700,6 +1700,7 @@ final class SaveInkNotebookTests: XCTestCase {
         await store.refreshLivePlaces()
         XCTAssertEqual(store.place("local-id")?.id, "remote-id")
         XCTAssertEqual(store.path, [.place("remote-id")])
+        XCTAssertEqual(store.activePlaceID, "remote-id")
     }
 
     private func livePlaceStore(places: [SaveInkPlace]) -> SaveInkNotebookStore {

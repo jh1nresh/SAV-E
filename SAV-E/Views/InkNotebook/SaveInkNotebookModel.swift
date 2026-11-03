@@ -1037,6 +1037,9 @@ final class SaveInkNotebookStore: ObservableObject {
 
     private func retargetOpenPlaces() {
         path = path.map(retarget)
+        if let activePlaceID, let resolved = place(activePlaceID)?.id, resolved != activePlaceID {
+            self.activePlaceID = resolved
+        }
         if case .checkIn(let situation, let placeID) = sheet, let resolved = place(placeID)?.id, resolved != placeID {
             sheet = .checkIn(situation, placeID: resolved)
         }
