@@ -4,10 +4,7 @@ struct SaveInkHomeScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
 
     private var picks: [SaveInkPlace] {
-        let featured = [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
-        let main = featured.compactMap { id in store.places.first { $0.id == id } }
-        let added = store.places.filter { $0.id.hasPrefix("saved-") }
-        return main + added
+        store.homePlaces()
     }
 
     var body: some View {

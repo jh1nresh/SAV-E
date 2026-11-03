@@ -565,6 +565,10 @@ final class SaveInkNotebookTests: XCTestCase {
             seedFixture: true
         )
         XCTAssertEqual(store.places.prefix(5).map(\.id), SaveInkFixture.places.map(\.id))
+        XCTAssertEqual(
+            store.homePlaces().prefix(3).map(\.id),
+            [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
+        )
         XCTAssertEqual(store.friendCards().map(\.authorName), ["阿哲", "凱文", "茉茉", "小安"])
         let seeded = SaveInkFixture.visits()
         XCTAssertEqual(store.totalVisits(), seeded.count)
@@ -709,6 +713,12 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.id, visit.id)
         XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.comment, "只有我寫的")
         XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1"), original)
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.name, "鼎泰小館")
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.stampName, "鼎泰小館")
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.street, "永康街")
+        XCTAssertFalse(store.homePlaces().contains { $0.id == SaveInkFixture.dingtai })
+        XCTAssertNil(store.place(SaveInkFixture.qingtian))
+        XCTAssertEqual(defaults.data(forKey: "save.ink.places.v1"), nil)
     }
 
     func testPasteExampleLinkStaysInsideTheFixtureCatalog() {

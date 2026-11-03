@@ -597,6 +597,7 @@ final class SaveInkNotebookStore: ObservableObject {
     @Published var activePlaceID: String?
 
     let city = "大安區"
+    let includesSampleCatalog: Bool
     let friendInputs: [SaveInkFriendVisitInput]
     private let defaults: UserDefaults
     private let placesDefaults: UserDefaults
@@ -625,8 +626,7 @@ final class SaveInkNotebookStore: ObservableObject {
         self.placesDefaults = placesDefaults
         self.now = now
         self.makeLocator = makeLocator
-        let catalog = (seedFixture || includeSampleCatalog) ? SaveInkFixture.places : []
-        self.places = catalog + Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        self.includesSampleCatalog = seedFixture || includeSampleCatalog
         if let friendInputs {
             self.friendInputs = friendInputs
         } else if seedFixture {
@@ -634,17 +634,42 @@ final class SaveInkNotebookStore: ObservableObject {
         } else {
             self.friendInputs = []
         }
+        let loadedVisits: [SaveInkVisitRecord]
         if seedFixture {
             if let stored = Self.load(defaults: defaults, key: storageKey) {
-                self.visits = stored
+                loadedVisits = stored
             } else {
-                let seeded = SaveInkFixture.visits()
-                self.visits = seeded
-                Self.save(seeded, defaults: defaults, key: storageKey)
+                loadedVisits = SaveInkFixture.visits()
+                Self.save(loadedVisits, defaults: defaults, key: storageKey)
             }
         } else {
-            self.visits = Self.visitsWithoutPersistedSamples(defaults: defaults, key: storageKey)
+            loadedVisits = Self.visitsWithoutPersistedSamples(defaults: defaults, key: storageKey)
         }
+        self.visits = loadedVisits
+        let saved = Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        if includesSampleCatalog {
+            self.places = SaveInkFixture.places + saved
+        } else {
+            self.places = saved + Self.placesForRetainedSampleVisits(loadedVisits, alreadyLoaded: saved)
+        }
+    }
+
+    func homePlaces() -> [SaveInkPlace] {
+        let saved = places.filter { $0.id.hasPrefix("saved-") }
+        guard includesSampleCatalog else { return saved }
+        let featured = [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
+        let main = featured.compactMap { id in places.first { $0.id == id } }
+        return main + saved
+    }
+
+    /// Sample shops stay off Home. A visit the user kept still needs a name and stamp.
+    private static func placesForRetainedSampleVisits(
+        _ visits: [SaveInkVisitRecord],
+        alreadyLoaded: [SaveInkPlace]
+    ) -> [SaveInkPlace] {
+        let referenced = Set(visits.map(\.placeID))
+        let known = Set(alreadyLoaded.map(\.id))
+        return SaveInkFixture.places.filter { referenced.contains($0.id) && !known.contains($0.id) }
     }
 
     func openFriends() {
