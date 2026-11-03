@@ -726,6 +726,20 @@ final class SaveInkNotebookStore: ObservableObject {
         visits.filter { $0.placeID == placeID }.count
     }
 
+    func homeSummary(count: Int) -> String {
+        guard count > 0 else { return "還沒有地點" }
+        return includesSampleCatalog ? "今天在\(city)，挑了 \(count) 個給你" : "挑了 \(count) 個給你"
+    }
+
+    func detailNote(for place: SaveInkPlace) -> String {
+        if !includesSampleCatalog,
+           place.shopLatitude == nil || place.shopLongitude == nil,
+           place.detailNote == "剛存下來，到了再按「我到了」。" {
+            return "剛存下來。可以記錄到訪（未驗證）。"
+        }
+        return place.detailNote
+    }
+
     func homeBadge(for place: SaveInkPlace) -> SaveInkPlaceBadge {
         guard !includesSampleCatalog else { return place.badge }
         if verifiedCount(for: place.id) > 0 { return .visited }

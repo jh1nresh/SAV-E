@@ -815,6 +815,29 @@ final class SaveInkNotebookTests: XCTestCase {
         }
     }
 
+    func testNormalUnlocatedCopyDoesNotClaimFixtureCityOrVerifiedAction() throws {
+        let defaults = inkSuite("unlocated-copy")
+        let store = SaveInkNotebookStore(defaults: defaults)
+        store.saveQuery = "沒有座標的小店"
+        store.commitSave()
+        let row = try XCTUnwrap(store.homePlaces().first)
+        XCTAssertEqual(store.homeSummary(count: 0), "還沒有地點")
+        XCTAssertEqual(store.homeSummary(count: 1), "挑了 1 個給你")
+        XCTAssertEqual(store.detailNote(for: row), "剛存下來。可以記錄到訪（未驗證）。")
+        let reloaded = SaveInkNotebookStore(defaults: defaults)
+        XCTAssertEqual(reloaded.detailNote(for: try XCTUnwrap(reloaded.place(row.id))), store.detailNote(for: row))
+        var custom = row
+        custom.detailNote = "自己留下的店家筆記"
+        XCTAssertEqual(store.detailNote(for: custom), custom.detailNote)
+        var located = row
+        located.shopLatitude = 25.03
+        located.shopLongitude = 121.53
+        XCTAssertEqual(store.detailNote(for: located), located.detailNote)
+        let fixture = SaveInkNotebookStore(defaults: inkSuite("fixture-copy"), seedFixture: true)
+        XCTAssertEqual(fixture.homeSummary(count: 3), "今天在大安區，挑了 3 個給你")
+        XCTAssertEqual(fixture.detailNote(for: row), row.detailNote)
+    }
+
     func testRetainedSampleVisitDoesNotEnableFixturePaste() throws {
         let defaults = inkSuite("retained-sample-paste")
         let visit = inkVisit(placeID: SaveInkFixture.qingtian, comment: "自己寫的")
