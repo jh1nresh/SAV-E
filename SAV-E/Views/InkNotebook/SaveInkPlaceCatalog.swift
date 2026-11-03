@@ -358,6 +358,14 @@ struct SaveInkLivePlaceEngine {
         }
     }
 
+    /// Ink rows that are not the same venue as a confirmed stamp are extra
+    /// places on the list, so they count toward the free cap.
+    private static func visibleStampCount(confirmed: [Place], ink: [SaveInkPlace]) -> Int {
+        let stamps = Place.consolidated(confirmed)
+        let extra = ink.filter { row in !stamps.contains { SaveInkPlaceCatalog.sameVenue(row, $0) } }
+        return stamps.count + extra.count
+    }
+
     /// Compares the fields `SaveMemoryRecord` writes back. Visibility, price
     /// range, and opening hours are not in that record, so they cannot round-trip.
     private static func vaultIsStale(_ stored: Place, comparedWith merged: Place) -> Bool {
@@ -479,7 +487,7 @@ struct SaveInkLivePlaceEngine {
                     }
                     continue
                 }
-                guard canConfirmAnother(Place.consolidated(confirmed).count) else {
+                guard canConfirmAnother(Self.visibleStampCount(confirmed: confirmed, ink: ink)) else {
                     retain(item)
                     continue
                 }
@@ -502,7 +510,7 @@ struct SaveInkLivePlaceEngine {
             }
         }
         if stillHere() {
-            pending.removePendingPlaces(withKeys: claimedKeys)
+            pending.removeProcessedPendingPlaces(queued.filter { claimedKeys.contains($0.deduplicationKey) })
         }
         guard stillHere() else {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)

@@ -1649,6 +1649,97 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(store.saveNotice, "已存 50 個地點，所以暫放，還沒放上地圖。")
     }
 
+    func testLegacyInkSaveIsClaimedByTheSignedInAccount() throws {
+        let defaults = UserDefaults(suiteName: "save.ink.legacy.\(UUID().uuidString)")!
+        let legacy = """
+        [{
+          "id": "saved-legacy",
+          "name": "升級前的店",
+          "stampName": "升級前的店",
+          "street": "舊街",
+          "blurb": "舊",
+          "sourceLabel": "來自 你貼上的店名",
+          "detailNote": "舊"
+        }]
+        """
+        defaults.set(Data(legacy.utf8), forKey: SavePlaceLinkGate.placesKey)
+        let accountA = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" }
+        )
+        XCTAssertTrue(accountA.places.contains { $0.name == "升級前的店" })
+        let accountB = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-b" }
+        )
+        XCTAssertFalse(accountB.places.contains { $0.name == "升級前的店" })
+    }
+
+    func testInkSavesCountTowardTheShareCap() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-cap-ink-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "排隊店", address: "巳路", latitude: 25.16, longitude: 121.66, owner: "account-a")
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        var counts: [Int] = []
+        let engine = SaveInkLivePlaceEngine(
+            vault: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
+            pending: queue,
+            remote: SaveInkRemoteFake(),
+            userID: { "account-a" },
+            location: { nil },
+            walkingMinutes: { _, _ in nil },
+            currentSession: { ("account-a", 1) },
+            canConfirmAnother: { count in
+                counts.append(count)
+                return count < 1
+            }
+        )
+        let loaded = await engine.load(ink: [inkRow(id: "saved-ink", name: "手寫店", street: "手寫")])
+        XCTAssertEqual(counts, [1])
+        XCTAssertFalse(loaded.places.contains { $0.name == "排隊店" })
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["排隊店"])
+    }
+
+    func testNewerShareWithTheSameKeyStaysQueued() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-newer-share-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var first = inkPending(name: "同鍵店", address: "午路", latitude: 25.17, longitude: 121.67, owner: "account-a")
+        first.sourceURL = "https://example.com/post/same"
+        first.dishes = ["舊菜"]
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([first])
+        let remote = SaveInkRemoteFake()
+        remote.beforeFetch = {
+            var newer = first
+            newer.dishes = ["新菜"]
+            newer.savedAt = first.savedAt.addingTimeInterval(60)
+            queue.restorePendingPlaces([newer])
+        }
+        let engine = liveEngine(
+            owner: "account-a",
+            vault: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
+            queue: queue,
+            remote: remote
+        )
+        _ = await engine.load(ink: [])
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.dishes), [["新菜"]])
+    }
+
     func testMatchingShareKeepsTheNewSourceOnTheStamp() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-evidence-\(UUID().uuidString)")

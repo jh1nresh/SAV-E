@@ -1125,6 +1125,25 @@ final class SaveInkNotebookStore: ObservableObject {
         return shared
     }
 
+    /// Rows saved before `ownerSubject` existed decode as nil. The signed-in
+    /// account that opens them claims those rows once. A later account does not.
+    static func claimLegacyInkRows(
+        _ records: [SaveInkSavedPlaceRecord],
+        owner: String?,
+        scoped: Bool
+    ) -> (records: [SaveInkSavedPlaceRecord], changed: Bool) {
+        guard scoped, let owner, !owner.isEmpty else { return (records, false) }
+        var changed = false
+        let next = records.map { record -> SaveInkSavedPlaceRecord in
+            guard record.ownerSubject == nil else { return record }
+            var copy = record
+            copy.ownerSubject = owner
+            changed = true
+            return copy
+        }
+        return (next, changed)
+    }
+
     /// Signed-in live launches see only that account's rows. Ownerless rows
     /// stay hidden while an account is signed in, matching the vault.
     static func visibleSavedRecords(
@@ -1145,7 +1164,11 @@ final class SaveInkNotebookStore: ObservableObject {
         guard let data = defaults.data(forKey: key),
               let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
         else { return [] }
-        return visibleSavedRecords(records, owner: owner, scoped: scoped).map {
+        let prepared = claimLegacyInkRows(records, owner: owner, scoped: scoped)
+        if prepared.changed, let encoded = try? JSONEncoder().encode(prepared.records) {
+            defaults.set(encoded, forKey: key)
+        }
+        return visibleSavedRecords(prepared.records, owner: owner, scoped: scoped).map {
             SaveInkPlace(
                 id: $0.id,
                 name: $0.name,
