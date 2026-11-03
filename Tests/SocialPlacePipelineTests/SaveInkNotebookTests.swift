@@ -1983,6 +1983,32 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.dishes), [["新菜"]])
     }
 
+    func testSuccessfulFetchDropsAStampDeletedElsewhere() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-deleted-elsewhere-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let deleted = Place.from(inkPending(name: "別台刪了", address: "戌路", latitude: 25.21, longitude: 121.71))
+        let waiting = Place.from(inkPending(name: "還在排隊", address: "亥路", latitude: 25.22, longitude: 121.72))
+        _ = try vault.saveConfirmedPlace(deleted, ownerSubject: "account-a")
+        _ = try vault.saveConfirmedPlace(waiting, ownerSubject: "account-a")
+        var queued = inkPending(name: "還在排隊", address: "亥路", latitude: 25.22, longitude: 121.72, owner: "account-a")
+        queued.dishes = ["待傳"]
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([queued])
+        let remote = SaveInkRemoteFake()
+        remote.saveError = URLError(.networkConnectionLost)
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        let loaded = await engine.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "別台刪了" })
+        XCTAssertTrue(loaded.places.contains { $0.name == "還在排隊" })
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        XCTAssertFalse(stored.contains { $0.name == "別台刪了" })
+        XCTAssertTrue(stored.contains { $0.name == "還在排隊" })
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["還在排隊"])
+    }
+
     func testUnwritableQueueDoesNotKeepAnOwnerlessStamp() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-unwritable-\(UUID().uuidString)")

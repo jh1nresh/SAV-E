@@ -459,7 +459,16 @@ struct SaveInkLivePlaceEngine {
                     return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
                 }
                 remoteIDs = Set(remotePlaces.map(\.id))
-                confirmed = Place.consolidated(remotePlaces + confirmed)
+                let localOnly = confirmed.filter { place in
+                    !remotePlaces.contains { $0.matches(place) }
+                }
+                let retryable = localOnly.filter { place in
+                    queued.contains { place.matches(Place.from($0)) }
+                }
+                for place in localOnly where !retryable.contains(where: { $0.savedIDs.contains(place.id) }) {
+                    dropQueueStamp(place.id, owner: owner)
+                }
+                confirmed = Place.consolidated(remotePlaces + retryable)
                 admitQueue = true
                 countIsAuthoritative = true
             } catch {
