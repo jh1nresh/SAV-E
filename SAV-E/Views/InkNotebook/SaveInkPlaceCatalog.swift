@@ -442,7 +442,9 @@ struct SaveInkLivePlaceEngine {
 
     func localPlaces(ink: [SaveInkPlace]) -> [SaveInkPlace] {
         let owner = currentSession().owner
-        let confirmed = (try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? []
+        guard let hidden = vault.capRejectedStampIDs(owner: owner) else { return ink }
+        let confirmed = ((try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? [])
+            .filter { $0.savedIDs.isDisjoint(with: hidden) }
         return SaveInkPlaceCatalog.merge(ink: ink, confirmed: confirmed, pending: [], userLocation: nil)
     }
 
@@ -524,7 +526,7 @@ struct SaveInkLivePlaceEngine {
                 if let owner, !owner.isEmpty, let heldBy = vault.unboundShareOwner(for: item.deduplicationKey) {
                     if heldBy != owner { continue }
                     if retain(item) {
-                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                        guard vault.releaseUnboundShare(key: item.deduplicationKey) else { break queue }
                     }
                 }
                 let candidate = Place.from(
@@ -593,9 +595,7 @@ struct SaveInkLivePlaceEngine {
                         vault.releaseUnboundShare(key: item.deduplicationKey)
                         continue
                     }
-                    if pending.removeProcessedPendingPlaces([item]) {
-                        vault.releaseUnboundShare(key: item.deduplicationKey)
-                    } else if let owner, !owner.isEmpty {
+                    if let owner, !owner.isEmpty {
                         _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
                     }
                     break queue
@@ -615,8 +615,6 @@ struct SaveInkLivePlaceEngine {
                     dropQueueStamp(candidate.id, owner: owner)
                     if retain(item) {
                         vault.releaseUnboundShare(key: item.deduplicationKey)
-                    } else if pending.removeProcessedPendingPlaces([item]) {
-                        vault.releaseUnboundShare(key: item.deduplicationKey)
                     } else if let owner, !owner.isEmpty {
                         _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
                     }
@@ -628,15 +626,18 @@ struct SaveInkLivePlaceEngine {
                 }
             }
         }
-        if stillHere(), !pending.removeProcessedPendingPlaces(claimedItems) {
-            let ownerless = claimedItems.filter { $0.ownerSubject == nil }
-            if let owner, !owner.isEmpty {
-                let keys = Set(ownerless.map(\.deduplicationKey))
-                if !keys.isEmpty, !pending.bindPendingPlaces(keys: keys, to: owner) {
-                    for item in ownerless {
+        if stillHere() {
+            for item in claimedItems {
+                if item.ownerSubject == nil, let owner, !owner.isEmpty {
+                    // Keep a retry row until both ownership and hold cleanup are
+                    // durable. A successful upload alone cannot release either.
+                    guard retain(item) else {
                         _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
+                        continue
                     }
+                    guard vault.releaseUnboundShare(key: item.deduplicationKey) else { continue }
                 }
+                _ = pending.removeProcessedPendingPlaces([item])
             }
         }
         guard stillHere() else {

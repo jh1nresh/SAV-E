@@ -100,6 +100,7 @@ final class SaveLocalVaultService: Sendable {
     nonisolated(unsafe) var saveReviewCandidateError: Error?
     nonisolated(unsafe) var purgeAccountDeletionRecordsError: Error?
     nonisolated(unsafe) var removeConfirmedPlaceError: Error?
+    nonisolated(unsafe) var releaseUnboundShareError: Error?
 #endif
 
     init(overrideVaultURL: URL? = nil) {
@@ -821,16 +822,19 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
-    func releaseUnboundShare(key: String) {
-        guard !key.isEmpty else { return }
-        withLock {
-            if case .rows(var rows) = readUnboundShares() {
-                rows.removeAll { $0.key == key }
-                _ = saveUnboundShares(rows)
-            }
-            guard case .rows(var fallback) = readUnboundShareFallback() else { return }
+    @discardableResult
+    func releaseUnboundShare(key: String) -> Bool {
+        guard !key.isEmpty else { return true }
+        return withLock {
+#if DEBUG
+            if releaseUnboundShareError != nil { return false }
+#endif
+            guard case .rows(var rows) = readUnboundShares(),
+                  case .rows(var fallback) = readUnboundShareFallback() else { return false }
+            rows.removeAll { $0.key == key }
+            guard saveUnboundShares(rows) else { return false }
             fallback.removeAll { $0.key == key }
-            _ = saveUnboundShareFallback(fallback)
+            return saveUnboundShareFallback(fallback)
         }
     }
 
