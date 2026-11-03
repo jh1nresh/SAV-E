@@ -512,6 +512,11 @@ struct SaveInkLivePlaceEngine {
             guard item.ownerSubject == nil, let owner, !owner.isEmpty else { return true }
             return pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
         }
+        func unboundKey(_ item: PendingSharedPlace) -> String {
+            var unbound = item
+            unbound.ownerSubject = nil
+            return unbound.deduplicationKey
+        }
         func holdUnbound(_ item: PendingSharedPlace) {
             guard let owner, !owner.isEmpty else { return }
             if retain(item) {
@@ -523,10 +528,12 @@ struct SaveInkLivePlaceEngine {
         if admitQueue, vault.unboundShareLedgerIsReadable() {
             queue: for item in queued {
                 guard stillHere() else { break }
-                if let owner, !owner.isEmpty, let heldBy = vault.unboundShareOwner(for: item.deduplicationKey) {
-                    if heldBy != owner { continue }
-                    if retain(item) {
-                        guard vault.releaseUnboundShare(key: item.deduplicationKey) else { break queue }
+                let holdKey = unboundKey(item)
+                if let owner, !owner.isEmpty, let heldBy = vault.unboundShareOwner(for: holdKey) {
+                    if heldBy != owner {
+                        if item.ownerSubject == nil { continue }
+                    } else if retain(item) {
+                        guard vault.releaseUnboundShare(key: holdKey) else { break queue }
                     }
                 }
                 let candidate = Place.from(
@@ -628,6 +635,7 @@ struct SaveInkLivePlaceEngine {
         }
         if stillHere() {
             for item in claimedItems {
+                var processed = item
                 if item.ownerSubject == nil, let owner, !owner.isEmpty {
                     // Keep a retry row until both ownership and hold cleanup are
                     // durable. A successful upload alone cannot release either.
@@ -635,9 +643,13 @@ struct SaveInkLivePlaceEngine {
                         _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
                         continue
                     }
-                    guard vault.releaseUnboundShare(key: item.deduplicationKey) else { continue }
+                    processed.ownerSubject = owner
                 }
-                _ = pending.removeProcessedPendingPlaces([item])
+                let holdKey = unboundKey(item)
+                if let owner, vault.unboundShareOwner(for: holdKey) == owner {
+                    guard vault.releaseUnboundShare(key: holdKey) else { continue }
+                }
+                _ = pending.removeProcessedPendingPlaces([processed])
             }
         }
         guard stillHere() else {
