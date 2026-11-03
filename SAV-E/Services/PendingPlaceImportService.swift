@@ -1044,6 +1044,8 @@ final class PendingPlaceImportService {
 #if DEBUG
     /// When set, coordinated queue writes report failure without touching the file.
     var forceCoordinationFailure = false
+    /// Binding reports failure. Removal can still succeed.
+    var forceBindFailure = false
 #endif
 
     init(fileManager: FileManager = .default, overrideContainerURL: URL? = nil) {
@@ -1077,6 +1079,9 @@ final class PendingPlaceImportService {
     @discardableResult
     func bindPendingPlaces(keys: Set<String>, to owner: String) -> Bool {
         guard !keys.isEmpty, !owner.isEmpty else { return true }
+#if DEBUG
+        if forceBindFailure { return false }
+#endif
         guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return false }
         var failed = false
         let coordinated = coordinate(url: url, purpose: "bind \(SAVEProductionConfig.pendingPlacesFileName)") {

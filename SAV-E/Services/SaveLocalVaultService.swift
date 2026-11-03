@@ -863,20 +863,22 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func rememberCapRejectedStamp(_ id: UUID, owner: String?) -> Bool {
-        var ids = capRejectedStampIDs(owner: owner)
+        guard var ids = capRejectedStampIDs(owner: owner) else { return false }
         ids.insert(id)
         return saveCapRejectedStamps(ids, owner: owner)
     }
 
-    func capRejectedStampIDs(owner: String?) -> Set<UUID> {
+    /// `nil` means the marker exists but cannot be decoded. Callers must not
+    /// treat that as an empty set.
+    func capRejectedStampIDs(owner: String?) -> Set<UUID>? {
+        guard let defaults = unboundShareDefaults() else { return nil }
         let key = capRejectedDefaultsKey(owner: owner)
-        guard let data = unboundShareDefaults()?.data(forKey: key),
-              let ids = try? JSONDecoder().decode(Set<UUID>.self, from: data) else { return [] }
-        return ids
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return try? JSONDecoder().decode(Set<UUID>.self, from: data)
     }
 
     func forgetCapRejectedStamp(_ id: UUID, owner: String?) {
-        var ids = capRejectedStampIDs(owner: owner)
+        guard var ids = capRejectedStampIDs(owner: owner) else { return }
         ids.remove(id)
         _ = saveCapRejectedStamps(ids, owner: owner)
     }
@@ -938,6 +940,10 @@ final class SaveLocalVaultService: Sendable {
 #if DEBUG
     func testingStoreOpaqueUnboundShareFallback(_ data: Data) {
         unboundShareDefaults()?.set(data, forKey: "claims")
+    }
+
+    func testingStoreOpaqueCapRejectedMarkers(_ data: Data, owner: String) {
+        unboundShareDefaults()?.set(data, forKey: capRejectedDefaultsKey(owner: owner))
     }
 #endif
 

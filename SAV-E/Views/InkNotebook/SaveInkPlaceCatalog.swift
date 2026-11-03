@@ -457,7 +457,9 @@ struct SaveInkLivePlaceEngine {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
         var confirmed = (try? vault.confirmedPlaces(limit: Self.vaultReadLimit, belongingTo: owner)) ?? []
-        let hidden = vault.capRejectedStampIDs(owner: owner)
+        guard let hidden = vault.capRejectedStampIDs(owner: owner) else {
+            return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil, countIsAuthoritative: false)
+        }
         if !hidden.isEmpty {
             for id in hidden {
                 _ = dropQueueStamp(id, owner: owner)
@@ -523,9 +525,6 @@ struct SaveInkLivePlaceEngine {
                     if heldBy != owner { continue }
                     if retain(item) {
                         vault.releaseUnboundShare(key: item.deduplicationKey)
-                    } else if pending.removeProcessedPendingPlaces([item]) {
-                        vault.releaseUnboundShare(key: item.deduplicationKey)
-                        continue
                     }
                 }
                 let candidate = Place.from(
@@ -710,7 +709,13 @@ enum SaveInkMapCamera {
                 points.append(user)
             }
         } else if let user, isUsable(user) {
-            points.append(user)
+            if let nearest = points.map({ distance($0, user) }).min() {
+                if nearest < 30_000 {
+                    points.append(user)
+                }
+            } else {
+                points.append(user)
+            }
         }
         guard !points.isEmpty else { return nil }
         let latitudes = points.map(\.latitude)

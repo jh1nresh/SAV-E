@@ -870,6 +870,10 @@ final class SaveInkNotebookTests: XCTestCase {
         let far = SaveInkMapCamera.region(around: [], user: farUser, focused: shop)
         XCTAssertLessThan(near?.span.latitudeDelta ?? 0, 0.05)
         XCTAssertLessThan(far?.span.latitudeDelta ?? 1, 0.05)
+        let homeNear = SaveInkMapCamera.region(around: [shop], user: nearUser, focused: nil)
+        let homeFar = SaveInkMapCamera.region(around: [shop], user: farUser, focused: nil)
+        XCTAssertGreaterThan(homeNear?.span.latitudeDelta ?? 0, 0.01)
+        XCTAssertLessThan(homeFar?.span.latitudeDelta ?? 1, 0.05)
         XCTAssertGreaterThan(near?.span.latitudeDelta ?? 0, far?.span.latitudeDelta ?? 0)
         let wide = SaveInkMapCamera.region(
             around: [
@@ -2324,6 +2328,53 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["超額寫不進"])
     }
 
+    func testOpaqueCapRejectionMarkersHideTheCatalog() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-bad-rejected-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let place = Place.from(inkPending(name: "不該露出", address: "未路", latitude: 25.31, longitude: 121.81))
+        _ = try vault.saveConfirmedPlace(place, ownerSubject: "account-a")
+        vault.testingStoreOpaqueCapRejectedMarkers(Data("not-json".utf8), owner: "account-a")
+        XCTAssertNil(vault.capRejectedStampIDs(owner: "account-a"))
+        XCTAssertFalse(vault.rememberCapRejectedStamp(UUID(), owner: "account-a"))
+        XCTAssertNil(vault.capRejectedStampIDs(owner: "account-a"))
+        let engine = liveEngine(
+            owner: "account-a",
+            vault: vault,
+            queue: PendingPlaceImportService(overrideContainerURL: directory),
+            remote: SaveInkRemoteFake()
+        )
+        let loaded = await engine.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "不該露出" })
+        XCTAssertFalse(loaded.countIsAuthoritative)
+    }
+
+    func testRetryHoldDoesNotDeleteTheShareWhenBindingFails() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-retry-hold-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "稍後再傳", address: "申路", latitude: 25.32, longitude: 121.82, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        XCTAssertTrue(vault.claimUnboundShare(key: item.deduplicationKey, owner: "account-a"))
+        queue.forceBindFailure = true
+        let remote = SaveInkRemoteFake()
+        remote.saveError = URLError(.networkConnectionLost)
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        _ = await engine.load(ink: [])
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["稍後再傳"])
+        XCTAssertEqual(vault.unboundShareOwner(for: item.deduplicationKey), "account-a")
+        let otherRemote = SaveInkRemoteFake()
+        let other = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: otherRemote)
+        let second = await other.load(ink: [])
+        XCTAssertFalse(second.places.contains { $0.name == "稍後再傳" })
+        XCTAssertTrue(otherRemote.saved.isEmpty)
+    }
+
     func testOpaqueShareFallbackBlocksTheQueue() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-bad-fallback-\(UUID().uuidString)")
@@ -2353,8 +2404,8 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(vault.rememberCapRejectedStamp(UUID(), owner: "account-a"))
         XCTAssertTrue(vault.rememberCapRejectedStamp(UUID(), owner: "account-b"))
         try vault.purgeUnboundShares(belongingTo: "account-a")
-        XCTAssertTrue(vault.capRejectedStampIDs(owner: "account-a").isEmpty)
-        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-b").count, 1)
+        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-a"), [])
+        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-b")?.count, 1)
     }
 
     func testLedgerFileFailureStillHoldsTheShare() async throws {
@@ -2402,14 +2453,14 @@ final class SaveInkNotebookTests: XCTestCase {
         let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
         let loaded = await engine.load(ink: [])
         XCTAssertFalse(loaded.places.contains { $0.name == "刪不掉" })
-        XCTAssertFalse(vault.capRejectedStampIDs(owner: "account-a").isEmpty)
+        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-a")?.isEmpty, false)
         XCTAssertTrue(try vault.confirmedPlaces(limit: 20, belongingTo: "account-a").contains { $0.name == "刪不掉" })
         let again = await engine.load(ink: [])
         XCTAssertFalse(again.places.contains { $0.name == "刪不掉" })
         vault.removeConfirmedPlaceError = nil
         _ = await engine.load(ink: [])
         XCTAssertFalse(try vault.confirmedPlaces(limit: 20, belongingTo: "account-a").contains { $0.name == "刪不掉" })
-        XCTAssertTrue(vault.capRejectedStampIDs(owner: "account-a").isEmpty)
+        XCTAssertEqual(vault.capRejectedStampIDs(owner: "account-a"), [])
     }
 
     func testCoordinationFailureDoesNotClaimTheQueueRow() throws {
