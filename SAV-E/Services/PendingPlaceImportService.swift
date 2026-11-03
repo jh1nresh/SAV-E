@@ -1284,9 +1284,9 @@ final class PendingPlaceImportService {
 }
 
 extension Place {
-    static func from(_ pendingPlace: PendingSharedPlace) -> Place {
+    static func from(_ pendingPlace: PendingSharedPlace, id: UUID = UUID()) -> Place {
         Place(
-            id: UUID(),
+            id: id,
             name: pendingPlace.name,
             address: pendingPlace.address,
             latitude: pendingPlace.latitude,

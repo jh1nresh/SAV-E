@@ -611,6 +611,8 @@ final class SaveInkNotebookStore: ObservableObject {
     private let makeLocator: () -> any SaveInkLocating
     private let liveLoader: SaveInkLivePlaceLoader
     private let liveOwner: () -> String?
+    private var refreshTask: Task<Void, Never>?
+    private var refreshQueued = false
     private var locator: (any SaveInkLocating)?
     private var pendingSituation: SaveInkCheckInSituation?
     private var liveGeneration = 0
@@ -642,18 +644,19 @@ final class SaveInkNotebookStore: ObservableObject {
             owner: usesLivePlaces ? liveOwner() : nil,
             scoped: usesLivePlaces
         )
-        // Vault and the share queue wait for refresh, which resolves the
-        // signed-in owner first. Reading them here would show ownerless rows
-        // before auth restores.
+        // Owner-scoped vault rows show immediately. Network refresh adds
+        // remote stamps afterward. Ownerless vault rows stay hidden while an
+        // account id is already known.
         if usesLivePlaces {
-            self.places = saved
+            self.places = loader.localPlaces(saved)
         } else {
             self.places = SaveInkFixture.places + saved
         }
         self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
-        if let stored = Self.load(defaults: defaults, key: storageKey) {
+        let visitKey = usesLivePlaces ? Self.visitsKey(owner: liveOwner()) : storageKey
+        if let stored = Self.load(defaults: defaults, key: visitKey) {
             self.visits = stored
-        } else if seedFixture {
+        } else if seedFixture && !usesLivePlaces {
             self.visits = SaveInkFixture.visits()
             Self.save(visits, defaults: defaults, key: storageKey)
         } else {
@@ -868,8 +871,27 @@ final class SaveInkNotebookStore: ObservableObject {
 
     /// Reloads vault stamps, the share queue, and ink saves. Fixture launches
     /// no-op so screenshot baselines and ink UI tests keep their seeded rows.
+    /// Overlapping callers wait for the in-flight load, then run one more pass.
     func refreshLivePlaces() async {
         guard usesLivePlaces else { return }
+        if refreshTask != nil {
+            refreshQueued = true
+            await refreshTask?.value
+            return
+        }
+        let task = Task { @MainActor in
+            await self.performLiveRefresh()
+        }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+        if refreshQueued {
+            refreshQueued = false
+            await refreshLivePlaces()
+        }
+    }
+
+    private func performLiveRefresh() async {
         liveGeneration += 1
         let generation = liveGeneration
         let owner = liveOwner()
@@ -884,6 +906,12 @@ final class SaveInkNotebookStore: ObservableObject {
         guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
+        let visitKey = Self.visitsKey(owner: owner)
+        if let stored = Self.load(defaults: defaults, key: visitKey) {
+            visits = stored
+        } else {
+            visits = []
+        }
     }
 
     func openSave() {
@@ -932,7 +960,13 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     private func persist() {
-        Self.save(visits, defaults: defaults, key: storageKey)
+        let key = usesLivePlaces ? Self.visitsKey(owner: liveOwner()) : storageKey
+        Self.save(visits, defaults: defaults, key: key)
+    }
+
+    private static func visitsKey(owner: String?) -> String {
+        guard let owner, !owner.isEmpty else { return "save.ink.visits.v1" }
+        return "save.ink.visits.v1.\(owner)"
     }
 
     private func persistPlaces() {

@@ -1,4 +1,5 @@
 import CoreLocation
+import CryptoKit
 import Foundation
 import MapKit
 
@@ -48,14 +49,12 @@ enum SaveInkPlaceCatalog {
         var rows: [SaveInkPlace] = []
         var seenInkKeys = Set<String>()
         for inkPlace in ink {
-            let key = venueKey(inkPlace.name)
-            let sameName = remaining.indices.filter { venueKey(remaining[$0].name) == key && !key.isEmpty }
-            if sameName.count == 1, let index = sameName.first {
+            if let index = remaining.firstIndex(where: { sameVenue(inkPlace, $0) }) {
                 let place = remaining.remove(at: index)
                 rows.append(row(place: place, ink: inkPlace))
-                seenInkKeys.insert(key)
                 continue
             }
+            let key = venueKey(inkPlace.name)
             if key.isEmpty || seenInkKeys.insert(key).inserted {
                 rows.append(inkPlace)
             }
@@ -64,6 +63,36 @@ enum SaveInkPlaceCatalog {
             rows.append(row(place: place, ink: nil))
         }
         return sortedByDistance(applyingDistance(rows, from: userLocation))
+    }
+
+    /// A name-only ink row does not inherit another venue's coordinates.
+    /// Merge only when the ink row has coordinates `Place.matches` accepts,
+    /// or the same name plus a real address.
+    static func sameVenue(_ ink: SaveInkPlace, _ place: Place) -> Bool {
+        if let latitude = ink.shopLatitude, let longitude = ink.shopLongitude {
+            let probe = Place.from(PendingSharedPlace(
+                name: ink.name,
+                address: nonempty(ink.addressLine) ?? nonempty(ink.street) ?? ink.name,
+                category: "food",
+                latitude: latitude,
+                longitude: longitude,
+                dishes: [],
+                savedAt: Date()
+            ))
+            return place.matches(probe)
+        }
+        guard let address = nonempty(ink.addressLine), venueKey(address) != venueKey(ink.name) else { return false }
+        return venueKey(ink.name) == venueKey(place.name) && venueKey(address) == venueKey(place.address)
+    }
+
+    static func stablePlaceID(for key: String) -> UUID {
+        let bytes = Array(SHA256.hash(data: Data(key.utf8)))
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 
     static func applyingDistance(_ places: [SaveInkPlace], from location: CLLocation?) -> [SaveInkPlace] {
@@ -247,10 +276,9 @@ struct SaveInkLivePlaceEngine {
     }
 
     func localPlaces(ink: [SaveInkPlace]) -> [SaveInkPlace] {
-        let owner = PrivyAuthService.shared.currentUserId
+        let owner = currentSession().owner
         let confirmed = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
-        let queued = pending.peekPendingPlaces(ownerSubject: owner)
-        return SaveInkPlaceCatalog.merge(ink: ink, confirmed: confirmed, pending: queued, userLocation: nil)
+        return SaveInkPlaceCatalog.merge(ink: ink, confirmed: confirmed, pending: [], userLocation: nil)
     }
 
     func load(ink: [SaveInkPlace]) async -> SaveInkLivePlaceLoad {
@@ -265,21 +293,56 @@ struct SaveInkLivePlaceEngine {
         }
         var confirmed = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
-        for item in queued {
-            guard stillHere() else { break }
-            let candidate = Place.from(item)
-            guard !confirmed.contains(where: { $0.matches(candidate) }) else { continue }
-            guard canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
-            guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
-            if let refreshed = try? vault.confirmedPlaces(limit: 500, belongingTo: owner) {
-                confirmed = refreshed
+        let remoteConfigured = owner?.isEmpty == false && remote.isConfigured
+        var admitQueue = !remoteConfigured
+        if let owner, !owner.isEmpty, remote.isConfigured {
+            do {
+                let remotePlaces = try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
+                    try await remote.fetchPlaces(for: owner)
+                }
+                guard stillHere() else {
+                    return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
+                }
+                confirmed = Place.consolidated(remotePlaces + confirmed)
+                admitQueue = true
+            } catch {
+                admitQueue = false
+            }
+        }
+        let baseline = confirmed
+        if admitQueue {
+            for item in queued {
+                guard stillHere() else { break }
+                let candidate = Place.from(
+                    item,
+                    id: SaveInkPlaceCatalog.stablePlaceID(for: item.deduplicationKey)
+                )
+                guard !confirmed.contains(where: { $0.matches(candidate) }) else { continue }
+                guard canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
+                guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
+                if let owner, !owner.isEmpty, remote.isConfigured {
+                    do {
+                        try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
+                            try await remote.savePlace(candidate, userId: owner)
+                        }
+                    } catch is SavePlaceLimitError {
+                        try? vault.removeConfirmedPlace(candidate, belongingTo: owner)
+                        break
+                    } catch {
+                        // The count was already known. Keep the local stamp if the upload itself failed.
+                    }
+                }
+                guard stillHere() else { break }
+                if let refreshed = try? vault.confirmedPlaces(limit: 500, belongingTo: owner) {
+                    confirmed = refreshed
+                }
             }
         }
         let reconciled: [Place]
-        if let owner, !owner.isEmpty {
+        if let owner, !owner.isEmpty, remote.isConfigured, admitQueue {
             reconciled = await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
                 await SaveInkPlaceSync.reconcile(
-                    local: confirmed,
+                    local: baseline,
                     userId: owner,
                     remote: remote,
                     stillCurrent: stillHere
@@ -300,10 +363,11 @@ struct SaveInkLivePlaceEngine {
         guard stillHere() else {
             return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
+        let display = Place.consolidated(confirmed + reconciled)
         var rows = SaveInkPlaceCatalog.merge(
             ink: ink,
-            confirmed: reconciled,
-            pending: queued,
+            confirmed: display,
+            pending: [],
             userLocation: userLocation
         )
         if let userLocation {

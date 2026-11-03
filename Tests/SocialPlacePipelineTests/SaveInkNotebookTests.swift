@@ -820,7 +820,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(SaveInkLaunch.usesLivePlaces(arguments: []))
     }
 
-    func testCatalogDedupesVaultPendingAndInkAndKeepsCoordinates() {
+    func testCatalogDedupesVaultPendingAndInkAndKeepsCoordinates() throws {
         let confirmed = Place.from(inkPending(
             name: "青田七六咖啡",
             address: "台北市大安區青田街",
@@ -848,14 +848,15 @@ final class SaveInkNotebookTests: XCTestCase {
             pending: [duplicate, shared],
             userLocation: CLLocation(latitude: 25.0260, longitude: 121.5320)
         )
-        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows.count, 3)
         XCTAssertEqual(Set(rows.map(\.name)), Set(["青田七六咖啡", "赤峰街麵店"]))
-        let qingtian = rows.first { $0.id == "saved-qingtian" }
-        XCTAssertEqual(qingtian?.shopLatitude ?? 0, 25.0272, accuracy: 0.0001)
-        XCTAssertEqual(qingtian?.shopLongitude ?? 0, 121.5328, accuracy: 0.0001)
-        XCTAssertNotNil(qingtian?.distanceMeters)
+        let inkQingtian = try XCTUnwrap(rows.first { $0.id == "saved-qingtian" })
+        XCTAssertNil(inkQingtian.shopLatitude)
+        let stamped = try XCTUnwrap(rows.first { $0.name == "青田七六咖啡" && $0.id != "saved-qingtian" })
+        XCTAssertEqual(stamped.shopLatitude, 25.0272, accuracy: 0.0001)
+        XCTAssertEqual(stamped.shopLongitude, 121.5328, accuracy: 0.0001)
         XCTAssertEqual(rows.first { $0.name == "赤峰街麵店" }?.shopLatitude ?? 0, 25.0562, accuracy: 0.0001)
-        XCTAssertLessThan(rows[0].distanceMeters ?? 0, rows[1].distanceMeters ?? 0)
+        XCTAssertLessThan(rows[0].distanceMeters ?? 0, rows[1].distanceMeters ?? 1)
     }
 
     func testWalkingMinutesRoundUpAndDetailCameraStaysLocal() {
@@ -960,9 +961,10 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: owner).map(\.name), ["分享麵店"])
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), [])
         let names = Set(loaded.places.map(\.name))
-        XCTAssertEqual(names, Set(["金庫小館", "分享麵店", "沒座標小店"]))
+        XCTAssertEqual(names, Set(["金庫小館", "沒座標小店"]))
+        XCTAssertFalse(names.contains("分享麵店"))
         XCTAssertFalse(names.contains("別人的店"))
-        let vaultRow = try XCTUnwrap(loaded.places.first { $0.id == "saved-vault" })
+        let vaultRow = try XCTUnwrap(loaded.places.first { $0.name == "金庫小館" && $0.shopLatitude != nil })
         XCTAssertEqual(vaultRow.shopLatitude ?? 0, 25.0331, accuracy: 0.0001)
         XCTAssertNotNil(vaultRow.distanceMeters)
         XCTAssertEqual(vaultRow.walkMinutes, 11)
@@ -970,7 +972,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertNil(unresolved.shopLatitude)
         XCTAssertNil(unresolved.walkMinutes)
         let stored = try vault.confirmedPlaces(limit: 20, belongingTo: owner)
-        XCTAssertTrue(stored.contains { $0.name == "分享麵店" })
+        XCTAssertFalse(stored.contains { $0.name == "分享麵店" })
         XCTAssertFalse(stored.contains { $0.name == "沒座標小店" })
         XCTAssertTrue(remote.saved.isEmpty)
 
@@ -1013,7 +1015,7 @@ final class SaveInkNotebookTests: XCTestCase {
             canConfirmAnother: { _ in false }
         )
         let loaded = await engine.load(ink: [])
-        XCTAssertEqual(loaded.places.map(\.name), ["排隊小店"])
+        XCTAssertTrue(loaded.places.isEmpty)
         let stored = try vault.confirmedPlaces(limit: 20, belongingTo: owner)
         XCTAssertFalse(stored.contains { $0.name == "排隊小店" })
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: owner).map(\.name), ["排隊小店"])
@@ -1100,6 +1102,54 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         XCTAssertEqual(accountB.places.map(\.name), ["乙店"])
         XCTAssertFalse(accountB.places.contains { $0.name == "丙店" })
+    }
+
+    func testVisitsStayWithTheAccountThatRecordedThem() async {
+        let defaults = UserDefaults(suiteName: "save.ink.visits.owner.\(UUID().uuidString)")!
+        let places = """
+        [{
+          "id": "saved-a",
+          "name": "甲店",
+          "stampName": "甲店",
+          "street": "甲街",
+          "blurb": "甲",
+          "sourceLabel": "來自 甲",
+          "detailNote": "甲",
+          "ownerSubject": "account-a"
+        }]
+        """
+        defaults.set(Data(places.utf8), forKey: SavePlaceLinkGate.placesKey)
+        let accountA = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" }
+        )
+        await accountA.checkIn(placeID: "saved-a")
+        XCTAssertEqual(accountA.verifiedCount(for: "saved-a"), 1)
+        let accountB = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-b" }
+        )
+        XCTAssertEqual(accountB.totalVisits(), 0)
+        let reloaded = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" }
+        )
+        XCTAssertEqual(reloaded.verifiedCount(for: "saved-a"), 1)
     }
 
     private func inkPending(
