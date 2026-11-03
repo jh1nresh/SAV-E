@@ -358,16 +358,35 @@ struct SaveInkLivePlaceEngine {
         }
     }
 
-    /// A fetched stamp can carry aliases, evidence, or a place id the vault
-    /// copy does not have yet. The next offline load must see that merge.
+    /// Compares the fields `SaveMemoryRecord` writes back. Visibility, price
+    /// range, and opening hours are not in that record, so they cannot round-trip.
     private static func vaultIsStale(_ stored: Place, comparedWith merged: Place) -> Bool {
         stored.savedIDs != merged.savedIDs
+            || stored.name != merged.name
+            || stored.address != merged.address
+            || stored.latitude != merged.latitude
+            || stored.longitude != merged.longitude
+            || stored.category != merged.category
             || stored.status != merged.status
             || stored.note != merged.note
+            || stored.createdAt != merged.createdAt
+            || (stored.rating ?? stored.googleRating) != (merged.rating ?? merged.googleRating)
             || stored.googlePlaceId != merged.googlePlaceId
             || stored.sourceUrl != merged.sourceUrl
+            || stored.coordinateSystem != merged.coordinateSystem
+            || stored.locationProvider != merged.locationProvider
+            || stored.providerPlaceId != merged.providerPlaceId
+            || stored.providerMapUrl != merged.providerMapUrl
+            || stored.sourceHandle != merged.sourceHandle
+            || stored.savedPlaceHighlights != merged.savedPlaceHighlights
+            || stored.savedRecommendedItems != merged.savedRecommendedItems
+            || stored.savedVibeTags != merged.savedVibeTags
+            || stored.savedAccessNotes != merged.savedAccessNotes
             || stored.additionalSourceEvidence != merged.additionalSourceEvidence
-            || stored.rating != merged.rating
+            || GooglePlacesPhotoURL.persistableString(stored.sourceImageUrl)
+                != GooglePlacesPhotoURL.persistableString(merged.sourceImageUrl)
+            || PlaceBusinessPhotoPersistence.importedRemoteURLs(stored.businessPhotoUrls)
+                != PlaceBusinessPhotoPersistence.importedRemoteURLs(merged.businessPhotoUrls)
     }
 
     func localPlaces(ink: [SaveInkPlace]) -> [SaveInkPlace] {

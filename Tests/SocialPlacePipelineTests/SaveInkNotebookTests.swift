@@ -1580,6 +1580,43 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(offline.first { $0.name == "同步店" }?.googlePlaceId, "google-sync")
     }
 
+    func testFetchedStampPersistsAddressCategoryAndProvider() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-mirror-fields-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var local = Place.from(inkPending(name: "欄位店", address: "舊路", latitude: 25.14, longitude: 121.64))
+        local.createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        local.category = .food
+        _ = try vault.saveConfirmedPlace(local, ownerSubject: "account-a")
+        var server = local
+        server.createdAt = Date(timeIntervalSince1970: 1_600_000_000)
+        server.address = "新路"
+        server.category = .cafe
+        server.latitude = 25.1404
+        server.locationProvider = .appleMaps
+        server.providerPlaceId = "poi-1"
+        server.recommendedItems = [RecommendedItem(name: "奶油麵包", price: nil)]
+        let remote = SaveInkRemoteFake()
+        remote.places = [server]
+        let engine = liveEngine(
+            owner: "account-a",
+            vault: vault,
+            queue: PendingPlaceImportService(overrideContainerURL: directory),
+            remote: remote
+        )
+        _ = await engine.load(ink: [])
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        let row = try XCTUnwrap(stored.first { $0.name == "欄位店" })
+        XCTAssertEqual(row.address, "新路")
+        XCTAssertEqual(row.category, .cafe)
+        XCTAssertEqual(row.latitude, 25.1404, accuracy: 0.00001)
+        XCTAssertEqual(row.locationProvider, .appleMaps)
+        XCTAssertEqual(row.providerPlaceId, "poi-1")
+        XCTAssertEqual(row.savedRecommendedItems.map(\.name), ["奶油麵包"])
+    }
+
     private func uploadedOwnerlessID(owner: String, item: PendingSharedPlace) async throws -> UUID {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-id-\(owner)-\(UUID().uuidString)")
