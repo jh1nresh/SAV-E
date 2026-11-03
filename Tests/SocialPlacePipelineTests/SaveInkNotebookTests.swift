@@ -1297,6 +1297,162 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(stored.contains { $0.name == "無主小店" })
     }
 
+    func testLiveCheckInShowsVisitedInsteadOfWantToGo() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-badge-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let defaults = UserDefaults(suiteName: "save.ink.badge.\(UUID().uuidString)")!
+        let owner = "account-a"
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let saved = Place.from(inkPending(name: "甲店", address: "甲街", latitude: 25.03, longitude: 121.53, owner: owner))
+        _ = try vault.saveConfirmedPlace(saved, ownerSubject: owner)
+        let loader = liveLoader(owner: owner, directory: directory, vault: vault, queue: [], remote: SaveInkRemoteFake())
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) },
+            usesLivePlaces: true,
+            liveLoader: loader,
+            liveOwner: { owner }
+        )
+        let placeID = try XCTUnwrap(store.places.first { $0.name == "甲店" }?.id)
+        XCTAssertEqual(store.places.first { $0.id == placeID }?.badge, .saved)
+        await store.checkIn(placeID: placeID)
+        XCTAssertEqual(store.places.first { $0.id == placeID }?.badge, .visited)
+        await store.refreshLivePlaces()
+        XCTAssertEqual(store.places.first { $0.id == placeID }?.badge, .visited)
+        let reloaded = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: loader,
+            liveOwner: { owner }
+        )
+        XCTAssertEqual(reloaded.places.first { $0.id == placeID }?.badge, .visited)
+    }
+
+    func testOwnerlessQueueIDsDifferByAccount() async throws {
+        let item = inkPending(name: "無主小店", address: "戊路", latitude: 25.05, longitude: 121.55, owner: nil)
+        let key = item.deduplicationKey
+        let first = try await uploadedOwnerlessID(owner: "account-a", item: item)
+        let second = try await uploadedOwnerlessID(owner: "account-b", item: item)
+        XCTAssertEqual(first, SaveInkPlaceCatalog.stablePlaceID(for: "account-a|\(key)"))
+        XCTAssertEqual(second, SaveInkPlaceCatalog.stablePlaceID(for: "account-b|\(key)"))
+        XCTAssertNotEqual(first, second)
+    }
+
+    func testFailedUploadStaysQueuedForTheSameAccount() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-retry-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "還沒傳上去", address: "己路", latitude: 25.06, longitude: 121.56, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let remote = SaveInkRemoteFake()
+        remote.saveError = URLError(.networkConnectionLost)
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        _ = await engine.load(ink: [])
+        XCTAssertTrue(remote.saved.isEmpty)
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: nil).isEmpty)
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["還沒傳上去"])
+        let kept = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        let keptID = try XCTUnwrap(kept.first { $0.name == "還沒傳上去" }?.id)
+        remote.saveError = nil
+        _ = await engine.load(ink: [])
+        XCTAssertEqual(remote.saved.map(\.id), [keptID])
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: "account-a").isEmpty)
+        let other = liveEngine(
+            owner: "account-b",
+            vault: vault,
+            queue: queue,
+            remote: SaveInkRemoteFake()
+        )
+        let loaded = await other.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "還沒傳上去" })
+    }
+
+    func testMatchingShareKeepsTheStampWhenTheUploadHitsTheCap() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-match-cap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "已存小店", address: "庚路", latitude: 25.07, longitude: 121.57, owner: nil)
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        _ = try vault.saveConfirmedPlace(Place.from(item), ownerSubject: "account-a")
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let remote = SaveInkRemoteFake()
+        remote.saveError = SavePlaceLimitError.parkedInUnplacedInbox
+        let engine = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: remote)
+        _ = await engine.load(ink: [])
+        let kept = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        XCTAssertTrue(kept.contains { $0.name == "已存小店" })
+        XCTAssertTrue(remote.saved.isEmpty)
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: nil).isEmpty)
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["已存小店"])
+        let other = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: SaveInkRemoteFake())
+        let loaded = await other.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "已存小店" })
+    }
+
+    private func uploadedOwnerlessID(owner: String, item: PendingSharedPlace) async throws -> UUID {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-id-\(owner)-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let remote = SaveInkRemoteFake()
+        let engine = liveEngine(
+            owner: owner,
+            vault: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
+            queue: queue,
+            remote: remote
+        )
+        _ = await engine.load(ink: [])
+        return try XCTUnwrap(remote.saved.first?.id)
+    }
+
+    private func liveLoader(
+        owner: String,
+        directory: URL,
+        vault: SaveLocalVaultService,
+        queue: [PendingSharedPlace],
+        remote: SaveInkRemoteFake
+    ) -> SaveInkLivePlaceLoader {
+        let pending = PendingPlaceImportService(overrideContainerURL: directory)
+        pending.restorePendingPlaces(queue)
+        let engine = liveEngine(owner: owner, vault: vault, queue: pending, remote: remote)
+        return SaveInkLivePlaceLoader(
+            localPlaces: { engine.localPlaces(ink: $0) },
+            load: { await engine.load(ink: $0) }
+        )
+    }
+
+    private func liveEngine(
+        owner: String,
+        vault: SaveLocalVaultService,
+        queue: PendingPlaceImportService,
+        remote: SaveInkRemoteFake
+    ) -> SaveInkLivePlaceEngine {
+        SaveInkLivePlaceEngine(
+            vault: vault,
+            pending: queue,
+            remote: remote,
+            userID: { owner },
+            location: { nil },
+            walkingMinutes: { _, _ in nil },
+            currentSession: { (owner, 1) },
+            canConfirmAnother: { _ in true }
+        )
+    }
+
     private func inkPending(
         name: String,
         address: String,

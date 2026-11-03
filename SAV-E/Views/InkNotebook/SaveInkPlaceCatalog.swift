@@ -286,6 +286,34 @@ struct SaveInkLivePlaceEngine {
         )
     }
 
+    private enum UploadResult {
+        case uploaded
+        case retryLater
+        case stop
+    }
+
+    /// Uploads one stamp. A place-limit rejection stops the queue. The caller
+    /// removes only a row it just added; an already saved stamp stays put.
+    /// Any other failure leaves the queue row for a later try.
+    private func upload(
+        _ place: Place,
+        owner: String?,
+        generation: Int,
+        remoteConfigured: Bool
+    ) async -> UploadResult {
+        guard let owner, !owner.isEmpty, remoteConfigured else { return .uploaded }
+        do {
+            try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                try await remote.savePlace(place, userId: owner)
+            }
+            return .uploaded
+        } catch is SavePlaceLimitError {
+            return .stop
+        } catch {
+            return .retryLater
+        }
+    }
+
     private func mirrorMissing(_ places: [Place], owner: String?) {
         let existing = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
         for place in places where !existing.contains(where: { $0.matches(place) }) {
@@ -313,6 +341,7 @@ struct SaveInkLivePlaceEngine {
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
         let remoteConfigured = owner?.isEmpty == false && remote.isConfigured
         var admitQueue = !remoteConfigured
+        var remoteIDs = Set<UUID>()
         if let owner, !owner.isEmpty, remote.isConfigured {
             do {
                 let remotePlaces = try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
@@ -321,6 +350,7 @@ struct SaveInkLivePlaceEngine {
                 guard stillHere() else {
                     return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
                 }
+                remoteIDs = Set(remotePlaces.map(\.id))
                 confirmed = Place.consolidated(remotePlaces + confirmed)
                 admitQueue = true
             } catch {
@@ -329,31 +359,47 @@ struct SaveInkLivePlaceEngine {
         }
         mirrorMissing(confirmed, owner: owner)
         var claimedKeys = Set<String>()
+        func retain(_ item: PendingSharedPlace) {
+            if item.ownerSubject == nil, let owner, !owner.isEmpty {
+                pending.bindPendingPlaces(keys: [item.deduplicationKey], to: owner)
+            }
+        }
         if admitQueue {
-            for item in queued {
+            queue: for item in queued {
                 guard stillHere() else { break }
                 let candidate = Place.from(
                     item,
-                    id: SaveInkPlaceCatalog.stablePlaceID(for: item.deduplicationKey)
+                    id: SaveInkPlaceCatalog.stablePlaceID(for: "\(owner ?? "")|\(item.deduplicationKey)")
                 )
-                guard !confirmed.contains(where: { $0.matches(candidate) }) else { continue }
+                if let existing = confirmed.first(where: { $0.matches(candidate) }) {
+                    if !existing.savedIDs.isDisjoint(with: remoteIDs) {
+                        claimedKeys.insert(item.deduplicationKey)
+                        continue
+                    }
+                    switch await upload(existing, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
+                    case .uploaded:
+                        claimedKeys.insert(item.deduplicationKey)
+                        remoteIDs.formUnion(existing.savedIDs)
+                    case .retryLater:
+                        retain(item)
+                    case .stop:
+                        retain(item)
+                        break queue
+                    }
+                    continue
+                }
                 guard canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
                 guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
-                var keep = true
-                if let owner, !owner.isEmpty, remote.isConfigured {
-                    do {
-                        try await SAVEPendingImportSessionScope.$current.withValue((started.generation, owner)) {
-                            try await remote.savePlace(candidate, userId: owner)
-                        }
-                    } catch is SavePlaceLimitError {
-                        try? vault.removeConfirmedPlace(candidate, belongingTo: owner)
-                        keep = false
-                        break
-                    } catch {
-                        // The count was already known. Keep the local stamp if the upload itself failed.
-                    }
+                switch await upload(candidate, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
+                case .uploaded:
+                    claimedKeys.insert(item.deduplicationKey)
+                    remoteIDs.insert(candidate.id)
+                case .retryLater:
+                    retain(item)
+                case .stop:
+                    try? vault.removeConfirmedPlace(candidate, belongingTo: owner)
+                    break queue
                 }
-                if keep { claimedKeys.insert(item.deduplicationKey) }
                 guard stillHere() else { break }
                 if let refreshed = try? vault.confirmedPlaces(limit: 500, belongingTo: owner) {
                     confirmed = Place.consolidated(confirmed + refreshed)

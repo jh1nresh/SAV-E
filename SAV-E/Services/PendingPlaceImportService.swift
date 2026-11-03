@@ -1067,8 +1067,23 @@ final class PendingPlaceImportService {
         }
     }
 
-    /// Read the share queue without removing it. Home shows these places even
-    /// when the legacy importer has not drained the file yet.
+    /// Keep a failed upload on this account so another sign-in cannot claim it.
+    func bindPendingPlaces(keys: Set<String>, to owner: String) {
+        guard !keys.isEmpty, !owner.isEmpty,
+              let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return }
+        coordinate(url: url, purpose: "bind \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard var items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
+            var changed = false
+            for index in items.indices where keys.contains(items[index].deduplicationKey) && items[index].ownerSubject != owner {
+                items[index].ownerSubject = owner
+                changed = true
+            }
+            guard changed, let data = try? JSONEncoder().encode(items) else { return }
+            try? data.write(to: url, options: [.atomic])
+        }
+    }
+
     /// Drop queue rows that this account has confirmed, so a later account
     /// cannot import the same ownerless save.
     func removePendingPlaces(withKeys keys: Set<String>) {
@@ -1086,6 +1101,8 @@ final class PendingPlaceImportService {
         }
     }
 
+    /// Read the share queue without removing it. Home shows these places even
+    /// when the legacy importer has not drained the file yet.
     func peekPendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
         guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return [] }
         var result: [PendingSharedPlace] = []

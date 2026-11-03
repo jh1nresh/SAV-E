@@ -664,6 +664,9 @@ final class SaveInkNotebookStore: ObservableObject {
         } else {
             self.visits = []
         }
+        if usesLivePlaces {
+            reflectVisitBadges()
+        }
     }
 
     func openFriends() {
@@ -741,6 +744,8 @@ final class SaveInkNotebookStore: ObservableObject {
             visits: &visits
         )
         persist(owner: ownerAtStart)
+        if case .inserted = outcome { markVisited(placeID) }
+        if case .upgraded = outcome { markVisited(placeID) }
         switch outcome {
         case .ignored:
             if case .tooFar(_) = decision.situation {
@@ -772,7 +777,8 @@ final class SaveInkNotebookStore: ObservableObject {
             visits: &visits,
             recordTooFar: true
         )
-        persist()
+        persist(owner: usesLivePlaces ? liveOwner() : nil)
+        markVisited(placeID)
         prepareDraft(placeID: placeID)
         pendingSituation = .downgradedUnverified
         sheet = .checkIn(.downgradedUnverified, placeID: placeID)
@@ -910,13 +916,14 @@ final class SaveInkNotebookStore: ObservableObject {
         guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
-        rekeyVisits(using: loaded.places)
         let visitKey = Self.visitsKey(owner: owner)
         if let stored = Self.load(defaults: defaults, key: visitKey) {
             visits = stored
         } else {
             visits = []
         }
+        rekeyVisits(using: loaded.places)
+        reflectVisitBadges()
     }
 
     func openSave() {
@@ -962,6 +969,24 @@ final class SaveInkNotebookStore: ObservableObject {
             let longitude = place.shopLongitude
         else { return nil }
         return (previous.visitedAt, latitude, longitude)
+    }
+
+    private func markVisited(_ placeID: String) {
+        guard let index = places.firstIndex(where: { $0.id == placeID }) else { return }
+        places[index].badge = .visited
+    }
+
+    private func reflectVisitBadges() {
+        let visited = Set(visits.map(\.placeID))
+        guard !visited.isEmpty else { return }
+        places = places.map { place in
+            guard place.badge != .visited else { return place }
+            let ids = Set([place.id] + place.aliasIDs)
+            guard !visited.isDisjoint(with: ids) else { return place }
+            var copy = place
+            copy.badge = .visited
+            return copy
+        }
     }
 
     private func rekeyVisits(using places: [SaveInkPlace]) {
