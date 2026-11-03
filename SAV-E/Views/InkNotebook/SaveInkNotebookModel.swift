@@ -613,7 +613,7 @@ final class SaveInkNotebookStore: ObservableObject {
     private let makeLocator: () -> any SaveInkLocating
     private let liveLoader: SaveInkLivePlaceLoader
     private let liveOwner: () -> String?
-    private let canSaveAnotherLivePlace: (Int) -> Bool
+    private let canSaveAnotherLivePlace: @MainActor (Int) -> Bool
     private var refreshTask: Task<Void, Never>?
     private var refreshQueued = false
     private var locator: (any SaveInkLocating)?
@@ -634,7 +634,7 @@ final class SaveInkNotebookStore: ObservableObject {
         usesLivePlaces: Bool = false,
         liveLoader: SaveInkLivePlaceLoader? = nil,
         liveOwner: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
-        canSaveAnotherLivePlace: @escaping (Int) -> Bool = Self.allowsAnotherLivePlace
+        canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace
     ) {
         self.defaults = defaults
         let placesDefaults = Self.placesDefaults(for: defaults)
@@ -968,9 +968,7 @@ final class SaveInkNotebookStore: ObservableObject {
         guard liveOwner() == owner else { return }
         places = loaded.places
         userCoordinate = loaded.userCoordinate
-        if loaded.countIsAuthoritative {
-            liveCatalogAuthoritative = true
-        }
+        liveCatalogAuthoritative = loaded.countIsAuthoritative
         retargetOpenPlaces()
         let visitKey = Self.visitsKey(owner: owner)
         if let stored = Self.load(defaults: defaults, key: visitKey) {

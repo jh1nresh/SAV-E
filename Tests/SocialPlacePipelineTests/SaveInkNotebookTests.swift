@@ -1678,6 +1678,38 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(store.places.contains { $0.name == "還沒核對" })
     }
 
+    func testFailedRefreshPausesLiveSavesAgain() async {
+        var authoritative = true
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in [] },
+            load: { ink in
+                let allowed = authoritative
+                authoritative = false
+                return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil, countIsAuthoritative: allowed)
+            }
+        )
+        let store = SaveInkNotebookStore(
+            defaults: UserDefaults(suiteName: "save.ink.recount.\(UUID().uuidString)")!,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: loader,
+            liveOwner: { "account-a" },
+            canSaveAnotherLivePlace: { _ in true }
+        )
+        await store.refreshLivePlaces()
+        store.saveQuery = "核對過"
+        store.commitSave()
+        XCTAssertTrue(store.places.contains { $0.name == "核對過" })
+        await store.refreshLivePlaces()
+        store.saveNotice = nil
+        store.saveQuery = "又失敗"
+        store.commitSave()
+        XCTAssertFalse(store.places.contains { $0.name == "又失敗" })
+        XCTAssertEqual(store.saveNotice, "還在核對已存的地點，請稍後再存。")
+    }
+
     func testAccountDeletionRemovesThatAccountsInkMemory() throws {
         let defaults = UserDefaults(suiteName: "save.ink.purge.\(UUID().uuidString)")!
         let places = """
