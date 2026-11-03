@@ -554,8 +554,16 @@ struct SaveInkLivePlaceEngine {
                     continue
                 }
                 guard canConfirmAnother(Self.visibleStampCount(confirmed: confirmed, ink: ink)) else {
-                    if !retain(item) { break queue }
-                    continue
+                    if retain(item) {
+                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                        continue
+                    }
+                    if pending.removeProcessedPendingPlaces([item]) {
+                        vault.releaseUnboundShare(key: item.deduplicationKey)
+                    } else if let owner, !owner.isEmpty {
+                        _ = vault.claimUnboundShare(key: item.deduplicationKey, owner: owner)
+                    }
+                    break queue
                 }
                 guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
                 switch await upload(candidate, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {

@@ -1480,6 +1480,42 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(second.places.contains { $0.name == "名額滿了" })
     }
 
+    func testLocalCapHoldsAnOwnerlessRowWhenTheQueueCannotBeRewritten() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-local-cap-unwritable-\(UUID().uuidString)")
+        let queueDirectory = root.appendingPathComponent("queue")
+        try FileManager.default.createDirectory(at: queueDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: queueDirectory.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let item = inkPending(name: "名額寫不進", address: "卯路", latitude: 25.27, longitude: 121.77, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: queueDirectory)
+        queue.restorePendingPlaces([item])
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: queueDirectory.path)
+        let vault = SaveLocalVaultService(overrideVaultURL: root.appendingPathComponent("vault.json"))
+        let remote = SaveInkRemoteFake()
+        remote.configured = false
+        let engine = SaveInkLivePlaceEngine(
+            vault: vault,
+            pending: queue,
+            remote: remote,
+            userID: { "account-a" },
+            location: { nil },
+            walkingMinutes: { _, _ in nil },
+            currentSession: { ("account-a", 1) },
+            canConfirmAnother: { _ in false }
+        )
+        let loaded = await engine.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "名額寫不進" })
+        XCTAssertEqual(vault.unboundShareOwner(for: item.deduplicationKey), "account-a")
+        let otherRemote = SaveInkRemoteFake()
+        let other = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: otherRemote)
+        let second = await other.load(ink: [])
+        XCTAssertFalse(second.places.contains { $0.name == "名額寫不進" })
+        XCTAssertTrue(otherRemote.saved.isEmpty)
+    }
+
     func testFailedFetchDoesNotRestoreVaultAfterTheAccountChanges() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-fetch-abort-\(UUID().uuidString)")
@@ -1780,6 +1816,34 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         fixture.pasteExampleLink()
         XCTAssertEqual(fixture.recognizedPlaceID, SaveInkFixture.qingtian)
+    }
+
+    func testLivePasteKeepsAMapLinkOpenUntilItHasAName() async {
+        let defaults = UserDefaults(suiteName: "save.ink.map-paste.\(UUID().uuidString)")!
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() },
+            usesLivePlaces: true,
+            liveLoader: .inactive,
+            liveOwner: { "account-a" },
+            liveSavedPlaceTierIsAuthoritative: { true }
+        )
+        await store.refreshLivePlaces()
+        store.sheet = .save
+        store.paste(liveText: "https://maps.apple.com/?ll=25.03,121.52")
+        store.commitSave()
+        XCTAssertEqual(store.saveNotice, "這則地圖連結還沒有店名。在下面寫下店名再存。")
+        XCTAssertEqual(store.sheet, .save)
+        XCTAssertFalse(store.places.contains { $0.name.contains("maps.apple") })
+        store.saveNotice = nil
+        store.paste(liveText: "https://maps.apple.com/?q=青田麵店")
+        store.commitSave()
+        XCTAssertTrue(store.places.contains { $0.name == "青田麵店" })
+        XCTAssertNil(store.sheet)
+        let saved = try? String(decoding: XCTUnwrap(defaults.data(forKey: SavePlaceLinkGate.placesKey)), as: UTF8.self)
+        XCTAssertTrue(saved?.contains("青田麵店") == true)
     }
 
     func testLiveSaveWaitsUntilTheSavedPlaceTierIsKnown() async {

@@ -545,6 +545,35 @@ enum SaveInkPlaceLink {
         let host = (url.host ?? "").lowercased()
         return host.contains("maps.") || host.contains("openstreetmap.org") || url.path.contains("/maps")
     }
+
+    /// A venue name carried by a map link, such as `?q=` or `/maps/place/`.
+    /// A coordinate-only link has no name.
+    static func mapPlaceName(in text: String) -> String? {
+        guard let url = firstURL(in: text), isMapLink(url) else { return nil }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        for key in ["q", "query", "address", "name"] {
+            guard let value = items.first(where: { $0.name.caseInsensitiveCompare(key) == .orderedSame })?.value?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty,
+                  !value.contains("://"),
+                  value.rangeOfCharacter(from: CharacterSet.letters) != nil
+            else { continue }
+            return value
+        }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard let index = parts.firstIndex(where: { $0 == "place" || $0 == "search" }),
+              index + 1 < parts.count else { return nil }
+        let raw = parts[index + 1].split(separator: "@").first.map(String.init) ?? parts[index + 1]
+        let decoded = raw.removingPercentEncoding ?? raw
+        let cleaned = decoded.replacingOccurrences(of: "+", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, cleaned.rangeOfCharacter(from: CharacterSet.letters) != nil else { return nil }
+        return cleaned
+    }
+
+    static func isUnresolvedMapLink(_ text: String) -> Bool {
+        guard let url = firstURL(in: text), isMapLink(url) else { return false }
+        return mapPlaceName(in: text) == nil
+    }
 }
 
 /// Visit JSON written before visibility existed. A missing field stays public.
@@ -925,8 +954,18 @@ final class SaveInkNotebookStore: ObservableObject {
         }
         saveNotice = nil
         var appendedIndex: Int?
-        if recognizedPlaceID == nil, !saveQuery.isEmpty {
-            let name = SaveInkPlaceLink.savedName(from: saveQuery)
+        var proposedName: String?
+        if recognizedPlaceID == nil {
+            if !saveQuery.isEmpty {
+                proposedName = SaveInkPlaceLink.savedName(from: saveQuery)
+            } else if let mapName = SaveInkPlaceLink.mapPlaceName(in: combined) {
+                proposedName = mapName
+            } else if SaveInkPlaceLink.isUnresolvedMapLink(combined) {
+                saveNotice = "這則地圖連結還沒有店名。在下面寫下店名再存。"
+                return
+            }
+        }
+        if let name = proposedName {
             if usesLivePlaces, refreshTask != nil || !liveCatalogAuthoritative {
                 saveNotice = "還在核對已存的地點，請稍後再存。"
                 return
