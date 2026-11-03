@@ -716,6 +716,14 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.name, "鼎泰小館")
         XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.stampName, "鼎泰小館")
         XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.street, "永康街")
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.friendUsualCount, 0)
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.detailNote, "你保留的到訪紀錄。")
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.walkMinutes)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.distanceMeters)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.videoTitle)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.videoSource)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.shopLatitude)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.shopLongitude)
         XCTAssertFalse(store.homePlaces().contains { $0.id == SaveInkFixture.dingtai })
         XCTAssertNil(store.place(SaveInkFixture.qingtian))
         XCTAssertEqual(defaults.data(forKey: "save.ink.places.v1"), nil)
@@ -757,6 +765,17 @@ final class SaveInkNotebookTests: XCTestCase {
         production.pasteExampleLink()
         XCTAssertEqual(production.saveLink, "")
         XCTAssertNil(production.recognizedPlaceID)
+    }
+
+    func testRetainedSampleVisitDoesNotEnableFixturePaste() throws {
+        let defaults = inkSuite("retained-sample-paste")
+        let visit = inkVisit(placeID: SaveInkFixture.qingtian, comment: "自己寫的")
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertNotNil(store.place(SaveInkFixture.qingtian))
+        store.pasteExampleLink()
+        XCTAssertEqual(store.saveLink, "")
+        XCTAssertNil(store.recognizedPlaceID)
     }
 
     func testCommitSaveIgnoresAnUnresolvedRecognizedPlace() {

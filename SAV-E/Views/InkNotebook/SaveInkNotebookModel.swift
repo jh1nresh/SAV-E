@@ -674,7 +674,17 @@ final class SaveInkNotebookStore: ObservableObject {
     ) -> [SaveInkPlace] {
         let referenced = Set(visits.map(\.placeID))
         let known = Set(alreadyLoaded.map(\.id))
-        return SaveInkFixture.places.filter { referenced.contains($0.id) && !known.contains($0.id) }
+        return SaveInkFixture.places
+            .filter { referenced.contains($0.id) && !known.contains($0.id) }
+            .map { place in
+                SaveInkPlace(
+                    id: place.id, name: place.name, stampName: place.stampName, street: place.street,
+                    distanceMeters: nil, blurb: "你保留的到訪紀錄", sourceLabel: "來自 你的到訪紀錄",
+                    badge: .visited, detailNote: "你保留的到訪紀錄。", friendUsualCount: 0,
+                    walkMinutes: nil, addressLine: nil, videoTitle: nil, videoSource: nil,
+                    shopLatitude: nil, shopLongitude: nil
+                )
+            }
     }
 
     func openFriends() {
@@ -825,7 +835,7 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func pasteExampleLink() {
-        guard place(SaveInkFixture.qingtian) != nil else { return }
+        guard includesSampleCatalog, place(SaveInkFixture.qingtian) != nil else { return }
         saveLink = "https://短影音連結/v/8f2k…"
         recognizedPlaceID = SaveInkFixture.qingtian
     }
