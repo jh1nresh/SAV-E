@@ -1512,6 +1512,74 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(stored.contains { $0.name == "刪除前的店" })
     }
 
+    func testSignedOutLoadLeavesTheShareQueueUntouched() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-signed-out-queue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "登入前的分享", address: "寅路", latitude: 25.12, longitude: 121.62, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let signedOut = SaveInkLivePlaceEngine(
+            vault: vault,
+            pending: queue,
+            remote: SaveInkRemoteFake(),
+            userID: { nil },
+            location: { nil },
+            walkingMinutes: { _, _ in nil },
+            currentSession: { (nil, 1) },
+            canConfirmAnother: { _ in true }
+        )
+        let hidden = await signedOut.load(ink: [])
+        XCTAssertFalse(hidden.places.contains { $0.name == "登入前的分享" })
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: nil).map(\.name), ["登入前的分享"])
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: nil)
+        XCTAssertFalse(stored.contains { $0.name == "登入前的分享" })
+        let signedIn = liveEngine(owner: "account-a", vault: vault, queue: queue, remote: SaveInkRemoteFake())
+        let loaded = await signedIn.load(ink: [])
+        XCTAssertTrue(loaded.places.contains { $0.name == "登入前的分享" })
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: nil).isEmpty)
+    }
+
+    func testFetchedStampUpdatesTheMatchingVaultRow() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-mirror-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var local = Place.from(inkPending(name: "同步店", address: "卯路", latitude: 25.13, longitude: 121.63))
+        local.createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        _ = try vault.saveConfirmedPlace(local, ownerSubject: "account-a")
+        var server = Place.from(inkPending(
+            name: "同步店",
+            address: "卯路",
+            latitude: 25.13,
+            longitude: 121.63,
+            google: "google-sync"
+        ))
+        server.createdAt = Date(timeIntervalSince1970: 1_600_000_000)
+        server.note = "伺服器備註"
+        let remote = SaveInkRemoteFake()
+        remote.places = [server]
+        let engine = liveEngine(
+            owner: "account-a",
+            vault: vault,
+            queue: PendingPlaceImportService(overrideContainerURL: directory),
+            remote: remote
+        )
+        _ = await engine.load(ink: [])
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        let row = try XCTUnwrap(stored.first { $0.name == "同步店" })
+        XCTAssertEqual(row.googlePlaceId, "google-sync")
+        XCTAssertTrue(row.savedIDs.contains(local.id))
+        remote.fetchError = URLError(.notConnectedToInternet)
+        remote.places = []
+        _ = await engine.load(ink: [])
+        let offline = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        XCTAssertEqual(offline.first { $0.name == "同步店" }?.googlePlaceId, "google-sync")
+    }
+
     private func uploadedOwnerlessID(owner: String, item: PendingSharedPlace) async throws -> UUID {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-id-\(owner)-\(UUID().uuidString)")

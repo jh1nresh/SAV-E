@@ -350,9 +350,24 @@ struct SaveInkLivePlaceEngine {
 
     private func mirrorMissing(_ places: [Place], owner: String?) {
         let existing = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
-        for place in places where !existing.contains(where: { $0.matches(place) }) {
+        for place in places {
+            if let match = existing.first(where: { $0.matches(place) }) {
+                guard Self.vaultIsStale(match, comparedWith: place) else { continue }
+            }
             try? vault.saveConfirmedPlace(place, ownerSubject: owner)
         }
+    }
+
+    /// A fetched stamp can carry aliases, evidence, or a place id the vault
+    /// copy does not have yet. The next offline load must see that merge.
+    private static func vaultIsStale(_ stored: Place, comparedWith merged: Place) -> Bool {
+        stored.savedIDs != merged.savedIDs
+            || stored.status != merged.status
+            || stored.note != merged.note
+            || stored.googlePlaceId != merged.googlePlaceId
+            || stored.sourceUrl != merged.sourceUrl
+            || stored.additionalSourceEvidence != merged.additionalSourceEvidence
+            || stored.rating != merged.rating
     }
 
     func localPlaces(ink: [SaveInkPlace]) -> [SaveInkPlace] {
@@ -373,8 +388,8 @@ struct SaveInkLivePlaceEngine {
         }
         var confirmed = (try? vault.confirmedPlaces(limit: 500, belongingTo: owner)) ?? []
         let queued = pending.peekPendingPlaces(ownerSubject: owner)
-        let remoteConfigured = owner?.isEmpty == false && remote.isConfigured
-        var admitQueue = !remoteConfigured
+        let signedIn = owner?.isEmpty == false
+        var admitQueue = signedIn && !remote.isConfigured
         var remoteIDs = Set<UUID>()
         if let owner, !owner.isEmpty, remote.isConfigured {
             do {
