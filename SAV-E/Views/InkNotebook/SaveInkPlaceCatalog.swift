@@ -388,8 +388,14 @@ struct SaveInkLivePlaceEngine {
                 confirmed = Place.consolidated(remotePlaces + confirmed)
                 admitQueue = true
             } catch {
+                guard stillHere() else {
+                    return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
+                }
                 admitQueue = false
             }
+        }
+        guard stillHere() else {
+            return SaveInkLivePlaceLoad(places: ink, userCoordinate: nil)
         }
         mirrorMissing(confirmed, owner: owner)
         var claimedKeys = Set<String>()
@@ -432,7 +438,10 @@ struct SaveInkLivePlaceEngine {
                     }
                     continue
                 }
-                guard canConfirmAnother(Place.consolidated(confirmed).count) else { continue }
+                guard canConfirmAnother(Place.consolidated(confirmed).count) else {
+                    retain(item)
+                    continue
+                }
                 guard (try? vault.saveConfirmedPlace(candidate, ownerSubject: owner)) != nil else { continue }
                 switch await upload(candidate, owner: owner, generation: started.generation, remoteConfigured: remote.isConfigured) {
                 case .uploaded:

@@ -1448,6 +1448,70 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["稍後超額"])
     }
 
+    func testLocalCapBindsAnOwnerlessShare() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-local-cap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = inkPending(name: "名額滿了", address: "癸路", latitude: 25.10, longitude: 121.60, owner: nil)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([item])
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let remote = SaveInkRemoteFake()
+        remote.configured = false
+        let engine = SaveInkLivePlaceEngine(
+            vault: vault,
+            pending: queue,
+            remote: remote,
+            userID: { "account-a" },
+            location: { nil },
+            walkingMinutes: { _, _ in nil },
+            currentSession: { ("account-a", 1) },
+            canConfirmAnother: { _ in false }
+        )
+        let loaded = await engine.load(ink: [])
+        XCTAssertFalse(loaded.places.contains { $0.name == "名額滿了" })
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        XCTAssertFalse(stored.contains { $0.name == "名額滿了" })
+        XCTAssertTrue(queue.peekPendingPlaces(ownerSubject: nil).isEmpty)
+        XCTAssertEqual(queue.peekPendingPlaces(ownerSubject: "account-a").map(\.name), ["名額滿了"])
+        let other = liveEngine(owner: "account-b", vault: vault, queue: queue, remote: SaveInkRemoteFake())
+        let second = await other.load(ink: [])
+        XCTAssertFalse(second.places.contains { $0.name == "名額滿了" })
+    }
+
+    func testFailedFetchDoesNotRestoreVaultAfterTheAccountChanges() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ink-fetch-abort-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let saved = Place.from(inkPending(name: "刪除前的店", address: "子路", latitude: 25.11, longitude: 121.61, owner: "account-a"))
+        _ = try vault.saveConfirmedPlace(saved, ownerSubject: "account-a")
+        var sessionOwner: String? = "account-a"
+        var generation = 1
+        let remote = SaveInkRemoteFake()
+        remote.fetchError = URLError(.cancelled)
+        remote.beforeFetch = {
+            try? vault.removeConfirmedPlace(saved, belongingTo: "account-a")
+            sessionOwner = nil
+            generation = 2
+        }
+        let engine = SaveInkLivePlaceEngine(
+            vault: vault,
+            pending: PendingPlaceImportService(overrideContainerURL: directory),
+            remote: remote,
+            userID: { sessionOwner },
+            location: { nil },
+            walkingMinutes: { _, _ in nil },
+            currentSession: { (sessionOwner, generation) },
+            canConfirmAnother: { _ in true }
+        )
+        _ = await engine.load(ink: [])
+        let stored = try vault.confirmedPlaces(limit: 20, belongingTo: "account-a")
+        XCTAssertFalse(stored.contains { $0.name == "刪除前的店" })
+    }
+
     private func uploadedOwnerlessID(owner: String, item: PendingSharedPlace) async throws -> UUID {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ink-id-\(owner)-\(UUID().uuidString)")
@@ -1638,8 +1702,10 @@ private final class SaveInkRemoteFake: SaveInkPlaceRemote {
     var saved: [Place] = []
     var fetchError: Error?
     var saveError: Error?
+    var beforeFetch: (() -> Void)?
 
     func fetchPlaces(for userId: String) async throws -> [Place] {
+        beforeFetch?()
         if let fetchError { throw fetchError }
         return places
     }
