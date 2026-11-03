@@ -662,6 +662,11 @@ final class SaveInkNotebookStore: ObservableObject {
         return main + saved
     }
 
+    /// Arrival needs a shop position. A typed save has none, so Home does not offer it.
+    func arrivalPlaceID() -> String? {
+        homePlaces().first { $0.shopLatitude != nil && $0.shopLongitude != nil }?.id
+    }
+
     /// Sample shops stay off Home. A visit the user kept still needs a name and stamp.
     private static func placesForRetainedSampleVisits(
         _ visits: [SaveInkVisitRecord],

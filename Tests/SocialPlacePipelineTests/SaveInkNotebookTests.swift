@@ -721,6 +721,25 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: "save.ink.places.v1"), nil)
     }
 
+    func testArrivalRequiresAShopPosition() {
+        let saved = SaveInkNotebookStore(
+            defaults: inkSuite("arrival-saved"),
+            now: { SaveInkClock.previewNow }
+        )
+        saved.saveQuery = "我的店"
+        saved.commitSave()
+        XCTAssertEqual(saved.homePlaces().first?.name, "我的店")
+        XCTAssertNil(saved.homePlaces().first?.shopLatitude)
+        XCTAssertNil(saved.arrivalPlaceID())
+
+        let fixture = SaveInkNotebookStore(
+            defaults: inkSuite("arrival-fixture"),
+            now: { SaveInkClock.previewNow },
+            seedFixture: true
+        )
+        XCTAssertEqual(fixture.arrivalPlaceID(), SaveInkFixture.dingtai)
+    }
+
     func testPasteExampleLinkStaysInsideTheFixtureCatalog() {
         let fixture = SaveInkNotebookStore(
             defaults: inkSuite("paste-fixture"),
@@ -786,7 +805,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(screens.contains("存一個地點，到了再記"))
         XCTAssertTrue(screens.contains("輕點卡片，看地圖怎麼走"))
         XCTAssertFalse(screens.contains("?? SaveInkFixture.dingtai"))
-        XCTAssertTrue(screens.contains("if let placeID = picks.first?.id"))
+        XCTAssertTrue(screens.contains("store.arrivalPlaceID()"))
         XCTAssertTrue(screens.contains("ink.friends.empty"))
         XCTAssertTrue(screens.contains("朋友還沒有分享造訪"))
     }

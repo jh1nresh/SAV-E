@@ -32,7 +32,7 @@ struct SaveInkHomeScreen: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
-                if let placeID = picks.first?.id {
+                if let placeID = store.arrivalPlaceID() {
                     SaveInkArriveButton {
                         Task { await store.checkIn(placeID: placeID) }
                     }
@@ -603,8 +603,10 @@ struct SaveInkPlaceScreen: View {
                     }
                 }
                 Spacer()
-                SaveInkArriveButton {
-                    Task { await store.checkIn(placeID: placeID) }
+                if place?.shopLatitude != nil, place?.shopLongitude != nil {
+                    SaveInkArriveButton {
+                        Task { await store.checkIn(placeID: placeID) }
+                    }
                 }
             }
             .padding(.horizontal, 24)
