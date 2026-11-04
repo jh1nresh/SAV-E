@@ -2633,6 +2633,33 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(reloaded.homeBadge(for: try XCTUnwrap(reloaded.place(original.id))), .visited)
     }
 
+    func testCheckInRejectsAFixMeasuredBeforeShopCoordinatesChanged() async {
+        var original = inkRow(id: "corrected-place", name: "甲店", street: "甲街")
+        original.shopLatitude = 25.03
+        original.shopLongitude = 121.53
+        var catalog = [original]
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in catalog },
+            load: { _ in SaveInkLivePlaceLoad(places: catalog, userCoordinate: nil) }
+        )
+        let locator = SaveInkSuspendedLocator()
+        let defaults = inkSuite("checkin-coordinate-correction")
+        let store = SaveInkNotebookStore(
+            defaults: defaults, makeLocator: { locator }, usesLivePlaces: true,
+            liveLoader: loader, liveOwner: { "account-a" }
+        )
+        let pending = Task { await store.checkIn(placeID: original.id) }
+        await locator.waitUntilRequested()
+        catalog[0].shopLatitude = 26.03
+        await store.refreshLivePlaces()
+        locator.finish(.inRange(meters: 18))
+        await pending.value
+        XCTAssertTrue(store.visits.isEmpty)
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-a"))
+        XCTAssertEqual(store.place(original.id)?.badge, .saved)
+        XCTAssertEqual(store.sheet, .checkIn(.locationFailed, placeID: original.id))
+    }
+
     func testIgnoredCheckInPreservesUnreadableStoredVisitBytes() async {
         var row = inkRow(id: "located-place", name: "甲店", street: "甲街")
         row.shopLatitude = 25.03

@@ -878,6 +878,12 @@ final class SaveInkNotebookStore: ObservableObject {
         let placeID = currentPlace.id
         activePlaceID = placeID
         checkInOwner = ownerAtStart
+        guard currentPlace.shopLatitude == place.shopLatitude,
+              currentPlace.shopLongitude == place.shopLongitude else {
+            pendingSituation = .locationFailed
+            sheet = .checkIn(.locationFailed, placeID: placeID)
+            return
+        }
         let previous = previousShop(before: placeID)
         let speed = SaveInkCheckIn.impliedSpeedKmh(
             from: previous,
