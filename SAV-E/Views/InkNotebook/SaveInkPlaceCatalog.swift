@@ -544,6 +544,14 @@ struct SaveInkLivePlaceEngine {
                         guard vault.releaseUnboundShare(key: holdKey) else { break queue }
                     }
                 }
+                // Secure every snapshot before an upload can suspend this pass.
+                // Keep the original item/key for IDs; cleanup below uses a bound
+                // snapshot only after a durable bind succeeds.
+                if item.ownerSubject == nil, let owner, !owner.isEmpty,
+                   !retain(item),
+                   !vault.claimUnboundShare(key: holdKey, owner: owner) {
+                    break queue
+                }
                 let candidate = Place.from(
                     item,
                     id: SaveInkPlaceCatalog.stablePlaceID(for: "\(owner ?? "")|\(item.deduplicationKey)")

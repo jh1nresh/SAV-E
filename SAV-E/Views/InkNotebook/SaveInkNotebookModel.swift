@@ -874,12 +874,15 @@ final class SaveInkNotebookStore: ObservableObject {
         activePlaceID = placeID
         let fix = await locatorOrMake().requestFix(for: place)
         if usesLivePlaces, liveOwner() != ownerAtStart || catalogOwner != ownerAtStart { return }
+        guard let currentPlace = self.place(placeID) else { return }
+        let placeID = currentPlace.id
+        activePlaceID = placeID
         checkInOwner = ownerAtStart
         let previous = previousShop(before: placeID)
         let speed = SaveInkCheckIn.impliedSpeedKmh(
             from: previous,
-            to: place.shopLatitude,
-            longitude: place.shopLongitude,
+            to: currentPlace.shopLatitude,
+            longitude: currentPlace.shopLongitude,
             now: now()
         )
         let decision = SaveInkCheckIn.decide(
