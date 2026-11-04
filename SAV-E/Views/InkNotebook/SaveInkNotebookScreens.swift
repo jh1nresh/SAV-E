@@ -2,7 +2,12 @@ import SwiftUI
 
 struct SaveInkHomeScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
+    @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     @Environment(\.scenePhase) private var scenePhase
+
+    private var showsLiveMap: Bool {
+        store.usesLivePlaces && !saveInkScreenshot
+    }
 
     private var picks: [SaveInkPlace] {
         store.homePlaces()
@@ -13,6 +18,15 @@ struct SaveInkHomeScreen: View {
                 header
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
+                        if showsLiveMap {
+                            SaveInkLiveMap(
+                                places: picks,
+                                userCoordinate: store.userCoordinate,
+                                focusPlaceID: nil,
+                                showsRoute: false,
+                                onSelect: { store.openPlace($0) }
+                            )
+                        }
                         friendsEntry
                         ForEach(picks) { place in
                             Button {
@@ -599,76 +613,144 @@ struct SaveInkPassportScreen: View {
 
 struct SaveInkPlaceScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
+    @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     var placeID: String
+
+    private var showsLiveMap: Bool {
+        store.usesLivePlaces && !saveInkScreenshot
+    }
 
     var body: some View {
         let place = store.place(placeID)
         ZStack {
             SaveInkPalette.paper.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    SaveInkBackButton(action: store.goBack)
-                    Text(place.map { "\($0.name)・\($0.street)" } ?? "")
-                        .font(SaveInkType.subpageTitle)
-                        .foregroundStyle(SaveInkPalette.ink)
-                        .lineLimit(1)
+            if showsLiveMap {
+                VStack(spacing: 0) {
+                    heading(place)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 18)
+                    ScrollView {
+                        liveDetails(place)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 16)
+                            .padding(.bottom, 16)
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollBounceBehavior(.basedOnSize)
+                    arrive
+                        .padding(.horizontal, 24)
+                        .padding(.top, 12)
+                        .padding(.bottom, 44)
                 }
-                if let place {
-                    SaveInkWalkMap(label: walkLabel(place))
-                    if !store.includesSampleCatalog, store.homeBadge(for: place) == .unverified {
-                        SaveInkBadge(text: "△ 未驗證造訪", verified: false)
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    heading(place)
+                    if let place {
+                        SaveInkWalkMap(label: walkLabel(place))
+                        facts(place)
                     }
-                    HStack(spacing: 10) {
-                        stat("\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次", "你去過")
-                        stat("\(place.friendUsualCount) 人", "朋友常去")
-                        stat(lastDate(place), "上次蓋章")
-                    }
-                    Text(store.detailNote(for: place))
-                        .font(SaveInkType.body)
-                        .foregroundStyle(SaveInkPalette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let title = place.videoTitle {
-                        Text("來源影片")
-                            .font(SaveInkType.body)
-                        HStack(spacing: 12) {
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(SaveInkPalette.ink, lineWidth: 1.6)
-                                .frame(width: 54, height: 54)
-                                .overlay(Text("▶").font(SaveInkType.body))
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("「\(title)」")
-                                    .font(SaveInkType.body)
-                                Text(place.videoSource ?? "")
-                                    .font(SaveInkType.aux)
-                                    .foregroundStyle(SaveInkPalette.inkSub)
-                            }
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .overlay(
-                            SaveInkRoughRoundedRect(cornerRadius: 18, seed: 15)
-                                .stroke(SaveInkPalette.ink, lineWidth: 2)
-                        )
-                    }
+                    Spacer()
+                    arrive
                 }
-                Spacer()
-                if place?.shopLatitude != nil, place?.shopLongitude != nil {
-                    SaveInkArriveButton {
-                        Task { await store.checkIn(placeID: placeID) }
-                    }
-                } else if place != nil {
-                    SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.place.arrived.unverified") {
-                        store.recordUnverifiedVisit(placeID: placeID)
-                    }
-                }
+                .padding(.horizontal, 24)
+                .padding(.top, 18)
+                .padding(.bottom, 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
-            .padding(.bottom, 44)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.place")
+    }
+
+    @ViewBuilder
+    private var arrive: some View {
+        let place = store.place(placeID)
+        if place?.shopLatitude != nil, place?.shopLongitude != nil {
+            SaveInkArriveButton {
+                Task { await store.checkIn(placeID: placeID) }
+            }
+        } else if place != nil {
+            SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.place.arrived.unverified") {
+                store.recordUnverifiedVisit(placeID: placeID)
+            }
+        }
+    }
+
+    private func heading(_ place: SaveInkPlace?) -> some View {
+        HStack(spacing: 12) {
+            SaveInkBackButton(action: store.goBack)
+            Text(place.map { "\($0.name)・\($0.street)" } ?? "")
+                .font(SaveInkType.subpageTitle)
+                .foregroundStyle(SaveInkPalette.ink)
+                .lineLimit(1)
+        }
+    }
+
+    /// Map, Apple Maps, and the note scroll. The title and「我到了」stay on screen.
+    private func liveDetails(_ place: SaveInkPlace?) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let place {
+                SaveInkLiveMap(
+                    places: [place],
+                    userCoordinate: store.userCoordinate,
+                    focusPlaceID: place.id,
+                    showsRoute: true,
+                    onSelect: { _ in }
+                )
+                if SaveInkAppleMaps.canOpen(place) {
+                    SaveInkOutlineButton(
+                        title: "用 Apple 地圖打開",
+                        identifier: "ink.place.openMaps",
+                        compact: true
+                    ) {
+                        SaveInkAppleMaps.open(place)
+                    }
+                }
+                facts(place)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func facts(_ place: SaveInkPlace) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if !store.includesSampleCatalog, store.homeBadge(for: place) == .unverified {
+                SaveInkBadge(text: "△ 未驗證造訪", verified: false)
+            }
+            HStack(spacing: 10) {
+                stat("\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次", "你去過")
+                stat("\(place.friendUsualCount) 人", "朋友常去")
+                stat(lastDate(place), "上次蓋章")
+            }
+            Text(store.detailNote(for: place))
+                .font(SaveInkType.body)
+                .foregroundStyle(SaveInkPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let title = place.videoTitle {
+                Text("來源影片")
+                    .font(SaveInkType.body)
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(SaveInkPalette.ink, lineWidth: 1.6)
+                        .frame(width: 54, height: 54)
+                        .overlay(Text("▶").font(SaveInkType.body))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("「\(title)」")
+                            .font(SaveInkType.body)
+                        Text(place.videoSource ?? "")
+                            .font(SaveInkType.aux)
+                            .foregroundStyle(SaveInkPalette.inkSub)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(
+                    SaveInkRoughRoundedRect(cornerRadius: 18, seed: 15)
+                        .stroke(SaveInkPalette.ink, lineWidth: 2)
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func walkLabel(_ place: SaveInkPlace) -> String {

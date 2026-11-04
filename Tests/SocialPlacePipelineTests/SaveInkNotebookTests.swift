@@ -1171,6 +1171,33 @@ final class SaveInkNotebookTests: XCTestCase {
         return image
     }
 
+    /// MapKit and its SwiftUI tasks need an asynchronous layout window. The
+    /// synchronous still helper is intentionally unchanged for the 14 baselines.
+    private func hostedInkMapImage<Content: View>(_ root: Content, width: CGFloat) async throws -> UIImage {
+        let size = CGSize(width: width, height: 852)
+        let host = UIHostingController(rootView: root)
+        host.overrideUserInterfaceStyle = .light
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.overrideUserInterfaceStyle = .light
+        window.backgroundColor = UIColor(SaveInkPalette.paper)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.backgroundColor = window.backgroundColor
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        try await Task.sleep(for: .seconds(3))
+        host.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        format.opaque = true
+        format.preferredRange = .standard
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            _ = host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+    }
+
     private func nonPaperRatio(_ image: UIImage, in rect: CGRect) -> Double {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -1324,6 +1351,51 @@ final class SaveInkNotebookTests: XCTestCase {
         }
     }
 
+    func testLiveMapKitScreensRenderForDesign() async throws {
+        var saved = inkRow(id: "map-saved", name: "只存未去的測試店", street: "測試街")
+        saved.shopLatitude = 25.0327
+        saved.shopLongitude = 121.5294
+        saved.distanceMeters = 200
+        saved.walkMinutes = 4
+        var visited = inkRow(id: "map-visited", name: "已到訪的測試店", street: "測試街二段")
+        visited.shopLatitude = 25.0338
+        visited.shopLongitude = 121.5320
+        visited.badge = .visited
+        visited.distanceMeters = 400
+        visited.walkMinutes = 7
+        let rows = [saved, visited]
+        let defaults = inkSuite("live-mapkit-render")
+        let visit = inkVisit(placeID: visited.id, comment: "測試用到訪紀錄")
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1.account-a")
+        let loader = SaveInkLivePlaceLoader(
+            localPlaces: { _ in rows },
+            load: { _ in SaveInkLivePlaceLoad(
+                places: rows,
+                userCoordinate: CLLocationCoordinate2D(latitude: 25.0315, longitude: 121.5300)
+            ) }
+        )
+        let store = SaveInkNotebookStore(
+            defaults: defaults, now: { SaveInkClock.previewNow }, usesLivePlaces: true,
+            liveLoader: loader, liveOwner: { "account-a" }
+        )
+        await store.refreshLivePlaces()
+        XCTAssertFalse(store.includesSampleCatalog)
+        XCTAssertEqual(store.verifiedCount(for: visited.id), 1)
+        for width: CGFloat in [375, 390, 430] {
+            for (name, image) in [
+                ("home", try await hostedInkMapImage(SaveInkHomeScreen(store: store), width: width)),
+                ("place-saved", try await hostedInkMapImage(SaveInkPlaceScreen(store: store, placeID: saved.id), width: width)),
+                ("place-visited", try await hostedInkMapImage(SaveInkPlaceScreen(store: store, placeID: visited.id), width: width)),
+            ] {
+                XCTAssertGreaterThan(try XCTUnwrap(image.pngData()).count, 8_000)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ink-mapkit-\(name)-\(Int(width))"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
     func testCatalogDedupesVaultPendingAndInkAndKeepsCoordinates() throws {
         let confirmed = Place.from(inkPending(
             name: "青田七六咖啡",
@@ -1399,6 +1471,85 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         XCTAssertLessThan(dateline?.span.longitudeDelta ?? 360, 20)
         XCTAssertGreaterThan(abs(dateline?.center.longitude ?? 0), 170)
+    }
+
+    func testLateWalkingRouteCannotReplaceANewerRoute() async {
+        let state = SaveInkMapRouteState()
+        let pending = SaveInkSuspendedRouteLookup()
+        let oldTask = Task { await state.refresh { await pending.load() } }
+        await pending.waitUntilStarted()
+
+        let current = inkRoute(seconds: 120, meters: 100)
+        await state.refresh { current }
+        pending.finish(inkRoute(seconds: 900, meters: 800))
+        await oldTask.value
+
+        XCTAssertEqual(state.route?.seconds, 120)
+        XCTAssertEqual(state.route?.meters, 100)
+        XCTAssertEqual(state.route?.points.last?.latitude, current.points.last?.latitude)
+    }
+
+    func testRemovingWalkingRouteInputsClearsAndInvalidatesPendingResult() async {
+        let state = SaveInkMapRouteState()
+        await state.refresh { inkRoute(seconds: 120, meters: 100) }
+        XCTAssertNotNil(state.route)
+
+        let pending = SaveInkSuspendedRouteLookup()
+        let oldTask = Task { await state.refresh { await pending.load() } }
+        await pending.waitUntilStarted()
+        XCTAssertNil(state.route, "A new request must clear the old label and polyline immediately")
+
+        // The view returns nil when the user coordinate or focused shop disappears.
+        await state.refresh { nil }
+        pending.finish(inkRoute(seconds: 900, meters: 800))
+        await oldTask.value
+        XCTAssertNil(state.route)
+    }
+
+    func testCancelledWalkingRouteCannotPublishALateResult() async {
+        let state = SaveInkMapRouteState()
+        let pending = SaveInkSuspendedRouteLookup()
+        let task = Task { await state.refresh { await pending.load() } }
+        await pending.waitUntilStarted()
+        task.cancel()
+        pending.finish(inkRoute(seconds: 900, meters: 800))
+        await task.value
+        XCTAssertNil(state.route)
+    }
+
+    private func inkRoute(seconds: TimeInterval, meters: CLLocationDistance) -> SaveInkMapRoute {
+        SaveInkMapRoute(
+            points: [
+                CLLocationCoordinate2D(latitude: 25.03, longitude: 121.53),
+                CLLocationCoordinate2D(latitude: 25.03 + seconds / 1_000_000, longitude: 121.53 + meters / 1_000_000),
+            ],
+            seconds: seconds,
+            meters: meters
+        )
+    }
+
+    func testLiveMapStaysOffTheFixtureNotebook() throws {
+        let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
+        let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
+        XCTAssertTrue(chrome.contains("struct SaveInkWalkMap"))
+        XCTAssertTrue(chrome.contains("struct SaveInkLiveMap"))
+        XCTAssertTrue(chrome.contains("emphasis: .muted"))
+        XCTAssertTrue(chrome.contains("pointsOfInterest: .excludingAll"))
+        XCTAssertTrue(chrome.contains("UserAnnotation()"))
+        XCTAssertTrue(chrome.contains("SaveInkMapPin()"))
+        XCTAssertTrue(chrome.contains("SaveInkMapPin(visited: pin.visited)"))
+        XCTAssertTrue(chrome.contains("head.fill(SaveInkPalette.ink)"))
+        XCTAssertTrue(chrome.contains("PaperTexture"))
+        XCTAssertTrue(chrome.contains("openInMaps"))
+        XCTAssertTrue(chrome.contains("ink.home.map"))
+        XCTAssertTrue(chrome.contains("ink.place.map"))
+        XCTAssertTrue(screens.contains("showsLiveMap"))
+        XCTAssertTrue(screens.contains("SaveInkWalkMap(label:"))
+        XCTAssertTrue(screens.contains("ink.place.openMaps"))
+        XCTAssertTrue(screens.contains("用 Apple 地圖打開"))
+        let plist = try source("SAV-E/Info.plist")
+        XCTAssertTrue(plist.contains("NSLocationWhenInUseUsageDescription"))
+        XCTAssertFalse(plist.contains("NSLocationAlwaysAndWhenInUseUsageDescription"))
     }
 
     func testSupabaseSyncKeepsLocalPlacesWhenTheServerFails() async {
@@ -3670,6 +3821,31 @@ final class SaveInkNotebookTests: XCTestCase {
 
     private func md5(_ data: Data) -> String {
         Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+@MainActor
+private final class SaveInkSuspendedRouteLookup {
+    private var result: CheckedContinuation<SaveInkMapRoute?, Never>?
+    private var started: CheckedContinuation<Void, Never>?
+
+    func load() async -> SaveInkMapRoute? {
+        await withCheckedContinuation { continuation in
+            result = continuation
+            started?.resume()
+            started = nil
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard result == nil else { return }
+        await withCheckedContinuation { started = $0 }
+    }
+
+    func finish(_ route: SaveInkMapRoute?) {
+        let continuation = result
+        result = nil
+        continuation?.resume(returning: route)
     }
 }
 
