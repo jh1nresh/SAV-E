@@ -87,6 +87,16 @@ enum SaveInkLaunch {
         let name = String(raw.dropFirst("--savvy-ink-screen=".count))
         return SaveInkPreviewScreen(rawValue: name)
     }
+
+    /// Only screenshot/suite launches use fixture data. Display-only flags
+    /// such as skip-welcome do not replace real saved places with samples.
+    static func usesLivePlaces(arguments: [String]) -> Bool {
+        !usesFixtureData(arguments: arguments)
+    }
+
+    static var usesLivePlaces: Bool {
+        usesLivePlaces(arguments: ProcessInfo.processInfo.arguments)
+    }
 }
 
 struct SaveInkNotebookRoot: View {
@@ -109,7 +119,8 @@ private struct SaveInkOwnedNotebook: View {
         defaults: SaveInkLaunch.defaults,
         seedFixture: SaveInkLaunch.usesFixtureData(),
         friendInputs: SaveInkLaunch.friendInputs(),
-        makeLocator: { SaveInkLaunch.makeLocator() }
+        makeLocator: { SaveInkLaunch.makeLocator() },
+        usesLivePlaces: SaveInkLaunch.usesLivePlaces
     )
 
     var body: some View {

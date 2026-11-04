@@ -1,4 +1,5 @@
 import Combine
+import CoreLocation
 import Foundation
 import UIKit
 
@@ -79,6 +80,7 @@ struct SaveInkFix: Equatable {
 enum SaveInkCheckInSituation: Equatable {
     case verified
     case locationFailed
+    case placeChanged
     case permissionDenied
     case approximateOnly
     case tooFar(meters: Int)
@@ -89,6 +91,7 @@ enum SaveInkCheckInSituation: Equatable {
         switch self {
         case .verified: "verified"
         case .locationFailed: "failed"
+        case .placeChanged: "place-changed"
         case .permissionDenied: "permission"
         case .approximateOnly: "approximate"
         case .tooFar(let meters): "far-\(meters)"
@@ -117,6 +120,10 @@ struct SaveInkVisitRecord: Codable, Equatable, Identifiable {
     var anomaly: SaveInkAnomaly?
 }
 
+enum SaveInkAccountPurgeError: Error {
+    case unreadablePlaces
+}
+
 enum SaveInkPlaceBadge: Equatable {
     case visited
     case saved
@@ -131,6 +138,8 @@ struct SaveInkSavedPlaceRecord: Codable, Equatable {
     var blurb: String
     var sourceLabel: String
     var detailNote: String
+    /// Nil on records saved before accounts were recorded, and while signed out.
+    var ownerSubject: String? = nil
 }
 
 struct SaveInkPlace: Identifiable, Equatable {
@@ -151,6 +160,8 @@ struct SaveInkPlace: Identifiable, Equatable {
     /// Shop position used only to measure a one-shot fix. Not written onto a visit.
     var shopLatitude: Double?
     var shopLongitude: Double?
+    /// Former stamp ids folded into this row by `Place.consolidated`.
+    var aliasIDs: [String] = []
 
     var meta: String {
         let streetText = street
@@ -537,6 +548,35 @@ enum SaveInkPlaceLink {
         let host = (url.host ?? "").lowercased()
         return host.contains("maps.") || host.contains("openstreetmap.org") || url.path.contains("/maps")
     }
+
+    /// A venue name carried by a map link, such as `?q=` or `/maps/place/`.
+    /// A coordinate-only link has no name.
+    static func mapPlaceName(in text: String) -> String? {
+        guard let url = firstURL(in: text), isMapLink(url) else { return nil }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        for key in ["q", "query", "name", "address"] {
+            guard let value = items.first(where: { $0.name.caseInsensitiveCompare(key) == .orderedSame })?.value?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty,
+                  !value.contains("://"),
+                  value.rangeOfCharacter(from: CharacterSet.letters) != nil
+            else { continue }
+            return value
+        }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard let index = parts.firstIndex(where: { $0 == "place" || $0 == "search" }),
+              index + 1 < parts.count else { return nil }
+        let raw = parts[index + 1].split(separator: "@").first.map(String.init) ?? parts[index + 1]
+        let decoded = raw.removingPercentEncoding ?? raw
+        let cleaned = decoded.replacingOccurrences(of: "+", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, cleaned.rangeOfCharacter(from: CharacterSet.letters) != nil else { return nil }
+        return cleaned
+    }
+
+    static func isUnresolvedMapLink(_ text: String) -> Bool {
+        guard let url = firstURL(in: text), isMapLink(url) else { return false }
+        return mapPlaceName(in: text) == nil
+    }
 }
 
 /// Visit JSON written before visibility existed. A missing field stays public.
@@ -591,11 +631,17 @@ final class SaveInkNotebookStore: ObservableObject {
     @Published var draftComment = ""
     @Published var draftSentiment: SaveInkSentiment?
     @Published var draftVisibility: SaveInkVisibility = SaveInkProvisional.defaultVisibility
-    @Published var saveLink = ""
-    @Published var saveQuery = ""
+    @Published var saveLink = "" {
+        didSet { if saveLink != oldValue { recognizedPlaceID = nil } }
+    }
+    @Published var saveQuery = "" {
+        didSet { if saveQuery != oldValue { recognizedPlaceID = nil } }
+    }
     @Published var saveNotice: String?
     @Published var recognizedPlaceID: String?
     @Published var activePlaceID: String?
+    @Published private(set) var usesLivePlaces: Bool
+    @Published private(set) var userCoordinate: CLLocationCoordinate2D?
 
     let city = "大安區"
     let includesSampleCatalog: Bool
@@ -606,8 +652,23 @@ final class SaveInkNotebookStore: ObservableObject {
     private let placesKey = SavePlaceLinkGate.placesKey
     private let now: () -> Date
     private let makeLocator: () -> any SaveInkLocating
+    private let liveLoader: SaveInkLivePlaceLoader
+    private let liveOwner: () -> String?
+    private let canSaveAnotherLivePlace: @MainActor (Int) -> Bool
+    private let liveSavedPlaceTierIsAuthoritative: @MainActor () -> Bool
+    private let parkCappedLiveSave: (@MainActor (String) -> Bool)?
+    private var refreshTask: Task<Void, Never>?
+    private var refreshQueued = false
     private var locator: (any SaveInkLocating)?
     private var pendingSituation: SaveInkCheckInSituation?
+    /// Account that opened the check-in sheet. 「還是記下」refuses a later account.
+    private var checkInOwner: String?
+    /// Account whose places are on screen. A save refuses a different account.
+    private var catalogOwner: String?
+    private var liveGeneration = 0
+    /// True after a load that knew the full saved-place count. New live saves
+    /// wait for that, so a partial local list cannot admit a 51st stamp.
+    private var liveCatalogAuthoritative = false
 
     var currentDate: Date { now() }
 
@@ -620,23 +681,45 @@ final class SaveInkNotebookStore: ObservableObject {
         seedFixture: Bool = false,
         includeSampleCatalog: Bool = false,
         friendInputs: [SaveInkFriendVisitInput]? = nil,
-        makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() }
+        makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() },
+        usesLivePlaces: Bool = false,
+        liveLoader: SaveInkLivePlaceLoader? = nil,
+        liveOwner: @escaping () -> String? = {
+            let auth = PrivyAuthService.shared
+            return SaveInkNotebookStore.resolvedLiveOwner(
+                authUnknown: auth.authState == .unknown,
+                currentUserId: auth.currentUserId,
+                cachedOwner: SavePlaceLimitHandoff.cachedActiveOwner()
+            )
+        },
+        canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace,
+        liveSavedPlaceTierIsAuthoritative: @escaping @MainActor () -> Bool = {
+            SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier
+        },
+        parkCappedLiveSave: (@MainActor (String) -> Bool)? = nil
     ) {
         self.defaults = defaults
         let placesDefaults = Self.placesDefaults(for: defaults)
         self.placesDefaults = placesDefaults
         self.now = now
         self.makeLocator = makeLocator
-        self.includesSampleCatalog = seedFixture || includeSampleCatalog
-        if let friendInputs {
-            self.friendInputs = friendInputs
-        } else if seedFixture {
-            self.friendInputs = SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
-        } else {
-            self.friendInputs = []
-        }
+        self.usesLivePlaces = usesLivePlaces
+        self.includesSampleCatalog = !usesLivePlaces && (seedFixture || includeSampleCatalog)
+        let loader = liveLoader ?? (usesLivePlaces ? SaveInkLivePlaceLoader.production() : .inactive)
+        self.liveLoader = loader
+        self.liveOwner = liveOwner
+        self.canSaveAnotherLivePlace = canSaveAnotherLivePlace
+        self.liveSavedPlaceTierIsAuthoritative = liveSavedPlaceTierIsAuthoritative
+        self.parkCappedLiveSave = parkCappedLiveSave
+        if usesLivePlaces { catalogOwner = liveOwner() }
+        let saved = Self.loadSavedPlaces(
+            defaults: placesDefaults, key: placesKey,
+            owner: usesLivePlaces ? liveOwner() : nil, scoped: usesLivePlaces
+        )
         let loadedVisits: [SaveInkVisitRecord]
-        if seedFixture {
+        if usesLivePlaces {
+            loadedVisits = Self.load(defaults: defaults, key: Self.visitsKey(owner: liveOwner())) ?? []
+        } else if seedFixture {
             if let stored = Self.load(defaults: defaults, key: storageKey) {
                 loadedVisits = stored
             } else {
@@ -647,15 +730,25 @@ final class SaveInkNotebookStore: ObservableObject {
             loadedVisits = Self.visitsWithoutPersistedSamples(defaults: defaults, key: storageKey)
         }
         self.visits = loadedVisits
-        let saved = Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
-        if includesSampleCatalog {
+        if usesLivePlaces {
+            self.places = loader.localPlaces(saved)
+        } else if includesSampleCatalog {
             self.places = SaveInkFixture.places + saved
         } else {
             self.places = saved + Self.placesForRetainedSampleVisits(loadedVisits, alreadyLoaded: saved)
         }
+        if let friendInputs {
+            self.friendInputs = friendInputs
+        } else if seedFixture && !usesLivePlaces {
+            self.friendInputs = SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
+        } else {
+            self.friendInputs = []
+        }
+        if usesLivePlaces { reflectVisitBadges() }
     }
 
     func homePlaces() -> [SaveInkPlace] {
+        if usesLivePlaces { return places }
         let saved = places.filter { $0.id.hasPrefix("saved-") }
         guard includesSampleCatalog else { return saved }
         let featured = [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
@@ -663,9 +756,10 @@ final class SaveInkNotebookStore: ObservableObject {
         return main + saved
     }
 
-    /// Arrival needs a shop position. A typed save has none, so Home does not offer it.
+    /// Home's location-check target. Unlocated saves use the explicit unverified entry.
     func arrivalPlaceID() -> String? {
-        homePlaces().first { $0.shopLatitude != nil && $0.shopLongitude != nil }?.id
+        if usesLivePlaces { return liveArrivalPlaceID() }
+        return homePlaces().first { $0.shopLatitude != nil && $0.shopLongitude != nil }?.id
     }
 
     /// Sample shops stay off Home. A visit the user kept still needs a name and stamp.
@@ -697,8 +791,9 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func openPlace(_ id: String) {
-        activePlaceID = id
-        path.append(.place(id))
+        let resolved = place(id)?.id ?? id
+        activePlaceID = resolved
+        path.append(.place(resolved))
     }
 
     func openWelcome() {
@@ -715,7 +810,15 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func place(_ id: String) -> SaveInkPlace? {
-        places.first { $0.id == id }
+        if let exact = places.first(where: { $0.id == id }) { return exact }
+        return places.first { $0.aliasIDs.contains(id) }
+    }
+
+    /// The Home「我到了」target. Live mode uses it only when a place has a
+    /// measured distance, so a denied location cannot check in the first name.
+    func liveArrivalPlaceID() -> String? {
+        guard usesLivePlaces, let nearest = places.first, nearest.distanceMeters != nil else { return nil }
+        return nearest.id
     }
 
     func verifiedCount(for placeID: String) -> Int {
@@ -743,7 +846,8 @@ final class SaveInkNotebookStore: ObservableObject {
     func homeBadge(for place: SaveInkPlace) -> SaveInkPlaceBadge {
         guard !includesSampleCatalog else { return place.badge }
         if verifiedCount(for: place.id) > 0 { return .visited }
-        return latestVisit(for: place.id) == nil ? .saved : .unverified
+        if latestVisit(for: place.id) != nil { return .unverified }
+        return usesLivePlaces ? place.badge : .saved
     }
 
     func totalVisits() -> Int {
@@ -763,14 +867,30 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func checkIn(placeID: String) async {
+        let ownerAtStart = usesLivePlaces ? liveOwner() : nil
+        if usesLivePlaces, ownerAtStart != catalogOwner {
+            sheet = nil
+            return
+        }
         guard let place = place(placeID) else { return }
         activePlaceID = placeID
         let fix = await locatorOrMake().requestFix(for: place)
+        if usesLivePlaces, liveOwner() != ownerAtStart || catalogOwner != ownerAtStart { return }
+        guard let currentPlace = self.place(placeID) else { return }
+        let placeID = currentPlace.id
+        activePlaceID = placeID
+        checkInOwner = ownerAtStart
+        guard currentPlace.shopLatitude == place.shopLatitude,
+              currentPlace.shopLongitude == place.shopLongitude else {
+            pendingSituation = .placeChanged
+            sheet = .checkIn(.placeChanged, placeID: placeID)
+            return
+        }
         let previous = previousShop(before: placeID)
         let speed = SaveInkCheckIn.impliedSpeedKmh(
             from: previous,
-            to: place.shopLatitude,
-            longitude: place.shopLongitude,
+            to: currentPlace.shopLatitude,
+            longitude: currentPlace.shopLongitude,
             now: now()
         )
         let decision = SaveInkCheckIn.decide(
@@ -784,7 +904,6 @@ final class SaveInkNotebookStore: ObservableObject {
             now: now(),
             visits: &visits
         )
-        persist()
         switch outcome {
         case .ignored:
             if case .tooFar(_) = decision.situation {
@@ -795,6 +914,8 @@ final class SaveInkNotebookStore: ObservableObject {
             pendingSituation = .duplicate
             sheet = .checkIn(.duplicate, placeID: placeID)
         case .inserted(_), .upgraded(_):
+            persist(owner: ownerAtStart)
+            markVisited(placeID)
             pendingSituation = decision.situation
             prepareDraft(placeID: placeID)
             sheet = .checkIn(decision.situation, placeID: placeID)
@@ -803,9 +924,16 @@ final class SaveInkNotebookStore: ObservableObject {
 
     /// The user explicitly records a visit without claiming location proof.
     func recordUnverifiedVisit(placeID: String) {
+        let owner = usesLivePlaces ? liveOwner() : nil
+        if usesLivePlaces, owner != catalogOwner {
+            sheet = nil
+            return
+        }
         guard let place = place(placeID),
               place.shopLatitude == nil || place.shopLongitude == nil else { return }
+        let placeID = place.id
         activePlaceID = placeID
+        checkInOwner = owner
         let outcome = SaveInkVisitBook.apply(
             decision: SaveInkCheckInDecision(
                 situation: .downgradedUnverified, recordsVisit: true,
@@ -813,7 +941,8 @@ final class SaveInkNotebookStore: ObservableObject {
             ),
             placeID: placeID, now: now(), visits: &visits
         )
-        persist()
+        persist(owner: owner)
+        if case .inserted = outcome { markVisited(placeID) }
         prepareDraft(placeID: placeID)
         let situation: SaveInkCheckInSituation = outcome == .suppressed ? .duplicate : .downgradedUnverified
         pendingSituation = situation
@@ -822,6 +951,11 @@ final class SaveInkNotebookStore: ObservableObject {
 
     func saveAnyway() {
         guard case .checkIn(.tooFar(_), let placeID)? = sheet else { return }
+        if usesLivePlaces, liveOwner() != checkInOwner || catalogOwner != checkInOwner {
+            sheet = nil
+            pendingSituation = nil
+            return
+        }
         let decision = SaveInkCheckInDecision(
             situation: .tooFar(meters: 0),
             recordsVisit: false,
@@ -835,7 +969,8 @@ final class SaveInkNotebookStore: ObservableObject {
             visits: &visits,
             recordTooFar: true
         )
-        persist()
+        persist(owner: usesLivePlaces ? checkInOwner : nil)
+        markVisited(placeID)
         prepareDraft(placeID: placeID)
         pendingSituation = .downgradedUnverified
         sheet = .checkIn(.downgradedUnverified, placeID: placeID)
@@ -867,21 +1002,48 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitDraft() {
+        if pendingSituation == .placeChanged {
+            cancelSheet()
+            return
+        }
+        if usesLivePlaces, liveOwner() != checkInOwner || catalogOwner != checkInOwner {
+            sheet = nil
+            path.removeAll()
+            return
+        }
         let placeID = activePlaceID ?? ""
         if let index = visits.lastIndex(where: { $0.placeID == placeID }) {
             visits[index].comment = draftComment.trimmingCharacters(in: .whitespacesAndNewlines)
             visits[index].visibility = draftVisibility
             visits[index].sentiment = draftSentiment
-            persist()
+            persist(owner: usesLivePlaces ? checkInOwner : nil)
         }
         sheet = nil
         path.removeAll()
     }
 
     func pasteExampleLink() {
+        if usesLivePlaces {
+            paste(liveText: UIPasteboard.general.string)
+            return
+        }
         guard includesSampleCatalog, place(SaveInkFixture.qingtian) != nil else { return }
         saveLink = "https://短影音連結/v/8f2k…"
         recognizedPlaceID = SaveInkFixture.qingtian
+    }
+
+    /// Live 「貼上」 reads the clipboard. It does not insert the fixture link
+    /// or point at the fixture place. An empty clipboard leaves the field alone.
+    func paste(liveText: String?) {
+        guard usesLivePlaces else {
+            pasteExampleLink()
+            return
+        }
+        let pasted = liveText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !pasted.isEmpty else { return }
+        saveLink = pasted
+        recognizedPlaceID = nil
+        recognizeQuery()
     }
 
     func recognizeQuery() {
@@ -895,11 +1057,15 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitSave() {
+        if usesLivePlaces, liveOwner() != catalogOwner {
+            sheet = nil
+            return
+        }
         if let id = recognizedPlaceID, place(id) == nil {
             recognizedPlaceID = nil
         }
         recognizeQuery()
-        if !includesSampleCatalog, let id = recognizedPlaceID,
+        if !usesLivePlaces && !includesSampleCatalog, let id = recognizedPlaceID,
            !id.hasPrefix("saved-"), var retained = place(id) {
             let savedID = "saved-\(id)"
             places.removeAll { $0.id == id }
@@ -928,8 +1094,34 @@ final class SaveInkNotebookStore: ObservableObject {
             return
         }
         saveNotice = nil
-        if recognizedPlaceID == nil, !saveQuery.isEmpty {
-            let name = SaveInkPlaceLink.savedName(from: saveQuery)
+        var appendedIndex: Int?
+        var proposedName: String?
+        if recognizedPlaceID == nil {
+            if !saveQuery.isEmpty {
+                proposedName = SaveInkPlaceLink.savedName(from: saveQuery)
+            } else if let mapName = SaveInkPlaceLink.mapPlaceName(in: combined) {
+                proposedName = mapName
+            } else if SaveInkPlaceLink.isUnresolvedMapLink(combined) {
+                saveNotice = "這則地圖連結還沒有店名。在下面寫下店名再存。"
+                return
+            }
+        }
+        if let name = proposedName {
+            if usesLivePlaces, refreshTask != nil || !liveCatalogAuthoritative {
+                saveNotice = "還在核對已存的地點，請稍後再存。"
+                return
+            }
+            if usesLivePlaces, !liveSavedPlaceTierIsAuthoritative() {
+                saveNotice = "還在核對可以存幾個地點，請稍後再存。"
+                return
+            }
+            if usesLivePlaces, !canSaveAnotherLivePlace(places.count) {
+                let parked = parkCappedLiveSave?(name) ?? parkLiveNameOffTheMap(name)
+                saveNotice = parked
+                    ? "已存 50 個地點，所以暫放，還沒放上地圖。"
+                    : "已存 50 個地點，這次沒有存下來。請稍後再試。"
+                return
+            }
             let place = SaveInkPlace(
                 id: "saved-\(SaveInkSeed.of(name))",
                 name: name,
@@ -950,14 +1142,118 @@ final class SaveInkNotebookStore: ObservableObject {
             )
             places.append(place)
             recognizedPlaceID = place.id
+            appendedIndex = places.count - 1
         }
         if let id = recognizedPlaceID, let index = places.firstIndex(where: { $0.id == id }) {
             if places[index].badge != .visited {
                 places[index].badge = .saved
             }
         }
-        persistPlaces()
+        guard persistPlaces() else {
+            if let appendedIndex, places.indices.contains(appendedIndex) {
+                let removed = places.remove(at: appendedIndex)
+                if recognizedPlaceID == removed.id {
+                    recognizedPlaceID = nil
+                }
+            }
+            saveNotice = "這次沒有存下來。請稍後再試。"
+            return
+        }
         sheet = nil
+        if usesLivePlaces {
+            Task { await refreshLivePlaces() }
+        }
+    }
+
+    /// While sign-in is still restoring, the cached account is the owner.
+    /// `currentUserId` is nil until that finishes, so the two must not diverge.
+    static func resolvedLiveOwner(authUnknown: Bool, currentUserId: String?, cachedOwner: String?) -> String? {
+        if authUnknown { return cachedOwner }
+        return currentUserId
+    }
+
+    /// Same cap as the share queue. The caller waits until the tier is known.
+    /// This check fails open only after that, so a resolved Pro account is not parked.
+    private static func allowsAnotherLivePlace(count: Int) -> Bool {
+        guard SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier else { return true }
+        return SavePlaceLimitGate.decide(
+            tier: SaveEntitlementStore.shared.tier,
+            savedPlaceCount: count
+        ) != .overFreeLimit
+    }
+
+    /// The 51st free save stays off the map. It is parked as a review item.
+    private func parkLiveNameOffTheMap(_ name: String) -> Bool {
+        let pending = PendingSharedPlace(
+            ownerSubject: liveOwner(),
+            name: name,
+            address: name,
+            category: "food",
+            latitude: 0,
+            longitude: 0,
+            dishes: [],
+            savedAt: now()
+        )
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: Place.from(pending),
+            ownerSubject: liveOwner()
+        )
+        do {
+            _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate, preservingParkedContext: true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Reloads vault stamps, the share queue, and ink saves. Fixture launches
+    /// no-op so screenshot baselines and ink UI tests keep their seeded rows.
+    /// Overlapping callers wait for the in-flight load, then run one more pass.
+    func refreshLivePlaces() async {
+        guard usesLivePlaces else { return }
+        if refreshTask != nil {
+            refreshQueued = true
+            await refreshTask?.value
+            return
+        }
+        let task = Task { @MainActor in
+            await self.performLiveRefresh()
+        }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+        if refreshQueued {
+            refreshQueued = false
+            await refreshLivePlaces()
+        }
+    }
+
+    private func performLiveRefresh() async {
+        liveGeneration += 1
+        let generation = liveGeneration
+        let owner = liveOwner()
+        let ink = Self.loadSavedPlaces(
+            defaults: placesDefaults,
+            key: placesKey,
+            owner: owner,
+            scoped: true
+        )
+        let loaded = await liveLoader.load(ink)
+        guard generation == liveGeneration else { return }
+        guard liveOwner() == owner else { return }
+        catalogOwner = owner
+        places = loaded.places
+        userCoordinate = loaded.userCoordinate
+        liveCatalogAuthoritative = loaded.countIsAuthoritative
+        retargetOpenPlaces()
+        let visitKey = Self.visitsKey(owner: owner)
+        if let stored = Self.load(defaults: defaults, key: visitKey) {
+            visits = stored
+        } else {
+            visits = []
+        }
+        rekeyVisits(using: loaded.places)
+        reflectVisitBadges()
     }
 
     func openSave() {
@@ -1005,12 +1301,83 @@ final class SaveInkNotebookStore: ObservableObject {
         return (previous.visitedAt, latitude, longitude)
     }
 
-    private func persist() {
-        Self.save(visits, defaults: defaults, key: storageKey)
+    private func markVisited(_ placeID: String) {
+        guard let index = places.firstIndex(where: { $0.id == placeID }) else { return }
+        places[index].badge = .visited
     }
 
-    private func persistPlaces() {
-        let records = places.filter { $0.id.hasPrefix("saved-") }.map {
+    private func reflectVisitBadges() {
+        let visited = Set(visits.map(\.placeID))
+        guard !visited.isEmpty else { return }
+        places = places.map { place in
+            guard place.badge != .visited else { return place }
+            let ids = Set([place.id] + place.aliasIDs)
+            guard !visited.isDisjoint(with: ids) else { return place }
+            var copy = place
+            copy.badge = .visited
+            return copy
+        }
+    }
+
+    private func retargetOpenPlaces() {
+        path = path.map(retarget)
+        if let activePlaceID, let resolved = place(activePlaceID)?.id, resolved != activePlaceID {
+            self.activePlaceID = resolved
+        }
+        if case .checkIn(let situation, let placeID) = sheet, let resolved = place(placeID)?.id, resolved != placeID {
+            sheet = .checkIn(situation, placeID: resolved)
+        }
+    }
+
+    private func retarget(_ route: SaveInkRoute) -> SaveInkRoute {
+        switch route {
+        case .place(let id):
+            return .place(place(id)?.id ?? id)
+        case .review(let id):
+            return .review(place(id)?.id ?? id)
+        case .arrival(let id):
+            return .arrival(place(id)?.id ?? id)
+        case .passport, .friends, .welcome:
+            return route
+        }
+    }
+
+    private func rekeyVisits(using places: [SaveInkPlace]) {
+        var aliasToPrimary: [String: String] = [:]
+        for place in places {
+            for alias in place.aliasIDs where alias != place.id {
+                aliasToPrimary[alias] = place.id
+            }
+        }
+        guard !aliasToPrimary.isEmpty else { return }
+        var changed = false
+        for index in visits.indices {
+            guard let primary = aliasToPrimary[visits[index].placeID] else { continue }
+            visits[index].placeID = primary
+            changed = true
+        }
+        if changed { persist(owner: liveOwner()) }
+    }
+
+    private func persist(owner explicitOwner: String? = nil) {
+        let key = usesLivePlaces ? Self.visitsKey(owner: explicitOwner ?? liveOwner()) : storageKey
+        Self.save(visits, defaults: defaults, key: key)
+    }
+
+    private static func visitsKey(owner: String?) -> String {
+        // Signed-out live launches must not read fixture visits stored on the
+        // base key. Those rows are not migrated: the account is unknown.
+        guard let owner, !owner.isEmpty else { return "save.ink.visits.live.signed-out" }
+        return "save.ink.visits.v1.\(owner)"
+    }
+
+    /// False when this account's rows could not be written. A file that exists
+    /// but cannot be decoded is left untouched, so one bad value cannot erase
+    /// every account's ink saves.
+    private func persistPlaces() -> Bool {
+        if usesLivePlaces, liveOwner() != catalogOwner { return false }
+        let owner = usesLivePlaces ? liveOwner() : nil
+        let mine = places.filter { $0.id.hasPrefix("saved-") }.map {
             SaveInkSavedPlaceRecord(
                 id: $0.id,
                 name: $0.name,
@@ -1018,11 +1385,22 @@ final class SaveInkNotebookStore: ObservableObject {
                 street: $0.street,
                 blurb: $0.blurb,
                 sourceLabel: $0.sourceLabel,
-                detailNote: $0.detailNote
+                detailNote: $0.detailNote,
+                ownerSubject: owner
             )
         }
-        guard let data = try? JSONEncoder().encode(records) else { return }
+        let records: [SaveInkSavedPlaceRecord]
+        if usesLivePlaces, let data = placesDefaults.data(forKey: placesKey) {
+            guard let existing = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data) else {
+                return false
+            }
+            records = existing.filter { $0.ownerSubject != owner } + mine
+        } else {
+            records = mine
+        }
+        guard let data = try? JSONEncoder().encode(records) else { return false }
         placesDefaults.set(data, forKey: placesKey)
+        return true
     }
 
     /// Production places live in the App Group. A private test suite stays isolated.
@@ -1037,11 +1415,49 @@ final class SaveInkNotebookStore: ObservableObject {
         return shared
     }
 
-    private static func loadSavedPlaces(defaults: UserDefaults, key: String) -> [SaveInkPlace] {
+    /// Removes this account's ink visits and name saves. Other accounts' rows stay.
+    static func purgeAccount(_ owner: String, defaults: UserDefaults = .standard) throws {
+        guard !owner.isEmpty else { return }
+        defaults.removeObject(forKey: "save.ink.visits.v1.\(owner)")
+        let store = placesDefaults(for: defaults)
+        let key = SavePlaceLinkGate.placesKey
+        guard let data = store.data(forKey: key) else { return }
+        guard let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data) else {
+            throw SaveInkAccountPurgeError.unreadablePlaces
+        }
+        let kept = records.filter { $0.ownerSubject != owner }
+        guard kept.count != records.count else { return }
+        if kept.isEmpty {
+            store.removeObject(forKey: key)
+            return
+        }
+        guard let encoded = try? JSONEncoder().encode(kept) else {
+            throw SaveInkAccountPurgeError.unreadablePlaces
+        }
+        store.set(encoded, forKey: key)
+    }
+
+    /// Signed-in live launches see only that account's rows. Ownerless rows
+    /// stay hidden while an account is signed in, matching the vault.
+    static func visibleSavedRecords(
+        _ records: [SaveInkSavedPlaceRecord],
+        owner: String?,
+        scoped: Bool
+    ) -> [SaveInkSavedPlaceRecord] {
+        guard scoped else { return records }
+        return records.filter { $0.ownerSubject == owner }
+    }
+
+    private static func loadSavedPlaces(
+        defaults: UserDefaults,
+        key: String,
+        owner: String?,
+        scoped: Bool
+    ) -> [SaveInkPlace] {
         guard let data = defaults.data(forKey: key),
               let records = try? JSONDecoder().decode([SaveInkSavedPlaceRecord].self, from: data)
         else { return [] }
-        return records.map {
+        return visibleSavedRecords(records, owner: owner, scoped: scoped).map {
             SaveInkPlace(
                 id: $0.id,
                 name: $0.name,

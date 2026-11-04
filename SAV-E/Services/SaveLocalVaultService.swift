@@ -99,6 +99,8 @@ final class SaveLocalVaultService: Sendable {
     nonisolated(unsafe) var removeReviewCandidateError: Error?
     nonisolated(unsafe) var saveReviewCandidateError: Error?
     nonisolated(unsafe) var purgeAccountDeletionRecordsError: Error?
+    nonisolated(unsafe) var removeConfirmedPlaceError: Error?
+    nonisolated(unsafe) var releaseUnboundShareError: Error?
 #endif
 
     init(overrideVaultURL: URL? = nil) {
@@ -662,6 +664,9 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func removeConfirmedPlace(_ place: Place, belongingTo currentUserId: String?) throws {
+#if DEBUG
+        if let removeConfirmedPlaceError { throw removeConfirmedPlaceError }
+#endif
         try removeConfirmedPlace(place, belongingTo: currentUserId, scopedToActiveAccount: true)
     }
 
@@ -773,6 +778,225 @@ final class SaveLocalVaultService: Sendable {
         if let coordinationError { throw coordinationError }
         guard let result else { throw SaveLocalVaultError.storageUnavailable }
         return try result.get()
+    }
+
+    /// A share this account tried to claim while the queue file could not be rewritten.
+    /// Another account must not import the same key. The ledger sits beside the vault,
+    /// so an unwritable queue directory does not block it.
+    func claimUnboundShare(key: String, owner: String) -> Bool {
+        guard !key.isEmpty, !owner.isEmpty else { return false }
+        return withLock {
+            guard case .rows(var rows) = readUnboundShares() else { return false }
+            rows.removeAll { $0.key == key }
+            rows.append(UnboundShareClaim(key: key, owner: owner))
+            guard case .rows(let storedFallback) = readUnboundShareFallback() else { return false }
+            if saveUnboundShares(rows) {
+                return saveUnboundShareFallback(storedFallback.filter { $0.key != key })
+            }
+            var fallback = storedFallback
+            fallback.removeAll { $0.key == key }
+            fallback.append(UnboundShareClaim(key: key, owner: owner))
+            return saveUnboundShareFallback(fallback)
+        }
+    }
+
+    func unboundShareOwner(for key: String) -> String? {
+        guard !key.isEmpty else { return nil }
+        return withLock {
+            guard case .rows(let rows) = readUnboundShares() else { return nil }
+            guard case .rows(let fallback) = readUnboundShareFallback() else { return nil }
+            if let held = fallback.first(where: { $0.key == key })?.owner {
+                return held
+            }
+            return rows.first { $0.key == key }?.owner
+        }
+    }
+
+    /// Missing file is readable and empty. A file that exists but cannot be
+    /// decoded is not "no claims": callers must not import ownerless shares.
+    func unboundShareLedgerIsReadable() -> Bool {
+        withLock {
+            if case .unreadable = readUnboundShares() { return false }
+            if case .unreadable = readUnboundShareFallback() { return false }
+            return true
+        }
+    }
+
+    @discardableResult
+    func releaseUnboundShare(key: String) -> Bool {
+        guard !key.isEmpty else { return true }
+        return withLock {
+#if DEBUG
+            if releaseUnboundShareError != nil { return false }
+#endif
+            guard case .rows(var rows) = readUnboundShares(),
+                  case .rows(var fallback) = readUnboundShareFallback() else { return false }
+            rows.removeAll { $0.key == key }
+            guard saveUnboundShares(rows) else { return false }
+            fallback.removeAll { $0.key == key }
+            return saveUnboundShareFallback(fallback)
+        }
+    }
+
+    /// Drops this account's fallback claims. Other accounts stay. A missing
+    /// file is already clean. An unreadable or unwritable file throws so
+    /// account deletion can retry instead of forgetting the hold.
+    func purgeUnboundShares(belongingTo owner: String) throws {
+        guard !owner.isEmpty else { return }
+        try withLock {
+            switch readUnboundShares() {
+            case .unreadable:
+                throw SaveLocalVaultError.storageUnavailable
+            case .rows(var rows):
+                let before = rows.count
+                rows.removeAll { $0.owner == owner }
+                guard case .rows(var fallback) = readUnboundShareFallback() else {
+                    throw SaveLocalVaultError.storageUnavailable
+                }
+                let fallbackBefore = fallback.count
+                fallback.removeAll { $0.owner == owner }
+                if rows.count != before, !saveUnboundShares(rows) {
+                    throw SaveLocalVaultError.storageUnavailable
+                }
+                if fallback.count != fallbackBefore, !saveUnboundShareFallback(fallback) {
+                    throw SaveLocalVaultError.storageUnavailable
+                }
+                try removeCapRejectedStamps(belongingTo: owner)
+            }
+        }
+    }
+
+    func rememberCapRejectedStamp(_ id: UUID, owner: String?) -> Bool {
+        guard var ids = capRejectedStampIDs(owner: owner) else { return false }
+        ids.insert(id)
+        return saveCapRejectedStamps(ids, owner: owner)
+    }
+
+    /// `nil` means the marker exists but cannot be decoded. Callers must not
+    /// treat that as an empty set.
+    func capRejectedStampIDs(owner: String?) -> Set<UUID>? {
+        guard let defaults = unboundShareDefaults() else { return nil }
+        let key = capRejectedDefaultsKey(owner: owner)
+        guard let data = defaults.data(forKey: key) else { return [] }
+        return try? JSONDecoder().decode(Set<UUID>.self, from: data)
+    }
+
+    func forgetCapRejectedStamp(_ id: UUID, owner: String?) {
+        guard var ids = capRejectedStampIDs(owner: owner) else { return }
+        ids.remove(id)
+        _ = saveCapRejectedStamps(ids, owner: owner)
+    }
+
+    private struct UnboundShareClaim: Codable, Equatable {
+        var key: String
+        var owner: String
+    }
+
+    private enum UnboundShareRead {
+        case rows([UnboundShareClaim])
+        case unreadable
+    }
+
+    private func unboundShareURL() -> URL? {
+        vaultURL()?.deletingLastPathComponent().appendingPathComponent("save.ink.unbound-shares.json")
+    }
+
+    private func readUnboundShares() -> UnboundShareRead {
+        guard let url = unboundShareURL() else { return .unreadable }
+        guard FileManager.default.fileExists(atPath: url.path) else { return .rows([]) }
+        guard let data = try? Data(contentsOf: url),
+              let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else {
+            return .unreadable
+        }
+        return .rows(rows)
+    }
+
+    private func unboundShareDefaults() -> UserDefaults? {
+        let path = vaultURL()?.deletingLastPathComponent().path ?? "shared"
+        var hash: UInt64 = 1469598103934665603
+        for byte in path.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1099511628211
+        }
+        return UserDefaults(suiteName: "ink-unbound-\(String(hash, radix: 16))")
+    }
+
+    private func readUnboundShareFallback() -> UnboundShareRead {
+        guard let defaults = unboundShareDefaults() else { return .unreadable }
+        guard let data = defaults.data(forKey: "claims") else { return .rows([]) }
+        guard let rows = try? JSONDecoder().decode([UnboundShareClaim].self, from: data) else {
+            return .unreadable
+        }
+        return .rows(rows)
+    }
+
+    private func removeCapRejectedStamps(belongingTo owner: String) throws {
+        guard let defaults = unboundShareDefaults() else {
+            throw SaveLocalVaultError.storageUnavailable
+        }
+        let key = capRejectedDefaultsKey(owner: owner)
+        defaults.removeObject(forKey: key)
+        if defaults.data(forKey: key) != nil {
+            throw SaveLocalVaultError.storageUnavailable
+        }
+    }
+
+#if DEBUG
+    func testingStoreOpaqueUnboundShareFallback(_ data: Data) {
+        unboundShareDefaults()?.set(data, forKey: "claims")
+    }
+
+    func testingStoreOpaqueCapRejectedMarkers(_ data: Data, owner: String) {
+        unboundShareDefaults()?.set(data, forKey: capRejectedDefaultsKey(owner: owner))
+    }
+#endif
+
+    private func saveUnboundShareFallback(_ rows: [UnboundShareClaim]) -> Bool {
+        guard let defaults = unboundShareDefaults() else { return false }
+        if rows.isEmpty {
+            defaults.removeObject(forKey: "claims")
+            return true
+        }
+        guard let data = try? JSONEncoder().encode(rows) else { return false }
+        defaults.set(data, forKey: "claims")
+        return true
+    }
+
+    private func capRejectedDefaultsKey(owner: String?) -> String {
+        "rejected.\(owner ?? "signed-out")"
+    }
+
+    private func saveCapRejectedStamps(_ ids: Set<UUID>, owner: String?) -> Bool {
+        guard let defaults = unboundShareDefaults() else { return false }
+        let key = capRejectedDefaultsKey(owner: owner)
+        if ids.isEmpty {
+            defaults.removeObject(forKey: key)
+            return true
+        }
+        guard let data = try? JSONEncoder().encode(ids) else { return false }
+        defaults.set(data, forKey: key)
+        return true
+    }
+
+    private func saveUnboundShares(_ rows: [UnboundShareClaim]) -> Bool {
+        guard let url = unboundShareURL() else { return false }
+        if rows.isEmpty {
+            if FileManager.default.fileExists(atPath: url.path) {
+                do {
+                    try FileManager.default.removeItem(at: url)
+                } catch {
+                    return false
+                }
+            }
+            return true
+        }
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(rows).write(to: url, options: [.atomic])
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func vaultURL() -> URL? {

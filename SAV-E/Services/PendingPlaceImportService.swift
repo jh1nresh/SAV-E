@@ -1041,6 +1041,12 @@ final class PendingPlaceImportService {
 
     private let fileManager: FileManager
     private let overrideContainerURL: URL?
+#if DEBUG
+    /// When set, coordinated queue writes report failure without touching the file.
+    var forceCoordinationFailure = false
+    /// Binding reports failure. Removal can still succeed.
+    var forceBindFailure = false
+#endif
 
     init(fileManager: FileManager = .default, overrideContainerURL: URL? = nil) {
         self.fileManager = fileManager
@@ -1065,6 +1071,109 @@ final class PendingPlaceImportService {
         consumePendingArray(named: SAVEProductionConfig.pendingPlacesFileName, as: PendingSharedPlace.self) {
             $0.ownerSubject == nil || $0.ownerSubject == ownerSubject
         }
+    }
+
+    /// Keep a failed upload on this account so another sign-in cannot claim it.
+    /// False when the queue file could not be rewritten. Callers must not treat
+    /// the row as owned in that case.
+    @discardableResult
+    func bindPendingPlaces(keys: Set<String>, to owner: String) -> Bool {
+        guard !keys.isEmpty, !owner.isEmpty else { return true }
+#if DEBUG
+        if forceBindFailure { return false }
+#endif
+        guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return false }
+        var failed = false
+        let coordinated = coordinate(url: url, purpose: "bind \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard var items = try? loadArray([PendingSharedPlace].self, from: url) else {
+                failed = true
+                return
+            }
+            var changed = false
+            for index in items.indices where keys.contains(items[index].deduplicationKey) && items[index].ownerSubject != owner {
+                items[index].ownerSubject = owner
+                changed = true
+            }
+            guard changed else { return }
+            do {
+                let data = try JSONEncoder().encode(items)
+                try data.write(to: url, options: [.atomic])
+            } catch {
+                failed = true
+            }
+        }
+        return coordinated && !failed
+    }
+
+    /// Drop queue rows that this account has confirmed, so a later account
+    /// cannot import the same ownerless save.
+    /// Drops the rows this pass actually processed. A later share that reused
+    /// the same deduplication key, with new text or dishes, stays queued.
+    @discardableResult
+    func removeProcessedPendingPlaces(_ processed: [PendingSharedPlace]) -> Bool {
+        guard !processed.isEmpty, let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return true }
+        let fingerprints = Set(processed.map(Self.pendingContentFingerprint))
+        var failed = false
+        let coordinated = coordinate(url: url, purpose: "claim \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else {
+                failed = true
+                return
+            }
+            let kept = items.filter { !fingerprints.contains(Self.pendingContentFingerprint($0)) }
+            guard kept.count != items.count else { return }
+            do {
+                if kept.isEmpty {
+                    try fileManager.removeItem(at: url)
+                } else {
+                    let data = try JSONEncoder().encode(kept)
+                    try data.write(to: url, options: [.atomic])
+                }
+            } catch {
+                failed = true
+            }
+        }
+        return coordinated && !failed
+    }
+
+    private static func pendingContentFingerprint(_ item: PendingSharedPlace) -> String {
+        [
+            item.deduplicationKey,
+            String(item.savedAt.timeIntervalSince1970),
+            item.sourceURL ?? "",
+            item.sourceText ?? "",
+            item.priceRange ?? "",
+            item.dishes.joined(separator: "\u{1f}"),
+        ].joined(separator: "\u{1e}")
+    }
+
+    func removePendingPlaces(withKeys keys: Set<String>) {
+        guard !keys.isEmpty, let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return }
+        coordinate(url: url, purpose: "claim \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
+            let kept = items.filter { !keys.contains($0.deduplicationKey) }
+            guard kept.count != items.count else { return }
+            if kept.isEmpty {
+                try? fileManager.removeItem(at: url)
+            } else if let data = try? JSONEncoder().encode(kept) {
+                try? data.write(to: url, options: [.atomic])
+            }
+        }
+    }
+
+    /// Read the share queue without removing it. Home shows these places even
+    /// when the legacy importer has not drained the file yet.
+    func peekPendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
+        guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return [] }
+        var result: [PendingSharedPlace] = []
+        coordinate(url: url, purpose: "peek \(SAVEProductionConfig.pendingPlacesFileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            guard let items = try? loadArray([PendingSharedPlace].self, from: url) else { return }
+            result = items.filter { $0.ownerSubject == nil || $0.ownerSubject == ownerSubject }
+        }
+        return result
     }
 
     func restorePendingPlaces(_ places: [PendingSharedPlace], restorationToken: PendingImportRestorationToken? = nil) {
@@ -1248,7 +1357,11 @@ final class PendingPlaceImportService {
         return try JSONDecoder().decode(type, from: data)
     }
 
-    private func coordinate(url: URL, purpose: String, _ work: () -> Void) {
+    @discardableResult
+    private func coordinate(url: URL, purpose: String, _ work: () -> Void) -> Bool {
+#if DEBUG
+        if forceCoordinationFailure { return false }
+#endif
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         coordinator.coordinate(writingItemAt: url, options: [], error: &coordinationError) { _ in
@@ -1256,7 +1369,9 @@ final class PendingPlaceImportService {
         }
         if let coordinationError {
             print("PendingPlaceImportService: failed to coordinate \(purpose): \(coordinationError)")
+            return false
         }
+        return true
     }
 
     private func pendingFileURL(named fileName: String) -> URL? {
@@ -1271,9 +1386,9 @@ final class PendingPlaceImportService {
 }
 
 extension Place {
-    static func from(_ pendingPlace: PendingSharedPlace) -> Place {
+    static func from(_ pendingPlace: PendingSharedPlace, id: UUID = UUID()) -> Place {
         Place(
-            id: UUID(),
+            id: id,
             name: pendingPlace.name,
             address: pendingPlace.address,
             latitude: pendingPlace.latitude,

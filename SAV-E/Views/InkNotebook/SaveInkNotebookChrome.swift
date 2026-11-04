@@ -296,6 +296,7 @@ struct SaveInkLineField: View {
 
 /// The only accent control in the ink notebook.
 struct SaveInkArriveButton: View {
+    var isEnabled: Bool = true
     var action: () -> Void
 
     var body: some View {
@@ -316,6 +317,8 @@ struct SaveInkArriveButton: View {
             )
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
         .accessibilityIdentifier("ink.arrived")
         .accessibilityLabel("我到了")
         .frame(minHeight: 44)

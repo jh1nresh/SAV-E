@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SaveInkHomeScreen: View {
     @ObservedObject var store: SaveInkNotebookStore
+    @Environment(\.scenePhase) private var scenePhase
 
     private var picks: [SaveInkPlace] {
         store.homePlaces()
@@ -32,24 +33,40 @@ struct SaveInkHomeScreen: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 10)
-                if let placeID = store.arrivalPlaceID() {
+                if let placeID = homeArrivalID {
                     SaveInkArriveButton {
                         Task { await store.checkIn(placeID: placeID) }
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 44)
-                } else if let place = picks.first {
+                } else if let place = picks.first,
+                          place.shopLatitude == nil || place.shopLongitude == nil {
                     SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.arrived.unverified") {
                         store.recordUnverifiedVisit(placeID: place.id)
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 44)
+                } else if !picks.isEmpty {
+                    SaveInkArriveButton(isEnabled: false) {}
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 44)
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveInkPalette.paper.ignoresSafeArea())
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.home")
+        .task { await store.refreshLivePlaces() }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await store.refreshLivePlaces() }
+        }
+    }
+
+    /// Fixture Home can check in the featured place. Live Home checks in only
+    /// the nearest located stamp. Without a distance, the person opens a card.
+    private var homeArrivalID: String? {
+        store.arrivalPlaceID()
     }
 
     private var header: some View {
@@ -129,6 +146,11 @@ struct SaveInkHomeScreen: View {
             Text(place.meta)
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.inkSub)
+            if store.usesLivePlaces, let minutes = place.walkMinutes {
+                Text("步行 \(minutes) 分")
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.inkSub)
+            }
             Text(place.blurb)
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)
@@ -275,8 +297,10 @@ struct SaveInkCheckInSheet: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .multilineTextAlignment(.center)
             }
-            stamp
-                .frame(width: stampSize, height: stampSize)
+            if situation != .placeChanged {
+                stamp
+                    .frame(width: stampSize, height: stampSize)
+            }
             if showsComment {
                 commentBox
                 sentiment
@@ -300,6 +324,8 @@ struct SaveInkCheckInSheet: View {
             return "到了，已蓋章"
         case .locationFailed:
             return "定位不到，先幫你記下"
+        case .placeChanged:
+            return "店家位置已更新"
         case .permissionDenied:
             return "沒有定位權限，\n這次記成未驗證"
         case .approximateOnly:
@@ -319,6 +345,7 @@ struct SaveInkCheckInSheet: View {
     private var subtitle: String? {
         switch situation {
         case .locationFailed: "到現場可再試一次驗證。"
+        case .placeChanged: "這次尚未記錄，請重新確認位置。"
         default: nil
         }
     }
@@ -357,7 +384,7 @@ struct SaveInkCheckInSheet: View {
         switch situation {
         case .locationFailed, .permissionDenied, .approximateOnly, .downgradedUnverified:
             return true
-        case .verified, .tooFar, .duplicate:
+        case .verified, .tooFar, .duplicate, .placeChanged:
             return false
         }
     }
@@ -406,6 +433,13 @@ struct SaveInkCheckInSheet: View {
     @ViewBuilder
     private var buttons: some View {
         switch situation {
+        case .placeChanged:
+            SaveInkOutlineButton(title: "重新確認位置", identifier: "ink.checkin.retry", compact: true) {
+                Task { await store.retryCheckIn() }
+            }
+            SaveInkOutlineButton(title: "稍後再試", identifier: "ink.checkin.cancel", compact: true) {
+                store.cancelSheet()
+            }
         case .verified:
             SaveInkOutlineButton(title: "看這次的章", identifier: "ink.checkin.stamp", compact: true) {
                 store.beginArrival()
@@ -678,7 +712,9 @@ struct SaveInkArrivalScreen: View {
                 Text("你到了\(place?.name ?? "")")
                     .font(SaveInkType.pageTitle)
                     .multilineTextAlignment(.center)
-                Text("距離店門 18 m・第 \(max(count, 1)) 次")
+                Text(store.includesSampleCatalog
+                     ? "距離店門 18 m・第 \(max(count, 1)) 次"
+                     : "這次造訪已驗證・第 \(max(count, 1)) 次")
                     .font(SaveInkType.aux)
                     .monospacedDigit()
                     .foregroundStyle(SaveInkPalette.inkSub)
@@ -1031,7 +1067,7 @@ struct SaveInkWelcomeScreen: View {
                 step("存", "存", "貼上抖音、小紅書連結，自動抓出地點")
                 step("去", "去", "附近值得去的，一張張排給你")
                 step("章", "蓋章", "到了按「我到了」，蓋一個印章")
-                Text("只在你按「我到了」時確認你在店裡，不會在背景追蹤，也不保存你的座標。")
+                Text("首頁用你的位置算距離和步行時間，可能先問一次定位。只在按「我到了」時確認你在店裡，不會在背景追蹤，也不保存座標。")
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .fixedSize(horizontal: false, vertical: true)
