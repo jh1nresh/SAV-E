@@ -1,4 +1,6 @@
+import CoreLocation
 import CoreText
+import MapKit
 import SwiftUI
 import UIKit
 
@@ -653,16 +655,241 @@ struct SaveInkWalkMap: View {
     }
 }
 
+struct SaveInkMapRoute: Sendable {
+    var points: [CLLocationCoordinate2D]
+    var seconds: TimeInterval
+    var meters: CLLocationDistance
+}
+
+/// A new request immediately clears the previous route. Only the latest,
+/// uncancelled request may publish, even if MapKit completes an old request.
+@MainActor
+final class SaveInkMapRouteState: ObservableObject {
+    @Published private(set) var route: SaveInkMapRoute?
+    private var requestID = UUID()
+
+    func refresh(_ lookup: @MainActor () async -> SaveInkMapRoute?) async {
+        guard !Task.isCancelled else { return }
+        let id = UUID()
+        requestID = id
+        route = nil
+        let result = await lookup()
+        guard !Task.isCancelled, requestID == id else { return }
+        route = result
+    }
+}
+
+/// Live ink map. Explicit screen/suite fixtures keep `SaveInkWalkMap`
+/// so the approved stills stay on the drawn roads. The canvas follows
+/// `SaveDoodleMapView`: SwiftUI `Map`, `UserAnnotation`, and `MapPolyline`.
+/// Ink pins and a light paper wash stay on this surface only.
+struct SaveInkLiveMap: View {
+    var places: [SaveInkPlace]
+    var userCoordinate: CLLocationCoordinate2D?
+    var focusPlaceID: String?
+    var showsRoute: Bool
+    var onSelect: (String) -> Void
+
+    @State private var position: MapCameraPosition = .automatic
+    @StateObject private var routeState = SaveInkMapRouteState()
+
+    private var focused: SaveInkPlace? {
+        guard let focusPlaceID else { return nil }
+        return places.first { $0.id == focusPlaceID }
+    }
+
+    private var pins: [Pin] {
+        let source = focused.map { [$0] } ?? places
+        return source.compactMap { place in
+            guard let coordinate = Self.coordinate(of: place) else { return nil }
+            return Pin(
+                id: place.id,
+                name: place.name,
+                visited: place.badge == .visited,
+                coordinate: coordinate
+            )
+        }
+    }
+
+    var body: some View {
+        Map(position: $position) {
+            UserAnnotation()
+            ForEach(pins) { pin in
+                Annotation(pin.name, coordinate: pin.coordinate, anchor: .bottom) {
+                    Button {
+                        onSelect(pin.id)
+                    } label: {
+                        SaveInkMapPin(visited: pin.visited)
+                            .frame(width: 22, height: 30)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(pin.visited ? "\(pin.name)，去過" : "\(pin.name)，存了還沒去")
+                }
+            }
+            if let route = routeState.route, route.points.count >= 2 {
+                MapPolyline(MKPolyline(coordinates: route.points, count: route.points.count))
+                    .stroke(
+                        SaveInkPalette.ink.opacity(0.82),
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [7, 5])
+                    )
+            }
+        }
+        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
+        .mapFeatureSelectionDisabled { _ in true }
+        .mapControls {
+            MapCompass()
+        }
+        .overlay {
+            Image("PaperTexture")
+                .resizable(resizingMode: .tile)
+                .opacity(0.14)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .overlay {
+            SaveInkPalette.paper.opacity(0.08)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if let travelLabel {
+                Text(travelLabel)
+                    .font(SaveInkType.minimum)
+                    .foregroundStyle(SaveInkPalette.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(SaveInkPalette.paper))
+                    .padding(12)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(height: 190)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            SaveInkRoughRoundedRect(cornerRadius: 18, seed: 42, amplitude: 0.45)
+                .stroke(SaveInkPalette.ink, lineWidth: 2)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(focusPlaceID == nil ? "ink.home.map" : "ink.place.map")
+        .accessibilityLabel(focusPlaceID == nil ? "已存地點地圖" : "步行地圖")
+        .onAppear(perform: fit)
+        .onChange(of: cameraToken) { _, _ in fit() }
+        .task(id: routeToken) { await loadRoute() }
+    }
+
+    private var cameraToken: String {
+        let points = pins.map { "\($0.coordinate.latitude),\($0.coordinate.longitude)" }
+        let user = userCoordinate.map { "\($0.latitude),\($0.longitude)" } ?? ""
+        return ((focusPlaceID ?? "all") + "|" + points.joined(separator: ";") + "|" + user)
+    }
+
+    private var routeToken: String {
+        guard showsRoute, let place = focused, let shop = Self.coordinate(of: place) else { return "" }
+        let user = userCoordinate.map { "\($0.latitude),\($0.longitude)" } ?? ""
+        return "\(place.id)|\(shop.latitude),\(shop.longitude)|\(user)"
+    }
+
+    private var travelLabel: String? {
+        guard showsRoute, let place = focused else { return nil }
+        if let route = routeState.route {
+            let minutes = SaveInkPlaceCatalog.minutes(fromTravelTime: route.seconds)
+            return "步行 \(minutes) 分・\(SaveInkClock.distance(route.meters))"
+        }
+        if let minutes = place.walkMinutes {
+            let distance = place.distanceMeters.map(SaveInkClock.distance) ?? ""
+            return distance.isEmpty ? "步行 \(minutes) 分" : "步行 \(minutes) 分・\(distance)"
+        }
+        return nil
+    }
+
+    private func fit() {
+        let focusedCoordinate = focused.flatMap(Self.coordinate(of:))
+        if let region = SaveInkMapCamera.region(
+            around: pins.map(\.coordinate),
+            user: userCoordinate,
+            focused: focusedCoordinate
+        ) {
+            position = .region(region)
+        } else if userCoordinate != nil {
+            position = .userLocation(fallback: .automatic)
+        }
+    }
+
+    private func loadRoute() async {
+        await routeState.refresh {
+            guard showsRoute, let user = userCoordinate, let place = focused, let shop = Self.coordinate(of: place) else { return nil }
+            guard let path = await SaveInkMapKitLookup.walkingRoute(from: user, to: shop) else { return nil }
+            let count = path.polyline.pointCount
+            guard count >= 2 else { return nil }
+            let pointer = path.polyline.points()
+            return SaveInkMapRoute(
+                points: (0..<count).map { pointer[$0].coordinate },
+                seconds: path.expectedTravelTime,
+                meters: path.distance
+            )
+        }
+    }
+
+    private static func coordinate(of place: SaveInkPlace) -> CLLocationCoordinate2D? {
+        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return nil }
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
+        guard coordinate.latitude != 0 || coordinate.longitude != 0 else { return nil }
+        return coordinate
+    }
+
+    private struct Pin: Identifiable {
+        var id: String
+        var name: String
+        var visited: Bool
+        var coordinate: CLLocationCoordinate2D
+    }
+}
+
+enum SaveInkAppleMaps {
+    static func canOpen(_ place: SaveInkPlace) -> Bool {
+        coordinate(of: place) != nil
+    }
+
+    static func open(_ place: SaveInkPlace) {
+        guard let coordinate = coordinate(of: place) else { return }
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        item.name = place.name
+        item.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
+        ])
+    }
+
+    private static func coordinate(of place: SaveInkPlace) -> CLLocationCoordinate2D? {
+        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return nil }
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
+        guard latitude != 0 || longitude != 0 else { return nil }
+        return coordinate
+    }
+}
+
 private struct SaveInkMapPin: View {
+    var visited = false
+
     var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            Path { path in
+            let head = Path { path in
                 path.addEllipse(in: CGRect(x: width * 0.12, y: 0, width: width * 0.76, height: width * 0.76))
-                path.move(to: CGPoint(x: width * 0.5, y: width * 0.7))
-                path.addLine(to: CGPoint(x: width * 0.5, y: proxy.size.height))
             }
-            .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            ZStack {
+                if visited {
+                    head.fill(SaveInkPalette.ink)
+                }
+                Path { path in
+                    path.addEllipse(in: CGRect(x: width * 0.12, y: 0, width: width * 0.76, height: width * 0.76))
+                    path.move(to: CGPoint(x: width * 0.5, y: width * 0.7))
+                    path.addLine(to: CGPoint(x: width * 0.5, y: proxy.size.height))
+                }
+                .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            }
         }
     }
 }
