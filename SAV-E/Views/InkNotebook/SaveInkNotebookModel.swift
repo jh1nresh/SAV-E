@@ -120,6 +120,7 @@ struct SaveInkVisitRecord: Codable, Equatable, Identifiable {
 enum SaveInkPlaceBadge: Equatable {
     case visited
     case saved
+    case unverified
 }
 
 struct SaveInkSavedPlaceRecord: Codable, Equatable {
@@ -597,6 +598,7 @@ final class SaveInkNotebookStore: ObservableObject {
     @Published var activePlaceID: String?
 
     let city = "大安區"
+    let includesSampleCatalog: Bool
     let friendInputs: [SaveInkFriendVisitInput]
     private let defaults: UserDefaults
     private let placesDefaults: UserDefaults
@@ -609,10 +611,14 @@ final class SaveInkNotebookStore: ObservableObject {
 
     var currentDate: Date { now() }
 
+    /// `seedFixture` is the screenshot and UI-test catalog: five sample shops,
+    /// friend cards, and first-launch check-ins. Normal launch leaves it false.
+    /// `includeSampleCatalog` keeps those shops in memory without writing check-ins.
     init(
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = { Date() },
-        seedFixture: Bool = true,
+        seedFixture: Bool = false,
+        includeSampleCatalog: Bool = false,
         friendInputs: [SaveInkFriendVisitInput]? = nil,
         makeLocator: @escaping () -> any SaveInkLocating = { SaveInkOneShotLocator() }
     ) {
@@ -621,17 +627,65 @@ final class SaveInkNotebookStore: ObservableObject {
         self.placesDefaults = placesDefaults
         self.now = now
         self.makeLocator = makeLocator
-        let seededPlaces = SaveInkFixture.places
-        self.places = seededPlaces + Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
-        self.friendInputs = friendInputs ?? SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
-        if let stored = Self.load(defaults: defaults, key: storageKey) {
-            self.visits = stored
+        self.includesSampleCatalog = seedFixture || includeSampleCatalog
+        if let friendInputs {
+            self.friendInputs = friendInputs
         } else if seedFixture {
-            self.visits = SaveInkFixture.visits()
-            Self.save(visits, defaults: defaults, key: storageKey)
+            self.friendInputs = SaveInkFixture.friendInputs(now: SaveInkClock.previewNow)
         } else {
-            self.visits = []
+            self.friendInputs = []
         }
+        let loadedVisits: [SaveInkVisitRecord]
+        if seedFixture {
+            if let stored = Self.load(defaults: defaults, key: storageKey) {
+                loadedVisits = stored
+            } else {
+                loadedVisits = SaveInkFixture.visits()
+                Self.save(loadedVisits, defaults: defaults, key: storageKey)
+            }
+        } else {
+            loadedVisits = Self.visitsWithoutPersistedSamples(defaults: defaults, key: storageKey)
+        }
+        self.visits = loadedVisits
+        let saved = Self.loadSavedPlaces(defaults: placesDefaults, key: placesKey)
+        if includesSampleCatalog {
+            self.places = SaveInkFixture.places + saved
+        } else {
+            self.places = saved + Self.placesForRetainedSampleVisits(loadedVisits, alreadyLoaded: saved)
+        }
+    }
+
+    func homePlaces() -> [SaveInkPlace] {
+        let saved = places.filter { $0.id.hasPrefix("saved-") }
+        guard includesSampleCatalog else { return saved }
+        let featured = [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
+        let main = featured.compactMap { id in places.first { $0.id == id } }
+        return main + saved
+    }
+
+    /// Arrival needs a shop position. A typed save has none, so Home does not offer it.
+    func arrivalPlaceID() -> String? {
+        homePlaces().first { $0.shopLatitude != nil && $0.shopLongitude != nil }?.id
+    }
+
+    /// Sample shops stay off Home. A visit the user kept still needs a name and stamp.
+    private static func placesForRetainedSampleVisits(
+        _ visits: [SaveInkVisitRecord],
+        alreadyLoaded: [SaveInkPlace]
+    ) -> [SaveInkPlace] {
+        let referenced = Set(visits.map(\.placeID))
+        let known = Set(alreadyLoaded.map(\.id))
+        return SaveInkFixture.places
+            .filter { referenced.contains($0.id) && !known.contains($0.id) }
+            .map { place in
+                SaveInkPlace(
+                    id: place.id, name: place.name, stampName: place.stampName, street: place.street,
+                    distanceMeters: nil, blurb: "你保留的到訪紀錄", sourceLabel: "來自 你的到訪紀錄",
+                    badge: .visited, detailNote: "你保留的到訪紀錄。", friendUsualCount: 0,
+                    walkMinutes: nil, addressLine: nil, videoTitle: nil, videoSource: nil,
+                    shopLatitude: nil, shopLongitude: nil
+                )
+            }
     }
 
     func openFriends() {
@@ -666,6 +720,30 @@ final class SaveInkNotebookStore: ObservableObject {
 
     func verifiedCount(for placeID: String) -> Int {
         visits.filter { $0.placeID == placeID && $0.verification == .verified }.count
+    }
+
+    func visitCount(for placeID: String) -> Int {
+        visits.filter { $0.placeID == placeID }.count
+    }
+
+    func homeSummary(count: Int) -> String {
+        guard count > 0 else { return "還沒有地點" }
+        return includesSampleCatalog ? "今天在\(city)，挑了 \(count) 個給你" : "挑了 \(count) 個給你"
+    }
+
+    func detailNote(for place: SaveInkPlace) -> String {
+        if !includesSampleCatalog,
+           place.shopLatitude == nil || place.shopLongitude == nil,
+           place.detailNote == "剛存下來，到了再按「我到了」。" {
+            return "剛存下來。可以記錄到訪（未驗證）。"
+        }
+        return place.detailNote
+    }
+
+    func homeBadge(for place: SaveInkPlace) -> SaveInkPlaceBadge {
+        guard !includesSampleCatalog else { return place.badge }
+        if verifiedCount(for: place.id) > 0 { return .visited }
+        return latestVisit(for: place.id) == nil ? .saved : .unverified
     }
 
     func totalVisits() -> Int {
@@ -721,6 +799,25 @@ final class SaveInkNotebookStore: ObservableObject {
             prepareDraft(placeID: placeID)
             sheet = .checkIn(decision.situation, placeID: placeID)
         }
+    }
+
+    /// The user explicitly records a visit without claiming location proof.
+    func recordUnverifiedVisit(placeID: String) {
+        guard let place = place(placeID),
+              place.shopLatitude == nil || place.shopLongitude == nil else { return }
+        activePlaceID = placeID
+        let outcome = SaveInkVisitBook.apply(
+            decision: SaveInkCheckInDecision(
+                situation: .downgradedUnverified, recordsVisit: true,
+                verification: .unverified, anomaly: nil
+            ),
+            placeID: placeID, now: now(), visits: &visits
+        )
+        persist()
+        prepareDraft(placeID: placeID)
+        let situation: SaveInkCheckInSituation = outcome == .suppressed ? .duplicate : .downgradedUnverified
+        pendingSituation = situation
+        sheet = .checkIn(situation, placeID: placeID)
     }
 
     func saveAnyway() {
@@ -782,6 +879,7 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func pasteExampleLink() {
+        guard includesSampleCatalog, place(SaveInkFixture.qingtian) != nil else { return }
         saveLink = "https://短影音連結/v/8f2k…"
         recognizedPlaceID = SaveInkFixture.qingtian
     }
@@ -797,7 +895,33 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitSave() {
+        if let id = recognizedPlaceID, place(id) == nil {
+            recognizedPlaceID = nil
+        }
         recognizeQuery()
+        if !includesSampleCatalog, let id = recognizedPlaceID,
+           !id.hasPrefix("saved-"), var retained = place(id) {
+            let savedID = "saved-\(id)"
+            places.removeAll { $0.id == id }
+            if place(savedID) == nil {
+                retained.id = savedID
+                places.append(retained)
+            }
+            for index in visits.indices where visits[index].placeID == id {
+                visits[index].placeID = savedID
+            }
+            if activePlaceID == id { activePlaceID = savedID }
+            path = path.map { route in
+                switch route {
+                case .place(id): .place(savedID)
+                case .review(id): .review(savedID)
+                case .arrival(id): .arrival(savedID)
+                default: route
+                }
+            }
+            persist()
+            recognizedPlaceID = savedID
+        }
         let combined = [saveLink, saveQuery].joined(separator: " ")
         if recognizedPlaceID == nil, SaveInkPlaceLink.rejects(combined, knownPlaces: places) {
             saveNotice = SaveInkPlaceLink.notAPlaceMessage
@@ -939,6 +1063,31 @@ final class SaveInkNotebookStore: ObservableObject {
         }
     }
 
+    static let sampleCheckInMigrationKey = "save.ink.sampleCheckIns.removed.v1"
+
+    /// One pass. Drops untouched seeded check-ins and rewrites storage only
+    /// when one of those rows was removed. A visit the user commented on,
+    /// hid, rated, or recorded on another date stays as stored.
+    private static func visitsWithoutPersistedSamples(
+        defaults: UserDefaults,
+        key: String
+    ) -> [SaveInkVisitRecord] {
+        let stored = load(defaults: defaults, key: key)
+        if defaults.bool(forKey: sampleCheckInMigrationKey) {
+            return stored ?? []
+        }
+        if defaults.data(forKey: key) != nil, stored == nil {
+            return []
+        }
+        let current = stored ?? []
+        let kept = current.filter { !SaveInkFixture.isUntouchedSeedVisit($0) }
+        if stored != nil, kept.count != current.count {
+            save(kept, defaults: defaults, key: key)
+        }
+        defaults.set(true, forKey: sampleCheckInMigrationKey)
+        return kept
+    }
+
     private static func load(defaults: UserDefaults, key: String) -> [SaveInkVisitRecord]? {
         guard let data = defaults.data(forKey: key) else { return nil }
         guard let legacy = try? Self.decoder.decode([SaveInkLegacyVisit].self, from: data) else { return nil }
@@ -977,6 +1126,7 @@ enum SaveInkFixture {
     static let chifeng = "chifeng"
     static let huashan = "huashan"
     static let dadaocheng = "dadaocheng"
+    static let samplePlaceIDs: Set<String> = [dingtai, qingtian, chifeng, huashan, dadaocheng]
 
     static let places: [SaveInkPlace] = [
         SaveInkPlace(
@@ -1071,17 +1221,18 @@ enum SaveInkFixture {
         ),
     ]
 
+    private static let seedVisits: [(String, Int, Int, Int, SaveInkVerification)] = [
+        (dingtai, 2026, 8, 2, .verified),
+        (dingtai, 2026, 9, 18, .verified),
+        (dingtai, 2026, 10, 28, .verified),
+        (chifeng, 2026, 7, 3, .verified),
+        (chifeng, 2026, 10, 12, .verified),
+        (huashan, 2026, 9, 30, .verified),
+        (dadaocheng, 2026, 9, 14, .unverified),
+    ]
+
     static func visits() -> [SaveInkVisitRecord] {
-        let rows: [(String, Int, Int, Int, SaveInkVerification)] = [
-            (dingtai, 2026, 8, 2, .verified),
-            (dingtai, 2026, 9, 18, .verified),
-            (dingtai, 2026, 10, 28, .verified),
-            (chifeng, 2026, 7, 3, .verified),
-            (chifeng, 2026, 10, 12, .verified),
-            (huashan, 2026, 9, 30, .verified),
-            (dadaocheng, 2026, 9, 14, .unverified),
-        ]
-        return rows.map { placeID, year, month, day, verification in
+        seedVisits.map { placeID, year, month, day, verification in
             SaveInkVisitRecord(
                 id: UUID(),
                 placeID: placeID,
@@ -1092,6 +1243,20 @@ enum SaveInkFixture {
                 sentiment: nil,
                 anomaly: nil
             )
+        }
+    }
+
+    /// A row written by `visits()` that the user has not edited.
+    static func isUntouchedSeedVisit(_ record: SaveInkVisitRecord) -> Bool {
+        guard record.visibility == .public,
+              record.sentiment == nil,
+              record.anomaly == nil,
+              record.comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        return seedVisits.contains { placeID, year, month, day, verification in
+            record.placeID == placeID
+                && record.verification == verification
+                && abs(record.visitedAt.timeIntervalSince(SaveInkClock.date(year, month, day))) < 1
         }
     }
 

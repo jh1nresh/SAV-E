@@ -131,6 +131,7 @@ final class SaveInkNotebookTests: XCTestCase {
             defaults: defaults,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
+            includeSampleCatalog: true,
             makeLocator: { locator }
         )
         await store.checkIn(placeID: SaveInkFixture.dingtai)
@@ -163,6 +164,7 @@ final class SaveInkNotebookTests: XCTestCase {
             defaults: UserDefaults(suiteName: "save.ink.f6.\(UUID().uuidString)")!,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
+            includeSampleCatalog: true,
             makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) }
         )
         await store.checkIn(placeID: SaveInkFixture.dingtai)
@@ -284,6 +286,7 @@ final class SaveInkNotebookTests: XCTestCase {
             defaults: UserDefaults(suiteName: "save.ink.f8.place.\(UUID().uuidString)")!,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
+            includeSampleCatalog: true,
             makeLocator: { SaveInkScriptedLocator() }
         )
         store.saveQuery = "https://www.youtube.com/watch?v=shop-tour 青田七六咖啡"
@@ -540,6 +543,412 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(SaveInkPreviewScreen.friendsEmpty.rawValue, "14-friends-empty")
     }
 
+    func testNormalLaunchOmitsSampleShopsFriendsAndCheckIns() {
+        let defaults = inkSuite("normal")
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow }
+        )
+        XCTAssertTrue(store.places.isEmpty)
+        XCTAssertTrue(store.friendCards().isEmpty)
+        XCTAssertEqual(store.totalVisits(), 0)
+        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1"))
+        XCTAssertTrue(defaults.bool(forKey: SaveInkNotebookStore.sampleCheckInMigrationKey))
+        XCTAssertEqual(SaveInkFixture.samplePlaceIDs.count, 5)
+    }
+
+    func testFixtureLaunchStillSeedsSampleShopsFriendsAndCheckIns() throws {
+        let defaults = inkSuite("fixture")
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true
+        )
+        XCTAssertEqual(store.places.prefix(5).map(\.id), SaveInkFixture.places.map(\.id))
+        XCTAssertEqual(
+            store.homePlaces().prefix(3).map(\.id),
+            [SaveInkFixture.dingtai, SaveInkFixture.qingtian, SaveInkFixture.chifeng]
+        )
+        XCTAssertEqual(store.friendCards().map(\.authorName), ["阿哲", "凱文", "茉茉", "小安"])
+        let seeded = SaveInkFixture.visits()
+        XCTAssertEqual(store.totalVisits(), seeded.count)
+        // 青田七六 is a saved shop in the catalog. It has no seeded check-in.
+        let seededPlaceIDs = Set(seeded.map(\.placeID))
+        XCTAssertEqual(
+            seededPlaceIDs,
+            [
+                SaveInkFixture.dingtai,
+                SaveInkFixture.chifeng,
+                SaveInkFixture.huashan,
+                SaveInkFixture.dadaocheng,
+            ]
+        )
+        XCTAssertFalse(seededPlaceIDs.contains(SaveInkFixture.qingtian))
+        let stored = try XCTUnwrap(defaults.data(forKey: "save.ink.visits.v1"))
+        let text = String(decoding: stored, as: UTF8.self)
+        for placeID in seededPlaceIDs {
+            XCTAssertTrue(text.contains(placeID), placeID)
+        }
+        XCTAssertFalse(text.contains(SaveInkFixture.qingtian))
+        XCTAssertFalse(text.contains("saved-"))
+        XCTAssertFalse(defaults.bool(forKey: SaveInkNotebookStore.sampleCheckInMigrationKey))
+    }
+
+    func testSampleCheckInMigrationRemovesOnlyUntouchedSeedVisits() throws {
+        let defaults = inkSuite("migrate")
+        let userVisit = inkVisit(placeID: "saved-mine", comment: "我的店，比鼎泰小館好")
+        let otherVisit = inkVisit(placeID: "walk-note", comment: "自己走去的")
+        var commentedSample = inkVisit(placeID: SaveInkFixture.dingtai, comment: "我真的去了")
+        commentedSample.visibility = .private
+        var ratedSample = inkVisit(placeID: SaveInkFixture.qingtian, comment: "")
+        ratedSample.sentiment = .again
+        let seed = try XCTUnwrap(SaveInkFixture.visits().first { $0.placeID == SaveInkFixture.dingtai })
+        XCTAssertTrue(SaveInkFixture.isUntouchedSeedVisit(seed))
+        XCTAssertFalse(SaveInkFixture.isUntouchedSeedVisit(commentedSample))
+        XCTAssertFalse(SaveInkFixture.isUntouchedSeedVisit(ratedSample))
+        let visitsBefore = try SaveInkNotebookStore.encoder.encode([
+            seed, userVisit, commentedSample, ratedSample, otherVisit,
+        ])
+        defaults.set(visitsBefore, forKey: "save.ink.visits.v1")
+        let placesBefore = Data("{\"id\":\"saved-mine\"}".utf8)
+        defaults.set(placesBefore, forKey: "save.ink.places.v1")
+
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false
+        )
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.id, commentedSample.id)
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.comment, "我真的去了")
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.visibility, .private)
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.qingtian)?.id, ratedSample.id)
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.qingtian)?.sentiment, .again)
+        XCTAssertEqual(store.latestVisit(for: "saved-mine")?.comment, "我的店，比鼎泰小館好")
+        XCTAssertEqual(store.latestVisit(for: "walk-note")?.comment, "自己走去的")
+        XCTAssertEqual(store.totalVisits(), 4)
+        XCTAssertEqual(defaults.data(forKey: "save.ink.places.v1"), placesBefore)
+        let stored = try XCTUnwrap(defaults.data(forKey: "save.ink.visits.v1"))
+        let text = String(decoding: stored, as: UTF8.self)
+        XCTAssertFalse(text.contains(seed.id.uuidString))
+        XCTAssertTrue(text.contains(commentedSample.id.uuidString))
+        XCTAssertTrue(text.contains("我真的去了"))
+        XCTAssertTrue(text.contains("saved-mine"))
+        XCTAssertNotEqual(stored, visitsBefore)
+    }
+
+    func testSampleCheckInMigrationLeavesUntouchedVisitsByteForByte() throws {
+        let defaults = inkSuite("migrate-user")
+        let userVisit = inkVisit(placeID: "saved-mine", comment: "只有這則")
+        let original = try SaveInkNotebookStore.encoder.encode([userVisit])
+        defaults.set(original, forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow }
+        )
+        XCTAssertEqual(store.latestVisit(for: "saved-mine")?.id, userVisit.id)
+        XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1"), original)
+    }
+
+    func testSampleCheckInMigrationRunsOnce() throws {
+        let defaults = inkSuite("migrate-once")
+        let seed = try XCTUnwrap(SaveInkFixture.visits().first { $0.placeID == SaveInkFixture.huashan })
+        defaults.set(
+            try SaveInkNotebookStore.encoder.encode([
+                seed,
+                inkVisit(placeID: "saved-mine", comment: "留下"),
+            ]),
+            forKey: "save.ink.visits.v1"
+        )
+        let first = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertNil(first.latestVisit(for: SaveInkFixture.huashan))
+        XCTAssertEqual(first.latestVisit(for: "saved-mine")?.comment, "留下")
+
+        let revived = try XCTUnwrap(SaveInkFixture.visits().first { $0.placeID == SaveInkFixture.dadaocheng })
+        let kept = try XCTUnwrap(first.latestVisit(for: "saved-mine"))
+        defaults.set(
+            try SaveInkNotebookStore.encoder.encode([kept, revived]),
+            forKey: "save.ink.visits.v1"
+        )
+        let second = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(second.latestVisit(for: SaveInkFixture.dadaocheng)?.id, revived.id)
+        XCTAssertEqual(second.latestVisit(for: "saved-mine")?.comment, "留下")
+        XCTAssertEqual(second.totalVisits(), 2)
+    }
+
+    func testFixtureModeDoesNotConsumeTheSampleCheckInMigration() throws {
+        let defaults = inkSuite("fixture-keeps-samples")
+        let seed = try XCTUnwrap(SaveInkFixture.visits().first { $0.placeID == SaveInkFixture.dingtai })
+        defaults.set(
+            try SaveInkNotebookStore.encoder.encode([
+                seed,
+                inkVisit(placeID: "saved-mine", comment: "我的"),
+            ]),
+            forKey: "save.ink.visits.v1"
+        )
+        let fixture = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: true
+        )
+        XCTAssertEqual(fixture.latestVisit(for: SaveInkFixture.dingtai)?.id, seed.id)
+        XCTAssertFalse(defaults.bool(forKey: SaveInkNotebookStore.sampleCheckInMigrationKey))
+
+        let production = SaveInkNotebookStore(
+            defaults: defaults,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false
+        )
+        XCTAssertNil(production.latestVisit(for: SaveInkFixture.dingtai))
+        XCTAssertEqual(production.latestVisit(for: "saved-mine")?.comment, "我的")
+        XCTAssertTrue(production.friendCards().isEmpty)
+        XCTAssertFalse(production.places.contains { SaveInkFixture.samplePlaceIDs.contains($0.id) })
+    }
+
+    func testUserConfirmedSamplePlaceVisitStaysByteForByte() throws {
+        let defaults = inkSuite("user-sample")
+        let visit = inkVisit(placeID: SaveInkFixture.dingtai, comment: "只有我寫的")
+        let original = try SaveInkNotebookStore.encoder.encode([visit])
+        defaults.set(original, forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.id, visit.id)
+        XCTAssertEqual(store.latestVisit(for: SaveInkFixture.dingtai)?.comment, "只有我寫的")
+        XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1"), original)
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.name, "鼎泰小館")
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.stampName, "鼎泰小館")
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.street, "永康街")
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.friendUsualCount, 0)
+        XCTAssertEqual(store.place(SaveInkFixture.dingtai)?.detailNote, "你保留的到訪紀錄。")
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.walkMinutes)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.distanceMeters)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.videoTitle)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.videoSource)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.shopLatitude)
+        XCTAssertNil(store.place(SaveInkFixture.dingtai)?.shopLongitude)
+        XCTAssertFalse(store.homePlaces().contains { $0.id == SaveInkFixture.dingtai })
+        XCTAssertNil(store.place(SaveInkFixture.qingtian))
+        XCTAssertEqual(defaults.data(forKey: "save.ink.places.v1"), nil)
+    }
+
+    func testArrivalRequiresAShopPosition() {
+        let saved = SaveInkNotebookStore(
+            defaults: inkSuite("arrival-saved"),
+            now: { SaveInkClock.previewNow }
+        )
+        saved.saveQuery = "我的店"
+        saved.commitSave()
+        XCTAssertEqual(saved.homePlaces().first?.name, "我的店")
+        XCTAssertNil(saved.homePlaces().first?.shopLatitude)
+        XCTAssertNil(saved.arrivalPlaceID())
+
+        let fixture = SaveInkNotebookStore(
+            defaults: inkSuite("arrival-fixture"),
+            now: { SaveInkClock.previewNow },
+            seedFixture: true
+        )
+        XCTAssertEqual(fixture.arrivalPlaceID(), SaveInkFixture.dingtai)
+    }
+
+    func testUnlocatedVisitIsExplicitlyUnverifiedAndNeverRequestsLocation() throws {
+        let defaults = inkSuite("unlocated-visit")
+        let locator = SaveInkScriptedLocator(fix: .inRange())
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow }, makeLocator: { locator })
+        store.saveQuery = "沒有座標的小店"
+        store.commitSave()
+        let id = try XCTUnwrap(store.homePlaces().first?.id)
+        XCTAssertEqual(store.homeBadge(for: try XCTUnwrap(store.place(id))), .saved)
+        store.recordUnverifiedVisit(placeID: id)
+        XCTAssertEqual(store.homeBadge(for: try XCTUnwrap(store.place(id))), .unverified)
+        XCTAssertEqual(locator.calls, 0)
+        XCTAssertEqual(store.latestVisit(for: id)?.verification, .unverified)
+        XCTAssertNil(store.latestVisit(for: id)?.anomaly)
+        XCTAssertEqual(store.verifiedCount(for: id), 0)
+        XCTAssertEqual(store.visitCount(for: id), 1)
+        XCTAssertEqual(store.sheet, .checkIn(.downgradedUnverified, placeID: id))
+        store.recordUnverifiedVisit(placeID: id)
+        XCTAssertEqual(store.totalVisits(), 1)
+        XCTAssertEqual(store.sheet, .checkIn(.duplicate, placeID: id))
+        let reloaded = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(reloaded.latestVisit(for: id)?.verification, .unverified)
+        XCTAssertEqual(reloaded.visitCount(for: id), 1)
+        XCTAssertEqual(reloaded.verifiedCount(for: id), 0)
+        XCTAssertEqual(reloaded.stampedPlaceIDs(), [id])
+        XCTAssertEqual(reloaded.homeBadge(for: try XCTUnwrap(reloaded.place(id))), .unverified)
+    }
+
+    func testPasteExampleLinkStaysInsideTheFixtureCatalog() {
+        let fixture = SaveInkNotebookStore(
+            defaults: inkSuite("paste-fixture"),
+            now: { SaveInkClock.previewNow },
+            seedFixture: true
+        )
+        fixture.pasteExampleLink()
+        XCTAssertEqual(fixture.saveLink, "https://短影音連結/v/8f2k…")
+        XCTAssertEqual(fixture.recognizedPlaceID, SaveInkFixture.qingtian)
+
+        let production = SaveInkNotebookStore(
+            defaults: inkSuite("paste-production"),
+            now: { SaveInkClock.previewNow }
+        )
+        production.pasteExampleLink()
+        XCTAssertEqual(production.saveLink, "")
+        XCTAssertNil(production.recognizedPlaceID)
+    }
+
+    func testUnlocatedVisitScreensRenderForQA() throws {
+        let store = SaveInkNotebookStore(defaults: inkSuite("unlocated-render"), now: { SaveInkClock.previewNow })
+        store.saveQuery = "沒有座標的長店名小店"
+        store.commitSave()
+        let id = try XCTUnwrap(store.homePlaces().first?.id)
+        store.recordUnverifiedVisit(placeID: id)
+        for width: CGFloat in [375, 390, 430] {
+            for (name, image) in [
+                ("home", try hostedInkImage(SaveInkHomeScreen(store: store), width: width)),
+                ("place", try hostedInkImage(SaveInkPlaceScreen(store: store, placeID: id), width: width)),
+            ] {
+                let data = try XCTUnwrap(image.pngData())
+                XCTAssertGreaterThan(data.count, 8_000)
+                let attachment = XCTAttachment(image: image)
+                attachment.name = "ink-unverified-\(name)-\(Int(width))"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
+    }
+
+    func testNormalUnlocatedCopyDoesNotClaimFixtureCityOrVerifiedAction() throws {
+        let defaults = inkSuite("unlocated-copy")
+        let store = SaveInkNotebookStore(defaults: defaults)
+        store.saveQuery = "沒有座標的小店"
+        store.commitSave()
+        let row = try XCTUnwrap(store.homePlaces().first)
+        XCTAssertEqual(store.homeSummary(count: 0), "還沒有地點")
+        XCTAssertEqual(store.homeSummary(count: 1), "挑了 1 個給你")
+        XCTAssertEqual(store.detailNote(for: row), "剛存下來。可以記錄到訪（未驗證）。")
+        let reloaded = SaveInkNotebookStore(defaults: defaults)
+        XCTAssertEqual(reloaded.detailNote(for: try XCTUnwrap(reloaded.place(row.id))), store.detailNote(for: row))
+        var custom = row
+        custom.detailNote = "自己留下的店家筆記"
+        XCTAssertEqual(store.detailNote(for: custom), custom.detailNote)
+        var located = row
+        located.shopLatitude = 25.03
+        located.shopLongitude = 121.53
+        XCTAssertEqual(store.detailNote(for: located), located.detailNote)
+        let fixture = SaveInkNotebookStore(defaults: inkSuite("fixture-copy"), seedFixture: true)
+        XCTAssertEqual(fixture.homeSummary(count: 3), "今天在大安區，挑了 3 個給你")
+        XCTAssertEqual(fixture.detailNote(for: row), row.detailNote)
+    }
+
+    func testRetainedSampleVisitDoesNotEnableFixturePaste() throws {
+        let defaults = inkSuite("retained-sample-paste")
+        let visit = inkVisit(placeID: SaveInkFixture.qingtian, comment: "自己寫的")
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertNotNil(store.place(SaveInkFixture.qingtian))
+        store.pasteExampleLink()
+        XCTAssertEqual(store.saveLink, "")
+        XCTAssertNil(store.recognizedPlaceID)
+    }
+
+    func testCommitSaveIgnoresAnUnresolvedRecognizedPlace() {
+        let store = SaveInkNotebookStore(
+            defaults: inkSuite("dangling-place"),
+            now: { SaveInkClock.previewNow }
+        )
+        store.recognizedPlaceID = SaveInkFixture.qingtian
+        store.saveQuery = "我的店"
+        store.commitSave()
+        XCTAssertNil(store.sheet)
+        let saved = store.places.first { $0.name == "我的店" }
+        XCTAssertEqual(saved?.id.hasPrefix("saved-"), true)
+        XCTAssertEqual(store.recognizedPlaceID, saved?.id)
+        XCTAssertFalse(store.places.contains { $0.id == SaveInkFixture.qingtian })
+    }
+
+    func testExplicitSavePromotesARetainedPlaceAndKeepsItsVisit() throws {
+        let defaults = inkSuite("retained-place-save")
+        let visit = inkVisit(placeID: SaveInkFixture.qingtian, comment: "自己寫的到訪")
+        defaults.set(try SaveInkNotebookStore.encoder.encode([visit]), forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertTrue(store.homePlaces().isEmpty)
+        store.saveQuery = "青田七六咖啡"
+        XCTAssertNil(store.recognizedPlaceID)
+        store.commitSave()
+        let saved = try XCTUnwrap(store.homePlaces().first)
+        XCTAssertEqual(saved.name, "青田七六咖啡")
+        XCTAssertTrue(saved.id.hasPrefix("saved-"))
+        XCTAssertEqual(store.latestVisit(for: saved.id)?.id, visit.id)
+        XCTAssertEqual(store.latestVisit(for: saved.id)?.comment, visit.comment)
+        XCTAssertEqual(store.recognizedPlaceID, saved.id)
+        XCTAssertNil(store.place(SaveInkFixture.qingtian))
+        store.commitSave()
+        XCTAssertEqual(store.homePlaces().count, 1)
+        let reloaded = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(reloaded.homePlaces().map(\.id), [saved.id])
+        XCTAssertEqual(reloaded.latestVisit(for: saved.id)?.id, visit.id)
+        XCTAssertEqual(reloaded.latestVisit(for: saved.id)?.comment, visit.comment)
+    }
+
+    func testCorruptVisitPayloadIsNotDeleted() {
+        let defaults = inkSuite("corrupt")
+        let payload = Data("not-json".utf8)
+        defaults.set(payload, forKey: "save.ink.visits.v1")
+        let store = SaveInkNotebookStore(defaults: defaults, now: { SaveInkClock.previewNow })
+        XCTAssertEqual(store.totalVisits(), 0)
+        XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1"), payload)
+        XCTAssertFalse(defaults.bool(forKey: SaveInkNotebookStore.sampleCheckInMigrationKey))
+    }
+
+    func testInkLaunchArgsGateFixtureData() {
+        XCTAssertFalse(SaveInkLaunch.usesFixtureData(arguments: []))
+        XCTAssertFalse(SaveInkLaunch.usesFixtureData(arguments: ["--savvy-ink-skip-welcome"]))
+        XCTAssertFalse(SaveInkLaunch.usesFixtureData(arguments: ["--uitest-complete-onboarding"]))
+        XCTAssertTrue(SaveInkLaunch.usesFixtureData(arguments: ["--savvy-ink-suite=ink-nav"]))
+        XCTAssertTrue(SaveInkLaunch.usesFixtureData(arguments: ["--savvy-ink-screen=01-main"]))
+        XCTAssertEqual(SaveInkLaunch.friendInputs(arguments: [])?.count, Optional(0))
+        XCTAssertEqual(
+            SaveInkLaunch.friendInputs(arguments: ["--savvy-ink-suite=x", "--savvy-ink-empty-friends"])?.count,
+            Optional(0)
+        )
+        XCTAssertNil(SaveInkLaunch.friendInputs(arguments: ["--savvy-ink-suite=x"]))
+    }
+
+    func testHomeEmptyStateUsesInkCopy() throws {
+        let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
+        XCTAssertTrue(screens.contains("ink.home.empty"))
+        let store = SaveInkNotebookStore(defaults: inkSuite("empty-home-copy"))
+        XCTAssertEqual(store.homeSummary(count: store.homePlaces().count), "還沒有地點")
+        XCTAssertTrue(screens.contains("存一個地點，到了再記"))
+        XCTAssertTrue(screens.contains("輕點卡片，看地圖怎麼走"))
+        XCTAssertFalse(screens.contains("?? SaveInkFixture.dingtai"))
+        XCTAssertTrue(screens.contains("store.arrivalPlaceID()"))
+        XCTAssertTrue(screens.contains("ink.friends.empty"))
+        XCTAssertTrue(screens.contains("朋友還沒有分享造訪"))
+    }
+
+    func testApprovedInkBaselinesStayByteIdentical() throws {
+        let expected = [
+            "ink-01-main.png": "722549d8eaa490abe201e32b90d9ce0df4785df41c0773f7b4c0d4337ae4a0d2",
+            "ink-02-save-place.png": "9c48fda0ef1d36d8ef3a4f68d0879b449a45ecb56e55ae795c86c0bc888280e0",
+            "ink-03-passport.png": "d97d2478fe3c68ad16b3d686f591f8fa6e05672bfb2e43d6a0ad4e410c3cfb63",
+            "ink-04-stamp-confirm.png": "6e92b8dcb3e24bfef7118038c0ad37b680962f30587b7331e46927463092a109",
+            "ink-05-shop-detail.png": "c3f349fa26a479c6fc9f2b0d90395a7e1e6dc9412fdee5e2521824e13d6ba70e",
+            "ink-06-welcome.png": "10f7662191fa12dfd91670428e9a3ef78390a5c7d67e987d9b171361f6fd27b1",
+            "ink-07-checkin-success.png": "4748cade0d4bb218239f5adb71505aa0a5d0dfb0782fc04dd0fca8a1f40071c3",
+            "ink-08-checkin-failed.png": "9a6dbdb255f6ee333515399bf9ede43c0c36283ef12d9fd73173bc24755c9140",
+            "ink-09-checkin-no-permission.png": "a42cabd3796ef960c5e034941d3e5cd324f673234c288d7ae5c6ffdc271f38c7",
+            "ink-10-checkin-approximate.png": "e1efe0c7a28ebbf19ca7648b0e63069954d9002eebedbdffd392fd35276e2105",
+            "ink-11-checkin-too-far.png": "46cbb73ad807d86278720e41cf8486b0df12de01a34104f7cf58df21bb827f36",
+            "ink-12-friends.png": "657a1fd868f9964fe99eb9cf89f558ac70835de6eeb07cc7ffec8c7ddf519bc7",
+            "ink-13-review-visibility.png": "17130bdd98c22c354033425c041c91d371231bb6a8d8c61ec05ef1ac5ccd64da",
+            "ink-14-friends-empty.png": "c389eba15e92a8536eb29adb7a42865402b81ba86bf19094ff2ca231c3b7aa8c",
+        ]
+        XCTAssertEqual(expected.count, SaveInkPreviewScreen.allCases.count)
+        for (name, hash) in expected {
+            let data = try Data(contentsOf: inkBaselineDirectory.appendingPathComponent(name))
+            XCTAssertEqual(sha256(data), hash, name)
+        }
+    }
+
     func testShippingRootIsTheInkNotebookWithoutAFlag() throws {
         let app = try source("SAV-E/App/SaveApp.swift")
         let launch = try source("SAV-E/Views/InkNotebook/SaveInkNotebookRoot.swift")
@@ -728,8 +1137,12 @@ final class SaveInkNotebookTests: XCTestCase {
     /// window runs the real layout pass those screens need.
     @MainActor
     private func hostedInkImage(_ screen: SaveInkPreviewScreen) throws -> UIImage {
-        let size = CGSize(width: 393, height: 852)
-        let root = SaveInkScreenPreview(screen: screen)
+        try hostedInkImage(SaveInkScreenPreview(screen: screen))
+    }
+
+    @MainActor
+    private func hostedInkImage<Content: View>(_ root: Content, width: CGFloat = 393) throws -> UIImage {
+        let size = CGSize(width: width, height: 852)
         let host = UIHostingController(rootView: root)
         host.overrideUserInterfaceStyle = .light
         let paper = UIColor(red: 250.0 / 255, green: 249.0 / 255, blue: 244.0 / 255, alpha: 1)
@@ -808,6 +1221,23 @@ final class SaveInkNotebookTests: XCTestCase {
             XCTAssertEqual([UInt8](data.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10], name)
             XCTAssertGreaterThan(data.count, 8_000, name)
         }
+    }
+
+    private func inkSuite(_ name: String) -> UserDefaults {
+        UserDefaults(suiteName: "save.ink.\(name).\(UUID().uuidString)")!
+    }
+
+    private func inkVisit(placeID: String, comment: String) -> SaveInkVisitRecord {
+        SaveInkVisitRecord(
+            id: UUID(),
+            placeID: placeID,
+            visitedAt: SaveInkClock.previewNow,
+            verification: .verified,
+            visibility: .public,
+            comment: comment,
+            sentiment: nil,
+            anomaly: nil
+        )
     }
 
     private func checkInStore(fix: SaveInkFix) async -> SaveInkNotebookStore {
