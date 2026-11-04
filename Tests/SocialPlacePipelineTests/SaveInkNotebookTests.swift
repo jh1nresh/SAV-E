@@ -2633,7 +2633,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(reloaded.homeBadge(for: try XCTUnwrap(reloaded.place(original.id))), .visited)
     }
 
-    func testCheckInRejectsAFixMeasuredBeforeShopCoordinatesChanged() async {
+    func testCheckInRejectsAFixMeasuredBeforeShopCoordinatesChanged() async throws {
         var original = inkRow(id: "corrected-place", name: "甲店", street: "甲街")
         original.shopLatitude = 25.03
         original.shopLongitude = 121.53
@@ -2644,20 +2644,34 @@ final class SaveInkNotebookTests: XCTestCase {
         )
         let locator = SaveInkSuspendedLocator()
         let defaults = inkSuite("checkin-coordinate-correction")
+        let prior = inkVisit(placeID: original.id, comment: "既有到訪筆記")
+        let priorBytes = try SaveInkNotebookStore.encoder.encode([prior])
+        defaults.set(priorBytes, forKey: "save.ink.visits.v1.account-a")
         let store = SaveInkNotebookStore(
             defaults: defaults, makeLocator: { locator }, usesLivePlaces: true,
             liveLoader: loader, liveOwner: { "account-a" }
         )
+        store.draftComment = "不能覆寫既有紀錄的殘留草稿"
         let pending = Task { await store.checkIn(placeID: original.id) }
         await locator.waitUntilRequested()
         catalog[0].shopLatitude = 26.03
         await store.refreshLivePlaces()
         locator.finish(.inRange(meters: 18))
         await pending.value
-        XCTAssertTrue(store.visits.isEmpty)
-        XCTAssertNil(defaults.data(forKey: "save.ink.visits.v1.account-a"))
-        XCTAssertEqual(store.place(original.id)?.badge, .saved)
-        XCTAssertEqual(store.sheet, .checkIn(.locationFailed, placeID: original.id))
+        XCTAssertEqual(store.visits.count, 1)
+        XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1.account-a"), priorBytes)
+        XCTAssertEqual(store.sheet, .checkIn(.placeChanged, placeID: original.id))
+        let image = try hostedInkImage(SaveInkCheckInSheet(
+            store: store, place: try XCTUnwrap(store.place(original.id)), situation: .placeChanged
+        ), width: 375)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "ink-place-changed-375"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        store.commitDraft()
+        XCTAssertNil(store.sheet)
+        XCTAssertEqual(defaults.data(forKey: "save.ink.visits.v1.account-a"), priorBytes)
+        XCTAssertEqual(store.latestVisit(for: original.id)?.comment, "既有到訪筆記")
     }
 
     func testIgnoredCheckInPreservesUnreadableStoredVisitBytes() async {

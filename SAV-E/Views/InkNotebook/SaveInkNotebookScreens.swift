@@ -297,8 +297,10 @@ struct SaveInkCheckInSheet: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .multilineTextAlignment(.center)
             }
-            stamp
-                .frame(width: stampSize, height: stampSize)
+            if situation != .placeChanged {
+                stamp
+                    .frame(width: stampSize, height: stampSize)
+            }
             if showsComment {
                 commentBox
                 sentiment
@@ -322,6 +324,8 @@ struct SaveInkCheckInSheet: View {
             return "到了，已蓋章"
         case .locationFailed:
             return "定位不到，先幫你記下"
+        case .placeChanged:
+            return "店家位置已更新"
         case .permissionDenied:
             return "沒有定位權限，\n這次記成未驗證"
         case .approximateOnly:
@@ -341,6 +345,7 @@ struct SaveInkCheckInSheet: View {
     private var subtitle: String? {
         switch situation {
         case .locationFailed: "到現場可再試一次驗證。"
+        case .placeChanged: "這次尚未記錄，請重新確認位置。"
         default: nil
         }
     }
@@ -379,7 +384,7 @@ struct SaveInkCheckInSheet: View {
         switch situation {
         case .locationFailed, .permissionDenied, .approximateOnly, .downgradedUnverified:
             return true
-        case .verified, .tooFar, .duplicate:
+        case .verified, .tooFar, .duplicate, .placeChanged:
             return false
         }
     }
@@ -428,6 +433,13 @@ struct SaveInkCheckInSheet: View {
     @ViewBuilder
     private var buttons: some View {
         switch situation {
+        case .placeChanged:
+            SaveInkOutlineButton(title: "重新確認位置", identifier: "ink.checkin.retry", compact: true) {
+                Task { await store.retryCheckIn() }
+            }
+            SaveInkOutlineButton(title: "稍後再試", identifier: "ink.checkin.cancel", compact: true) {
+                store.cancelSheet()
+            }
         case .verified:
             SaveInkOutlineButton(title: "看這次的章", identifier: "ink.checkin.stamp", compact: true) {
                 store.beginArrival()

@@ -80,6 +80,7 @@ struct SaveInkFix: Equatable {
 enum SaveInkCheckInSituation: Equatable {
     case verified
     case locationFailed
+    case placeChanged
     case permissionDenied
     case approximateOnly
     case tooFar(meters: Int)
@@ -90,6 +91,7 @@ enum SaveInkCheckInSituation: Equatable {
         switch self {
         case .verified: "verified"
         case .locationFailed: "failed"
+        case .placeChanged: "place-changed"
         case .permissionDenied: "permission"
         case .approximateOnly: "approximate"
         case .tooFar(let meters): "far-\(meters)"
@@ -880,8 +882,8 @@ final class SaveInkNotebookStore: ObservableObject {
         checkInOwner = ownerAtStart
         guard currentPlace.shopLatitude == place.shopLatitude,
               currentPlace.shopLongitude == place.shopLongitude else {
-            pendingSituation = .locationFailed
-            sheet = .checkIn(.locationFailed, placeID: placeID)
+            pendingSituation = .placeChanged
+            sheet = .checkIn(.placeChanged, placeID: placeID)
             return
         }
         let previous = previousShop(before: placeID)
@@ -1000,6 +1002,10 @@ final class SaveInkNotebookStore: ObservableObject {
     }
 
     func commitDraft() {
+        if pendingSituation == .placeChanged {
+            cancelSheet()
+            return
+        }
         if usesLivePlaces, liveOwner() != checkInOwner || catalogOwner != checkInOwner {
             sheet = nil
             path.removeAll()
