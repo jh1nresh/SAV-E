@@ -712,7 +712,9 @@ struct SaveInkArrivalScreen: View {
                 Text("你到了\(place?.name ?? "")")
                     .font(SaveInkType.pageTitle)
                     .multilineTextAlignment(.center)
-                Text("距離店門 18 m・第 \(max(count, 1)) 次")
+                Text(store.includesSampleCatalog
+                     ? "距離店門 18 m・第 \(max(count, 1)) 次"
+                     : "這次造訪已驗證・第 \(max(count, 1)) 次")
                     .font(SaveInkType.aux)
                     .monospacedDigit()
                     .foregroundStyle(SaveInkPalette.inkSub)

@@ -1822,7 +1822,7 @@ final class SaveInkNotebookTests: XCTestCase {
             defaults: defaults,
             now: { SaveInkClock.previewNow },
             seedFixture: false,
-            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 18)) },
+            makeLocator: { SaveInkScriptedLocator(fix: .inRange(meters: 64)) },
             usesLivePlaces: true,
             liveLoader: loader,
             liveOwner: { owner }
@@ -1831,6 +1831,11 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(store.places.first { $0.id == placeID }?.badge, .saved)
         await store.checkIn(placeID: placeID)
         XCTAssertEqual(store.places.first { $0.id == placeID }?.badge, .visited)
+        let image = try hostedInkImage(SaveInkArrivalScreen(store: store, placeID: placeID), width: 375)
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "ink-verified-arrival-measured64-375"
+        attachment.lifetime = .keepAlways
+        add(attachment)
         await store.refreshLivePlaces()
         XCTAssertEqual(store.places.first { $0.id == placeID }?.badge, .visited)
         let reloaded = SaveInkNotebookStore(
