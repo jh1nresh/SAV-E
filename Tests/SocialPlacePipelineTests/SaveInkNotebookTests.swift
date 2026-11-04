@@ -917,7 +917,8 @@ final class SaveInkNotebookTests: XCTestCase {
     func testHomeEmptyStateUsesInkCopy() throws {
         let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
         XCTAssertTrue(screens.contains("ink.home.empty"))
-        XCTAssertTrue(screens.contains("還沒有地點"))
+        let store = SaveInkNotebookStore(defaults: inkSuite("empty-home-copy"))
+        XCTAssertEqual(store.homeSummary(count: store.homePlaces().count), "還沒有地點")
         XCTAssertTrue(screens.contains("存一個地點，到了再記"))
         XCTAssertTrue(screens.contains("輕點卡片，看地圖怎麼走"))
         XCTAssertFalse(screens.contains("?? SaveInkFixture.dingtai"))
