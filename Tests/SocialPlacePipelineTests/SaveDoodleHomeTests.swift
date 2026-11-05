@@ -1870,6 +1870,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let logo = try Data(contentsOf: assets.appendingPathComponent("SavvyLogo.imageset/savvy-logo.png"))
         let icon = try Data(contentsOf: assets.appendingPathComponent("AppIcon.appiconset/SaveAppIcon.png"))
         XCTAssertEqual(logo, icon)
+        let prototypeLogo = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Resources/Assets.xcassets/SavvyLogo.imageset/savvy-logo.png"
+        ))
+        XCTAssertEqual(prototypeLogo, icon)
         XCTAssertNotNil(UIImage(data: logo))
         for name in ["MemoMascot", "SavesMemoSorting", "OnboardingMemoClue",
                      "OnboardingMemoReview", "OnboardingMemoStamp", "HomeAtlasScene", "MapAtlasScene",

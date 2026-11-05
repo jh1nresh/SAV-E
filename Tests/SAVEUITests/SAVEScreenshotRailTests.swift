@@ -682,6 +682,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "ink-signin-\(language)-\(size)")
             XCTAssertTrue(scrollUntilHittable(email, in: app.scrollViews.firstMatch, maxSwipes: 8))
             typeText("appreview@wanderly.app", into: email)
+            XCTAssertFalse(app.buttons["signin.google"].exists)
             XCTAssertTrue(app.keyboards.firstMatch.exists)
             XCTAssertTrue(app.buttons["signin.keyboardDone"].waitForExistence(timeout: stepTimeout))
             let send = app.buttons["signin.sendCode"]
@@ -740,7 +741,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testInkOpeningUsesHonestWaitState() {
         for language in ["en", "zh-Hant"] {
             let app = makeApp(launchArguments: [
-                "--uitest-complete-onboarding", "--uitest-hold-opening",
+                "--uitest-complete-onboarding", "--uitest-freeze-opening",
                 "--uitest-location-denied",
                 "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", language,

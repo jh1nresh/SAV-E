@@ -320,6 +320,10 @@ struct SaveApp: App {
     @MainActor
     private func completeMinimumOpeningAnimation() async {
         guard !minimumOpeningAnimationCompleted else { return }
+#if DEBUG
+        // Screenshot evidence must not race the normal eight-second test hold.
+        if ProcessInfo.processInfo.arguments.contains("--uitest-freeze-opening") { return }
+#endif
         try? await Task.sleep(nanoseconds: minimumOpeningAnimationDuration)
         minimumOpeningAnimationCompleted = true
     }
@@ -1215,6 +1219,7 @@ private struct SaveInkEntryBrand: View {
 struct SignInView: View {
     @EnvironmentObject var authService: PrivyAuthService
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var email = ""
     @State private var showEmailCode = false
     @State private var verificationCode = ""
@@ -1239,27 +1244,33 @@ struct SignInView: View {
         ScrollViewReader { scrollProxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    SaveInkEntryBrand()
-                        .padding(.bottom, 28)
+                    if focusedActionID == nil {
+                        SaveInkEntryBrand()
+                            .padding(.bottom, 28)
+                    }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(languageSettings.localized(english: "Sign in to Savvy", traditionalChinese: "登入 Savvy"))
+                        Text(showEmailCode
+                            ? languageSettings.localized(english: "Enter your code", traditionalChinese: "輸入驗證碼")
+                            : languageSettings.localized(english: "Sign in to Savvy", traditionalChinese: "登入 Savvy"))
                             .font(SaveInkType.subpageTitle)
                             .foregroundStyle(SaveInkPalette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("signin.title")
-                        Text(languageSettings.localized(
-                            english: "Keep the places you want to visit.",
-                            traditionalChinese: "把想去的地方，留在自己的手帳裡。"
-                        ))
-                        .font(SaveInkType.body)
-                        .foregroundStyle(SaveInkPalette.inkSub)
-                        .fixedSize(horizontal: false, vertical: true)
+                        if !showEmailCode && focusedActionID == nil {
+                            Text(languageSettings.localized(
+                                english: "Keep the places you want to visit.",
+                                traditionalChinese: "把想去的地方，留在自己的手帳裡。"
+                            ))
+                            .font(SaveInkType.body)
+                            .foregroundStyle(SaveInkPalette.inkSub)
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.bottom, 24)
 
                     VStack(alignment: .leading, spacing: 14) {
-                        if !showEmailCode {
+                        if !showEmailCode && focusedActionID == nil {
                             appleSignInButton
                             googleSignInButton
                         }
@@ -1304,13 +1315,13 @@ struct SignInView: View {
             .clipped()
             .onChange(of: focusedActionID) { _, actionID in
                 guard let actionID else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                     scrollProxy.scrollTo(actionID, anchor: .bottom)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
                 guard let focusedActionID else { return }
-                withAnimation(.easeOut(duration: 0.2)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) {
                     scrollProxy.scrollTo(focusedActionID, anchor: .bottom)
                 }
             }
@@ -1408,7 +1419,7 @@ struct SignInView: View {
 
     private var emailSignInSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if !showEmailCode {
+            if !showEmailCode && focusedActionID == nil {
                 HStack(spacing: 10) {
                     Rectangle()
                         .fill(SaveInkPalette.emptyLine)
@@ -1451,11 +1462,13 @@ struct SignInView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(languageSettings.localized(
-                        english: "Enter the code sent to",
-                        traditionalChinese: "輸入寄到以下信箱的驗證碼"
-                    ))
-                    .fixedSize(horizontal: false, vertical: true)
+                    if focusedActionID == nil {
+                        Text(languageSettings.localized(
+                            english: "Enter the code sent to",
+                            traditionalChinese: "輸入寄到以下信箱的驗證碼"
+                        ))
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text(email)
                         .lineLimit(1)
                         .truncationMode(.middle)

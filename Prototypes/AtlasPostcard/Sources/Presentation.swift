@@ -46,8 +46,9 @@ struct AtlasHomeHeroPresentation: Equatable {
         title: "Tokyo",
         subtitle: "Illustrated city atlas",
         countryCode: "JP",
-        latitude: nil,
-        longitude: nil
+        // Reference city center, never a user location.
+        latitude: 35.6762,
+        longitude: 139.6503
     )
 
     static let neutral = AtlasHomeHeroPresentation(
