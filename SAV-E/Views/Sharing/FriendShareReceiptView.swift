@@ -96,6 +96,7 @@ struct FriendShareReceiptView: View {
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SaveInkPalette.paper.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("friendShareReceipt.loading")
     }
 
@@ -115,6 +116,7 @@ struct FriendShareReceiptView: View {
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SaveInkPalette.paper.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("friendShareReceipt.unavailable")
     }
 

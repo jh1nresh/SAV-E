@@ -182,6 +182,7 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
 
     @MainActor
     private func waitForLabel(_ label: String, element: XCUIElement) {
+        XCTAssertTrue(element.waitForExistence(timeout: stepTimeout))
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: element)
         XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: stepTimeout), .completed)
     }
@@ -190,8 +191,8 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     private func assertJournal(_ app: XCUIApplication, pending: Bool, saves: Int) {
         let counter = app.staticTexts["incoming.fixture.saves"]
         XCTAssertTrue(counter.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(counter.label, "Saves: \(saves)")
-        XCTAssertEqual(app.staticTexts["incoming.fixture.journal"].label, pending ? "Journal: pending" : "Journal: none")
+        waitForLabel("Saves: \(saves)", element: counter)
+        waitForLabel(pending ? "Journal: pending" : "Journal: none", element: app.staticTexts["incoming.fixture.journal"])
     }
 
     @MainActor
