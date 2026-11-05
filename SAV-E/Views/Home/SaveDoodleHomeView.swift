@@ -125,7 +125,7 @@ struct SaveDoodleHomeView: View {
                         relativeTo: .largeTitle,
                         locksPointSize: true
                     )
-                    MemoMascotMark(size: 28, framed: false)
+                    SavvyBrandMark(size: 28, framed: false)
                 }
                 .contentShape(Rectangle())
             }
@@ -677,11 +677,11 @@ struct SaveDoodleHomeView: View {
 }
 
 enum SaveDoodleOfficialSticker: String, CaseIterable {
-    case duck, noodle, coffee, temple, lantern, elephant
+    case duck, noodle, coffee, temple, lantern
 
     var title: String { rawValue.capitalized }
 
-    /// Place marks only. The brand elephant lives in the header, never here.
+    /// Place marks only. Savvy branding is separate from place categories.
     static let placeCases: [SaveDoodleOfficialSticker] = [
         .duck, .noodle, .coffee, .temple, .lantern
     ]
@@ -695,8 +695,7 @@ enum SaveDoodleOfficialSticker: String, CaseIterable {
         return "DoodleSticker\(title)Outline"
     }
 
-    /// Never returns `.elephant`. Place names that mention an elephant still
-    /// use the category mark.
+    /// Place names do not introduce additional brand sticker categories.
     static func named(
         for category: PlaceCategory,
         placeName: String = ""

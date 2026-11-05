@@ -1,11 +1,11 @@
 import SwiftUI
 
-struct MemoMascotMark: View {
+struct SavvyBrandMark: View {
     var size: CGFloat = 72
     var framed = true
 
     var body: some View {
-        Image("MemoMascot")
+        Image("SavvyLogo")
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
@@ -24,8 +24,8 @@ struct MemoMascotMark: View {
 
 #Preview {
     VStack(spacing: 20) {
-        MemoMascotMark(size: 120)
-        MemoMascotMark(size: 46)
+        SavvyBrandMark(size: 120)
+        SavvyBrandMark(size: 46)
     }
     .padding()
     .background(SaveDottedBackground())

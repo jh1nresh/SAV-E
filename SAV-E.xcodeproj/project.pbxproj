@@ -178,7 +178,7 @@
 		B118D409C44CFAEC868DE8C2 /* TripPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE1A3AEC5BB812BBC6D7E14 /* TripPackStore.swift */; };
 		B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */; };
 		B45133218BC50C705B223B87 /* DebugVaultExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */; };
-		B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */; };
+		B4DAEDB0A245CE1D4707844F /* SavvyBrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */; };
 		B4E71FBC15953C17578E4241 /* DebugOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AC60F7F1A412AC73D3FE11 /* DebugOverlay.swift */; };
 		B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */; };
@@ -535,7 +535,7 @@
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEProAccessPolicy.swift; sourceTree = "<group>"; };
-		B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoMascotMark.swift; sourceTree = "<group>"; };
+		B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyBrandMark.swift; sourceTree = "<group>"; };
 		B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripHoursAnnotatorTests.swift; sourceTree = "<group>"; };
 		B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapDrawerPanel.swift; sourceTree = "<group>"; };
 		B83DDE4E3ACC60AF68724EAB /* SavePlaceFromURLIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceFromURLIntent.swift; sourceTree = "<group>"; };
@@ -890,7 +890,7 @@
 				A5009253F9320E70D431D935 /* CategoryPill.swift */,
 				AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */,
 				688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */,
-				B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */,
+				B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */,
 				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
 				898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */,
 				D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */,
@@ -1789,7 +1789,7 @@
 				P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */,
 				P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */,
 				97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */,
-				B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */,
+				B4DAEDB0A245CE1D4707844F /* SavvyBrandMark.swift in Sources */,
 				973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */,
 				8D622D0CF6A3524A97914E46 /* NavigationService.swift in Sources */,
 				F53F17B082DBB81DCC487486 /* OnboardingView.swift in Sources */,

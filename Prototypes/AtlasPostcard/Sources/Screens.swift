@@ -194,20 +194,11 @@ struct HomeAtlasScreen: View {
         accessibilityIdentifier: String
     ) -> some View {
         if SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset(assetName) {
-            if assetName == "HomeAtlasScene" {
-                Image(assetName)
-                    .resizable()
-                    .scaledToFill()
-                    .clipped()
-                    .accessibilityLabel("Illustrated Tokyo atlas")
-                    .accessibilityIdentifier(accessibilityIdentifier)
-            } else {
-                AtlasIllustratedCityHero(
-                    hero: presentation.homeHero,
-                    assetName: assetName,
-                    accessibilityIdentifier: accessibilityIdentifier
-                )
-            }
+            AtlasIllustratedCityHero(
+                hero: presentation.homeHero,
+                assetName: assetName,
+                accessibilityIdentifier: accessibilityIdentifier
+            )
         } else {
             AtlasRegionalHomeHero(hero: presentation.homeHero)
         }
@@ -244,7 +235,7 @@ private struct AtlasIllustratedCityHero: View {
                 .accessibilityLabel(hero.title)
                 .accessibilityIdentifier("home.region.title")
 
-            Image("MemoMascot")
+            Image("SavvyLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 94, height: 94)
@@ -1319,19 +1310,17 @@ struct TripsAtlasScreen: View {
     }
 
     /// Illustrated map scene with the featured trip postcard resting on its
-    /// lower half and Memo peeking over the top edge.
+    /// lower half and the Savvy logo above the top edge.
     private var heroScene: some View {
         ZStack(alignment: .top) {
-            Image("MapAtlasScene")
-                .resizable()
-                .scaledToFill()
+            AtlasRegionalHomeHero(hero: .referenceTokyo)
                 .saturation(0.82)
                 .frame(width: AtlasMetrics.width, height: 211)
                 .clipped()
                 .overlay(AtlasPalette.canvas.opacity(0.08))
                 .accessibilityHidden(true)
 
-            MemoMark(size: 67)
+            AtlasBrandMark(size: 67)
                 .frame(maxWidth: .infinity, alignment: .topTrailing)
                 .padding(.trailing, 32)
                 .padding(.top, 8)
@@ -1560,11 +1549,11 @@ struct SavesPocketScreen: View {
                 .placed(x: 10, y: 103, width: 382, height: 101)
                 .accessibilityIdentifier("prototype.saves.title")
 
-            Image("SavesMemoSorting")
+            Image("SavvyLogo")
                 .resizable()
                 .scaledToFit()
                 .placed(x: 286, y: 100, width: 112, height: 112)
-                .accessibilityLabel("Memo sorting saved cards")
+                .accessibilityLabel("Savvy")
 
             HStack(spacing: 10) {
                 Button(action: presentation.onSelectReview) {
@@ -1885,7 +1874,7 @@ struct TripHeader: View {
                 .accessibilityLabel("Share Trip")
                 .accessibilityIdentifier("trip.share.action")
             } else {
-                MemoMark(size: 48)
+                AtlasBrandMark(size: 48)
                     .position(x: 375, y: 26)
             }
         }
@@ -2084,9 +2073,7 @@ struct TripAtlasMapScreen: View {
                 .placed(x: 0, y: 48, width: 402, height: 54)
                 .accessibilityIdentifier("prototype.trip.map.header")
 
-            Image("MapAtlasScene")
-                .resizable()
-                .scaledToFill()
+            AtlasRegionalHomeHero(hero: .referenceTokyo)
                 .clipped()
                 .placed(x: 0, y: 102, width: 402, height: 450)
                 .accessibilityLabel("Tokyo Weekend route map")
@@ -2257,7 +2244,7 @@ private struct TripPrototypePlaceholder: View {
                 .accessibilityIdentifier("\(identifier).header")
 
             VStack(spacing: 18) {
-                MemoMark(size: 88)
+                AtlasBrandMark(size: 88)
                     .frame(height: 104)
 
                 Image(systemName: icon)
@@ -2315,9 +2302,7 @@ struct RootAtlasMapScreen: View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            Image("MapAtlasScene")
-                .resizable()
-                .scaledToFill()
+            AtlasRegionalHomeHero(hero: .referenceTokyo)
                 .clipped()
                 .placed(x: 0, y: 91, width: 402, height: 480)
                 .accessibilityLabel("Illustrated Tokyo route map")

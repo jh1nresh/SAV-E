@@ -137,7 +137,7 @@ struct SaveBrandPrimaryButtonStyle: ButtonStyle {
 }
 
 extension Color {
-    // MARK: - Savvy Memo Scrapbook Theme
+    // MARK: - Savvy Scrapbook Theme
     static let saveCream = Color(light: "FFF5E7", dark: "15191F")
     static let saveMint = Color(light: "C8EBCF", dark: "4F7D5D")
     static let saveCocoa = Color(light: "3A2415", dark: "F7EFE5")
@@ -244,7 +244,7 @@ enum SaveDoodle {
 
 /// Full-pixel tile-town materials (founder lock 2026-10-14).
 /// These paint the product Map base and Home/Friends peeks. Soft Pixel remains
-/// the pin / seal / Memo accent language on top of this town, not the map itself.
+/// the pin / seal / brand accent language on top of this town, not the map itself.
 enum SaveTileTownPalette {
     static let grass = Color(light: "8FBF6A", dark: "3D5A32")
     static let grassDeep = Color(light: "6FA04E", dark: "2E4526")
@@ -708,18 +708,6 @@ struct SavePostcardPocketFooter: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(title), \(count) \(countLabel)")
-    }
-}
-
-struct SavePostcardMemoPeek: View {
-    var width: CGFloat = 88
-
-    var body: some View {
-        Image("SavesMemoSorting")
-            .resizable()
-            .scaledToFit()
-            .frame(width: width)
-            .accessibilityHidden(true)
     }
 }
 

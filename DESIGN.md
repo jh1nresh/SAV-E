@@ -10,7 +10,7 @@
 > keeps only shared leftovers for a later cleanup. The 2026-10-19 isometric
 > Home hero is withdrawn. Product Map is default Apple MapKit with Doodle
 > chrome (`SaveDoodleMapView`). **Soft Pixel** is accents-only on remaining
-> town surfaces (pins / seals / Memo). **Cream-notebook** tokens are
+> town surfaces (pins / seals / brand marks). **Cream-notebook** tokens are
 > legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
 > Tokens" below.
 
@@ -34,7 +34,7 @@ Assumptions locked by current code:
   handoff.
 - `Color+Theme.swift` owns the current palette tokens, including
   `SaveTileTownPalette`.
-- `MemoMascotMark` owns the Memo elephant mark.
+- `SavvyBrandMark` owns the orange/cream script logo, matching the current app icon.
 - `SaveKraftStamp` is the one stamp language for Home recent stamps and the
   Passport grid. `SaveMemoryBadge`, `PlaceMapPin`, and `ReviewCandidateMapPin`
   still split clues, review candidates, and Map Stamps.
@@ -67,7 +67,7 @@ Savvy should feel like a cream field notebook that happens to have a map inside 
 The interface language is:
 
 ```text
-Memo elephant -> cream notebook -> source clue -> review candidate -> map stamp -> passport
+Savvy wordmark -> cream notebook -> source clue -> review candidate -> map stamp -> passport
 ```
 
 Every screen should make one of those states obvious. If a user cannot tell whether
@@ -91,17 +91,19 @@ layer must feel like Savvy.
 
 ## Core Metaphors
 
-### Memo Elephant
+### Savvy Brand
 
-Memo is the brand character and memory keeper. Use Memo to signal guidance, sorting,
-review, and friendly system intelligence.
+The current identity is the supplied cream script Savvy wordmark on orange,
+with the supplied forest-green pin banner for entry screens. Elephant artwork
+and the Memo character are retired across all bundled app surfaces.
 
-Rules:
-
-- Use `MemoMascotMark` for brand moments, onboarding, sign-in, empty states, and
-  Passport guidance or brand lockups.
-- Memo should not become a random decoration on every row.
-- Memo copy should be short and useful: "Memo has 3 clues waiting", not mascot jokes.
+- `SavvyBrandMark` uses `SavvyLogo`, the same image as the current app icon.
+- Sign-in and opening use the complete `SavvyEntryBanner` without cropping it.
+- Use the logo for onboarding, empty states and Passport brand lockups.
+- The logo is branding, never a confirmed place or verified-visit stamp.
+- Do not bring back elephant illustrations, stickers, overlays or mascot copy.
+- Keep the existing ink paper, Iansui typography and rough outlines. The brand
+  artwork may contain orange/green; ordinary ink controls reserve accent for arrival.
 
 ### Cream Notebook
 
@@ -170,14 +172,14 @@ does not replace Atlas tokens, the cream notebook canvas, or the tile-town
 map base.
 
 **Lock (2026-10-14 founder):** Soft Pixel appears as pins, Map Stamp seals,
-and Memo. Not a full Soft Pixel / 16-bit UI chrome system. The map *base*
+and brand marks. Not a full Soft Pixel / 16-bit UI chrome system. The map *base*
 is the owned tile-town renderer, not a random `SoftPixel*` / `16-bit` city
 PNG and not live MapKit.
 
 Rules:
 
 - Allowed Soft Pixel surfaces: tile-town pin marks, Map Stamp seals
-  (`SaveKraftStamp` / `SaveMemoryBadge` stamp family), Memo (`MemoMascotMark`),
+  (`SaveKraftStamp` / `SaveMemoryBadge` stamp family), branding (`SavvyBrandMark`),
   small stamp chips on tickets. Trip MapKit pins may keep `PlaceMapPin` /
   `ReviewCandidateMapPin`.
 - Forbidden: Soft Pixel chrome on every inactive root tab; Soft Pixel
@@ -247,7 +249,7 @@ Rules:
 Use these product nouns:
 
 - Savvy
-- Memo
+- Savvy
 - Map Stamp
 - Visited Map Stamp
 - Review Candidate
@@ -424,7 +426,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
 | Friends (`SaveFriendsView`) | Doodle people list (shared map hidden) |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
-| Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
+| Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `SavvyBrandMark` | Intentional — do not recolor in migrations |
 | App Clip shared place and list previews | Doodle v3.1 (plan A) — see **App Clip** below. Trip / referral / My Savvy stay functional with no Google photos and are not a visual restyle in this pass. |
 | `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), smoke harness | Legacy cream-notebook |
 
@@ -519,9 +521,9 @@ Spacing rules:
 
 ## Components
 
-### Memo Mark
+### Savvy Brand Mark
 
-Source: `SAV-E/Views/Shared/MemoMascotMark.swift`.
+Source: `SAV-E/Views/Shared/SavvyBrandMark.swift`.
 
 Use for:
 
@@ -709,12 +711,11 @@ waiting. Test-only or invisible navigation controls are not valid user
 routes. When clues wait, Review is that route. Visited Home/Map stickers
 use the official DESIGN color die-cut (duck, noodle, coffee, temple,
 lantern); unvisited stickers use the matching pencil outline.
-Founder-approved DESIGN v2 (2026-10-24) puts a small Memo elephant in
-the header with Savvy and Eat/Go. The elephant is never a place sticker
-and does not return to the empty plate. Code-drawn geometry is not a
-place sticker. Art sits in a 48pt box at ≤40pt.
+The old DESIGN v2 elephant header is retired. The header uses the current
+Savvy wordmark with Eat/Go. Brand art is never a place sticker.
+Code-drawn geometry is not a place sticker. Art sits in a 48pt box at ≤40pt.
 
-Resting Home is Savvy + small elephant + Eat/Go in the header, then
+Resting Home is Savvy + current logo + Eat/Go in the header, then
 Near you · city ▾, the always-visible hint row, 68pt own-save rows,
 then Collected. It is not the Map tab and it has no mini-map and no
 map component. Do not add a top-right map icon. No Eat/Go grouping or
@@ -812,8 +813,8 @@ The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
 to three columns on 375/390pt phones after the 24pt screen and panel
 insets. Columns = floor((availableGridWidth + 16) / 80), min 1 max 4.
 Official DESIGN stickers (duck, noodle, coffee, temple, lantern)
-fill the 64pt slot; stamp rings are secondary. Do not wrap a shrunken icon in a filled circle. The elephant is brand-only and
-appears on the empty Passport state, never as a place mark. The rank
+fill the 64pt slot; stamp rings are secondary. Do not wrap a shrunken icon in a filled circle.
+The current Savvy logo appears on the empty Passport state, never as a place mark. The rank
 legend stacks when its full text cannot fit, including larger text
 sizes. Map and Passport share manual visit history and the same daily
 deduplication.
@@ -843,10 +844,10 @@ stickers.
 
 First impression:
 
-- Memo elephant as clear brand anchor.
+- Supplied Savvy banner as the brand anchor.
 - Savvy name prominent.
 - One sentence: "Your personal place agent."
-- Workflow strip: Capture, Review, Save.
+- Plain indeterminate opening state, without a simulated processing strip.
 - Cream notebook background.
 
 ### Onboarding
@@ -1002,12 +1003,12 @@ Rules:
 
 ### Review Queue
 
-Review queue is Memo's waiting clues.
+Review queue contains waiting clues.
 
 The full queue is a compact continuous list on Atlas canvas, with paper rows,
 readable counts, and explicit source-clue versus review-candidate labels.
 Use the native navigation title once. Do not interrupt the list with an oversized
-envelope, repeated mascot header, or decorative count panel.
+envelope, repeated brand header, or decorative count panel.
 
 Rules:
 

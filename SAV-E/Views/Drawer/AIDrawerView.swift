@@ -672,7 +672,7 @@ struct AIDrawerView: View {
 
     // MARK: - Loading
 
-    /// Branded "Memo is sorting" treatment. Memo leads, a quiescent symbol
+    /// Branded sorting treatment. Savvy leads, a quiescent symbol
     /// pulse signals progress without an infinite layout animation that would
     /// trip UI-test quiescence checks.
     private var loadingStateView: some View {
@@ -903,7 +903,7 @@ struct AIDrawerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
-                    MemoMascotMark(size: 52, framed: false)
+                    SavvyBrandMark(size: 52, framed: false)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(languageSettings.localized(
@@ -1711,7 +1711,7 @@ struct MapDetailDrawerView: View {
                     )
             }
 
-            SavePostcardMemoPeek(width: 72)
+            SavvyBrandMark(size: 72, framed: false)
                 .offset(x: -20, y: 31)
         }
         .padding(.horizontal, 14)
@@ -1790,7 +1790,7 @@ struct MapDetailDrawerView: View {
                     )
             }
 
-            SavePostcardMemoPeek(width: 72)
+            SavvyBrandMark(size: 72, framed: false)
                 .offset(x: -20, y: 31)
                 .accessibilityIdentifier("drawer.review.memoPeek")
         }

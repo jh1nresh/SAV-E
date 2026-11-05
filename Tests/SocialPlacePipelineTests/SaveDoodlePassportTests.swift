@@ -44,11 +44,11 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual(SaveDoodleStickerKind.duck.officialSticker, .duck)
         XCTAssertEqual(SaveDoodleStickerKind.noodles.officialSticker, .noodle)
         for kind in SaveDoodleStickerKind.allCases {
-            XCTAssertNotEqual(kind.officialSticker, .elephant)
+            XCTAssertTrue(SaveDoodleOfficialSticker.placeCases.contains(kind.officialSticker))
         }
-        XCTAssertNotEqual(
+        XCTAssertEqual(
             SaveDoodleOfficialSticker.named(for: .attraction, placeName: "Elephant Park"),
-            .elephant
+            .temple
         )
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 279), 3)
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 294), 3)
@@ -241,7 +241,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(catalog.contains("physicalScreenWidth"))
         XCTAssertFalse(catalog.contains("columnCenters"))
         XCTAssertFalse(catalog.contains("panelWidth"))
-        XCTAssertTrue(page.contains("MemoMascotMark"))
+        XCTAssertTrue(page.contains("SavvyBrandMark"))
         XCTAssertFalse(page.contains("SaveDoodleElephant"))
         XCTAssertTrue(page.contains("passport.empty"))
         XCTAssertTrue(page.contains("showsEmptyPassport"))

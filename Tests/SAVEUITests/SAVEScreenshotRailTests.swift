@@ -638,10 +638,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
+                "--uitest-location-denied",
                 "-save.appLanguage", "en",
             ]
         )
         launch(app)
+        dismissEntryLocationPrompt()
 
         let title = app.staticTexts["signin.title"]
         let apple = app.buttons["signin.apple"]
@@ -674,6 +676,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "-UIPreferredContentSizeCategoryName", size,
             ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
             launch(app)
+            dismissEntryLocationPrompt()
             let email = app.textFields["signin.emailField"]
             XCTAssertTrue(email.waitForExistence(timeout: launchTimeout))
             attach(app, name: "ink-signin-\(language)-\(size)")
@@ -713,16 +716,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         for language in ["en", "zh-Hant"] {
             let app = makeApp(launchArguments: [
                 "--uitest-complete-onboarding", "--uitest-hold-opening",
+                "--uitest-location-denied",
                 "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", language,
             ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
             launch(app)
+            dismissEntryLocationPrompt()
             let loading = app.descendants(matching: .any)["opening.loading"]
             XCTAssertTrue(loading.waitForExistence(timeout: launchTimeout))
             XCTAssertFalse(app.staticTexts["CLUE → STAMP"].exists)
             attach(app, name: "ink-opening-\(language)")
             terminate(app)
         }
+    }
+
+    /// Unit-test host launches may leave an OS location prompt above the app.
+    /// Dismiss it before capturing the entry surface rather than accepting an obscured screenshot.
+    @MainActor
+    private func dismissEntryLocationPrompt() {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        guard alert.waitForExistence(timeout: timeout(0.5)) else { return }
+        for label in ["Don’t Allow", "Don't Allow"] where alert.buttons[label].exists {
+            alert.buttons[label].tap()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: stepTimeout))
+            return
+        }
+        XCTFail("Unexpected system alert obscures the entry screen: \(alert.label)")
     }
 
     @MainActor

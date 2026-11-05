@@ -671,11 +671,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let passportTopBar = try typeBody("PassportTopBar", in: profile)
 
         XCTAssertTrue(brandHeader.contains("Image(\"SavvyLogo\")"))
-        XCTAssertFalse(brandHeader.contains("MemoMascotMark"))
+        XCTAssertFalse(brandHeader.contains("SavvyBrandMark"))
         XCTAssertTrue(rootHeader.contains("Image(\"SavvyLogo\")"))
         XCTAssertTrue(rootHeader.contains("accessibilityIdentifier(\"root.passport\")"))
         XCTAssertTrue(rootHeader.contains("Open Savvy Passport"))
-        XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
+        XCTAssertFalse(rootHeader.contains("SavvyBrandMark"))
         XCTAssertTrue(passportTopBar.contains("SaveDisplayTitle(text: \"Savvy\""))
         XCTAssertTrue(passportTopBar.contains("accessibilityLabel(\"Savvy\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))

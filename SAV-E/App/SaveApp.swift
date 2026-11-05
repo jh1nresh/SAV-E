@@ -1168,8 +1168,8 @@ struct AuthLoadingView: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    SaveInkEntryWordmark()
+                VStack(alignment: .leading, spacing: 16) {
+                    SaveInkEntryBrand()
                     Text(languageSettings.localized(
                         english: "Keep the places you find.\nGo when the time is right.",
                         traditionalChinese: "把刷到的好店，\n變成真的去過"
@@ -1200,7 +1200,7 @@ struct AuthLoadingView: View {
                 .frame(maxWidth: 430, alignment: .leading)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
-                .padding(.top, 36)
+                .padding(.top, 24)
                 .padding(.bottom, 40)
                 .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
@@ -1211,11 +1211,13 @@ struct AuthLoadingView: View {
     }
 }
 
-private struct SaveInkEntryWordmark: View {
+private struct SaveInkEntryBrand: View {
     var body: some View {
-        Text("Savvy")
-            .font(SaveInkType.brand)
-            .foregroundStyle(SaveInkPalette.ink)
+        Image("SavvyEntryBanner")
+            .resizable()
+            .scaledToFit()
+            .clipShape(SaveInkRoughRoundedRect(cornerRadius: 18, seed: 510))
+            .accessibilityLabel("Savvy")
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -1250,7 +1252,7 @@ struct SignInView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     SignInHero()
 
-                    Spacer(minLength: 40)
+                    Spacer(minLength: 24)
 
                     VStack(alignment: .leading, spacing: 16) {
                         Text(languageSettings.text(.signInOrCreateAccount))
@@ -1280,7 +1282,7 @@ struct SignInView: View {
                 .frame(maxWidth: 430, alignment: .leading)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
-                .padding(.top, 36)
+                .padding(.top, 24)
                 .padding(.bottom, 28)
                 .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
@@ -1470,8 +1472,8 @@ private struct SignInHero: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            SaveInkEntryWordmark()
+        VStack(alignment: .leading, spacing: 16) {
+            SaveInkEntryBrand()
             Text(languageSettings.localized(
                 english: "Your next good find,\nremembered.",
                 traditionalChinese: "下一間想去的店，\n替自己記下來。"
