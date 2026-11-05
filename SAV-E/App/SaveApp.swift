@@ -1219,6 +1219,7 @@ struct SignInView: View {
     @State private var showEmailCode = false
     @State private var verificationCode = ""
     @State private var isLoading = false
+    @State private var focusedActionID: String?
     @State private var errorTitle = "Can't Sign In"
     @State private var errorMessage: String?
 
@@ -1235,7 +1236,7 @@ struct SignInView: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
+        ScrollViewReader { scrollProxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     SaveInkEntryBrand()
@@ -1258,11 +1259,30 @@ struct SignInView: View {
                     .padding(.bottom, 24)
 
                     VStack(alignment: .leading, spacing: 14) {
-                        appleSignInButton
-                        googleSignInButton
+                        if !showEmailCode {
+                            appleSignInButton
+                            googleSignInButton
+                        }
                         emailSignInSection
                     }
                     .disabled(isLoading)
+
+                    if showEmailCode {
+                        Button {
+                            focusedActionID = nil
+                            verificationCode = ""
+                            showEmailCode = false
+                        } label: {
+                            Text(languageSettings.localized(english: "Back to sign-in options", traditionalChinese: "返回登入選項"))
+                                .font(SaveInkType.body)
+                                .foregroundStyle(SaveInkPalette.inkSub)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isLoading)
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("signin.backToOptions")
+                    }
 
                     if isLoading {
                         HStack(spacing: 10) {
@@ -1282,6 +1302,18 @@ struct SignInView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .clipped()
+            .onChange(of: focusedActionID) { _, actionID in
+                guard let actionID else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    scrollProxy.scrollTo(actionID, anchor: .bottom)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                guard let focusedActionID else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    scrollProxy.scrollTo(focusedActionID, anchor: .bottom)
+                }
+            }
         }
         .background(SaveInkPalette.paper.ignoresSafeArea())
         .preferredColorScheme(.light)
@@ -1376,19 +1408,21 @@ struct SignInView: View {
 
     private var emailSignInSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Rectangle()
-                    .fill(SaveInkPalette.emptyLine)
-                    .frame(height: 1)
-                Text(languageSettings.text(.orUseEmail))
-                    .font(SaveInkType.aux)
-                    .foregroundStyle(SaveInkPalette.inkSub)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                Rectangle()
-                    .fill(SaveInkPalette.emptyLine)
-                    .frame(height: 1)
+            if !showEmailCode {
+                HStack(spacing: 10) {
+                    Rectangle()
+                        .fill(SaveInkPalette.emptyLine)
+                        .frame(height: 1)
+                    Text(languageSettings.text(.orUseEmail))
+                        .font(SaveInkType.aux)
+                        .foregroundStyle(SaveInkPalette.inkSub)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
+                    Rectangle()
+                        .fill(SaveInkPalette.emptyLine)
+                        .frame(height: 1)
+                }
             }
 
             if !showEmailCode {
@@ -1399,7 +1433,8 @@ struct SignInView: View {
                     keyboardType: .emailAddress,
                     isDisabled: !canSendEmailCode,
                     fieldAccessibilityID: "signin.emailField",
-                    buttonAccessibilityID: "signin.sendCode"
+                    buttonAccessibilityID: "signin.sendCode",
+                    onFocusChange: { focusedActionID = $0 }
                 ) {
                     guard !isLoading else { return }
                     isLoading = true
@@ -1438,7 +1473,8 @@ struct SignInView: View {
                     keyboardType: .numberPad,
                     isDisabled: verificationCode.isEmpty || isLoading,
                     fieldAccessibilityID: "signin.codeField",
-                    buttonAccessibilityID: "signin.verify"
+                    buttonAccessibilityID: "signin.verify",
+                    onFocusChange: { focusedActionID = $0 }
                 ) {
                     guard !isLoading else { return }
                     isLoading = true
@@ -1482,6 +1518,7 @@ private struct SignInInputRow: View {
     // sign-in flow types into these fields (see Tests/SAVEUITests).
     var fieldAccessibilityID: String = ""
     var buttonAccessibilityID: String = ""
+    var onFocusChange: (String?) -> Void = { _ in }
     let action: () -> Void
     @FocusState private var isFocused: Bool
 
@@ -1498,6 +1535,9 @@ private struct SignInInputRow: View {
                 .accessibilityLabel(placeholder)
                 .accessibilityIdentifier(fieldAccessibilityID)
                 .focused($isFocused)
+                .onChange(of: isFocused) { _, focused in
+                    onFocusChange(focused ? buttonAccessibilityID : nil)
+                }
                 .onSubmit { isFocused = false }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -1542,6 +1582,7 @@ private struct SignInInputRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier(buttonAccessibilityID)
+            .id(buttonAccessibilityID)
             .disabled(isDisabled)
         }
     }

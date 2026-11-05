@@ -683,15 +683,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(scrollUntilHittable(email, in: app.scrollViews.firstMatch, maxSwipes: 8))
             typeText("appreview@wanderly.app", into: email)
             XCTAssertTrue(app.keyboards.firstMatch.exists)
-            XCTAssertLessThanOrEqual(email.frame.maxY, app.keyboards.firstMatch.frame.minY)
+            XCTAssertTrue(app.buttons["signin.keyboardDone"].waitForExistence(timeout: stepTimeout))
+            let send = app.buttons["signin.sendCode"]
+            let emailVisibleBottom = min(app.keyboards.firstMatch.frame.minY, app.buttons["signin.keyboardDone"].frame.minY)
+            XCTAssertLessThanOrEqual(email.frame.maxY, emailVisibleBottom)
+            XCTAssertLessThanOrEqual(send.frame.maxY, emailVisibleBottom)
+            XCTAssertTrue(send.isHittable)
             attach(app, name: "ink-signin-email-keyboard-\(language)")
             dismissKeyboard(app: app)
-            let send = app.buttons["signin.sendCode"]
             XCTAssertTrue(scrollUntilHittable(send, in: app.scrollViews.firstMatch, maxSwipes: 8))
             XCTAssertGreaterThanOrEqual(send.frame.height, 44)
             send.tap()
             let code = app.textFields["signin.codeField"]
             XCTAssertTrue(code.waitForExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.buttons["signin.google"].exists)
+            if language == "zh-Hant" {
+                let back = app.buttons["signin.backToOptions"]
+                XCTAssertTrue(scrollUntilHittable(back, in: app.scrollViews.firstMatch, maxSwipes: 8))
+                back.tap()
+                XCTAssertTrue(email.waitForExistence(timeout: stepTimeout))
+                XCTAssertTrue(app.buttons["signin.apple"].exists)
+                XCTAssertTrue(app.buttons["signin.google"].exists)
+                XCTAssertEqual(email.value as? String, "appreview@wanderly.app")
+                XCTAssertTrue(scrollUntilHittable(send, in: app.scrollViews.firstMatch, maxSwipes: 8))
+                send.tap()
+                XCTAssertTrue(code.waitForExistence(timeout: stepTimeout))
+            }
             let hint = app.descendants(matching: .any)["signin.codeHint"]
             XCTAssertTrue(hint.exists)
             XCTAssertGreaterThanOrEqual(hint.frame.minX, app.frame.minX)
@@ -699,10 +716,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(scrollUntilHittable(code, in: app.scrollViews.firstMatch, maxSwipes: 8))
             typeText("424242", into: code)
             XCTAssertTrue(app.keyboards.firstMatch.exists)
-            XCTAssertLessThanOrEqual(code.frame.maxY, app.keyboards.firstMatch.frame.minY)
+            XCTAssertTrue(app.buttons["signin.keyboardDone"].waitForExistence(timeout: stepTimeout))
+            let verify = app.buttons["signin.verify"]
+            let codeVisibleBottom = min(app.keyboards.firstMatch.frame.minY, app.buttons["signin.keyboardDone"].frame.minY)
+            XCTAssertLessThanOrEqual(code.frame.maxY, codeVisibleBottom)
+            XCTAssertLessThanOrEqual(verify.frame.maxY, codeVisibleBottom)
+            XCTAssertTrue(verify.isHittable)
             attach(app, name: "ink-signin-code-keyboard-\(language)")
             dismissKeyboard(app: app)
-            let verify = app.buttons["signin.verify"]
             XCTAssertTrue(scrollUntilHittable(verify, in: app.scrollViews.firstMatch, maxSwipes: 8))
             XCTAssertGreaterThanOrEqual(verify.frame.height, 44)
             XCTAssertGreaterThanOrEqual(verify.frame.minX, app.frame.minX)
