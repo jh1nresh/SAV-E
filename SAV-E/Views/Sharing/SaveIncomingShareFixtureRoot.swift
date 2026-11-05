@@ -1,11 +1,30 @@
 #if DEBUG
 import SwiftUI
 
+@MainActor
+final class SaveIncomingShareFixtureSession: ObservableObject {
+    static let shared = SaveIncomingShareFixtureSession()
+    @Published var verified = false
+    @Published var owner = "fixture-account"
+    @Published var generation = 1
+    @Published private(set) var joins = 0
+
+    var session: SaveIncomingShareSession { .init(owner: owner, generation: generation) }
+
+    func join(code: String) throws -> SaveCollaborativeList {
+        guard code == "fixture-list" else { throw SaveCollaborativeListError.invalidLink }
+        joins += 1
+        // The live joined list deliberately differs from the Clip selection.
+        return SaveCollaborativeList(title: "Synthetic joined list", items: [])
+    }
+}
+
 /// Explicit UI-suite launch only: isolated preferences, synthetic receipts and
 /// in-memory save responses. No App Group journal or backend writes.
 struct SaveIncomingShareFixtureRoot: View {
     static var isEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share")
+            && ReviewDemo.isOfflineUITestMode
     }
     static let defaults: UserDefaults = {
         let name = "savvy.incoming-share.fixture"
@@ -24,17 +43,17 @@ struct SaveIncomingShareFixtureRoot: View {
     @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var requestID: UUID
     let showParentAlert: () -> Void
+    let verificationChanged: () -> Void
     @StateObject private var language = AppLanguageSettings(userDefaults: Self.defaults, preferredLanguages: { ["en"] })
-    @State private var verified = false
+    @ObservedObject private var account = SaveIncomingShareFixtureSession.shared
     @State private var prepared = false
     @State private var saves = 0
     @State private var resolutions = 0
     @State private var waiting: (CheckedContinuation<SharedPlaceSaveOutcome, Error>, SharedPlaceSaveOutcome)?
-    private let session = SaveIncomingShareSession(owner: "fixture-account", generation: 1)
 
     var body: some View {
         Group {
-            if verified {
+            if account.verified {
                 SaveInkNotebookRoot(launch: .preview(Self.scenario == "existing-modal" ? .passport : .main))
                     .modifier(SaveIncomingShareHost(
                         incomingPlaceReceipt: $incomingPlaceReceipt,
@@ -42,8 +61,8 @@ struct SaveIncomingShareFixtureRoot: View {
                         requiresListConfirmation: $requiresListConfirmation,
                         pendingClipListSave: $pendingClipListSave,
                         requestID: $requestID,
-                        session: session,
-                        currentSession: { verified ? session : nil },
+                        session: account.session,
+                        currentSession: { account.verified ? account.session : nil },
                         journalStore: Self.defaults,
                         resolveReceipt: { url in
                             resolutions += 1
@@ -59,7 +78,16 @@ struct SaveIncomingShareFixtureRoot: View {
                             saves += 1
                             if Self.scenario == "failure" { throw SharedPlaceReceiptError.networkUnavailable }
                             if Self.scenario == "cap" { throw SavePlaceLimitError.parkedInUnplacedInbox }
-                            let place = receipt.recipientOwnedPlace(ownerSubject: session.owner)
+                            let place = receipt.recipientOwnedPlace(ownerSubject: account.owner)
+                            if Self.scenario == "account-switch" {
+                                account.verified = false
+                                account.owner = "fixture-account-b"
+                                account.generation += 1
+                                incomingPlaceReceipt = nil
+                                requestID = UUID()
+                                try? await Task.sleep(for: .milliseconds(300))
+                                return .saved(place)
+                            }
                             if Self.scenario == "replacement", saves == 1 {
                                 // J2 arrives while J1 is still saving, before its URL is opened.
                                 writeJournal()
@@ -83,6 +111,7 @@ struct SaveIncomingShareFixtureRoot: View {
                         VStack {
                             Text("Synthetic share fixture").font(SaveInkType.aux)
                             Text("Saves: \(saves)").accessibilityIdentifier("incoming.fixture.saves")
+                            joinCounter
                             Text(PendingShareStore.load(from: Self.defaults) == nil ? "Journal: none" : "Journal: pending")
                                 .accessibilityIdentifier("incoming.fixture.journal")
                             if Self.scenario == "existing-alert" {
@@ -98,8 +127,10 @@ struct SaveIncomingShareFixtureRoot: View {
             } else {
                 VStack(spacing: 20) {
                     Text("Account verification fixture").font(SaveInkType.sheetTitle)
+                    joinCounter
                     SaveInkOutlineButton(title: "Verify fixture account", identifier: "incoming.fixture.verify") {
-                        verified = true
+                        account.verified = true
+                        verificationChanged()
                     }
                 }
                 .padding(24)
@@ -113,17 +144,16 @@ struct SaveIncomingShareFixtureRoot: View {
             guard !prepared else { return }
             prepared = true
             language.language = ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-zh") ? .traditionalChinese : .english
-            if ["clip", "replacement", "failure", "cap", "list", "list-cap"].contains(Self.scenario) { writeJournal() }
-            if Self.scenario.hasPrefix("list") {
-                let snapshot = Self.snapshot
-                pendingClipListSave = SaveCollaborativeList(title: "Synthetic list", items: [snapshot.asListItem()])
-                requiresListConfirmation = true
-                requestID = UUID()
-            }
-            verified = !ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-unverified")
+            if ["clip", "replacement", "failure", "cap", "list", "list-cap", "clip-unknown-reference", "list-unknown-reference", "account-switch"].contains(Self.scenario) { writeJournal() }
+            account.verified = !ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-unverified")
+            verificationChanged()
         }
         .onChange(of: requestID) { _, _ in finishWaiting(cancel: false) }
         .onDisappear { finishWaiting(cancel: true) }
+    }
+
+    private var joinCounter: some View {
+        Text("Joins: \(account.joins)").accessibilityIdentifier("incoming.fixture.joins")
     }
 
     private func finishWaiting(cancel: Bool) {
@@ -136,9 +166,9 @@ struct SaveIncomingShareFixtureRoot: View {
     private func writeJournal() {
         let list = Self.scenario.hasPrefix("list")
         _ = PendingShareStore.write(PendingSharePayload(
-            kind: list ? .list : .place, shareCode: list ? nil : "share-fixture",
+            kind: list ? .list : .place, shareCode: list ? "fixture-list" : "share-fixture",
             placeId: nil, listId: nil, sender: nil,
-            url: list ? "savvy://list/fixture" : "savvy://p/share-fixture",
+            url: list ? "savvy://list?c=fixture-list" : "savvy://p/share-fixture",
             confirmedPlaces: [Self.snapshot]
         ), to: Self.defaults)
     }
@@ -146,7 +176,8 @@ struct SaveIncomingShareFixtureRoot: View {
     private static var snapshot: PendingConfirmedPlace {
         PendingConfirmedPlace(
             placeId: "fixture-place-a", name: "Fixture place A", address: "Synthetic address",
-            latitude: 25.033, longitude: 121.5654, category: "cafe", sourceURL: nil
+            latitude: 25.033, longitude: 121.5654, category: "cafe", sourceURL: nil,
+            coordinateSystem: scenario.hasSuffix("unknown-reference") ? "unsupported-reference" : nil
         )
     }
 

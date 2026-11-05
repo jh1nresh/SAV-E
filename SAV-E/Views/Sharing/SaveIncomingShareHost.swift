@@ -81,13 +81,18 @@ struct SaveIncomingShareHost: ViewModifier {
             .sheet(item: presentationBinding) { item in
                 switch item {
                 case .place(let destination, let journal, let token, let owner):
-                    FriendShareReceiptView(destination: destination, resolveReceipt: resolveReceipt, recordEvent: recordReceiptEvent) { receipt in
+                    FriendShareReceiptView(
+                        destination: destination,
+                        canConfirmLocation: ClipPlaceHandoff.journalForConfirmation(pending: journal, destination: destination)?.supportsIncomingShareLocationReferences ?? true,
+                        resolveReceipt: resolveReceipt, recordEvent: recordReceiptEvent
+                    ) { receipt in
                         try await confirmPlace(receipt, destination: destination, journal: journal, token: token, owner: owner)
                     }
                     .id(item.id)
                 case .list(let list, let journal, let token, let owner):
                     SaveIncomingListConfirmation(
                         list: list,
+                        canConfirmLocation: journal?.supportsIncomingShareLocationReferences == true,
                         save: { try await confirmList(list, journal: journal, token: token, owner: owner) },
                         completed: { counts in finishList(list, journal: journal, token: token, owner: owner, counts: counts) }
                     )
@@ -159,6 +164,7 @@ struct SaveIncomingShareHost: ViewModifier {
         guard incomingPlaceReceipt?.id == destination.id else { throw CancellationError() }
         let confirmsClip = requiresShareConfirmation
         let selectedJournal = ClipPlaceHandoff.journalForConfirmation(pending: journal, destination: destination)
+        guard selectedJournal?.supportsIncomingShareLocationReferences != false else { throw SharedPlaceReceiptError.invalidResponse }
         if confirmsClip {
             guard selectedJournal != nil, PendingShareStore.load(from: journalStore) == selectedJournal else { throw CancellationError() }
         }
@@ -184,6 +190,7 @@ struct SaveIncomingShareHost: ViewModifier {
         token: UUID, owner: SaveIncomingShareSession
     ) async throws -> ClipListHandoffCounts {
         try requireCurrent(token, owner: owner)
+        guard journal?.supportsIncomingShareLocationReferences == true else { throw SharedPlaceReceiptError.invalidResponse }
         guard requiresListConfirmation, pendingClipListSave == list,
               PendingShareStore.load(from: journalStore) == journal,
               ClipListHandoff.matchesPendingSelection(list, pending: journal) else { throw CancellationError() }
@@ -232,6 +239,7 @@ private struct SaveIncomingListConfirmation: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
     let list: SaveCollaborativeList
+    let canConfirmLocation: Bool
     let save: () async throws -> ClipListHandoffCounts
     let completed: (ClipListHandoffCounts) -> Void
     @State private var isSaving = false
@@ -251,11 +259,18 @@ private struct SaveIncomingListConfirmation: View {
                     if let message {
                         Text(message).accessibilityIdentifier("app.handoff.confirmationMessage")
                     }
+                    if !canConfirmLocation {
+                        Text(localized(
+                            "These places stay pending because their locations could not be verified.",
+                            "這些地點的座標尚無法確認，仍保留待辦。"
+                        ))
+                        .accessibilityIdentifier("app.handoff.locationPending")
+                    }
                     SaveInkOutlineButton(
                         title: localized(isSaving ? "Saving…" : "Confirm save", isSaving ? "儲存中…" : "確認收藏"),
                         identifier: "app.handoff.confirmList", compact: true
                     ) { Task { await confirm() } }
-                    .disabled(isSaving)
+                    .disabled(isSaving || !canConfirmLocation)
                 }
                 .padding(24)
             }
@@ -282,7 +297,7 @@ private struct SaveIncomingListConfirmation: View {
 
     @MainActor
     private func confirm() async {
-        guard !isSaving else { return }
+        guard canConfirmLocation, !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
         do {

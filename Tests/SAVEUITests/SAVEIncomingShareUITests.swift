@@ -2,6 +2,7 @@ import XCTest
 
 final class SAVEIncomingShareUITests: SAVEUITestCase {
     private let firstURL = URL(string: "savvy://p/share-fixture")!
+    private let listURL = URL(string: "savvy://list?c=fixture-list")!
 
     @MainActor
     func testPlaceWaitsForVerificationAndExplicitSave() {
@@ -69,6 +70,29 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     }
 
     @MainActor
+    func testUnsupportedClipJournalLocationStaysPending() {
+        let app = fixture("clip-unknown-reference")
+        XCUIDevice.shared.system.open(firstURL)
+        waitForReceipt(app, name: "Fixture place A")
+        XCTAssertTrue(app.staticTexts["friendShareReceipt.locationPending"].exists)
+        XCTAssertFalse(saveButton(app).isEnabled)
+        app.buttons["Done"].tap()
+        assertJournal(app, pending: true, saves: 0)
+    }
+
+    @MainActor
+    func testUnsupportedListJournalLocationStaysPending() {
+        let app = fixture("list-unknown-reference")
+        XCUIDevice.shared.system.open(listURL)
+        let confirm = app.buttons["app.handoff.confirmList"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["app.handoff.locationPending"].exists)
+        XCTAssertFalse(confirm.isEnabled)
+        app.buttons["Later"].tap()
+        assertJournal(app, pending: true, saves: 0)
+    }
+
+    @MainActor
     func testOverCapSaveExplainsThatThePlaceStaysPending() {
         let app = fixture("cap")
         XCUIDevice.shared.system.open(firstURL)
@@ -110,10 +134,18 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
 
     @MainActor
     func testListCanBeDeferredThenExplicitlyConfirmed() {
-        let app = fixture("list")
+        let app = fixture("list", extra: ["--uitest-incoming-share-unverified"])
+        XCUIDevice.shared.system.open(listURL)
+        let verify = app.buttons["incoming.fixture.verify"]
+        XCTAssertTrue(verify.waitForExistence(timeout: launchTimeout))
+        waitForLabel("Joins: 0", element: app.staticTexts["incoming.fixture.joins"])
+        XCTAssertFalse(app.buttons["app.handoff.confirmList"].exists)
+        verify.tap()
         XCTAssertTrue(app.buttons["app.handoff.confirmList"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Fixture place A"].exists, "The selected Clip snapshot survives an empty joined list.")
         app.buttons["Later"].tap()
         assertJournal(app, pending: true, saves: 0)
+        waitForLabel("Joins: 1", element: app.staticTexts["incoming.fixture.joins"])
         app.buttons["app.handoff.reviewList"].tap()
         app.buttons["app.handoff.confirmList"].tap()
         assertJournal(app, pending: false, saves: 1)
@@ -125,6 +157,7 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     @MainActor
     func testListCapRetainsTheSelectionForRetry() {
         let app = fixture("list-cap")
+        XCUIDevice.shared.system.open(listURL)
         XCTAssertTrue(app.buttons["app.handoff.confirmList"].waitForExistence(timeout: stepTimeout))
         app.buttons["app.handoff.confirmList"].tap()
         let message = app.staticTexts["app.handoff.confirmationMessage"]
@@ -133,6 +166,20 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
         app.buttons["Later"].tap()
         assertJournal(app, pending: true, saves: 1)
         XCTAssertTrue(app.buttons["app.handoff.reviewList"].exists)
+    }
+
+    @MainActor
+    func testAccountChangeRejectsASuspendedSaveCompletion() {
+        let app = fixture("account-switch")
+        XCUIDevice.shared.system.open(firstURL)
+        waitForReceipt(app, name: "Fixture place A")
+        saveButton(app).tap()
+        let verify = app.buttons["incoming.fixture.verify"]
+        XCTAssertTrue(verify.waitForExistence(timeout: stepTimeout))
+        verify.tap()
+        assertJournal(app, pending: true, saves: 1)
+        XCTAssertFalse(saveButton(app).exists)
+        XCTAssertFalse(app.staticTexts["app.handoff.confirmationMessage"].exists)
     }
 
     @MainActor
@@ -204,7 +251,7 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     @MainActor
     private func fixture(_ scenario: String, extra: [String] = []) -> XCUIApplication {
         let app = makeApp(
-            launchArguments: ["--uitest-incoming-share", "--uitest-incoming-share-reset"] + extra,
+            launchArguments: ["--uitest-review-demo-offline", "--uitest-incoming-share", "--uitest-incoming-share-reset"] + extra,
             launchEnvironment: ["SAVE_INCOMING_SHARE_SCENARIO": scenario]
         )
         launch(app)

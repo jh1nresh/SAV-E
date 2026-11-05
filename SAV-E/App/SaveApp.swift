@@ -250,7 +250,8 @@ struct SaveApp: App {
                 requiresListConfirmation: $requiresListConfirmation,
                 pendingClipListSave: $pendingClipListSave,
                 requestID: $incomingShareRequestID,
-                showParentAlert: { linkErrorMessage = "Synthetic existing alert" }
+                showParentAlert: { linkErrorMessage = "Synthetic existing alert" },
+                verificationChanged: { processDeferredAccountURLIfVerified() }
             )
         } else if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()
@@ -372,6 +373,10 @@ struct SaveApp: App {
 
     private func handleIncomingURL(_ url: URL) {
 #if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled {
+            // Fixture verification must never authorize real inbound links.
+            guard ["savvy://p/share-fixture", "savvy://p/share-fixture-b", "savvy://p/", "savvy://list?c=fixture-list"].contains(url.absoluteString) else { return }
+        }
         if SaveSmokeHarness.isSmokeURL(url) {
             smokeHarnessActive = true
             return
@@ -386,7 +391,7 @@ struct SaveApp: App {
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: accepted,
-                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+                ownerGeneration: isCurrentAccountVerified ? incomingAccountGeneration : nil
             )
             accountScopedURLProcessingID = nil
             processDeferredAccountURLIfVerified()
@@ -399,7 +404,7 @@ struct SaveApp: App {
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
-                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+                ownerGeneration: isCurrentAccountVerified ? incomingAccountGeneration : nil
             )
             accountScopedURLProcessingID = nil
             processDeferredAccountURLIfVerified()
@@ -448,8 +453,18 @@ struct SaveApp: App {
     }
 
     private var isCurrentAccountVerified: Bool {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveIncomingShareFixtureSession.shared.verified }
+#endif
         guard case .authenticated = authService.authState else { return false }
         return verifiedAccountGeneration == authService.sessionGeneration
+    }
+
+    private var incomingAccountGeneration: Int {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveIncomingShareFixtureSession.shared.generation }
+#endif
+        return authService.sessionGeneration
     }
 
     @MainActor
@@ -494,7 +509,7 @@ struct SaveApp: App {
               accountScopedURLProcessingID == nil,
               var link = deferredAccountScopedLink else { return }
 
-        let generation = authService.sessionGeneration
+        let generation = incomingAccountGeneration
         guard link.ownerGeneration == nil || link.ownerGeneration == generation else {
             deferredAccountScopedLink = nil
             return
@@ -561,8 +576,7 @@ struct SaveApp: App {
         var joined: SaveCollaborativeList?
         var joinError: Error?
         do {
-            let row = try await supabaseService.joinCollaborativeList(code: code)
-            joined = SaveCollaborativeList(serverRow: row)
+            joined = try await joinIncomingList(code: code)
             if joined == nil {
                 joinError = SaveCollaborativeListError.invalidLink
             }
@@ -576,7 +590,7 @@ struct SaveApp: App {
               link.id == linkID,
               link.ownerGeneration == generation,
               isCurrentAccountVerified,
-              authService.sessionGeneration == generation,
+              incomingAccountGeneration == generation,
               SaveSharedListPayload.isListLink(link.url) else {
             if deferredAccountScopedLink?.id == linkID {
                 deferredAccountScopedLink = nil
@@ -594,6 +608,15 @@ struct SaveApp: App {
             )
         }
         deferredAccountScopedLink = nil
+    }
+
+    @MainActor
+    private func joinIncomingList(code: String) async throws -> SaveCollaborativeList? {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return try SaveIncomingShareFixtureSession.shared.join(code: code) }
+#endif
+        let row = try await supabaseService.joinCollaborativeList(code: code)
+        return SaveCollaborativeList(serverRow: row)
     }
 
     /// Clip selected a pending snapshot. A separate full App action confirms
@@ -680,7 +703,10 @@ struct SaveApp: App {
     }
 
     private var activeCollaborativeListStore: SaveCollaborativeListStore {
-        authService.isReviewerDemo ? ReviewDemoStorage.collaborativeListStore : .shared
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveCollaborativeListStore(defaults: SaveIncomingShareFixtureRoot.defaults) }
+#endif
+        return authService.isReviewerDemo ? ReviewDemoStorage.collaborativeListStore : .shared
     }
 
     private var activeReferralHandoffStore: SaveReferralHandoffStore {

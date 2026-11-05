@@ -50,6 +50,38 @@ final class SaveIncomingShareTests: XCTestCase {
     }
 
     @MainActor
+    func testRawJournalReferencesAreCheckedBeforeListNormalization() {
+        var selected = PendingConfirmedPlace(
+            placeId: "fixture", name: "Fixture place", address: "Synthetic address",
+            latitude: 25.033, longitude: 121.5654, category: "cafe", sourceURL: nil
+        )
+        var journal = PendingSharePayload(
+            kind: .place, shareCode: "fixture", placeId: nil, listId: nil, sender: nil,
+            url: "savvy://p/fixture"
+        )
+        XCTAssertTrue(journal.supportsIncomingShareLocationReferences, "Legacy single-place journals have no snapshot metadata.")
+        journal.kind = .list
+        XCTAssertFalse(journal.supportsIncomingShareLocationReferences, "Lists require their selected raw snapshot.")
+        journal.confirmedPlaces = [selected]
+        XCTAssertTrue(journal.supportsIncomingShareLocationReferences)
+        selected.coordinateSystem = "unsupported-reference"
+        XCTAssertNil(selected.asListItem().coordinateSystem, "Normalization loses the unknown tag.")
+        for kind in [PendingSharePayload.Kind.place, .list] {
+            journal.kind = kind
+            journal.confirmedPlaces = [selected]
+            XCTAssertFalse(journal.supportsIncomingShareLocationReferences)
+        }
+        selected.coordinateSystem = PlaceCoordinateSystem.wgs84.rawValue
+        selected.locationProvider = "unsupported-provider"
+        XCTAssertFalse(selected.supportsIncomingShareLocationReference)
+        selected.locationProvider = nil
+        selected.latitude = .infinity
+        XCTAssertFalse(selected.supportsIncomingShareLocationReference)
+        selected.latitude = 91
+        XCTAssertFalse(selected.supportsIncomingShareLocationReference)
+    }
+
+    @MainActor
     private func placePayload() -> SharedPlaceData {
         SharedPlaceData(
             id: "fixture", name: "Fixture place", address: "Synthetic address",

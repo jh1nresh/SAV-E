@@ -18,6 +18,7 @@ struct FriendShareReceiptView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.appLanguageSettings) private var languageSettings
     let destination: SharedPlaceReceiptDestination
+    let canConfirmLocation: Bool
     let resolveReceipt: (URL) async throws -> SharedPlaceReceipt
     let recordEvent: (String, FriendShareReceiptEvent, FriendShareOpenFailureReason?) async -> Void
     let onSave: (SharedPlaceReceipt) async throws -> SharedPlaceSaveOutcome
@@ -30,11 +31,13 @@ struct FriendShareReceiptView: View {
 
     init(
         destination: SharedPlaceReceiptDestination,
+        canConfirmLocation: Bool = true,
         resolveReceipt: ((URL) async throws -> SharedPlaceReceipt)? = nil,
         recordEvent: ((String, FriendShareReceiptEvent, FriendShareOpenFailureReason?) async -> Void)? = nil,
         onSave: @escaping (SharedPlaceReceipt) async throws -> SharedPlaceSaveOutcome
     ) {
         self.destination = destination
+        self.canConfirmLocation = canConfirmLocation
         self.resolveReceipt = resolveReceipt ?? { try await SharedPlaceReceipt.resolve(from: $0) }
         self.recordEvent = recordEvent ?? { code, event, reason in
             try? await SupabaseService.shared.recordFriendShareEvent(code: code, event: event, failureReason: reason)
@@ -184,10 +187,18 @@ struct FriendShareReceiptView: View {
                 }
 
                 VStack(spacing: 12) {
+                    if !canConfirmLocation {
+                        Text(localized(
+                            "This place stays pending because its location could not be verified.",
+                            "這個地點的座標尚無法確認，仍保留待辦。"
+                        ))
+                        .font(SaveInkType.aux)
+                        .accessibilityIdentifier("friendShareReceipt.locationPending")
+                    }
                     SaveInkOutlineButton(title: saveButtonTitle, identifier: "friendShareReceipt.save", compact: true) {
                         Task { await save(receipt) }
                     }
-                    .disabled(saveState != .idle)
+                    .disabled(saveState != .idle || !canConfirmLocation)
 
                     if let saveErrorMessage {
                         Text(saveErrorMessage)
@@ -287,7 +298,7 @@ struct FriendShareReceiptView: View {
 
     @MainActor
     private func save(_ receipt: SharedPlaceReceipt) async {
-        guard saveState == .idle,
+        guard canConfirmLocation, saveState == .idle,
               case .loaded(let currentReceipt) = loadState,
               currentReceipt.id == receipt.id
         else { return }
@@ -349,14 +360,40 @@ struct FriendShareReceiptView: View {
     }
 }
 
+enum SaveIncomingShareLocationReference {
+    static func accepts(latitude: Double, longitude: Double, coordinateSystem: String?, provider: String?) -> Bool {
+        guard latitude.isFinite, longitude.isFinite,
+              (-90...90).contains(latitude), (-180...180).contains(longitude) else { return false }
+        if let provider, PlaceMatchProvider(rawValue: provider) == nil { return false }
+        if coordinateSystem == nil || coordinateSystem == PlaceCoordinateSystem.wgs84.rawValue { return true }
+        return coordinateSystem == PlaceCoordinateSystem.gcj02.rawValue
+            && provider == PlaceMatchProvider.amap.rawValue
+    }
+}
+
+extension PendingConfirmedPlace {
+    var supportsIncomingShareLocationReference: Bool {
+        SaveIncomingShareLocationReference.accepts(
+            latitude: latitude, longitude: longitude, coordinateSystem: coordinateSystem, provider: locationProvider
+        )
+    }
+}
+
+extension PendingSharePayload {
+    /// Inspect raw journal metadata before asListItem() can discard unknown tags.
+    var supportsIncomingShareLocationReferences: Bool {
+        if kind == .list, confirmedPlaces?.isEmpty != false { return false }
+        return confirmedPlaces?.allSatisfy(\.supportsIncomingShareLocationReference) ?? true
+    }
+}
+
 extension SharedPlaceData {
     /// Missing metadata is the existing legacy WGS84 format. An explicit
     /// unknown reference must not silently become WGS84 during confirmation.
     var supportsIncomingShareLocationReference: Bool {
-        guard hasValidCoordinate else { return false }
-        if coordinateSystem == nil || coordinateSystem == PlaceCoordinateSystem.wgs84.rawValue { return true }
-        return coordinateSystem == PlaceCoordinateSystem.gcj02.rawValue
-            && locationProvider == PlaceMatchProvider.amap.rawValue
+        SaveIncomingShareLocationReference.accepts(
+            latitude: lat, longitude: lng, coordinateSystem: coordinateSystem, provider: locationProvider
+        )
     }
 
     var incomingShareMapURL: URL? {
