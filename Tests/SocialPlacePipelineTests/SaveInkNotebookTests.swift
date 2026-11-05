@@ -963,6 +963,20 @@ final class SaveInkNotebookTests: XCTestCase {
         }
     }
 
+    func testShippingInkLanguageDoesNotReuseArchivedDesigns() throws {
+        let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
+        XCTAssertFalse(screens.contains("LanguageSettingsSheet()"))
+        let start = try XCTUnwrap(screens.range(of: "struct SaveInkLanguageSheet: View"))
+        let end = try XCTUnwrap(screens.range(of: "struct SaveInkWelcomeScreen: View"))
+        let sheet = String(screens[start.lowerBound..<end.lowerBound])
+        XCTAssertTrue(sheet.contains("SaveInkType."))
+        XCTAssertTrue(sheet.contains("SaveInkPalette."))
+        XCTAssertTrue(sheet.contains("SaveInkRoughRoundedRect"))
+        for legacyStyle in ["SaveTheme.", "SaveAtlasPalette.", "SaveDottedBackground", "saveSuccess"] {
+            XCTAssertFalse(sheet.contains(legacyStyle), "Current language UI must not borrow archived styles: \(legacyStyle)")
+        }
+    }
+
     func testShippingRootIsTheInkNotebookWithoutAFlag() throws {
         let app = try source("SAV-E/App/SaveApp.swift")
         let launch = try source("SAV-E/Views/InkNotebook/SaveInkNotebookRoot.swift")

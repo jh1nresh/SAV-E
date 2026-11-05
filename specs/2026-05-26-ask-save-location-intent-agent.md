@@ -61,7 +61,7 @@ Files already relevant:
 SAV-E/Services/SaveAIService.swift
 SAV-E/Services/SaveSearchController.swift
 SAV-E/ViewModels/AIDrawerViewModel.swift
-SAV-E/Views/Drawer/AIDrawerView.swift
+SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
 SAV-E/Models/AIResponse.swift
 SAV-E/Models/Place.swift
 ```
@@ -340,9 +340,9 @@ Likely files:
 
 ```text
 Modify: SAV-E/Models/AIResponse.swift
-Modify: SAV-E/Views/Drawer/AIDrawerView.swift
+Modify: SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
 Modify: SAV-E/ViewModels/AIDrawerViewModel.swift
-Modify: SAV-E/Views/Map/MapView.swift
+Modify: SAV-E/Legacy/Views/Map/MapView.swift
 Test: SAVETests/AIDrawerIntentRecommendationTests.swift
 ```
 
@@ -436,7 +436,7 @@ Likely files:
 Modify/Create: SAV-E/Services/MapPlaceSearchService.swift
 Modify: SAV-E/Services/SaveSearchController.swift
 Modify: SAV-E/ViewModels/MapViewModel.swift
-Modify: SAV-E/Views/Map/MapView.swift
+Modify: SAV-E/Legacy/Views/Map/MapView.swift
 Test: SAVETests/SaveNearbyUnsavedCandidateTests.swift
 ```
 

@@ -7,7 +7,7 @@ import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-MAP = ROOT / "SAV-E/Views/Map/SaveDoodleMapView.swift"
+MAP = ROOT / "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift"
 
 # Acceptance: ZERO `.saturation(`, `.colorMultiply(`, `.muted`, and
 # paper-texture overlay on the product Map surface.

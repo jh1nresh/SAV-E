@@ -579,7 +579,7 @@ struct SaveInkPassportScreen: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("小米")
                             .font(SaveInkType.sheetTitle)
-                        Text(languageSettings.localized(english: "Taipei · \(store.stampedPlaceIDs().count) stamps · \(store.totalVisits()) visits", traditionalChinese: "台北・已蓋 \(store.stampedPlaceIDs().count) 個章・去過 \(store.totalVisits()) 次"))
+                        Text(languageSettings.localized(english: "Taipei · \(store.stampedPlaceIDs().count) \(store.stampedPlaceIDs().count == 1 ? "stamp" : "stamps") · \(SaveInkSystemCopy.visitCount(store.totalVisits(), language: .english))", traditionalChinese: "台北・已蓋 \(store.stampedPlaceIDs().count) 個章・去過 \(store.totalVisits()) 次"))
                             .font(SaveInkType.aux)
                             .monospacedDigit()
                             .foregroundStyle(SaveInkPalette.inkSub)
@@ -620,7 +620,7 @@ struct SaveInkPassportScreen: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.passport")
-        .sheet(isPresented: $showsLanguage) { LanguageSettingsSheet() }
+        .sheet(isPresented: $showsLanguage) { SaveInkLanguageSheet() }
     }
 
     private var savedPlaces: some View {
@@ -676,7 +676,7 @@ struct SaveInkPassportScreen: View {
                 placeID: id,
                 mark: verified ? "✓" : "△",
                 title: title,
-                trailing: languageSettings.localized(english: "\(rows.count) visits · \(date)", traditionalChinese: "\(rows.count) 次・\(date)")
+                trailing: languageSettings.localized(english: "\(SaveInkSystemCopy.visitCount(rows.count, language: .english)) · \(date)", traditionalChinese: "\(rows.count) 次・\(date)")
             )
         }
     }
@@ -846,8 +846,8 @@ struct SaveInkPlaceScreen: View {
                 SaveInkBadge(text: languageSettings.localized(english: "△ Unverified visit", traditionalChinese: "△ 未驗證造訪"), verified: false)
             }
             HStack(spacing: 10) {
-                stat(languageSettings.localized(english: "\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) visits", traditionalChinese: "\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次"), languageSettings.localized(english: "Your visits", traditionalChinese: "你去過"))
-                stat(languageSettings.localized(english: "\(place.friendUsualCount) friends", traditionalChinese: "\(place.friendUsualCount) 人"), languageSettings.localized(english: "Friends visit", traditionalChinese: "朋友常去"))
+                stat(SaveInkSystemCopy.visitCount(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id), language: languageSettings.language), languageSettings.localized(english: "Your visits", traditionalChinese: "你去過"))
+                stat(languageSettings.localized(english: "\(place.friendUsualCount) \(place.friendUsualCount == 1 ? "friend" : "friends")", traditionalChinese: "\(place.friendUsualCount) 人"), languageSettings.localized(english: "Friends visit", traditionalChinese: "朋友常去"))
                 stat(lastDate(place), languageSettings.localized(english: "Last stamp", traditionalChinese: "上次蓋章"))
             }
             Text(SaveInkSystemCopy.text(store.detailNote(for: place), language: languageSettings.language, isUserContent: place.detailNoteIsUserContent))
@@ -1263,6 +1263,83 @@ private enum SaveInkVisibilityIcon {
     case lock
 }
 
+/// The shipping notebook owns its language control; legacy settings must not
+/// bring Atlas typography, dotted paper or colored selection into this flow.
+struct SaveInkLanguageSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 12) {
+                    Text(languageSettings.text(.chooseLanguage))
+                        .font(SaveInkType.sheetTitle)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    SaveInkCircleButton(
+                        label: "×", identifier: "ink.language.close",
+                        spoken: languageSettings.localized(english: "Close", traditionalChinese: "關閉")
+                    ) { dismiss() }
+                }
+                Text(languageSettings.text(.languageDescription))
+                    .font(SaveInkType.body)
+                    .foregroundStyle(SaveInkPalette.inkSub)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(AppLanguagePreference.allCases) { preference in
+                    option(preference)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 28)
+        }
+        .background(SaveInkPalette.paper.ignoresSafeArea())
+        .foregroundStyle(SaveInkPalette.ink)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ink.language")
+    }
+
+    private func option(_ preference: AppLanguagePreference) -> some View {
+        let selected = languageSettings.preference == preference
+        return Button { languageSettings.preference = preference } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(preference.displayName(language: languageSettings.language))
+                        .font(SaveInkType.friendShop)
+                    if preference == .system {
+                        Text(languageSettings.language.displayName)
+                            .font(SaveInkType.aux)
+                            .foregroundStyle(SaveInkPalette.inkSub)
+                    }
+                }
+                Spacer(minLength: 8)
+                SaveInkRoughCircle(seed: 17, amplitude: 0.35)
+                    .stroke(SaveInkPalette.ink, lineWidth: 1.6)
+                    .frame(width: 22, height: 22)
+                    .overlay {
+                        if selected { Circle().fill(SaveInkPalette.ink).padding(5) }
+                    }
+                    .accessibilityHidden(true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .background {
+                SaveInkRoughRoundedRect(cornerRadius: 18, seed: SaveInkSeed.of(preference.id))
+                    .fill(SaveInkPalette.card)
+            }
+            .overlay {
+                SaveInkRoughRoundedRect(cornerRadius: 18, seed: SaveInkSeed.of(preference.id))
+                    .stroke(SaveInkPalette.ink, lineWidth: selected ? 2.4 : 1.6)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("ink.language.option.\(preference.id)")
+    }
+}
+
 struct SaveInkWelcomeScreen: View {
     @State private var showsLanguage = false
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -1279,7 +1356,7 @@ struct SaveInkWelcomeScreen: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.welcome")
-        .sheet(isPresented: $showsLanguage) { LanguageSettingsSheet() }
+        .sheet(isPresented: $showsLanguage) { SaveInkLanguageSheet() }
     }
 
     private var welcomeContent: some View {

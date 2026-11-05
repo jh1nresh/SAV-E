@@ -6,7 +6,7 @@ import UIKit
 /// purchase boundary stay; AI / itinerary / collectible extras stay off the wall.
 final class SaveDoodleCapturePaywallTests: XCTestCase {
     func testCaptureSheetUsesDoodleTokensAndKeepsAnalyzePipeline() throws {
-        let capture = try source(at: "SAV-E/Views/Capture/SaveCaptureFlowView.swift")
+        let capture = try source(at: "SAV-E/Legacy/Views/Capture/SaveCaptureFlowView.swift")
         XCTAssertTrue(capture.contains("Save a place"))
         XCTAssertTrue(capture.contains("存一個地方"))
         XCTAssertTrue(capture.contains("SaveDisplayTitle"))
@@ -49,7 +49,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertFalse(capture.contains(".fullScreenCover(isPresented: $isGoogleTakeoutPresented)"))
         XCTAssertFalse(capture.contains(".sheet(isPresented: $isGoogleTakeoutPresented)"))
         XCTAssertFalse(capture.contains(".navigationDestination(isPresented: $isGoogleTakeoutPresented)"))
-        let takeout = try source(at: "SAV-E/Views/Import/GoogleTakeoutImportView.swift")
+        let takeout = try source(at: "SAV-E/Legacy/Views/Import/GoogleTakeoutImportView.swift")
         XCTAssertTrue(takeout.contains(".accessibilityIdentifier(\"takeout.import.chooseFile\")"))
         XCTAssertTrue(takeout.contains(".accessibilityIdentifier(\"takeout.import.folder\")"))
         XCTAssertTrue(takeout.contains(".accessibilityIdentifier(\"takeout.import.root\")"))
@@ -70,8 +70,8 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
     }
 
     func testPaywallIsFullScreenDoodleModalWithOneBenefit() throws {
-        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let paywall = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         XCTAssertTrue(paywall.contains("paywall.root"))
         XCTAssertTrue(paywall.contains("paywall.close"))
         XCTAssertTrue(paywall.contains("paywall.restore"))
@@ -183,7 +183,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertFalse(paywall.contains("SavePixel"))
         XCTAssertFalse(paywall.contains("TabView"))
 
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(content.contains("--uitest-show-paywall"))
         XCTAssertTrue(content.contains("--uitest-show-paywall-cap"))
         XCTAssertTrue(content.contains("hidesRootTabBarForPaywallUITest"))

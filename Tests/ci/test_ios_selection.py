@@ -33,13 +33,13 @@ class CoverageTests(unittest.TestCase):
                 self.assertRegex(source, rf"func {method[0]}\(")
 
     def test_known_map_change_keeps_parity_and_related_navigation(self):
-        plan = selection.select(["SAV-E/Views/Map/SaveMapDrawerPanel.swift"])
+        plan = selection.select(["SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift"])
         self.assertEqual(plan["profile"], "map")
         self.assertEqual(plan["tests"], selection.INK)
         self.assertFalse(plan["trip"])
 
     def test_shared_place_detail_keeps_full_integration(self):
-        plan = selection.select(["SAV-E/Views/Map/PlaceBottomSheet.swift"])
+        plan = selection.select(["SAV-E/Legacy/Views/Map/PlaceBottomSheet.swift"])
         self.assertEqual(plan["profile"], "ink")
         self.assertTrue(plan["units"])
         self.assertFalse(plan["trip"])
@@ -59,7 +59,7 @@ class CoverageTests(unittest.TestCase):
         self.assertFalse(plan["trip"])
 
     def test_plan_keeps_confirmation_persistence_and_trip_sheets(self):
-        plan = selection.select(["SAV-E/Views/Plan/SavePlanView.swift"])
+        plan = selection.select(["SAV-E/Legacy/Views/Plan/SavePlanView.swift"])
         self.assertFalse(plan["trip"])
         self.assertEqual(plan["tests"], selection.INK)
 
@@ -71,9 +71,9 @@ class CoverageTests(unittest.TestCase):
 
     def test_shared_unknown_ci_and_test_harness_force_full(self):
         for path in (
-            "SAV-E/App/ContentView.swift", "SAV-E/Extensions/Color+Theme.swift",
+            "SAV-E/Legacy/App/ContentView.swift", "SAV-E/Extensions/Color+Theme.swift",
             "SAV-E/Services/SaveAIService.swift", "SAV-E/Views/Shared/New.swift",
-            "SAV-E/Views/Map/New.swift", "SAV-E.xcodeproj/project.pbxproj",
+            "SAV-E/Legacy/Views/Map/New.swift", "SAV-E.xcodeproj/project.pbxproj",
             "Tests/SAVEUITests/SAVEScreenshotRailTests.swift", "project.yml",
             ".github/workflows/ci.yml", ".github/workflows/ios.yml",
             "scripts/select-ios-tests.py", "unknown.json",
@@ -108,7 +108,7 @@ class CoverageTests(unittest.TestCase):
             git("add", ".")
             git("commit", "-qm", "base")
             base = git("rev-parse", "HEAD")
-            target = root / "SAV-E/Views/Map/SaveMapDrawerPanel.swift"
+            target = root / "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift"
             target.parent.mkdir(parents=True)
             source.rename(target)
             git("add", "-A")

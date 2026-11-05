@@ -34,6 +34,7 @@ targets:
       - path: SAV-E
         excludes:
           - DebugBridge
+          - Legacy/README.md
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
           - Resources/SAVEPro.storekit
@@ -42,7 +43,7 @@ targets:
         type: folder
         buildPhase: resources
       - path: SAV-EShared
-      - path: Prototypes/AtlasPostcard/Sources
+      - path: Prototypes/AtlasPostcard/Legacy/Sources
         excludes:
           - AtlasPostcardApp.swift
     postBuildScripts:

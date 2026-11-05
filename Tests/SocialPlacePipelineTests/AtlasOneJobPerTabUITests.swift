@@ -78,9 +78,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     func testPrimaryLoadingSurfacesShareTheAtlasLoadingCard() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
-        let trips = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
-        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let trips = try source(at: "SAV-E/Legacy/Views/Trips/TripPackViews.swift")
+        let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
 
         XCTAssertTrue(theme.contains("struct SaveAtlasLoadingCard"))
         XCTAssertTrue(theme.contains("SavePostcardPerforatedMedallion"))
@@ -93,7 +93,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testLiveHomeLeadsWithSavedPlacesAndKeepsSecondaryManagement() throws {
-        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let screens = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
         let home = try typeBody("HomeAtlasScreen", in: screens)
         let library = try typeBody("HomeSavedPlacesLibrary", in: screens)
         let reviewTicket = try typeBody("ReviewTicket", in: screens)
@@ -137,22 +137,22 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(library.contains("SpriteKit"))
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
-        let saveHome = try typeBody("SaveHomeView", in: try source(at: "SAV-E/Views/Home/SaveRootViews.swift"))
+        let saveHome = try typeBody("SaveHomeView", in: try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift"))
         XCTAssertTrue(saveHome.contains("SaveDoodleHomeView("))
         XCTAssertFalse(saveHome.contains("HomeAtlasScreen()"))
         XCTAssertTrue(saveHome.contains("SaveHomeReviewQueue.previewIDs"))
         XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
-        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let bridge = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
         XCTAssertTrue(bridge.contains("searchPlace: place"))
         XCTAssertTrue(bridge.contains("SaveHomeReviewQueue.isSourceClue"))
     }
 
     func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {
-        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let screens = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
         let row = try typeBody("HomeSavedPlaceRow", in: screens)
         let hero = try typeBody("HomeFeaturedPlaceHero", in: screens)
         let thumbnail = try typeBody("HomeSavedPlaceThumbnail", in: screens)
-        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let bridge = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
 
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(row.contains("placeID: place.id"))
@@ -179,7 +179,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(screens.contains("mapOptions.mapType = .hybrid"))
         XCTAssertTrue(bridge.contains("HomePlaceCardArt.photoURL(for: place)"))
 
-        let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(bridge.contains("await mapViewModel.refreshHomePlacePhoto(id: placeID)"))
         XCTAssertTrue(home.contains("ReviewDemo.isOfflineUITestMode"))
 
@@ -414,7 +414,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
-        let review = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let review = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
         let card = try typeBody("ReviewCandidateDetailCard", in: review)
         let header = try XCTUnwrap(
             review.components(separatedBy: "private func reviewPostcardHeader").dropFirst().first
@@ -447,7 +447,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testSavesQueueIsContinuousAndKeepsCaptureCoral() throws {
-        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let saves = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("firstViewportTicketLimit = 3"))
         XCTAssertTrue(saves.contains("SaveAtlasPalette.coral.opacity(0.92)"))
         XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
@@ -461,9 +461,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {
-        let file = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let file = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         let saves = try typeBody("SaveLibraryView", in: file)
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
 
         // Failure fixture: after #157 demoted Saves off the root bar, the
         // page still padded for ReferenceViewport status bar (48) and the
@@ -485,7 +485,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testTripsKeepsOneSecondaryTicket() throws {
-        let trips = try typeBody("TripsAtlasScreen", in: try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift"))
+        let trips = try typeBody("TripsAtlasScreen", in: try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift"))
         XCTAssertTrue(trips.contains("tripRecommendations.first"))
         XCTAssertTrue(trips.contains("tripSummaries.dropFirst().first"))
         XCTAssertFalse(trips.contains("prefix(2)"))
@@ -493,9 +493,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testMapRestStateHasNoDefaultPlaceCard() throws {
-        let map = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
-        let markers = try source(at: "SAV-E/Views/Map/MapView.swift")
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let markers = try source(at: "SAV-E/Legacy/Views/Map/MapView.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(map.contains("if let place = mapViewModel.selectedPlace"))
         XCTAssertTrue(map.contains("} else if !hidesCommandShelf"))
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
@@ -526,11 +526,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testMapSearchIsDockedWithParkedDetents() throws {
-        let shelf = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
-        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
-        let map = try source(at: "SAV-E/Views/Map/MapView.swift")
-        let root = try source(at: "SAV-E/App/ContentView.swift")
-        let tabBar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let shelf = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let panel = try source(at: "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/MapView.swift")
+        let root = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let tabBar = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
 
         XCTAssertTrue(root.contains("SaveMapDrawerPanel("))
         XCTAssertTrue(root.contains("hidesCommandShelf: true"))
@@ -590,8 +590,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testMapSearchShelfTapFocusesAndDragDoesNot() throws {
-        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
-        let root = try source(at: "SAV-E/App/ContentView.swift")
+        let panel = try source(at: "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift")
+        let root = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(panel.contains("guard !collapsedDragConsumedTap else { return }"))
         XCTAssertTrue(panel.contains("onExpand(true)"))
         XCTAssertTrue(panel.contains("if stage == .collapsed { onExpand(false) }"))
@@ -601,7 +601,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testPassportPutsLanguageAndProBehindDisclosure() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         let disclosure = try identifierBody("profile.controlsDisclosure", in: passport)
         XCTAssertTrue(passport.contains("profile.stampLedger"))
         XCTAssertTrue(disclosure.contains("profile.language"))
@@ -616,9 +616,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     @MainActor
     func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
+        let page = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
 
         XCTAssertFalse(SaveDoodlePassportFlags.showTodayMissions)
         XCTAssertFalse(SaveDoodlePassportFlags.showFieldStreak)
@@ -663,11 +663,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testPrimaryHeadersUseTheCurrentSavvyBrandTreatment() throws {
-        let components = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let components = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
         let brandHeader = try typeBody("BrandHeader", in: components)
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         let rootHeader = try typeBody("SaveAtlasBrandHeader", in: root)
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         let passportTopBar = try typeBody("PassportTopBar", in: profile)
 
         XCTAssertTrue(brandHeader.contains("Image(\"SavvyLogo\")"))
@@ -681,7 +681,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
 
         let saveHome = try typeBody("SaveHomeView", in: root)
-        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let screens = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
         let home = try typeBody("HomeAtlasScreen", in: screens)
         XCTAssertTrue(saveHome.contains("SaveDoodleHomeView("))
         XCTAssertFalse(saveHome.contains("HomeAtlasScreen()"))
@@ -692,7 +692,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testOriginCommunityCardCanReshareWithoutPublishingPrivateClues() throws {
-        let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+        let origin = try source(at: "SAV-E/Legacy/Views/Origin/SaveOriginView.swift")
 
         XCTAssertTrue(origin.contains("SavePlaceShareButton(content: .communityRecommendation(place))"))
         XCTAssertTrue(origin.contains("origin.reshare.\\(place.id.uuidString)"))
@@ -701,9 +701,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testPassportActionsSharePlacesAndKeepBulkImportInCapture() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
-        let capture = try source(at: "SAV-E/Views/Capture/SaveCaptureFlowView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let capture = try source(at: "SAV-E/Legacy/Views/Capture/SaveCaptureFlowView.swift")
 
         XCTAssertTrue(passport.contains("SavePlaceShareButton(content: .place(place))"))
         XCTAssertTrue(passport.contains("profile.share.\\(place.id)"))
@@ -722,12 +722,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             "SAV-E/Services/SaveStoreKitService.swift",
         ]
         let oneJobSwiftFiles: Set<String> = [
-            "Prototypes/AtlasPostcard/Sources/Presentation.swift",
-            "Prototypes/AtlasPostcard/Sources/Screens.swift",
-            "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift",
-            "SAV-E/Views/Drawer/AIDrawerView.swift",
-            "SAV-E/Views/Home/SaveRootViews.swift",
-            "SAV-E/Views/Profile/ProfileView.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Presentation.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift",
+            "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift",
+            "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift",
+            "SAV-E/Legacy/Views/Home/SaveRootViews.swift",
+            "SAV-E/Legacy/Views/Profile/ProfileView.swift",
             "Tests/SocialPlacePipelineTests/AtlasOneJobPerTabUITests.swift",
         ]
         XCTAssertTrue(grantPathFiles.isDisjoint(with: oneJobSwiftFiles))

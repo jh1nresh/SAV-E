@@ -185,7 +185,7 @@ These are the only places a follow-up PR should land. One slice per PR.
   does not give Want to try / Visited a badge-level state.
 - AppLlama reference: Mapstr To try / Done; Parkwolf Place Exploration pin
   state.
-- Landing files: `SAV-E/Views/Drawer/AIDrawerView.swift` (saved-place drawer),
+- Landing files: `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift` (saved-place drawer),
   `SaveMemoryBadge.swift` only if DESIGN is amended. Prefer a kraft chip or
   existing mint/coral ticket style before a new badge enum.
 - Keep the five-second test: this is a Map Stamp substate, not a fourth

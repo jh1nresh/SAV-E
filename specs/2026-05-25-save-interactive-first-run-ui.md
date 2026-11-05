@@ -45,7 +45,7 @@ Current relevant surfaces:
     - “No more fake pins”
     - “Turn memories into trips”
   - good thesis, but it explains instead of demonstrating.
-- `SAV-E/App/ContentView.swift`
+- `SAV-E/Legacy/App/ContentView.swift`
   - always presents `AIDrawerView` over `MapView`.
   - existing drawer can be the agent surface; do not add another permanent tab.
 - `SAV-E/Views/List/PlaceListView.swift`
@@ -54,7 +54,7 @@ Current relevant surfaces:
   - already has state-aware `agentDrawer` modeling.
 - `SAV-E/Views/Shared/MemoMascotMark.swift`
   - mascot exists and can guide, but should clarify state/evidence rather than become decorative.
-- `SAV-E/Views/Shared/EmptyStateView.swift`
+- `SAV-E/Legacy/Views/Shared/EmptyStateView.swift`
   - reusable but currently generic.
 
 ## Product Metaphor / State Machine
@@ -297,8 +297,8 @@ After onboarding completion, the first empty app surface should invite the user 
 Candidate surfaces:
 
 - `SAV-E/Views/Onboarding/OnboardingView.swift`
-- `SAV-E/Views/Drawer/AIDrawerView.swift`
-- `SAV-E/Views/Shared/EmptyStateView.swift`
+- `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift`
+- `SAV-E/Legacy/Views/Shared/EmptyStateView.swift`
 
 Desired empty-state copy:
 
@@ -368,8 +368,8 @@ Goal: align post-onboarding empty state with the same transformation loop.
 
 Files to inspect before editing:
 
-- `SAV-E/Views/Drawer/AIDrawerView.swift`
-- `SAV-E/Views/Shared/EmptyStateView.swift`
+- `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift`
+- `SAV-E/Legacy/Views/Shared/EmptyStateView.swift`
 - `SAV-E/ViewModels/AIDrawerViewModel.swift`
 - `SAV-E/ViewModels/MapViewModel.swift`
 
@@ -395,7 +395,7 @@ Files:
 
 - `SAV-E/Models/SaveSearchModels.swift`
 - `SAV-E/Views/List/PlaceListView.swift`
-- `SAV-E/Views/Shared/SaveMemoryBadge.swift`
+- `SAV-E/Legacy/Views/Shared/SaveMemoryBadge.swift`
 
 Tasks:
 

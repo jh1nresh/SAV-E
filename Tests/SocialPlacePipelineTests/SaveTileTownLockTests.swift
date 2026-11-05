@@ -5,13 +5,13 @@ import XCTest
 final class SaveTileTownLockTests: XCTestCase {
     func testTileTownHasNoReachableProductPath() throws {
         let productFiles = [
-            "SAV-E/App/ContentView.swift",
-            "SAV-E/Views/Home/SaveRootViews.swift",
-            "SAV-E/Views/Home/SaveDoodleHomeView.swift",
-            "SAV-E/Views/Map/SaveDoodleMapView.swift",
-            "SAV-E/Views/Capture/SaveCaptureFlowView.swift",
-            "SAV-E/Views/Profile/SaveProPaywallView.swift",
-            "SAV-E/Views/Origin/SaveFriendsView.swift",
+            "SAV-E/Legacy/App/ContentView.swift",
+            "SAV-E/Legacy/Views/Home/SaveRootViews.swift",
+            "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift",
+            "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift",
+            "SAV-E/Legacy/Views/Capture/SaveCaptureFlowView.swift",
+            "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift",
+            "SAV-E/Legacy/Views/Origin/SaveFriendsView.swift",
             "SAV-E/Views/Onboarding/OnboardingView.swift",
         ]
         let forbidden = [
@@ -31,18 +31,18 @@ final class SaveTileTownLockTests: XCTestCase {
         }
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
+                "SAV-E/Legacy/Views/TileTown/SaveTileTownHomeView.swift"
             ).path
         ))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
+                "SAV-E/Legacy/Views/TileTown/SaveTileTownRootMap.swift"
             ).path
         ))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent("SAV-E/Resources/PixelFont").path
         ))
-        let leftoverTown = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        let leftoverTown = try source(at: "SAV-E/Legacy/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(leftoverTown.contains("enum SaveTileTownProductLock"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownCanvas"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPin"))
@@ -51,7 +51,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(leftoverTown.contains("enum SaveTileTownRaster"))
         XCTAssertFalse(leftoverTown.contains("enum SaveTileTownMapLens"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPeekCard"))
-        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        let friends = try source(at: "SAV-E/Legacy/Views/Origin/SaveFriendsView.swift")
         XCTAssertFalse(friends.contains("friends.mapStrip"))
         XCTAssertTrue(friends.contains("friends.root"))
         XCTAssertTrue(friends.contains("friends.list"))
@@ -79,7 +79,7 @@ final class SaveTileTownLockTests: XCTestCase {
             SaveRootTab.allCases.map(\.atlasIcon),
             ["house", "map", "plus", "person.2", "book.closed"]
         )
-        let bar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let bar = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
         XCTAssertTrue(bar.contains("AtlasPalette.coral"))
         XCTAssertFalse(bar.contains("AtlasPalette.mint.opacity(0.62)"))
         XCTAssertTrue(bar.contains("selection == item"))
@@ -88,12 +88,12 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(bar.contains("iconView"))
         XCTAssertEqual(AtlasTabBarMetrics.raisedControlStrokeWidth, 0)
         XCTAssertEqual(AtlasPalette.strokeWidth, 1)
-        let root = try source(at: "SAV-E/App/ContentView.swift")
+        let root = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(root.contains("hidesTitle: { $0.isCaptureControl }"))
         XCTAssertTrue(root.contains("SaveDoodleTabIcon("))
         XCTAssertFalse(root.contains("SavePixelChromeIcon("))
         XCTAssertTrue(root.contains("pointSize: 24"))
-        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertTrue(stamp.contains("struct SaveDoodleTabIcon"))
         XCTAssertTrue(stamp.contains("lineWidth: 1.5"))
         let design = try source(at: "DESIGN.md")
@@ -107,26 +107,26 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertEqual(SaveRootTab.capture.atlasTitle, "Save")
         XCTAssertEqual(SaveRootTab.capture.title(language: .english), "Save")
         XCTAssertEqual(SaveRootTab.capture.title(language: .traditionalChinese), "收藏")
-        let bar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let bar = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
         XCTAssertTrue(bar.contains(".accessibilityLabel(displayTitle?(item) ?? item[keyPath: title])"))
         XCTAssertTrue(bar.contains("if !hidesTitle(item)"))
         XCTAssertTrue(bar.contains("accessibilityPrefix"))
         XCTAssertTrue(bar.contains("item[keyPath: title].lowercased()"))
-        let root = try source(at: "SAV-E/App/ContentView.swift")
+        let root = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(root.contains("accessibilityPrefix: \"root.tab\""))
         XCTAssertTrue(root.contains("hidesTitle: { $0.isCaptureControl }"))
     }
 
     func testTownPinsRemainTappableOnHomeAndMap() throws {
-        let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let town = try source(at: "SAV-E/Legacy/Views/TileTown/SaveTileTownMap.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
         XCTAssertFalse(town.contains("map.tilePin.\\(pin.id.uuidString)"))
         XCTAssertFalse(town.contains("map.tilePin."))
         XCTAssertFalse(town.contains("showsPins"))
         XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))
         XCTAssertFalse(town.contains("struct SaveTileTownPin"))
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("home.miniMap"))
         XCTAssertFalse(home.contains("Map("))
         XCTAssertFalse(home.contains("MKMapView"))
@@ -154,7 +154,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(theme.contains("PixelifySans"))
         XCTAssertFalse(theme.contains("Fusion-Pixel"))
         XCTAssertFalse(theme.contains("enum SavePixelType"))
-        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertTrue(stamp.contains("struct SaveDisplayTitle"))
         XCTAssertTrue(stamp.contains("Text(text)"))
         XCTAssertTrue(stamp.contains("SaveDisplayType.display"))
@@ -203,7 +203,7 @@ final class SaveTileTownLockTests: XCTestCase {
     }
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("SaveDoodleMiniMap"))
         XCTAssertFalse(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.review"))
@@ -240,8 +240,8 @@ final class SaveTileTownLockTests: XCTestCase {
     }
 
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertFalse(map.contains("emphasis: .muted"))
@@ -250,7 +250,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(map.contains("SaveTileTownCanvas"))
         XCTAssertTrue(map.contains("map.placeSheet"))
         XCTAssertTrue(map.contains(".frame(minHeight: 44)") || map.contains("SaveLayout.minTap"))
-        let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        let town = try source(at: "SAV-E/Legacy/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(town.contains("mapChromeHeight"))
         XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
         XCTAssertFalse(town.contains("map.tilePin.\\(pin.id.uuidString)"))
@@ -267,14 +267,14 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
         XCTAssertTrue(map.contains("map.eatGo"))
-        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
+        let panel = try source(at: "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
         XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
         XCTAssertTrue(root.contains("SaveDoodleMapView("))
         XCTAssertFalse(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
-        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        let friends = try source(at: "SAV-E/Legacy/Views/Origin/SaveFriendsView.swift")
         XCTAssertFalse(friends.contains("SaveTileTownCanvas("))
         XCTAssertFalse(friends.contains("friends.mapStrip"))
         XCTAssertTrue(friends.contains("friends.root"))
@@ -282,9 +282,9 @@ final class SaveTileTownLockTests: XCTestCase {
     }
 
     func testStampLanguageIsOneSystem() throws {
-        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         XCTAssertTrue(stamp.contains("enum SaveKraftStampFace"))
         XCTAssertTrue(stamp.contains("case scene"))
         XCTAssertTrue(stamp.contains("SaveKraftStampPixelArt"))
@@ -299,13 +299,13 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(passport.contains("PassportTileTownCollection"))
         XCTAssertFalse(passport.contains("SaveKraftStamp("))
         XCTAssertTrue(passport.contains("onOpenPlace: onOpenPlace"))
-        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        let page = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(page.contains("profile.stampGrid"))
         XCTAssertTrue(page.contains("rootTabScrollClearance"))
     }
 
     func testFriendsIsPeopleFirstWithLastAt() throws {
-        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        let friends = try source(at: "SAV-E/Legacy/Views/Origin/SaveFriendsView.swift")
         XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
         XCTAssertTrue(friends.contains("last at"))
         XCTAssertTrue(friends.contains("SaveDoodleFriendSticker"))
@@ -431,7 +431,7 @@ final class SaveTileTownLockTests: XCTestCase {
         let project = try source(at: "project.yml")
         XCTAssertFalse(project.contains("UIUserInterfaceStyle: Light"))
         XCTAssertFalse(project.contains("INFOPLIST_KEY_UIUserInterfaceStyle"))
-        let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/AtlasPostcardApp.swift")
+        let prototype = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/AtlasPostcardApp.swift")
         XCTAssertFalse(prototype.contains("preferredColorScheme(.light)"))
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         XCTAssertTrue(theme.contains("dark: \"1E1C19\""))
@@ -467,7 +467,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(app.contains("--uitest-force-dark"))
         XCTAssertTrue(app.contains("overrideUserInterfaceStyle"))
         XCTAssertTrue(app.contains("preferredColorScheme"))
-        let viewportTheme = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
+        let viewportTheme = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Theme.swift")
         XCTAssertTrue(viewportTheme.contains("SaveAtlasPalette.canvas"))
         XCTAssertTrue(viewportTheme.contains("SaveDottedBackground()"))
     }

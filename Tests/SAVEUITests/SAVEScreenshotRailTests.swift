@@ -27,12 +27,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "ink.passport.place.")).firstMatch.exists)
         XCTAssertGreaterThanOrEqual(language.frame.height, 44)
         language.tap()
-        let system = app.buttons["profile.languageOption.system"]
+        let system = app.buttons["ink.language.option.system"]
         XCTAssertTrue(system.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(system.isSelected)
-        app.buttons["profile.languageOption.zh-Hant"].tap()
+        app.buttons["ink.language.option.zh-Hant"].tap()
         XCTAssertTrue(app.staticTexts["選擇語言"].waitForExistence(timeout: stepTimeout))
-        app.buttons["profile.language.close"].tap()
+        app.buttons["ink.language.close"].tap()
         XCTAssertTrue(app.staticTexts["我的護照"].exists)
         attach(app, name: "language-passport-zh-Hant")
         terminate(app)
@@ -40,14 +40,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["附近值得去的"].exists)
         app.buttons["ink.passport.entry"].tap()
         app.buttons["ink.passport.language"].tap()
-        XCTAssertTrue(app.buttons["profile.languageOption.zh-Hant"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["profile.languageOption.zh-Hant"].isSelected)
-        app.buttons["profile.languageOption.en"].tap()
+        XCTAssertTrue(app.buttons["ink.language.option.zh-Hant"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["ink.language.option.zh-Hant"].isSelected)
+        app.buttons["ink.language.option.en"].tap()
         XCTAssertTrue(app.staticTexts["Choose Language"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "language-options-en")
-        app.buttons["profile.languageOption.system"].tap()
-        XCTAssertTrue(app.buttons["profile.languageOption.system"].isSelected)
-        app.buttons["profile.language.close"].tap()
+        app.buttons["ink.language.option.system"].tap()
+        XCTAssertTrue(app.buttons["ink.language.option.system"].isSelected)
+        app.buttons["ink.language.close"].tap()
         XCTAssertTrue(app.staticTexts["My Passport"].exists)
         attach(app, name: "language-passport-en")
         let savedPlace = app.buttons["ink.passport.place.qingtian"]
@@ -79,8 +79,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let language = app.buttons["ink.welcome.language"]
         XCTAssertTrue(language.waitForExistence(timeout: launchTimeout))
         language.tap()
-        XCTAssertTrue(app.buttons["profile.languageOption.system"].waitForExistence(timeout: stepTimeout))
-        app.buttons["profile.language.close"].tap()
+        XCTAssertTrue(app.buttons["ink.language.option.system"].waitForExistence(timeout: stepTimeout))
+        app.buttons["ink.language.close"].tap()
         let start = app.buttons["ink.welcome.start"]
         if !start.isHittable { app.swipeUp() }
         XCTAssertTrue(start.isHittable)

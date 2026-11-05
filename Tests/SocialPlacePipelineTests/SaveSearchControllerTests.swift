@@ -7249,8 +7249,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 
     func testReviewHeroAndExactSearchWiringStaySplit() throws {
-        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         let mapModel = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         XCTAssertTrue(drawer.contains("if candidate.hasReliableCoordinates"))
         XCTAssertTrue(drawer.contains("onFocusOnMap ?? onFindExactPlace"))
@@ -7272,7 +7272,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(content.contains("let shouldResolveClue = isExactSearchSessionActive"))
         XCTAssertTrue(content.contains("|| exactSearchClueID != nil"))
         XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
-        let doodleMap = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let doodleMap = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(doodleMap.contains("let shouldResolve = isExactSearchSessionActive"))
         XCTAssertTrue(doodleMap.contains("chooseSavedStampFromExactSearch"))
         XCTAssertTrue(content.contains("activateExactSearchSession"))
@@ -7333,7 +7333,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 
     func testCloseDrawerContentEndsExactSearchWithoutVisibleResults() throws {
-        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
         let closer = try XCTUnwrap(
             drawer.components(separatedBy: "private func closeDrawerContent()").last?
                 .components(separatedBy: "private func closeMapSearchResults()").first

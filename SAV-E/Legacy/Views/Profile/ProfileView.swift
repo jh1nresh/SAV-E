@@ -530,7 +530,7 @@ struct ProfileView: View {
             }
         }
         .sheet(isPresented: $showLanguageSettings) {
-            LanguageSettingsSheet()
+            LegacyLanguageSettingsSheet()
         }
         .fullScreenCover(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
@@ -2885,7 +2885,7 @@ struct SettingsRow: View {
     }
 }
 
-struct LanguageSettingsSheet: View {
+private struct LegacyLanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
 

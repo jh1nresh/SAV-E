@@ -51,9 +51,9 @@ BASELINE = [RAIL + name for name in (
 
 # Exact-file allowlist: adding another view/service requires coverage review.
 SURFACES = {
-    "SAV-E/Views/Map/SaveMapDrawerPanel.swift": "map",
+    "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift": "map",
     "SAV-E/Views/Onboarding/OnboardingView.swift": "onboarding",
-    "SAV-E/Views/Plan/SavePlanView.swift": "plan",
+    "SAV-E/Legacy/Views/Plan/SavePlanView.swift": "plan",
 }
 TESTS = {
     "map": list(INK),

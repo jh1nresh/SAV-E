@@ -207,7 +207,7 @@ struct SaveInkFriendCard: Identifiable, Equatable {
         let when = SaveInkClock.ago(latestAt, now: now, language: language)
         switch segment {
         case .verified:
-            return language.localized(english: "\(verifiedCount) visits · \(when)", traditionalChinese: "去過 \(verifiedCount) 次・\(when)")
+            return language.localized(english: "\(SaveInkSystemCopy.visitCount(verifiedCount, language: .english)) · \(when)", traditionalChinese: "去過 \(verifiedCount) 次・\(when)")
         case .unverified:
             return when
         }
@@ -1725,6 +1725,10 @@ enum SaveInkFixture {
 
 /// Only known Savvy-generated fallback copy; original names, comments and sources stay intact.
 enum SaveInkSystemCopy {
+    static func visitCount(_ count: Int, language: AppLanguage) -> String {
+        language.localized(english: count == 1 ? "1 visit" : "\(count) visits", traditionalChinese: "\(count) 次")
+    }
+
     static func text(_ value: String, language: AppLanguage, isUserContent: Bool = false) -> String {
         guard language == .english, !isUserContent else { return value }
         return english[value] ?? value

@@ -18,9 +18,9 @@ def section(path, start, end):
 
 history = section('SAV-E/Services/SaveDoodleHomeCatalog.swift',
                   '@MainActor\nfinal class SaveDoodleVisitStore', '/// Only Home\'s Collected')
-adapter = section('SAV-E/Views/Map/SavvyMapPhotoPins.swift',
+adapter = section('SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift',
                   '@MainActor\nfinal class SavvyMapVisitStore', '// MARK: - Card session')
-passport = section('SAV-E/Views/Profile/SaveDoodlePassportCatalog.swift',
+passport = section('SAV-E/Legacy/Views/Profile/SaveDoodlePassportCatalog.swift',
                    'enum SavePassportStampRank:', 'enum SaveDoodleStickerKind:')
 update = section('SAV-E/ViewModels/MapViewModel.swift',
                  '    func updatePlace(_ place: Place) async throws {',

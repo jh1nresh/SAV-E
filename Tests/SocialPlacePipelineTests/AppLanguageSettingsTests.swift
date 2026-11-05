@@ -68,6 +68,10 @@ final class AppLanguageSettingsTests: XCTestCase {
 
     @MainActor
     func testInkEnglishCopyPreservesUserContentAndVerificationMeaning() {
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(0, language: .english), "0 visits")
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(1, language: .english), "1 visit")
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(2, language: .english), "2 visits")
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(1, language: .traditionalChinese), "1 次")
         XCTAssertEqual(SaveInkSentiment.again.title(language: .english), "Would return")
         XCTAssertEqual(SaveInkSystemCopy.text("剛存的", language: .english), "Recently saved")
         XCTAssertEqual(SaveInkSystemCopy.text("My private note: 喜歡這家", language: .english), "My private note: 喜歡這家")

@@ -6,8 +6,8 @@ Complements: `specs/2026-08-23-save-one-job-per-tab-v0.md`,
 Palette: production `SaveAtlasPalette`. This is a root-bar and Home IA change,
 not a restyle.
 
-Cited by `SAV-E/App/ContentView.swift`,
-`SAV-E/Views/Origin/SaveOriginPlaceholderView.swift`, and
+Cited by `SAV-E/Legacy/App/ContentView.swift`,
+`SAV-E/Legacy/Views/Origin/SaveOriginPlaceholderView.swift`, and
 `Tests/SocialPlacePipelineTests/AtlasFiveTabBarTests.swift`.
 
 ## Paid user job / observed failure
@@ -98,11 +98,11 @@ Feature. Root-bar topology and Home IA on the existing Atlas / Postcard faces.
 
 ## Files and systems in scope
 
-- `SAV-E/App/ContentView.swift` (`SaveRootTab`, root routing, raised Save)
-- `SAV-E/Views/Origin/SaveOriginPlaceholderView.swift`
-- `SAV-E/Views/Home/SaveRootViews.swift` (Home saved-place library)
-- `SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift`
-- `Prototypes/AtlasPostcard/Sources/{Components,Presentation,Screens}.swift`
+- `SAV-E/Legacy/App/ContentView.swift` (`SaveRootTab`, root routing, raised Save)
+- `SAV-E/Legacy/Views/Origin/SaveOriginPlaceholderView.swift`
+- `SAV-E/Legacy/Views/Home/SaveRootViews.swift` (Home saved-place library)
+- `SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift`
+- `Prototypes/AtlasPostcard/Legacy/Sources/{Components,Presentation,Screens}.swift`
 - `Tests/SocialPlacePipelineTests/AtlasFiveTabBarTests.swift`
 - `Tests/SAVEUITests/SAVEScreenshotRailTests.swift` (`testCaptureFiveTabLanding`
   and Saves/Trips root-tab migrations)

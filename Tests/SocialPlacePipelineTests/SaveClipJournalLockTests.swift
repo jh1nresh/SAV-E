@@ -10,7 +10,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         let pending = try source(at: "SAV-EClip/PendingShareStore.swift")
         let appPending = try source(at: "SAV-E/Models/PendingShareStore.swift")
         let app = try source(at: "SAV-E/App/SaveApp.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         let strings = try source(at: "SAV-EClip/Localizable.xcstrings")
         let entitlements = try source(at: "SAV-EClip/SAV-EClip.entitlements")
 

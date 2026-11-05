@@ -6,8 +6,8 @@ import XCTest
 @MainActor
 final class SaveDoodleMapTests: XCTestCase {
     func testProductMapIsDefaultAppleMapsWithDoodleChrome() throws {
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(root.contains("SaveDoodleMapView("))
         XCTAssertFalse(root.contains("SaveTileTownRootMap("))
         XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
@@ -95,7 +95,7 @@ final class SaveDoodleMapTests: XCTestCase {
     }
 
     func testProductMapKeepsNativeAppleColors() throws {
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertFalse(
             map.contains(".saturation("),
             "SaveDoodleMapView HoP 298-1: no saturation wash on Apple tiles"
@@ -136,8 +136,8 @@ final class SaveDoodleMapTests: XCTestCase {
     }
 
     func testReplacementMapRendersCollaborativeListRoute() throws {
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        let pinSource = try source(at: "SAV-E/Views/Map/MapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
+        let pinSource = try source(at: "SAV-E/Legacy/Views/Map/MapView.swift")
         XCTAssertTrue(map.contains("routePolyline"))
         XCTAssertTrue(map.contains("MapPolyline(polyline)"))
         XCTAssertTrue(map.contains("if !mapViewModel.routeCoordinates.isEmpty"))
@@ -207,7 +207,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(store.visitCount(for: placeID), 1)
         XCTAssertFalse(store.canCheckIn(placeID: placeID))
 
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("applyCheckIn("))
         XCTAssertTrue(map.contains("priorStatus: place.status"))
         XCTAssertTrue(map.contains("applyUndo(placeID: place.id)"))
@@ -314,7 +314,7 @@ final class SaveDoodleMapTests: XCTestCase {
     func testParityMaskLeavesThePointNineGateAndPrefersLiveMap() throws {
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(parity.contains("ignoreRects"))
         XCTAssertTrue(parity.contains("--ignore-mask"))
         XCTAssertTrue(parity.contains("allowedPixelScales: 1...4"))
@@ -399,7 +399,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(map.contains("taipei.isEmpty ? coordinates : taipei"))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
+                "SAV-E/Legacy/Views/TileTown/SaveTileTownRootMap.swift"
             ).path
         ))
         let design = try source(at: "DESIGN.md")
