@@ -1749,7 +1749,21 @@ final class SaveInkNotebookTests: XCTestCase {
         let port = try XCTUnwrap(fixture.port, "Loopback HTTP fixture must become ready: \(fixture.listenerState)")
         let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/map-shell"))
         var failed = false
-        let web = WKWebView()
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }, "The HTTP fixture needs a foreground test host")
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let host = UIViewController()
+        let web = WKWebView(frame: scene.coordinateSpace.bounds)
+        host.view = web
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        web.layoutIfNeeded()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
+        }
         let coordinator = SaveInkAmapWebView.Coordinator(
             failed: Binding(get: { failed }, set: { failed = $0 }),
             originalURL: try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9")),
@@ -1763,13 +1777,25 @@ final class SaveInkNotebookTests: XCTestCase {
         }
         web.navigationDelegate = observer
         web.load(URLRequest(url: url))
-        for _ in 0..<250 {
-            if observer.finished && failed { break }
-            if observer.error != nil { break }
+        // A cold WebKit process may take seconds to start on a hosted simulator.
+        // Keep that loading budget separate from the 100 ms semantic deadline.
+        let loadDeadline = ContinuousClock.now + .seconds(30)
+        while !observer.finished && observer.error == nil && ContinuousClock.now < loadDeadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let semanticDeadline = ContinuousClock.now + .seconds(2)
+        while observer.finished && !failed && ContinuousClock.now < semanticDeadline {
             try await Task.sleep(for: .milliseconds(20))
         }
-        let body = (try? await web.evaluateJavaScript("document.body ? document.body.innerText : ''")) as? String
-        let diagnostics = "listener=\(fixture.listenerState) successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
+        var body: String?
+        var scriptError: String?
+        do {
+            body = try await web.evaluateJavaScript("document.body?.textContent ?? ''") as? String
+        } catch {
+            let failure = error as NSError
+            scriptError = "\(failure.domain)/\(failure.code)"
+        }
+        let diagnostics = "listener=\(fixture.listenerState) successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) attached=\(web.window === window) scriptError=\(scriptError ?? "none") bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
         let attachment = XCTAttachment(string: diagnostics)
         attachment.name = "ink-amap-http200-fixture-diagnostics"
         attachment.lifetime = .keepAlways
@@ -4630,6 +4656,13 @@ private final class SaveInkHTTP200MapObserver: NSObject, WKNavigationDelegate {
         record("response class=\(String(reflecting: type(of: response))) status=\(code.map(String.init) ?? "nil") main=\(navigationResponse.isForMainFrame) expected=\(expected) url=\(location(response.url))")
         if navigationResponse.isForMainFrame, expected { statusCode = code }
         decisionHandler(.allow)
+    }
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        record("commit expected=\(matchesExpected(webView.url)) url=\(location(webView.url))")
+    }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        record("WebContent terminated")
+        error = WKError(.webContentProcessTerminated)
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         let expected = matchesExpected(webView.url)
