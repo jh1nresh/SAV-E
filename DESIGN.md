@@ -42,6 +42,9 @@ Assumptions locked by current code:
 
 The 2026-11-01 v2-a ink notebook (`SaveInkNotebookRoot`) is the only main
 screen: one home, no tab bar, Iansui body, and accent only on「我到了」.
+Sign-in and the opening wait screen continue that ink notebook language:
+`SaveInkPalette` paper/ink, `SaveInkType`, and rough outlined controls. They
+show no confirmed stamp, analysis steps, or decorative Atlas ticket stack.
 Founder 2026-11-01: the five-tab shell is not the shipping root, and
 `--savvy-ink-notebook` is not a launch gate. Screenshot baselines for this
 surface live in `Prototypes/AtlasPostcard/Reference/InkNotebook/` and are

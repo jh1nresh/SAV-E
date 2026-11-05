@@ -662,6 +662,70 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testInkSignInKeyboardAndLargeText() throws {
+        for (language, size) in [
+            ("zh-Hant", "UICTContentSizeCategoryL"),
+            ("en", "UICTContentSizeCategoryAccessibilityXXXL"),
+        ] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage", "--uitest-location-denied",
+                "-save.appLanguage", language,
+                "-UIPreferredContentSizeCategoryName", size,
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            let email = app.textFields["signin.emailField"]
+            XCTAssertTrue(email.waitForExistence(timeout: launchTimeout))
+            attach(app, name: "ink-signin-\(language)-\(size)")
+            XCTAssertTrue(scrollUntilHittable(email, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            typeText("appreview@wanderly.app", into: email)
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertLessThanOrEqual(email.frame.maxY, app.keyboards.firstMatch.frame.minY)
+            attach(app, name: "ink-signin-email-keyboard-\(language)")
+            dismissKeyboard(app: app)
+            let send = app.buttons["signin.sendCode"]
+            XCTAssertTrue(scrollUntilHittable(send, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            XCTAssertGreaterThanOrEqual(send.frame.height, 44)
+            send.tap()
+            let code = app.textFields["signin.codeField"]
+            XCTAssertTrue(code.waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(scrollUntilHittable(code, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            typeText("424242", into: code)
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertLessThanOrEqual(code.frame.maxY, app.keyboards.firstMatch.frame.minY)
+            attach(app, name: "ink-signin-code-keyboard-\(language)")
+            dismissKeyboard(app: app)
+            let verify = app.buttons["signin.verify"]
+            XCTAssertTrue(scrollUntilHittable(verify, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            XCTAssertGreaterThanOrEqual(verify.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(verify.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(verify.frame.maxX, app.frame.maxX)
+            attach(app, name: "ink-signin-code-\(language)")
+            verify.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["ink.welcome"].waitForExistence(timeout: stepTimeout)
+                || app.descendants(matching: .any)["ink.home"].exists)
+            terminate(app)
+        }
+    }
+
+    @MainActor
+    func testInkOpeningUsesHonestWaitState() {
+        for language in ["en", "zh-Hant"] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--uitest-hold-opening",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", language,
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            let loading = app.descendants(matching: .any)["opening.loading"]
+            XCTAssertTrue(loading.waitForExistence(timeout: launchTimeout))
+            XCTAssertFalse(app.staticTexts["CLUE → STAMP"].exists)
+            attach(app, name: "ink-opening-\(language)")
+            terminate(app)
+        }
+    }
+
+    @MainActor
     func testLaunchKeepsPaywallAbsentAndTripsInBeta() throws {
         let app = makeApp(
             launchArguments: [

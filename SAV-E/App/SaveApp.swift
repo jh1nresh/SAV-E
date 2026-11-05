@@ -1164,235 +1164,59 @@ private struct AccountAccessView: View {
 
 struct AuthLoadingView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isBreathing = false
-    @State private var activeStep = 0
-
-    private var loadingSteps: [SaveOpeningStep] {
-        [
-            SaveOpeningStep(icon: "link", label: openingStepClues, tint: SaveAtlasPalette.coral),
-            SaveOpeningStep(icon: "checklist", label: languageSettings.text(.review), tint: SaveAtlasPalette.sky),
-            SaveOpeningStep(icon: "mappin.and.ellipse", label: openingStepMap, tint: SaveAtlasPalette.mint)
-        ]
-    }
 
     var body: some View {
-        ZStack {
-            AtlasCanvas()
-                .ignoresSafeArea()
-
-            VStack(spacing: 20) {
-                Spacer(minLength: 12)
-
-                SaveOpeningLogoMark(isBreathing: isBreathing, reduceMotion: reduceMotion)
-
-                VStack(spacing: 6) {
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    SaveInkEntryWordmark()
                     Text(languageSettings.localized(
-                        english: "YOUR PLACE MEMORY",
-                        traditionalChinese: "你的地點記憶"
+                        english: "Keep the places you find.\nGo when the time is right.",
+                        traditionalChinese: "把刷到的好店，\n變成真的去過"
                     ))
-                    .font(SaveAtlasType.strong(10))
-                    .tracking(1)
-                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .font(SaveInkType.sheetTitle)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                    Text(languageSettings.text(.opening))
-                        .font(SaveAtlasType.strong(27, relativeTo: .title2))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("opening.loading")
+                    Spacer(minLength: 48)
+
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .tint(SaveInkPalette.ink)
+                            .accessibilityHidden(true)
+                        Text(languageSettings.text(.opening))
+                            .font(SaveInkType.secondaryButton)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(languageSettings.text(.opening))
+                    .accessibilityIdentifier("opening.loading")
+
+                    Text(languageSettings.localized(
+                        english: "Just a moment.",
+                        traditionalChinese: "稍等一下，就好。"
+                    ))
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.inkSub)
                 }
-
-                SaveOpeningStepRail(steps: loadingSteps, activeStep: activeStep)
-
-                SaveOpeningHintPill(text: languageSettings.text(.openingHint))
-
-                Spacer(minLength: 12)
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 22)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                isBreathing = true
+                .frame(maxWidth: 430, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 36)
+                .padding(.bottom, 40)
+                .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
         }
-        .task {
-            guard !reduceMotion else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 650_000_000)
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.76)) {
-                    activeStep = (activeStep + 1) % loadingSteps.count
-                }
-            }
-        }
-    }
-
-    private var openingStepClues: String {
-        switch languageSettings.language {
-        case .english: return "Clues"
-        case .traditionalChinese: return "線索"
-        }
-    }
-
-    private var openingStepMap: String {
-        switch languageSettings.language {
-        case .english: return "Map"
-        case .traditionalChinese: return "地圖"
-        }
+        .foregroundStyle(SaveInkPalette.ink)
+        .background(SaveInkPalette.paper.ignoresSafeArea())
+        .preferredColorScheme(.light)
     }
 }
 
-private struct SaveOpeningStep: Identifiable {
-    let icon: String
-    let label: String
-    let tint: Color
-
-    var id: String { icon }
-}
-
-private struct SaveOpeningLogoMark: View {
-    var isBreathing: Bool
-    var reduceMotion: Bool
-
+private struct SaveInkEntryWordmark: View {
     var body: some View {
-        ZStack {
-            SaveOpeningBackTicket(fill: SaveAtlasPalette.sky, rotation: -7, offset: CGSize(width: -33, height: 19))
-            SaveOpeningBackTicket(fill: SaveAtlasPalette.mint, rotation: 6, offset: CGSize(width: 31, height: 25))
-
-            Image("SavesEnvelope")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 246)
-                .offset(y: 50)
-
-            MemoMascotMark(size: 126, framed: false)
-                .scaleEffect(isBreathing && !reduceMotion ? 1.035 : 0.985)
-                .offset(y: isBreathing && !reduceMotion ? -23 : -16)
-                .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 6, y: 4)
-
-            SavePostcardPostmark()
-                .scaleEffect(0.78)
-                .rotationEffect(.degrees(-8))
-                .offset(x: -82, y: 60)
-
-            Text("CLUE → STAMP")
-                .font(SaveAtlasType.strong(10))
-                .tracking(0.8)
-                .foregroundStyle(SaveAtlasPalette.forest)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 6)
-                .background(SaveAtlasPalette.paper.opacity(0.94), in: Capsule())
-                .overlay {
-                    Capsule().stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
-                }
-                .offset(x: 64, y: 60)
-        }
-        .frame(width: 280, height: 220)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct SaveOpeningBackTicket: View {
-    var fill: Color
-    var rotation: Double
-    var offset: CGSize
-
-    var body: some View {
-        SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-            .fill(fill.opacity(0.82))
-            .frame(width: 184, height: 108)
-            .overlay {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .stroke(
-                        SaveAtlasPalette.line.opacity(0.45),
-                        style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                    )
-            }
-            .rotationEffect(.degrees(rotation))
-            .offset(offset)
-    }
-}
-
-private struct SaveOpeningStepRail: View {
-    var steps: [SaveOpeningStep]
-    var activeStep: Int
-
-    var body: some View {
-        VStack(spacing: -4) {
-            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                SaveOpeningStepChip(step: step, isActive: index == activeStep)
-                    .zIndex(Double(steps.count - index))
-            }
-        }
-        .frame(maxWidth: 320)
-    }
-}
-
-private struct SaveOpeningStepChip: View {
-    var step: SaveOpeningStep
-    var isActive: Bool
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: step.icon)
-                .font(.system(size: 12, weight: .bold))
-            Text(step.label)
-                .font(SaveAtlasType.strong(13))
-
-            Spacer(minLength: 8)
-
-            Image(systemName: isActive ? "arrow.right" : "circle.fill")
-                .font(.system(size: isActive ? 11 : 5, weight: .bold))
-                .opacity(isActive ? 1 : 0.28)
-        }
-        .foregroundStyle(SaveAtlasPalette.ink)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, minHeight: 45)
-        .background(SaveAtlasPalette.paper.opacity(0.98))
-        .padding(4)
-        .background {
-            SavePostcardScallopedRectangle(depth: 2.5, pitch: 10)
-                .fill(isActive ? step.tint.opacity(0.82) : SaveAtlasPalette.kraft.opacity(0.34))
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 2.5, pitch: 10)
-                .stroke(
-                    isActive
-                        ? SaveAtlasPalette.forest.opacity(0.46)
-                        : SaveAtlasPalette.line.opacity(0.30),
-                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
-                )
-        }
-        .scaleEffect(isActive ? 1 : 0.97)
-        .shadow(color: SaveAtlasPalette.ink.opacity(isActive ? 0.055 : 0.02), radius: 4, y: 2)
-    }
-}
-
-private struct SaveOpeningHintPill: View {
-    var text: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(SaveAtlasPalette.coral)
-                .frame(width: 7, height: 7)
-                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 0.8))
-
-            Text(text)
-                .font(SaveAtlasType.body(12))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-        }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
-        .background(SaveAtlasPalette.paper.opacity(0.82))
-        .overlay {
-            Capsule().stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
-        }
-        .clipShape(Capsule())
+        Text("Savvy")
+            .font(SaveInkType.brand)
+            .foregroundStyle(SaveInkPalette.ink)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -1416,31 +1240,23 @@ struct SignInView: View {
         trimmedEmail.contains("@") && trimmedEmail.contains(".") && !isLoading
     }
 
+    private var signingInLabel: String {
+        languageSettings.localized(english: "Signing in…", traditionalChinese: "正在登入…")
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            let isCompactHeight = proxy.size.height < 760
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    SignInHero()
 
-            ZStack {
-                SaveDottedBackground()
-                    .ignoresSafeArea()
+                    Spacer(minLength: 40)
 
-                VStack(spacing: 0) {
-                    Spacer(minLength: isCompactHeight ? 18 : 36)
-
-                    SignInHero(isCompactHeight: isCompactHeight)
-                        .padding(.horizontal, 24)
-
-                    Spacer(minLength: isCompactHeight ? 22 : 42)
-
-                    VStack(spacing: isCompactHeight ? 10 : 12) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text(languageSettings.text(.signInOrCreateAccount))
-                            .font(SaveAtlasType.strong(
-                                isCompactHeight ? 18 : 20,
-                                relativeTo: .headline
-                            ))
-                            .foregroundStyle(SaveAtlasPalette.forest)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.bottom, isCompactHeight ? 0 : 2)
+                            .font(SaveInkType.subpageTitle)
+                            .foregroundStyle(SaveInkPalette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("signin.title")
 
                         appleSignInButton
@@ -1448,31 +1264,33 @@ struct SignInView: View {
                         emailSignInSection
                     }
                     .disabled(isLoading)
-                    // Provider controls already have large, fixed-height native
-                    // labels. Cap only this compact action sheet so extreme
-                    // sizes keep every auth route visible; VoiceOver remains
-                    // available and the title still scales through XXXL.
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .padding(isCompactHeight ? 14 : 18)
-                    .background(SaveAtlasPalette.paper.opacity(0.98))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.24), lineWidth: 1)
+
+                    if isLoading {
+                        HStack(spacing: 10) {
+                            ProgressView().tint(SaveInkPalette.ink)
+                            Text(signingInLabel)
+                            .font(SaveInkType.aux)
+                        }
+                        .foregroundStyle(SaveInkPalette.inkSub)
+                        .padding(.top, 16)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("signin.loading")
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .shadow(color: SaveAtlasPalette.ink.opacity(0.075), radius: 18, y: 8)
-                    .frame(maxWidth: 390)
-                    .padding(.horizontal, isCompactHeight ? 12 : 22)
-                    .padding(.bottom, isCompactHeight ? 18 : 34)
                 }
+                .frame(maxWidth: 430, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.top, 36)
+                .padding(.bottom, 28)
+                .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
+            .scrollDismissesKeyboard(.interactively)
         }
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-        .overlay(alignment: .bottom) {
-            if isLoading {
-                ProgressView()
-                    .tint(.saveInk)
-                    .padding(.bottom, 10)
+        .background(SaveInkPalette.paper.ignoresSafeArea())
+        .preferredColorScheme(.light)
+        .onChange(of: isLoading) { _, loading in
+            if loading {
+                UIAccessibility.post(notification: .announcement, argument: signingInLabel)
             }
         }
         .alert(errorTitle, isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
@@ -1518,8 +1336,8 @@ struct SignInView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityIdentifier("signin.apple")
     }
 
@@ -1536,39 +1354,42 @@ struct SignInView: View {
             HStack(spacing: 10) {
                 Image(systemName: "g.circle.fill")
                     .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .foregroundStyle(SaveInkPalette.ink)
                 Text(languageSettings.text(.continueWithGoogle))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .font(SaveAtlasType.strong(16, relativeTo: .headline))
-            .foregroundStyle(SaveAtlasPalette.ink)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(SaveAtlasPalette.paper)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1)
+            .font(SaveInkType.secondaryButton)
+            .foregroundStyle(SaveInkPalette.ink)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(
+                SaveInkRoughRoundedRect(cornerRadius: 20, seed: 511)
+                    .fill(SaveInkPalette.card)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                SaveInkRoughRoundedRect(cornerRadius: 20, seed: 511)
+                    .stroke(SaveInkPalette.ink, lineWidth: 2)
+            )
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("signin.google")
     }
 
     private var emailSignInSection: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Rectangle()
-                    .fill(Color.saveNotebookLine.opacity(0.22))
+                    .fill(SaveInkPalette.emptyLine)
                     .frame(height: 1)
                 Text(languageSettings.text(.orUseEmail))
-                    .font(SaveAtlasType.body(13, relativeTo: .caption))
-                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.82))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.inkSub)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Rectangle()
-                    .fill(Color.saveNotebookLine.opacity(0.22))
+                    .fill(SaveInkPalette.emptyLine)
                     .frame(height: 1)
             }
 
@@ -1596,6 +1417,15 @@ struct SignInView: View {
                     }
                 }
             } else {
+                Text(languageSettings.localized(
+                    english: "Enter the code sent to \(email)",
+                    traditionalChinese: "輸入寄到 \(email) 的驗證碼"
+                ))
+                .font(SaveInkType.aux)
+                .foregroundStyle(SaveInkPalette.inkSub)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("signin.codeHint")
+
                 SignInInputRow(
                     placeholder: languageSettings.text(.verificationCode),
                     text: $verificationCode,
@@ -1638,25 +1468,17 @@ enum PendingOnboardingClueAccess {
 
 private struct SignInHero: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-    let isCompactHeight: Bool
 
     var body: some View {
-        let logoSize: CGFloat = isCompactHeight ? 104 : 124
-
-        VStack(spacing: isCompactHeight ? 12 : 16) {
-            Image("SavvyLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: logoSize, height: logoSize)
-                .clipShape(RoundedRectangle(
-                    cornerRadius: logoSize * 0.225,
-                    style: .continuous
-                ))
-                .accessibilityHidden(true)
-
-            Text(languageSettings.text(.appName))
-                .font(SaveAtlasType.strong(isCompactHeight ? 28 : 32, relativeTo: .title))
-                .foregroundStyle(SaveAtlasPalette.forest)
+        VStack(alignment: .leading, spacing: 22) {
+            SaveInkEntryWordmark()
+            Text(languageSettings.localized(
+                english: "Your next good find,\nremembered.",
+                traditionalChinese: "下一間想去的店，\n替自己記下來。"
+            ))
+            .font(SaveInkType.sheetTitle)
+            .foregroundStyle(SaveInkPalette.ink)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -1676,28 +1498,30 @@ private struct SignInInputRow: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: keyboardType == .emailAddress ? "envelope" : "number")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(SaveAtlasPalette.forest.opacity(0.82))
-                .frame(width: 18)
-                .accessibilityHidden(true)
-
+        VStack(alignment: .leading, spacing: 12) {
             TextField(placeholder, text: $text)
+                .font(SaveInkType.secondaryButton)
                 .keyboardType(keyboardType)
                 .textContentType(keyboardType == .emailAddress ? .emailAddress : .oneTimeCode)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.done)
-                .foregroundColor(.saveInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
+                .foregroundStyle(SaveInkPalette.ink)
+                .accessibilityLabel(placeholder)
                 .accessibilityIdentifier(fieldAccessibilityID)
                 .focused($isFocused)
-                // The sign-in layout ignores the keyboard safe area, so the
-                // keyboard covers the Send/Verify button while typing. The
-                // number pad has no return key, so without this Done button a
-                // reviewer typing the demo code could never reach "Verify".
+                .onSubmit { isFocused = false }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(minHeight: 56)
+                .background {
+                    SaveInkRoughRoundedRect(cornerRadius: 18, seed: 512)
+                        .fill(SaveInkPalette.card)
+                }
+                .overlay {
+                    SaveInkRoughRoundedRect(cornerRadius: 18, seed: 512)
+                        .stroke(SaveInkPalette.ink, lineWidth: 2)
+                }
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
@@ -1708,26 +1532,29 @@ private struct SignInInputRow: View {
                     }
                 }
 
-            Button(buttonTitle, action: action)
-                .accessibilityIdentifier(buttonAccessibilityID)
-                .font(SaveAtlasType.strong(13))
-                .foregroundStyle(SaveAtlasPalette.paper)
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-                .padding(.horizontal, 11)
-                .frame(height: 36)
-                .background(SaveAtlasPalette.coral.opacity(isDisabled ? 0.34 : 1))
-                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                .disabled(isDisabled)
+            Button {
+                isFocused = false
+                action()
+            } label: {
+                Text(buttonTitle)
+                    .font(SaveInkType.secondaryButton)
+                    .foregroundStyle(isDisabled ? SaveInkPalette.inkSub : SaveInkPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 16)
+                    .background {
+                        SaveInkRoughRoundedRect(cornerRadius: 24, seed: 513)
+                            .fill(isDisabled ? SaveInkPalette.unverifiedFill : SaveInkPalette.card)
+                    }
+                    .overlay {
+                        SaveInkRoughRoundedRect(cornerRadius: 24, seed: 513)
+                            .stroke(isDisabled ? SaveInkPalette.emptyLine : SaveInkPalette.ink, lineWidth: 2)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(buttonAccessibilityID)
+            .disabled(isDisabled)
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 8)
-        .frame(height: 52)
-        .background(SaveAtlasPalette.canvas.opacity(0.72))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.48), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

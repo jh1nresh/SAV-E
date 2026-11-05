@@ -1021,7 +1021,7 @@ struct SavvyMapPinPhotoFill: View {
 struct SavvyMapCalloutTail: Shape {
     var size: CGFloat = 12
 
-    func path(in rect: CGRect) -> Path {
+    nonisolated func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.midX - size, y: rect.minY))
         path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
