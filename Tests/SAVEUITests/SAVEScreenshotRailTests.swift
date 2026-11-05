@@ -12,6 +12,85 @@ import UIKit
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testInkLanguageSwitchingPersistsAndReturnsToIOS() throws {
+        let suite = "save.ink.language.\(UUID().uuidString)"
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-repair-review-demo-seed", "--savvy-ink-skip-welcome",
+            "--savvy-ink-suite=\(suite)", "-AppleLanguages", "(en, zh-Hant)"
+        ])
+        try signedInInkHome(app)
+        XCTAssertTrue(app.staticTexts["Places nearby"].exists)
+        app.buttons["ink.passport.entry"].tap()
+        let language = app.buttons["ink.passport.language"]
+        XCTAssertTrue(language.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "ink.passport.place.")).firstMatch.exists)
+        XCTAssertGreaterThanOrEqual(language.frame.height, 44)
+        language.tap()
+        let system = app.buttons["profile.languageOption.system"]
+        XCTAssertTrue(system.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(system.isSelected)
+        app.buttons["profile.languageOption.zh-Hant"].tap()
+        XCTAssertTrue(app.staticTexts["選擇語言"].waitForExistence(timeout: stepTimeout))
+        app.buttons["profile.language.close"].tap()
+        XCTAssertTrue(app.staticTexts["我的護照"].exists)
+        attach(app, name: "language-passport-zh-Hant")
+        terminate(app)
+        launch(app)
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.staticTexts["附近值得去的"].exists)
+        app.buttons["ink.passport.entry"].tap()
+        app.buttons["ink.passport.language"].tap()
+        XCTAssertTrue(app.buttons["profile.languageOption.zh-Hant"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["profile.languageOption.zh-Hant"].isSelected)
+        app.buttons["profile.languageOption.en"].tap()
+        XCTAssertTrue(app.staticTexts["Choose Language"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "language-options-en")
+        app.buttons["profile.languageOption.system"].tap()
+        XCTAssertTrue(app.buttons["profile.languageOption.system"].isSelected)
+        app.buttons["profile.language.close"].tap()
+        XCTAssertTrue(app.staticTexts["My Passport"].exists)
+        attach(app, name: "language-passport-en")
+        let savedPlace = app.buttons["ink.passport.place.qingtian"]
+        XCTAssertTrue(savedPlace.exists)
+        XCTAssertTrue(savedPlace.label.contains("Saved"))
+        savedPlace.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.place"].waitForExistence(timeout: stepTimeout))
+        app.buttons["ink.back"].tap()
+        XCTAssertTrue(app.staticTexts["My Passport"].waitForExistence(timeout: stepTimeout))
+        app.buttons["ink.back"].tap()
+        XCTAssertTrue(app.staticTexts["Places nearby"].waitForExistence(timeout: stepTimeout))
+        app.buttons["ink.save.entry"].tap()
+        XCTAssertTrue(app.staticTexts["Save a place"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["ink.save.commit"].exists)
+        attach(app, name: "language-save-en")
+    }
+
+    @MainActor
+    func testInkEnglishWelcomeAllowsLanguageAndStartAtLargeType() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-repair-review-demo-seed", "--savvy-ink-show-welcome",
+            "--savvy-ink-suite=save.ink.welcome-language.\(UUID().uuidString)",
+            "-save.appLanguage", "en",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"
+        ])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let language = app.buttons["ink.welcome.language"]
+        XCTAssertTrue(language.waitForExistence(timeout: launchTimeout))
+        language.tap()
+        XCTAssertTrue(app.buttons["profile.languageOption.system"].waitForExistence(timeout: stepTimeout))
+        app.buttons["profile.language.close"].tap()
+        let start = app.buttons["ink.welcome.start"]
+        if !start.isHittable { app.swipeUp() }
+        XCTAssertTrue(start.isHittable)
+        attach(app, name: "language-welcome-en-large-type")
+        start.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
     func testHomeListProgressiveSearch() throws {
         for staticMode in [false, true] {
             let app = makeApp(launchArguments: [

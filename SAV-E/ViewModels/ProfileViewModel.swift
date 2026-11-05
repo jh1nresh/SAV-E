@@ -10,6 +10,7 @@ final class ProfileViewModel: ObservableObject {
     @Published var isDeletingAccount = false
     @Published var errorMessage: String?
     @Published private(set) var localAvatarData: Data?
+    @Published private(set) var identityOwnerID: String?
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
@@ -18,6 +19,8 @@ final class ProfileViewModel: ObservableObject {
     private let saveLocalVaultService: SaveLocalVaultService
     private let pendingPlaceImportService: PendingPlaceImportService
     private let accountReferenceStore: AccountReferenceStoring
+    private let fetchProfileRemotely: (String) async throws -> UserProfile?
+    private var identityLoadID = UUID()
     private let updateProfileRemotely: (UserProfile) async throws -> Void
     private let currentUserIDProvider: () -> String?
     private let reviewerDemoProvider: () -> Bool
@@ -33,6 +36,7 @@ final class ProfileViewModel: ObservableObject {
         saveLocalVaultService: SaveLocalVaultService = .shared,
         pendingPlaceImportService: PendingPlaceImportService = .shared,
         accountReferenceStore: AccountReferenceStoring = KeychainAccountReferenceStore.shared,
+        fetchProfileRemotely: ((String) async throws -> UserProfile?)? = nil,
         updateProfileRemotely: ((UserProfile) async throws -> Void)? = nil,
         currentUserIDProvider: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
         reviewerDemoProvider: @escaping () -> Bool = { PrivyAuthService.shared.isReviewerDemo }
@@ -43,6 +47,9 @@ final class ProfileViewModel: ObservableObject {
         self.saveLocalVaultService = saveLocalVaultService
         self.pendingPlaceImportService = pendingPlaceImportService
         self.accountReferenceStore = accountReferenceStore
+        self.fetchProfileRemotely = fetchProfileRemotely ?? { userID in
+            try await supabaseService.fetchProfile(for: userID)
+        }
         self.updateProfileRemotely = updateProfileRemotely ?? { profile in
             try await supabaseService.updateProfile(profile)
         }
@@ -57,7 +64,10 @@ final class ProfileViewModel: ObservableObject {
         let userID = reviewerDemoProvider() ? nil : currentUserIDProvider()
         guard loadedUserID != userID || userID == nil else { return }
         loadedUserID = userID
+        identityLoadID = UUID()
+        isLoading = false
         profile = .empty
+        identityOwnerID = nil
         localAvatarData = nil
         errorMessage = nil
     }
@@ -83,21 +93,40 @@ final class ProfileViewModel: ObservableObject {
             errorMessage = "Local account cleanup could not finish. Retry to remove the hidden data from this device. \(error.localizedDescription)"
             return
         }
+        await fetchIdentity(migratingLegacyAvatar: true)
+    }
+
+    /// Read-only Passport identity. Opening the notebook must never complete
+    /// account-deletion cleanup or migrate files, and must never show mock data.
+    func loadPassportIdentity() async {
+        resetForCurrentSession()
+        guard !isDeletingAccount, !reviewerDemoProvider() else { return }
+        guard supabaseService.isConfigured else {
+            errorMessage = "Account details are unavailable. Your saved places are unchanged."
+            return
+        }
+        await fetchIdentity(migratingLegacyAvatar: false)
+    }
+
+    private func fetchIdentity(migratingLegacyAvatar: Bool) async {
         if reviewerDemoProvider() {
             errorMessage = nil
             return
         }
         guard let userId = currentUserIDProvider() else { return }
+        let requestID = UUID()
+        identityLoadID = requestID
         localAvatarData = avatarStore.load(for: userId)
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer { if identityLoadID == requestID { isLoading = false } }
 
         do {
-            if let profile = try await supabaseService.fetchProfile(for: userId) {
-                guard !Task.isCancelled, currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
+            if let profile = try await fetchProfileRemotely(userId) {
+                guard !Task.isCancelled, identityLoadID == requestID, currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
                 self.profile = profile
-                if localAvatarData == nil {
+                self.identityOwnerID = userId
+                if migratingLegacyAvatar, localAvatarData == nil {
                     localAvatarData = try? avatarStore.migrateLegacyAvatarIfNeeded(
                         from: profile.avatarUrl,
                         for: userId
@@ -111,7 +140,7 @@ final class ProfileViewModel: ObservableObject {
                 // URLSession cancellation is expected when the view task is torn down.
                 return
             }
-            guard currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
+            guard identityLoadID == requestID, currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
             errorMessage = error.localizedDescription
             print("Failed to load profile: \(error)")
         }

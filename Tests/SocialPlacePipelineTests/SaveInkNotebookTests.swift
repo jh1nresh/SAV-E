@@ -8,6 +8,18 @@ import XCTest
 
 @MainActor
 final class SaveInkNotebookTests: XCTestCase {
+    func testSavedOnlyPassportPlaceDoesNotCreateAVisitOrStamp() {
+        let place = inkRow(id: "saved-only", name: "Old saved place", street: "Real street")
+        let store = livePlaceStore(places: [place])
+        XCTAssertEqual(store.homePlaces().map(\.id), ["saved-only"])
+        XCTAssertEqual(store.homeBadge(for: place), .saved)
+        store.openPassport()
+        store.openPlace(place.id)
+        XCTAssertEqual(store.path, [.passport, .place("saved-only")])
+        XCTAssertTrue(store.stampedPlaceIDs().isEmpty)
+        XCTAssertEqual(store.totalVisits(), 0)
+    }
+
     func testProvisionalThresholdsMatchHoPSuggestions() {
         XCTAssertEqual(SaveInkProvisional.radiusMeters, 150)
         XCTAssertEqual(SaveInkProvisional.maxAccuracyMeters, 100)
@@ -439,7 +451,7 @@ final class SaveInkNotebookTests: XCTestCase {
     func testF10InkControlsHaveLabelsHitTargetsAndAreNotColorOnly() throws {
         let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
         let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
-        XCTAssertTrue(chrome.contains(".accessibilityLabel(\"返回\")"))
+        XCTAssertTrue(chrome.contains(".accessibilityLabel(languageSettings.localized(english: \"Back\", traditionalChinese: \"返回\"))"))
         XCTAssertTrue(chrome.contains(".frame(minWidth: 44, minHeight: 44)"))
         XCTAssertTrue(chrome.contains("relativeTo:"))
         XCTAssertTrue(screens.contains("ink.friends.entry"))

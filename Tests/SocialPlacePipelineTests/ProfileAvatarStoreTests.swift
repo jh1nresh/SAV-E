@@ -16,6 +16,81 @@ final class ProfileAvatarStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testNotebookIdentityDoesNotCompletePendingDeletionOrShowMockProfile() async throws {
+        let vaultURL = directory.appendingPathComponent("identity-vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Private clue", ownerSubject: "account-a"))
+        let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        let bytes = try Data(contentsOf: vaultURL)
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            saveLocalVaultService: vault,
+            currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
+        )
+        await model.loadPassportIdentity()
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent(), intent)
+        XCTAssertEqual(try Data(contentsOf: vaultURL), bytes)
+        XCTAssertEqual(model.profile.id, UserProfile.empty.id)
+        XCTAssertNil(model.profile.email)
+        XCTAssertNotNil(model.errorMessage)
+    }
+
+    @MainActor
+    func testNotebookIdentityUsesRequestedOwnerInsteadOfCanonicalProfileID() async {
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: "https://example.invalid"),
+            avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("canonical-avatars")),
+            fetchProfileRemotely: { _ in
+                UserProfile(id: "existing-profile-a", displayName: "My actual name", email: "a@example.invalid", avatarUrl: nil,
+                            savedCount: 0, visitedCount: 0, citiesCount: 0, isPremium: false, collections: [], createdAt: Date())
+            },
+            currentUserIDProvider: { "did:privy:a" }, reviewerDemoProvider: { false }
+        )
+        await model.loadPassportIdentity()
+        XCTAssertEqual(model.identityOwnerID, "did:privy:a")
+        XCTAssertEqual(model.profile.id, "existing-profile-a")
+        XCTAssertEqual(model.profile.displayName, "My actual name")
+    }
+
+    @MainActor
+    func testNotebookIdentityRejectsPreviousOwnersDelayedResponseAndUsesOwnAvatar() async throws {
+        let avatars = ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("identity-avatars"))
+        try avatars.save(Data([0x0A]), for: "account-a")
+        try avatars.save(Data([0x0B]), for: "account-b")
+        var owner = "account-a"
+        var continuation: CheckedContinuation<UserProfile?, Error>?
+        let started = expectation(description: "account A profile request suspended")
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: "https://example.invalid"),
+            avatarStore: avatars,
+            fetchProfileRemotely: { requestedOwner in
+                if requestedOwner == "account-a" {
+                    return try await withCheckedThrowingContinuation {
+                        continuation = $0
+                        started.fulfill()
+                    }
+                }
+                let result = UserProfile(id: requestedOwner, displayName: "Account B", email: "b@example.invalid", avatarUrl: nil,
+                                     savedCount: 0, visitedCount: 0, citiesCount: 0, isPremium: false, collections: [], createdAt: Date())
+                return result
+            },
+            currentUserIDProvider: { owner }, reviewerDemoProvider: { false }
+        )
+        let oldRequest = Task { await model.loadPassportIdentity() }
+        await fulfillment(of: [started], timeout: 2)
+        owner = "account-b"
+        model.resetForCurrentSession()
+        XCTAssertNil(model.localAvatarData)
+        XCTAssertEqual(model.profile.id, UserProfile.empty.id)
+        await model.loadPassportIdentity()
+        continuation?.resume(returning: profile(named: "Account A"))
+        await oldRequest.value
+        XCTAssertEqual(model.profile.id, "account-b")
+        XCTAssertEqual(model.profile.displayName, "Account B")
+        XCTAssertEqual(model.localAvatarData, Data([0x0B]))
+    }
+
+    @MainActor
     func testAvatarPersistsAcrossStoreReloadForSameAccount() throws {
         let avatar = Data([0x01, 0x02, 0x03])
         let firstStore = ProfileAvatarStore(baseDirectory: directory)

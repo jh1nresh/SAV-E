@@ -15,6 +15,8 @@ INK = [
     RAIL + "testInkNotebookReachesEveryScreenAndReturnsHome",
     RAIL + "testInkNotebookEmptyFriendsReachesScreen14AndReturnsHome",
     RAIL + "testF10HomeControlsSpeakChinese",
+    "SAVEUITests/SAVEScreenshotRailTests/testInkLanguageSwitchingPersistsAndReturnsToIOS",
+    "SAVEUITests/SAVEScreenshotRailTests/testInkEnglishWelcomeAllowsLanguageAndStartAtLargeType",
 ]
 ONBOARDING = "SAVEUITests/SAVEOnboardingCarouselTests"
 PHOTO_ATTR = "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"

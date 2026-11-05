@@ -75,6 +75,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Savvy
+        CFBundleLocalizations: [en, zh-Hant]
         UIApplicationSupportsIndirectInputEvents: true
         UIAppFonts:
           - DisplayFont/Caveat-SemiBold.ttf

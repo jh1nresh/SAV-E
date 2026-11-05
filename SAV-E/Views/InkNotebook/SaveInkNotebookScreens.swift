@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SaveInkHomeScreen: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
     @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     @Environment(\.scenePhase) private var scenePhase
@@ -42,7 +43,7 @@ struct SaveInkHomeScreen: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 24)
                 }
-                Text(picks.isEmpty ? "存一個地點，到了再記" : "輕點卡片，看地圖怎麼走")
+                Text(picks.isEmpty ? languageSettings.localized(english: "Save a place, record your visit later", traditionalChinese: "存一個地點，到了再記") : languageSettings.localized(english: "Tap a place for walking directions", traditionalChinese: "輕點卡片，看地圖怎麼走"))
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .frame(maxWidth: .infinity)
@@ -55,7 +56,7 @@ struct SaveInkHomeScreen: View {
                     .padding(.bottom, 44)
                 } else if let place = picks.first,
                           place.shopLatitude == nil || place.shopLongitude == nil {
-                    SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.arrived.unverified") {
+                    SaveInkOutlineButton(title: languageSettings.localized(english: "Record visit (unverified)", traditionalChinese: "記錄到訪（未驗證）"), identifier: "ink.arrived.unverified") {
                         store.recordUnverifiedVisit(placeID: place.id)
                     }
                     .padding(.horizontal, 24)
@@ -86,17 +87,17 @@ struct SaveInkHomeScreen: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("附近值得去的")
+                Text(languageSettings.localized(english: "Places nearby", traditionalChinese: "附近值得去的"))
                     .font(SaveInkType.pageTitle)
                     .foregroundStyle(SaveInkPalette.ink)
                 homeCount
             }
             Spacer(minLength: 12)
             HStack(spacing: 10) {
-                SaveInkCircleButton(label: "人", identifier: "ink.passport.entry", personIcon: true, spoken: "護照") {
+                SaveInkCircleButton(label: "人", identifier: "ink.passport.entry", personIcon: true, spoken: languageSettings.localized(english: "Passport", traditionalChinese: "護照")) {
                     store.openPassport()
                 }
-                SaveInkCircleButton(label: "+", identifier: "ink.save.entry", spoken: "存地點") {
+                SaveInkCircleButton(label: "+", identifier: "ink.save.entry", spoken: languageSettings.localized(english: "Save a place", traditionalChinese: "存地點")) {
                     store.openSave()
                 }
             }
@@ -107,7 +108,7 @@ struct SaveInkHomeScreen: View {
     }
 
     private var homeCount: some View {
-        Text(store.homeSummary(count: picks.count))
+        Text(store.homeSummary(count: picks.count, language: languageSettings.language))
             .font(SaveInkType.aux)
             .foregroundStyle(SaveInkPalette.inkSub)
             .accessibilityIdentifier(picks.isEmpty ? "ink.home.empty" : "ink.home.count")
@@ -118,7 +119,7 @@ struct SaveInkHomeScreen: View {
             HStack(spacing: 12) {
                 SaveInkPersonIcon()
                     .frame(width: 22, height: 22)
-                Text("朋友推薦")
+                Text(languageSettings.localized(english: "Friends’ places", traditionalChinese: "朋友推薦"))
                     .font(SaveInkType.body)
                     .foregroundStyle(SaveInkPalette.ink)
                 Spacer()
@@ -140,7 +141,7 @@ struct SaveInkHomeScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("ink.friends.entry")
-        .accessibilityLabel("朋友推薦")
+        .accessibilityLabel(languageSettings.localized(english: "Friends’ places", traditionalChinese: "朋友推薦"))
     }
 
     private func placeCard(_ place: SaveInkPlace) -> some View {
@@ -153,7 +154,7 @@ struct SaveInkHomeScreen: View {
                     .foregroundStyle(SaveInkPalette.ink)
                 Spacer(minLength: 8)
                 SaveInkBadge(
-                    text: badge == .unverified ? "△ 未驗證造訪" : (saved ? "○ 存了還沒去" : "✓ 去過"),
+                    text: badge == .unverified ? languageSettings.localized(english: "△ Unverified visit", traditionalChinese: "△ 未驗證造訪") : (saved ? languageSettings.localized(english: "○ Saved, not visited", traditionalChinese: "○ 存了還沒去") : languageSettings.localized(english: "✓ Visited", traditionalChinese: "✓ 去過")),
                     verified: badge == .visited
                 )
             }
@@ -161,17 +162,17 @@ struct SaveInkHomeScreen: View {
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.inkSub)
             if store.usesLivePlaces, let minutes = place.walkMinutes {
-                Text("步行 \(minutes) 分")
+                Text(languageSettings.localized(english: "\(minutes) min walk", traditionalChinese: "步行 \(minutes) 分"))
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
             }
-            Text(place.blurb)
+            Text(SaveInkSystemCopy.text(place.blurb, language: languageSettings.language, isUserContent: place.blurbIsUserContent))
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Text("▣")
-                Text(place.sourceLabel)
+                Text(SaveInkSystemCopy.text(place.sourceLabel, language: languageSettings.language))
             }
             .font(SaveInkType.aux)
             .foregroundStyle(SaveInkPalette.inkSub)
@@ -194,6 +195,7 @@ struct SaveInkHomeScreen: View {
 }
 
 struct SaveInkSaveSheet: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
 
     var body: some View {
@@ -203,7 +205,7 @@ struct SaveInkSaveSheet: View {
                 .frame(width: 42, height: 5)
                 .frame(maxWidth: .infinity)
             HStack {
-                Text("存一個地點")
+                Text(languageSettings.localized(english: "Save a place", traditionalChinese: "存一個地點"))
                     .font(SaveInkType.sheetTitle)
                     .foregroundStyle(SaveInkPalette.ink)
                 Spacer()
@@ -211,19 +213,19 @@ struct SaveInkSaveSheet: View {
                     store.cancelSheet()
                 }
             }
-            Text("只收跟地點有關的內容")
+            Text(languageSettings.localized(english: "Save content about places", traditionalChinese: "只收跟地點有關的內容"))
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.inkSub)
-            Text("貼上影片連結")
+            Text(languageSettings.localized(english: "Paste a video link", traditionalChinese: "貼上影片連結"))
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)
             HStack {
-                Text(store.saveLink.isEmpty ? "https://短影音連結/v/8f2k…" : store.saveLink)
+                Text(store.saveLink.isEmpty ? languageSettings.localized(english: "https://example.com/video/…", traditionalChinese: "https://短影音連結/v/8f2k…") : store.saveLink)
                     .font(SaveInkType.aux)
                     .foregroundStyle(store.saveLink.isEmpty ? SaveInkPalette.inkSub : SaveInkPalette.ink)
                     .lineLimit(1)
                 Spacer()
-                Button("貼上") { store.pasteExampleLink() }
+                Button(languageSettings.localized(english: "Paste", traditionalChinese: "貼上")) { store.pasteExampleLink() }
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.ink)
                     .frame(minWidth: 44, minHeight: 44)
@@ -238,7 +240,7 @@ struct SaveInkSaveSheet: View {
                         Text(place.name)
                             .font(SaveInkType.shop)
                         Spacer()
-                        SaveInkBadge(text: "✓ 已辨識", verified: true)
+                        SaveInkBadge(text: languageSettings.localized(english: "✓ Place identified", traditionalChinese: "✓ 已辨識"), verified: true)
                     }
                     Text("\(place.addressLine ?? place.street)・\(place.meta.components(separatedBy: "・").last ?? "")")
                         .font(SaveInkType.aux)
@@ -251,22 +253,22 @@ struct SaveInkSaveSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(field)
             }
-            Text("或直接搜店名")
+            Text(languageSettings.localized(english: "Or enter a place name", traditionalChinese: "或直接搜店名"))
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)
             SaveInkLineField(
-                placeholder: "輸入店名，例如「赤峰街」",
+                placeholder: languageSettings.localized(english: "Enter a place name", traditionalChinese: "輸入店名，例如「赤峰街」"),
                 text: $store.saveQuery,
                 identifier: "ink.save.query"
             )
             if let notice = store.saveNotice {
-                Text(notice)
+                Text(SaveInkSystemCopy.text(notice, language: languageSettings.language))
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("ink.save.notice")
             }
-            SaveInkOutlineButton(title: "存起來", identifier: "ink.save.commit") {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Save place", traditionalChinese: "存起來"), identifier: "ink.save.commit") {
                 store.commitSave()
             }
             .padding(.top, 8)
@@ -291,6 +293,7 @@ struct SaveInkSaveSheet: View {
 }
 
 struct SaveInkCheckInSheet: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
     var place: SaveInkPlace
     var situation: SaveInkCheckInSituation
@@ -335,31 +338,31 @@ struct SaveInkCheckInSheet: View {
     private var title: String {
         switch situation {
         case .verified:
-            return "到了，已蓋章"
+            return languageSettings.localized(english: "Visit verified, stamp added", traditionalChinese: "到了，已蓋章")
         case .locationFailed:
-            return "定位不到，先幫你記下"
+            return languageSettings.localized(english: "Location unavailable, visit recorded", traditionalChinese: "定位不到，先幫你記下")
         case .placeChanged:
-            return "店家位置已更新"
+            return languageSettings.localized(english: "This place’s location has changed", traditionalChinese: "店家位置已更新")
         case .permissionDenied:
-            return "沒有定位權限，\n這次記成未驗證"
+            return languageSettings.localized(english: "Location access is off.\nThis visit is unverified.", traditionalChinese: "沒有定位權限，\n這次記成未驗證")
         case .approximateOnly:
-            return "需要精確位置\n才能驗證這次造訪"
+            return languageSettings.localized(english: "Precise location is needed\nto verify this visit.", traditionalChinese: "需要精確位置\n才能驗證這次造訪")
         case .tooFar(let meters):
-            return "你好像離這裡還有 \(meters) m"
+            return languageSettings.localized(english: "You are about \(meters) m away", traditionalChinese: "你好像離這裡還有 \(meters) m")
         case .downgradedUnverified:
-            return "這次記成未驗證"
+            return languageSettings.localized(english: "This visit is unverified", traditionalChinese: "這次記成未驗證")
         case .duplicate:
             if store.latestVisit(for: place.id)?.verification == .unverified {
-                return "這次記成未驗證"
+                return languageSettings.localized(english: "This visit is unverified", traditionalChinese: "這次記成未驗證")
             }
-            return "到了，已蓋章"
+            return languageSettings.localized(english: "Visit verified, stamp added", traditionalChinese: "到了，已蓋章")
         }
     }
 
     private var subtitle: String? {
         switch situation {
-        case .locationFailed: "到現場可再試一次驗證。"
-        case .placeChanged: "這次尚未記錄，請重新確認位置。"
+        case .locationFailed: languageSettings.localized(english: "Try verifying again when you arrive.", traditionalChinese: "到現場可再試一次驗證。")
+        case .placeChanged: languageSettings.localized(english: "No visit was recorded. Check the location again.", traditionalChinese: "這次尚未記錄，請重新確認位置。")
         default: nil
         }
     }
@@ -406,16 +409,16 @@ struct SaveInkCheckInSheet: View {
     private var commentBox: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("留一句評論（選填）")
+                Text(languageSettings.localized(english: "Add a comment (optional)", traditionalChinese: "留一句評論（選填）"))
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                 Spacer()
                 if situation != .verified {
-                    SaveInkBadge(text: "△ 未驗證造訪", verified: false)
+                    SaveInkBadge(text: languageSettings.localized(english: "△ Unverified visit", traditionalChinese: "△ 未驗證造訪"), verified: false)
                 }
             }
             SaveInkLineField(
-                placeholder: "小籠包皮很薄，排隊 15 分鐘…",
+                placeholder: languageSettings.localized(english: "What was your visit like?", traditionalChinese: "小籠包皮很薄，排隊 15 分鐘…"),
                 text: $store.draftComment,
                 identifier: "ink.checkin.comment",
                 minHeight: 72
@@ -431,7 +434,7 @@ struct SaveInkCheckInSheet: View {
     private var sentiment: some View {
         HStack(spacing: 8) {
             ForEach(SaveInkSentiment.allCases, id: \.self) { item in
-                Button(item.title) { store.draftSentiment = item }
+                Button(item.title(language: languageSettings.language)) { store.draftSentiment = item }
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.ink)
                     .padding(.horizontal, 12)
@@ -448,47 +451,47 @@ struct SaveInkCheckInSheet: View {
     private var buttons: some View {
         switch situation {
         case .placeChanged:
-            SaveInkOutlineButton(title: "重新確認位置", identifier: "ink.checkin.retry", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Check location again", traditionalChinese: "重新確認位置"), identifier: "ink.checkin.retry", compact: true) {
                 Task { await store.retryCheckIn() }
             }
-            SaveInkOutlineButton(title: "稍後再試", identifier: "ink.checkin.cancel", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Try later", traditionalChinese: "稍後再試"), identifier: "ink.checkin.cancel", compact: true) {
                 store.cancelSheet()
             }
         case .verified:
-            SaveInkOutlineButton(title: "看這次的章", identifier: "ink.checkin.stamp", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "View stamp", traditionalChinese: "看這次的章"), identifier: "ink.checkin.stamp", compact: true) {
                 store.beginArrival()
             }
-            SaveInkOutlineButton(title: "留一句評論", identifier: "ink.checkin.commentButton", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Add a comment", traditionalChinese: "留一句評論"), identifier: "ink.checkin.commentButton", compact: true) {
                 store.beginReview()
             }
-            SaveInkOutlineButton(title: "完成", identifier: "ink.checkin.done", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Done", traditionalChinese: "完成"), identifier: "ink.checkin.done", compact: true) {
                 store.commitDraft()
             }
         case .locationFailed, .downgradedUnverified:
             if place.shopLatitude != nil, place.shopLongitude != nil {
-                SaveInkOutlineButton(title: "重試", identifier: "ink.checkin.retry", compact: true) {
+                SaveInkOutlineButton(title: languageSettings.localized(english: "Retry", traditionalChinese: "重試"), identifier: "ink.checkin.retry", compact: true) {
                     Task { await store.retryCheckIn() }
                 }
             }
-            SaveInkOutlineButton(title: "完成", identifier: "ink.checkin.done", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Done", traditionalChinese: "完成"), identifier: "ink.checkin.done", compact: true) {
                 store.commitDraft()
             }
         case .permissionDenied:
-            SaveInkOutlineButton(title: "開啟定位", identifier: "ink.checkin.settings", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Location settings", traditionalChinese: "開啟定位"), identifier: "ink.checkin.settings", compact: true) {
                 store.openSettings()
             }
-            SaveInkOutlineButton(title: "完成", identifier: "ink.checkin.done", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Done", traditionalChinese: "完成"), identifier: "ink.checkin.done", compact: true) {
                 store.commitDraft()
             }
         case .approximateOnly, .duplicate:
-            SaveInkOutlineButton(title: "完成", identifier: "ink.checkin.done", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Done", traditionalChinese: "完成"), identifier: "ink.checkin.done", compact: true) {
                 store.commitDraft()
             }
         case .tooFar:
-            SaveInkOutlineButton(title: "還是記下", identifier: "ink.checkin.saveAnyway", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Record unverified visit", traditionalChinese: "還是記下"), identifier: "ink.checkin.saveAnyway", compact: true) {
                 store.saveAnyway()
             }
-            SaveInkOutlineButton(title: "取消", identifier: "ink.checkin.cancel", compact: true) {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), identifier: "ink.checkin.cancel", compact: true) {
                 store.cancelSheet()
             }
         }
@@ -496,6 +499,7 @@ struct SaveInkCheckInSheet: View {
 }
 
 struct SaveInkStampGrid: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
 
     var body: some View {
@@ -534,6 +538,8 @@ struct SaveInkStampGrid: View {
 }
 
 struct SaveInkPassportScreen: View {
+    @State private var showsLanguage = false
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
 
     var body: some View {
@@ -543,10 +549,28 @@ struct SaveInkPassportScreen: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 12) {
                     SaveInkBackButton(action: store.goBack)
-                    Text("我的護照")
+                    Text(languageSettings.localized(english: "My Passport", traditionalChinese: "我的護照"))
                         .font(SaveInkType.subpageTitle)
                         .foregroundStyle(SaveInkPalette.ink)
                 }
+                Button { showsLanguage = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "globe")
+                        Text("Language / 語言")
+                        Spacer(minLength: 8)
+                        Text(languageSettings.preference.displayName(language: languageSettings.language))
+                            .foregroundStyle(SaveInkPalette.inkSub)
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.ink)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ink.passport.language")
+                if store.includesSampleCatalog {
                 HStack(spacing: 12) {
                     SaveInkRoughCircle(seed: 3, amplitude: 0.4)
                         .stroke(SaveInkPalette.ink, lineWidth: 2)
@@ -555,16 +579,20 @@ struct SaveInkPassportScreen: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("小米")
                             .font(SaveInkType.sheetTitle)
-                        Text("台北・已蓋 \(store.stampedPlaceIDs().count) 個章・去過 \(store.totalVisits()) 次")
+                        Text(languageSettings.localized(english: "Taipei · \(store.stampedPlaceIDs().count) stamps · \(store.totalVisits()) visits", traditionalChinese: "台北・已蓋 \(store.stampedPlaceIDs().count) 個章・去過 \(store.totalVisits()) 次"))
                             .font(SaveInkType.aux)
                             .monospacedDigit()
                             .foregroundStyle(SaveInkPalette.inkSub)
                     }
                 }
-                Text("印章")
+                } else {
+                    SaveInkPassportIdentity()
+                }
+                savedPlaces
+                Text(languageSettings.localized(english: "Stamps", traditionalChinese: "印章"))
                     .font(SaveInkType.body)
                 SaveInkStampGrid(store: store)
-                Text("去過的地方")
+                Text(languageSettings.localized(english: "Visited places", traditionalChinese: "去過的地方"))
                     .font(SaveInkType.body)
                 VStack(spacing: 0) {
                     ForEach(ledger, id: \.placeID) { row in
@@ -592,6 +620,49 @@ struct SaveInkPassportScreen: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ink.passport")
+        .sheet(isPresented: $showsLanguage) { LanguageSettingsSheet() }
+    }
+
+    private var savedPlaces: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(languageSettings.localized(english: "Saved places", traditionalChinese: "已存地點"))
+                .font(SaveInkType.body)
+            if store.homePlaces().isEmpty {
+                Text(languageSettings.localized(english: "No saved places to show yet", traditionalChinese: "目前沒有可顯示的已存地點"))
+                    .font(SaveInkType.aux)
+                    .foregroundStyle(SaveInkPalette.inkSub)
+            }
+            ForEach(store.homePlaces()) { place in
+                Button { store.openPlace(place.id) } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(place.name).font(SaveInkType.body)
+                            Text(place.street).font(SaveInkType.aux).foregroundStyle(SaveInkPalette.inkSub)
+                        }
+                        Spacer(minLength: 8)
+                        Text(savedState(place))
+                            .font(SaveInkType.aux)
+                        Image(systemName: "chevron.right")
+                    }
+                    .foregroundStyle(SaveInkPalette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ink.passport.place.\(place.id)")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ink.passport.savedPlaces")
+    }
+
+    private func savedState(_ place: SaveInkPlace) -> String {
+        switch store.homeBadge(for: place) {
+        case .saved: languageSettings.localized(english: "Saved", traditionalChinese: "已收藏")
+        case .visited: languageSettings.localized(english: "Visited", traditionalChinese: "去過")
+        case .unverified: languageSettings.localized(english: "Unverified visit", traditionalChinese: "未驗證造訪")
+        }
     }
 
     private var ledger: [(placeID: String, mark: String, title: String, trailing: String)] {
@@ -600,18 +671,75 @@ struct SaveInkPassportScreen: View {
             let rows = store.visits.filter { $0.placeID == id }
             let verified = rows.contains { $0.verification == .verified }
             let date = rows.map(\.visitedAt).max().map(SaveInkClock.shortDate) ?? ""
-            let title = verified ? "\(place.name)・\(place.street)" : "\(place.name)・未驗證"
+            let title = verified ? "\(place.name)・\(place.street)" : languageSettings.localized(english: "\(place.name) · Unverified", traditionalChinese: "\(place.name)・未驗證")
             return (
                 placeID: id,
                 mark: verified ? "✓" : "△",
                 title: title,
-                trailing: "\(rows.count) 次・\(date)"
+                trailing: languageSettings.localized(english: "\(rows.count) visits · \(date)", traditionalChinese: "\(rows.count) 次・\(date)")
             )
         }
     }
 }
 
+private struct SaveInkPassportIdentity: View {
+    @ObservedObject private var auth = PrivyAuthService.shared
+
+    var body: some View {
+        SaveInkPassportAccountIdentity(owner: auth.currentUserId)
+            .id(auth.sessionGeneration)
+    }
+}
+
+private struct SaveInkPassportAccountIdentity: View {
+    let owner: String?
+    @StateObject private var model = ProfileViewModel()
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    private var profile: UserProfile? {
+        guard let owner, model.identityOwnerID == owner else { return nil }
+        return model.profile
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Group {
+                if let data = model.localAvatarData, let image = UIImage(data: data) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    Image("SavvyLogo").resizable().scaledToFit()
+                }
+            }
+            .frame(width: 54, height: 54)
+            .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(profile?.displayName ?? languageSettings.localized(english: "Your account", traditionalChinese: "你的帳號"))
+                    .font(SaveInkType.sheetTitle)
+                    .accessibilityIdentifier("ink.passport.accountName")
+                if let email = profile?.email {
+                    Text(email).font(SaveInkType.aux).textSelection(.enabled)
+                }
+                if model.isLoading { ProgressView() }
+                if model.errorMessage != nil || (!model.isLoading && profile == nil) {
+                    Text(languageSettings.localized(english: "Account details are unavailable. Your saved places are unchanged.", traditionalChinese: "暫時無法載入帳號資料，你的收藏不受影響。"))
+                        .font(SaveInkType.aux)
+                        .foregroundStyle(SaveInkPalette.inkSub)
+                    Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
+                        Task { await model.loadPassportIdentity() }
+                    }
+                    .accessibilityIdentifier("ink.passport.accountRetry")
+                }
+            }
+        }
+        .foregroundStyle(SaveInkPalette.ink)
+        .task(id: owner) { await model.loadPassportIdentity() }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ink.passport.account")
+    }
+}
+
 struct SaveInkPlaceScreen: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
     @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     var placeID: String
@@ -670,7 +798,7 @@ struct SaveInkPlaceScreen: View {
                 Task { await store.checkIn(placeID: placeID) }
             }
         } else if place != nil {
-            SaveInkOutlineButton(title: "記錄到訪（未驗證）", identifier: "ink.place.arrived.unverified") {
+            SaveInkOutlineButton(title: languageSettings.localized(english: "Record visit (unverified)", traditionalChinese: "記錄到訪（未驗證）"), identifier: "ink.place.arrived.unverified") {
                 store.recordUnverifiedVisit(placeID: placeID)
             }
         }
@@ -699,7 +827,7 @@ struct SaveInkPlaceScreen: View {
                 )
                 if SaveInkAppleMaps.canOpen(place) {
                     SaveInkOutlineButton(
-                        title: "用 Apple 地圖打開",
+                        title: languageSettings.localized(english: "Open in Apple Maps", traditionalChinese: "用 Apple 地圖打開"),
                         identifier: "ink.place.openMaps",
                         compact: true
                     ) {
@@ -715,19 +843,19 @@ struct SaveInkPlaceScreen: View {
     private func facts(_ place: SaveInkPlace) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             if !store.includesSampleCatalog, store.homeBadge(for: place) == .unverified {
-                SaveInkBadge(text: "△ 未驗證造訪", verified: false)
+                SaveInkBadge(text: languageSettings.localized(english: "△ Unverified visit", traditionalChinese: "△ 未驗證造訪"), verified: false)
             }
             HStack(spacing: 10) {
-                stat("\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次", "你去過")
-                stat("\(place.friendUsualCount) 人", "朋友常去")
-                stat(lastDate(place), "上次蓋章")
+                stat(languageSettings.localized(english: "\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) visits", traditionalChinese: "\(store.includesSampleCatalog ? store.verifiedCount(for: place.id) : store.visitCount(for: place.id)) 次"), languageSettings.localized(english: "Your visits", traditionalChinese: "你去過"))
+                stat(languageSettings.localized(english: "\(place.friendUsualCount) friends", traditionalChinese: "\(place.friendUsualCount) 人"), languageSettings.localized(english: "Friends visit", traditionalChinese: "朋友常去"))
+                stat(lastDate(place), languageSettings.localized(english: "Last stamp", traditionalChinese: "上次蓋章"))
             }
-            Text(store.detailNote(for: place))
+            Text(SaveInkSystemCopy.text(store.detailNote(for: place), language: languageSettings.language, isUserContent: place.detailNoteIsUserContent))
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if let title = place.videoTitle {
-                Text("來源影片")
+                Text(languageSettings.localized(english: "Source video", traditionalChinese: "來源影片"))
                     .font(SaveInkType.body)
                 HStack(spacing: 12) {
                     RoundedRectangle(cornerRadius: 10)
@@ -756,9 +884,9 @@ struct SaveInkPlaceScreen: View {
     private func walkLabel(_ place: SaveInkPlace) -> String {
         let distance = place.distanceMeters.map(SaveInkClock.distance) ?? ""
         guard let minutes = place.walkMinutes else {
-            return distance.isEmpty ? "步行時間還沒算" : "步行時間還沒算・\(distance)"
+            return distance.isEmpty ? languageSettings.localized(english: "Walking time unavailable", traditionalChinese: "步行時間還沒算") : languageSettings.localized(english: "Walking time unavailable · \(distance)", traditionalChinese: "步行時間還沒算・\(distance)")
         }
-        return distance.isEmpty ? "步行 \(minutes) 分" : "步行 \(minutes) 分・\(distance)"
+        return distance.isEmpty ? languageSettings.localized(english: "\(minutes) min walk", traditionalChinese: "步行 \(minutes) 分") : languageSettings.localized(english: "\(minutes) min walk · \(distance)", traditionalChinese: "步行 \(minutes) 分・\(distance)")
     }
 
     private func lastDate(_ place: SaveInkPlace) -> String {
@@ -781,6 +909,7 @@ struct SaveInkPlaceScreen: View {
 }
 
 struct SaveInkArrivalScreen: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
     var placeID: String
 
@@ -791,12 +920,12 @@ struct SaveInkArrivalScreen: View {
             SaveInkPalette.paper.ignoresSafeArea()
             VStack(spacing: 18) {
                 Spacer(minLength: 12)
-                Text("你到了\(place?.name ?? "")")
+                Text(languageSettings.localized(english: "You arrived at \(place?.name ?? "")", traditionalChinese: "你到了\(place?.name ?? "")"))
                     .font(SaveInkType.pageTitle)
                     .multilineTextAlignment(.center)
                 Text(store.includesSampleCatalog
-                     ? "距離店門 18 m・第 \(max(count, 1)) 次"
-                     : "這次造訪已驗證・第 \(max(count, 1)) 次")
+                     ? languageSettings.localized(english: "18 m from the door · Visit \(max(count, 1))", traditionalChinese: "距離店門 18 m・第 \(max(count, 1)) 次")
+                     : languageSettings.localized(english: "Verified visit · Visit \(max(count, 1))", traditionalChinese: "這次造訪已驗證・第 \(max(count, 1)) 次"))
                     .font(SaveInkType.aux)
                     .monospacedDigit()
                     .foregroundStyle(SaveInkPalette.inkSub)
@@ -808,11 +937,11 @@ struct SaveInkArrivalScreen: View {
                 )
                 .frame(width: 210, height: 210)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("留一句評論（選填）")
+                    Text(languageSettings.localized(english: "Add a comment (optional)", traditionalChinese: "留一句評論（選填）"))
                         .font(SaveInkType.aux)
                         .foregroundStyle(SaveInkPalette.inkSub)
                     SaveInkLineField(
-                        placeholder: "小籠包皮很薄，排隊 15 分鐘…",
+                        placeholder: languageSettings.localized(english: "What was your visit like?", traditionalChinese: "小籠包皮很薄，排隊 15 分鐘…"),
                         text: $store.draftComment,
                         identifier: "ink.arrival.comment",
                         minHeight: 72
@@ -826,7 +955,7 @@ struct SaveInkArrivalScreen: View {
                 )
                 HStack(spacing: 8) {
                     ForEach(SaveInkSentiment.allCases, id: \.self) { item in
-                        Button(item.title) { store.draftSentiment = item }
+                        Button(item.title(language: languageSettings.language)) { store.draftSentiment = item }
                             .font(SaveInkType.aux)
                             .foregroundStyle(SaveInkPalette.ink)
                             .padding(.horizontal, 12)
@@ -836,7 +965,7 @@ struct SaveInkArrivalScreen: View {
                     Spacer(minLength: 0)
                 }
                 Spacer()
-                SaveInkOutlineButton(title: "完成，回首頁", identifier: "ink.arrival.done") {
+                SaveInkOutlineButton(title: languageSettings.localized(english: "Done, back to Home", traditionalChinese: "完成，回首頁"), identifier: "ink.arrival.done") {
                     store.commitDraft()
                 }
             }
@@ -849,6 +978,7 @@ struct SaveInkArrivalScreen: View {
 }
 
 struct SaveInkFriendsScreen: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
 
     var body: some View {
@@ -858,10 +988,10 @@ struct SaveInkFriendsScreen: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     SaveInkBackButton(identifier: "ink.friends.back", action: store.goBack)
-                    Text("朋友推薦")
+                    Text(languageSettings.localized(english: "Friends’ places", traditionalChinese: "朋友推薦"))
                         .font(SaveInkType.subpageTitle)
                 }
-                Text("朋友去過的地方")
+                Text(languageSettings.localized(english: "Places your friends have visited", traditionalChinese: "朋友去過的地方"))
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .padding(.leading, 58)
@@ -894,12 +1024,12 @@ struct SaveInkFriendsScreen: View {
             SaveInkStampMark(kind: .empty, seed: 14)
                 .frame(width: 120, height: 120)
                 .padding(.top, 48)
-            Text("朋友還沒有分享造訪")
+            Text(languageSettings.localized(english: "No visits shared yet", traditionalChinese: "朋友還沒有分享造訪"))
                 .font(SaveInkType.subpageTitle)
                 .foregroundStyle(SaveInkPalette.ink)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("ink.friends.empty")
-            Text("朋友把造訪設成公開後，就會出現在這裡")
+            Text(languageSettings.localized(english: "Your friends’ public visits will appear here.", traditionalChinese: "朋友把造訪設成公開後，就會出現在這裡"))
                 .font(SaveInkType.body)
                 .foregroundStyle(SaveInkPalette.inkSub)
                 .multilineTextAlignment(.center)
@@ -925,11 +1055,11 @@ struct SaveInkFriendsScreen: View {
                     HStack(spacing: 6) {
                         Text(card.authorName).font(SaveInkType.body)
                         SaveInkBadge(
-                            text: unverified ? "△ 未驗證造訪" : "✓ 已驗證",
+                            text: unverified ? languageSettings.localized(english: "△ Unverified visit", traditionalChinese: "△ 未驗證造訪") : languageSettings.localized(english: "✓ Verified", traditionalChinese: "✓ 已驗證"),
                             verified: !unverified
                         )
                     }
-                    Text(card.subtitle(now: store.currentDate))
+                    Text(card.subtitle(now: store.currentDate, language: languageSettings.language))
                         .font(SaveInkType.aux)
                         .monospacedDigit()
                         .foregroundStyle(SaveInkPalette.inkSub)
@@ -947,7 +1077,7 @@ struct SaveInkFriendsScreen: View {
                     .font(SaveInkType.body)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Text(SaveInkProvisional.commentMark)
+                Text(languageSettings.localized(english: "Sample", traditionalChinese: SaveInkProvisional.commentMark))
                     .font(SaveInkType.minimum)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .padding(.horizontal, 8)
@@ -977,6 +1107,7 @@ struct SaveInkFriendsScreen: View {
 }
 
 struct SaveInkReviewScreen: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
     var placeID: String
 
@@ -990,7 +1121,7 @@ struct SaveInkReviewScreen: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
                         SaveInkBackButton(action: store.goBack)
-                        Text("留一句評論")
+                        Text(languageSettings.localized(english: "Add a comment", traditionalChinese: "留一句評論"))
                             .font(SaveInkType.subpageTitle)
                     }
                     HStack(alignment: .center, spacing: 12) {
@@ -1004,17 +1135,17 @@ struct SaveInkReviewScreen: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(place.map { "\($0.name)・\($0.street)" } ?? "")
                                 .font(SaveInkType.friendShop)
-                            Text("今天的造訪")
+                            Text(languageSettings.localized(english: "Today’s visit", traditionalChinese: "今天的造訪"))
                                 .font(SaveInkType.aux)
                                 .foregroundStyle(SaveInkPalette.inkSub)
                         }
                     }
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("評論（選填）")
+                        Text(languageSettings.localized(english: "Comment (optional)", traditionalChinese: "評論（選填）"))
                             .font(SaveInkType.aux)
                             .foregroundStyle(SaveInkPalette.inkSub)
                         SaveInkLineField(
-                            placeholder: "寫下這次的感想…",
+                            placeholder: languageSettings.localized(english: "Write about your visit…", traditionalChinese: "寫下這次的感想…"),
                             text: $store.draftComment,
                             identifier: "ink.review.comment",
                             minHeight: 96
@@ -1026,28 +1157,28 @@ struct SaveInkReviewScreen: View {
                         SaveInkRoughRoundedRect(cornerRadius: 18, seed: 41)
                             .stroke(SaveInkPalette.ink, lineWidth: 2)
                     )
-                    Text("這則造訪和評論要給誰看？")
+                    Text(languageSettings.localized(english: "Who can see this visit and comment?", traditionalChinese: "這則造訪和評論要給誰看？"))
                         .font(SaveInkType.body)
-                    Text("每一則都由你自己選")
+                    Text(languageSettings.localized(english: "You choose for each visit", traditionalChinese: "每一則都由你自己選"))
                         .font(SaveInkType.aux)
                         .foregroundStyle(SaveInkPalette.inkSub)
                     HStack(spacing: 12) {
                         visibilityCard(
-                            title: "公開",
-                            body: "朋友會在「朋友推薦」看到",
+                            title: languageSettings.localized(english: "Public", traditionalChinese: "公開"),
+                            body: languageSettings.localized(english: "Visible in Friends’ places", traditionalChinese: "朋友會在「朋友推薦」看到"),
                             selected: store.draftVisibility == .public,
                             identifier: "ink.review.public",
                             icon: .person
                         ) { store.draftVisibility = .public }
                         visibilityCard(
-                            title: "私密",
-                            body: "只有你看得到",
+                            title: languageSettings.localized(english: "Private", traditionalChinese: "私密"),
+                            body: languageSettings.localized(english: "Only you can see it", traditionalChinese: "只有你看得到"),
                             selected: store.draftVisibility == .private,
                             identifier: "ink.review.private",
                             icon: .lock
                         ) { store.draftVisibility = .private }
                     }
-                    Text("ⓘ 私密的造訪和評論不會出現在朋友推薦頁，也不算進朋友看到的「去過 N 次」。")
+                    Text(languageSettings.localized(english: "ⓘ Private visits and comments stay out of Friends’ places and the visit counts your friends see.", traditionalChinese: "ⓘ 私密的造訪和評論不會出現在朋友推薦頁，也不算進朋友看到的「去過 N 次」。"))
                         .font(SaveInkType.aux)
                         .foregroundStyle(SaveInkPalette.inkSub)
                         .padding(14)
@@ -1059,7 +1190,7 @@ struct SaveInkReviewScreen: View {
                                     style: StrokeStyle(lineWidth: 1.6, dash: [5, 4])
                                 )
                         )
-                    SaveInkOutlineButton(title: "完成", identifier: "ink.review.done") {
+                    SaveInkOutlineButton(title: languageSettings.localized(english: "Done", traditionalChinese: "完成"), identifier: "ink.review.done") {
                         store.commitDraft()
                     }
                     .padding(.top, 8)
@@ -1133,30 +1264,50 @@ private enum SaveInkVisibilityIcon {
 }
 
 struct SaveInkWelcomeScreen: View {
+    @State private var showsLanguage = false
+    @Environment(\.appLanguageSettings) private var languageSettings
     var onStart: () -> Void
     var onSignIn: () -> Void
 
     var body: some View {
         ZStack {
             SaveInkPalette.paper.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 22) {
-                Text("Savvy")
-                    .font(SaveInkType.brand)
-                    .padding(.top, 36)
-                Text("把刷到的好店，\n變成真的去過")
+            ViewThatFits(in: .vertical) {
+                welcomeContent
+                ScrollView { welcomeContent }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ink.welcome")
+        .sheet(isPresented: $showsLanguage) { LanguageSettingsSheet() }
+    }
+
+    private var welcomeContent: some View {
+        VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    Text("Savvy").font(SaveInkType.brand)
+                    Spacer()
+                    Button { showsLanguage = true } label: {
+                        Image(systemName: "globe").font(SaveInkType.body).frame(width: 46, height: 46)
+                    }
+                    .accessibilityLabel("Language / 語言")
+                    .accessibilityIdentifier("ink.welcome.language")
+                }
+                .padding(.top, 36)
+                Text(languageSettings.localized(english: "From places you discover\nto places you visit", traditionalChinese: "把刷到的好店，\n變成真的去過"))
                     .font(SaveInkType.sheetTitle)
                     .fixedSize(horizontal: false, vertical: true)
-                step("存", "存", "貼上抖音、小紅書連結，自動抓出地點")
-                step("去", "去", "附近值得去的，一張張排給你")
-                step("章", "蓋章", "到了按「我到了」，蓋一個印章")
-                Text("首頁用你的位置算距離和步行時間，可能先問一次定位。只在按「我到了」時確認你在店裡，不會在背景追蹤，也不保存座標。")
+                step(languageSettings.localized(english: "Save", traditionalChinese: "存"), languageSettings.localized(english: "Save", traditionalChinese: "存"), languageSettings.localized(english: "Paste a Douyin or Xiaohongshu link to find the place", traditionalChinese: "貼上抖音、小紅書連結，自動抓出地點"))
+                step(languageSettings.localized(english: "Go", traditionalChinese: "去"), languageSettings.localized(english: "Go", traditionalChinese: "去"), languageSettings.localized(english: "Find places worth visiting nearby", traditionalChinese: "附近值得去的，一張張排給你"))
+                step(languageSettings.localized(english: "Stamp", traditionalChinese: "章"), languageSettings.localized(english: "Stamp", traditionalChinese: "蓋章"), languageSettings.localized(english: "Tap “I’m here” when you arrive to add a stamp", traditionalChinese: "到了按「我到了」，蓋一個印章"))
+                Text(languageSettings.localized(english: "Home uses your location for distances and walking times and may ask for access. Savvy checks your arrival only when you tap “I’m here”. It does not track you in the background or store your coordinates.", traditionalChinese: "首頁用你的位置算距離和步行時間，可能先問一次定位。只在按「我到了」時確認你在店裡，不會在背景追蹤，也不保存座標。"))
                     .font(SaveInkType.aux)
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
-                SaveInkOutlineButton(title: "開始使用", identifier: "ink.welcome.start", action: onStart)
+                SaveInkOutlineButton(title: languageSettings.localized(english: "Get started", traditionalChinese: "開始使用"), identifier: "ink.welcome.start", action: onStart)
                 Button(action: onSignIn) {
-                    Text("已經有帳號？登入")
+                    Text(languageSettings.localized(english: "Already have an account? Sign in", traditionalChinese: "已經有帳號？登入"))
                         .font(SaveInkType.aux)
                         .foregroundStyle(SaveInkPalette.inkSub)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -1165,9 +1316,6 @@ struct SaveInkWelcomeScreen: View {
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 28)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("ink.welcome")
     }
 
     private func step(_ mark: String, _ title: String, _ body: String) -> some View {

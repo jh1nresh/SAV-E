@@ -33,11 +33,13 @@ enum SaveInkSentiment: String, Codable, Equatable, CaseIterable {
     case worthQueue
     case ordinary
 
-    var title: String {
+    var title: String { title(language: .traditionalChinese) }
+
+    func title(language: AppLanguage) -> String {
         switch self {
-        case .again: "會再來"
-        case .worthQueue: "值得排"
-        case .ordinary: "普通"
+        case .again: language.localized(english: "Would return", traditionalChinese: "會再來")
+        case .worthQueue: language.localized(english: "Worth the wait", traditionalChinese: "值得排")
+        case .ordinary: language.localized(english: "Okay", traditionalChinese: "普通")
         }
     }
 }
@@ -162,6 +164,10 @@ struct SaveInkPlace: Identifiable, Equatable {
     var shopLongitude: Double?
     /// Former stamp ids folded into this row by `Place.consolidated`.
     var aliasIDs: [String] = []
+    /// Transient display provenance. User-authored notes must not be translated
+    /// even when their text happens to equal a generated fallback label.
+    var blurbIsUserContent = false
+    var detailNoteIsUserContent = false
 
     var meta: String {
         let streetText = street
@@ -197,11 +203,11 @@ struct SaveInkFriendCard: Identifiable, Equatable {
     var latestAt: Date
     var segment: SaveInkFriendSegment
 
-    func subtitle(now: Date) -> String {
-        let when = SaveInkClock.ago(latestAt, now: now)
+    func subtitle(now: Date, language: AppLanguage = .traditionalChinese) -> String {
+        let when = SaveInkClock.ago(latestAt, now: now, language: language)
         switch segment {
         case .verified:
-            return "去過 \(verifiedCount) 次・\(when)"
+            return language.localized(english: "\(verifiedCount) visits · \(when)", traditionalChinese: "去過 \(verifiedCount) 次・\(when)")
         case .unverified:
             return when
         }
@@ -276,16 +282,16 @@ enum SaveInkClock {
         return "\(parts.month ?? 0)/\(parts.day ?? 0)"
     }
 
-    static func ago(_ date: Date, now: Date) -> String {
+    static func ago(_ date: Date, now: Date, language: AppLanguage = .traditionalChinese) -> String {
         let days = taipei.dateComponents(
             [.day],
             from: taipei.startOfDay(for: date),
             to: taipei.startOfDay(for: now)
         ).day ?? 0
-        if days <= 0 { return "今天" }
-        if days < 7 { return "\(days) 天前" }
-        if days < 14 { return "1 週前" }
-        return "\(days / 7) 週前"
+        if days <= 0 { return language.localized(english: "Today", traditionalChinese: "今天") }
+        if days < 7 { return language.localized(english: days == 1 ? "1 day ago" : "\(days) days ago", traditionalChinese: "\(days) 天前") }
+        if days < 14 { return language.localized(english: "1 week ago", traditionalChinese: "1 週前") }
+        return language.localized(english: "\(days / 7) weeks ago", traditionalChinese: "\(days / 7) 週前")
     }
 
     static func distance(_ meters: Double) -> String {
@@ -829,13 +835,17 @@ final class SaveInkNotebookStore: ObservableObject {
         visits.filter { $0.placeID == placeID }.count
     }
 
-    func homeSummary(count: Int) -> String {
-        guard count > 0 else { return "還沒有地點" }
-        return includesSampleCatalog ? "今天在\(city)，挑了 \(count) 個給你" : "挑了 \(count) 個給你"
+    func homeSummary(count: Int, language: AppLanguage = .traditionalChinese) -> String {
+        guard count > 0 else { return language.localized(english: "No saved places yet", traditionalChinese: "還沒有地點") }
+        let english = count == 1 ? "1 place for you" : "\(count) places for you"
+        return language.localized(
+            english: english,
+            traditionalChinese: includesSampleCatalog ? "今天在\(city)，挑了 \(count) 個給你" : "挑了 \(count) 個給你"
+        )
     }
 
     func detailNote(for place: SaveInkPlace) -> String {
-        if !includesSampleCatalog,
+        if !includesSampleCatalog, !place.detailNoteIsUserContent,
            place.shopLatitude == nil || place.shopLongitude == nil,
            place.detailNote == "剛存下來，到了再按「我到了」。" {
             return "剛存下來。可以記錄到訪（未驗證）。"
@@ -1711,4 +1721,34 @@ enum SaveInkFixture {
     static var homePlaces: [SaveInkPlace] {
         places.filter { [dingtai, qingtian, chifeng].contains($0.id) }
     }
+}
+
+/// Only known Savvy-generated fallback copy; original names, comments and sources stay intact.
+enum SaveInkSystemCopy {
+    static func text(_ value: String, language: AppLanguage, isUserContent: Bool = false) -> String {
+        guard language == .english, !isUserContent else { return value }
+        return english[value] ?? value
+    }
+
+    private static let english: [String: String] = [
+        "還沒有地點": "No saved places yet",
+        "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。": "This content is not about a place. It was not saved, will not appear on the map, and cannot receive a stamp.",
+        "這則地圖連結還沒有店名。在下面寫下店名再存。": "This map link has no place name. Enter the name below before saving.",
+        "還在核對已存的地點，請稍後再存。": "Checking saved places. Try saving again shortly.",
+        "還在核對可以存幾個地點，請稍後再存。": "Checking your place limit. Try saving again shortly.",
+        "已存 50 個地點，所以暫放，還沒放上地圖。": "You have saved 50 places. This clue is waiting and has not been added to the map.",
+        "已存 50 個地點，這次沒有存下來。請稍後再試。": "You have saved 50 places. This place was not saved. Try again later.",
+        "這次沒有存下來。請稍後再試。": "The place was not saved. Try again later.",
+        "你保留的到訪紀錄": "Your recorded visit",
+        "來自 你的到訪紀錄": "From your visit history",
+        "你保留的到訪紀錄。": "Your recorded visit.",
+        "剛存的": "Recently saved",
+        "來自 你貼上的店名": "From the place name you entered",
+        "剛存下來，到了再按「我到了」。": "Saved. Tap “I’m here” when you arrive.",
+        "剛存下來。可以記錄到訪（未驗證）。": "Saved. You can record an unverified visit.",
+        "你去過": "Visited",
+        "存了，還沒去": "Saved, not visited",
+        "來自 分享": "From a shared place",
+        "來自 已存的地點": "From your saved places"
+    ]
 }
