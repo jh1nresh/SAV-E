@@ -146,7 +146,13 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
         app.buttons["Later"].tap()
         assertJournal(app, pending: true, saves: 0)
         waitForLabel("Joins: 1", element: app.staticTexts["incoming.fixture.joins"])
-        app.buttons["app.handoff.reviewList"].tap()
+        let review = app.buttons["app.handoff.reviewList"]
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(window.contains(review.frame), "The deferred-list action must fit on screen: \(review.frame) in \(window)")
+        XCTAssertTrue(review.isHittable)
+        capture(app, name: "incoming-share-list-deferred")
+        review.tap()
         app.buttons["app.handoff.confirmList"].tap()
         assertJournal(app, pending: false, saves: 1)
         XCTAssertTrue(app.staticTexts["app.handoff.confirmationMessage"].exists)

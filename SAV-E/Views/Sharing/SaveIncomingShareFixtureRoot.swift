@@ -45,6 +45,7 @@ struct SaveIncomingShareFixtureRoot: View {
     let showParentAlert: () -> Void
     let verificationChanged: () -> Void
     @StateObject private var language = AppLanguageSettings(userDefaults: Self.defaults, preferredLanguages: { ["en"] })
+    @StateObject private var notebook = Self.makeNotebook()
     @ObservedObject private var account = SaveIncomingShareFixtureSession.shared
     @State private var prepared = false
     @State private var saves = 0
@@ -55,7 +56,9 @@ struct SaveIncomingShareFixtureRoot: View {
     var body: some View {
         Group {
             if account.verified {
-                SaveInkNotebookRoot(launch: .preview(Self.scenario == "existing-modal" ? .passport : .main))
+                // Exercise the resizable navigation surface, not the 393×852 screenshot canvas.
+                SaveInkNavigator(store: notebook)
+                    .environment(\.saveInkScreenshot, true)
                     .modifier(SaveIncomingShareHost(
                         incomingPlaceReceipt: $incomingPlaceReceipt,
                         requiresShareConfirmation: $requiresShareConfirmation,
@@ -170,6 +173,12 @@ struct SaveIncomingShareFixtureRoot: View {
 
     private var joinCounter: some View {
         Text("Joins: \(account.joins)").accessibilityIdentifier("incoming.fixture.joins")
+    }
+
+    private static func makeNotebook() -> SaveInkNotebookStore {
+        let store = SaveInkPreviewFactory.store(for: .main)
+        if scenario == "existing-modal" { store.path = [.passport] }
+        return store
     }
 
     private func finishWaiting(cancel: Bool) {
