@@ -849,25 +849,19 @@ enum SaveInkMapPolicy {
 
     static func amapEmbedURL(for place: SaveInkPlace) -> URL? {
         guard let reference = reference(for: place), supportsAmap(reference) else { return nil }
-        var components = URLComponents()
-        var items: [URLQueryItem]
-        if let id = amapID(reference) {
-            // The provider resolves its own POI; no WGS84 -> GCJ-02 conversion.
-            components.scheme = "https"
-            components.host = "www.amap.com"
-            components.path = "/ssr/embed/place"
-            items = [URLQueryItem(name: "id", value: id)]
-        } else if reference.coordinateSystem == .gcj02 {
-            components.scheme = "https"
-            components.host = "www.amap.com"
-            components.path = "/ssr/embed/place"
-            items = [URLQueryItem(name: "lng", value: String(reference.longitude)),
-                     URLQueryItem(name: "lat", value: String(reference.latitude))]
-        } else {
-            // The embed endpoint documents only Amap coordinates. The official
-            // H5 marker endpoint explicitly accepts WGS84 and converts it itself.
+        guard reference.coordinateSystem == .gcj02 else {
+            // The marker endpoint converts WGS84 before the compact map loads.
             return amapMarkerURL(for: place, opensApp: false)
         }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "www.amap.com"
+        components.path = "/ssr/embed/place"
+        // Amap can return an invalid-coordinate page for an ID alone.
+        // Send its saved coordinate pair even when this place also has a POI ID.
+        var items = [URLQueryItem(name: "lng", value: String(reference.longitude)),
+                     URLQueryItem(name: "lat", value: String(reference.latitude))]
+        if let id = amapID(reference) { items.append(URLQueryItem(name: "id", value: id)) }
         items += [URLQueryItem(name: "name", value: place.name),
                   URLQueryItem(name: "platform", value: "pc"),
                   URLQueryItem(name: "zoom", value: "16"),
@@ -883,7 +877,9 @@ enum SaveInkMapPolicy {
         components.host = "uri.amap.com"
         components.path = "/marker"
         var items: [URLQueryItem]
-        if let id = amapID(reference) {
+        // The external handoff can select the POI directly. Embedded WGS84
+        // needs the coordinate-aware redirect before the compact map can load.
+        if let id = amapID(reference), opensApp || reference.coordinateSystem == .gcj02 {
             items = [URLQueryItem(name: "poiid", value: id)]
         } else {
             items = [URLQueryItem(name: "position", value: "\(reference.longitude),\(reference.latitude)"),

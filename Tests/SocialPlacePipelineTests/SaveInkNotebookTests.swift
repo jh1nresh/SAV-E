@@ -1905,12 +1905,30 @@ final class SaveInkNotebookTests: XCTestCase {
         taipei.shopLatitude = 25.033964
         taipei.shopLongitude = 121.564468
         let outside = await SaveInkMapPolicy.destinationCountryCode(for: taipei)
-        let hqMetadata = await SaveInkMapPolicy.destinationPlacemark(for: hq)
-        let taipeiMetadata = await SaveInkMapPolicy.destinationPlacemark(for: taipei)
-        func metadata(_ match: CLPlacemark?) -> String {
-            "iso=\(match?.isoCountryCode ?? "nil") admin=\(match?.administrativeArea ?? "nil") locality=\(match?.locality ?? "nil") sublocality=\(match?.subLocality ?? "nil") zone=\(match?.timeZone?.identifier ?? "nil")"
+        var diagnosticText = "Public HQ region=\(mainland ?? "unresolved")\nPublic Taipei region=\(outside ?? "unresolved")"
+        if mainland == nil {
+            // Observe the public fixture's raw Apple reply separately. Calling
+            // destinationPlacemark again would discard the same failure detail.
+            let geocoder = CLGeocoder()
+            var serviceError = "no callback"
+            let probe = SaveInkMapCountryRequest(start: { _, address, finish in
+                geocoder.geocodeAddressString(address, in: nil, preferredLocale: Locale(identifier: "en_US")) { matches, error in
+                    Task { @MainActor in
+                        serviceError = error.map { "\(($0 as NSError).domain)/\(($0 as NSError).code)" } ?? "none"
+                        finish(matches)
+                    }
+                }
+            }, stop: { geocoder.cancelGeocode() })
+            let reference = try XCTUnwrap(hq.mapReference)
+            let matches = await probe.matches(reference: reference, address: hq.street)
+            diagnosticText += "\nSeparate public address query: count=\(matches?.count ?? 0) serviceError=\(serviceError)"
+            for match in (matches ?? []).prefix(5) {
+                let nearby = match.location.map {
+                    SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                } ?? false
+                diagnosticText += "\niso=\(match.isoCountryCode ?? "nil") admin=\(match.administrativeArea ?? "nil") city=\(match.locality ?? "nil") near=\(nearby)"
+            }
         }
-        let diagnosticText = "Public HQ GCJ/address region=\(mainland ?? "unresolved") \(metadata(hqMetadata))\nPublic Taipei WGS84 region=\(outside ?? "unresolved") \(metadata(taipeiMetadata))"
         try diagnosticText.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("ink-map-live-country-results.txt"), atomically: true, encoding: .utf8)
         let result = XCTAttachment(string: diagnosticText)
         result.name = "ink-map-live-country-results"
@@ -2102,7 +2120,21 @@ final class SaveInkNotebookTests: XCTestCase {
         let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
         XCTAssertEqual(url.host, "www.amap.com")
         XCTAssertEqual(query.first { $0.name == "id" }?.value, "B000TEST")
-        XCTAssertNil(query.first { $0.name == "lng" }, "Amap resolves its POI id instead of reinterpreting coordinates")
+        XCTAssertEqual(query.first { $0.name == "lng" }?.value, "121.47")
+        XCTAssertEqual(query.first { $0.name == "lat" }?.value, "31.23")
+
+        var wgsRow = row
+        wgsRow.mapReference?.coordinateSystem = .wgs84
+        let wgsURL = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: wgsRow))
+        let wgsQuery = try XCTUnwrap(URLComponents(url: wgsURL, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(wgsURL.host, "uri.amap.com")
+        XCTAssertEqual(wgsQuery.first { $0.name == "coordinate" }?.value, "wgs84")
+        XCTAssertEqual(wgsQuery.first { $0.name == "position" }?.value, "121.47,31.23")
+        XCTAssertFalse(wgsQuery.contains { ["lat", "lng", "poiid"].contains($0.name) })
+        let handoff = try XCTUnwrap(SaveInkMapPolicy.amapMarkerURL(for: wgsRow, opensApp: true))
+        let handoffQuery = try XCTUnwrap(URLComponents(url: handoff, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(handoffQuery.first { $0.name == "poiid" }?.value, "B000TEST")
+
         let store = livePlaceStore(places: [row])
         store.openPlace(row.id)
         XCTAssertEqual(store.totalVisits(), 0)
