@@ -692,6 +692,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             send.tap()
             let code = app.textFields["signin.codeField"]
             XCTAssertTrue(code.waitForExistence(timeout: stepTimeout))
+            let hint = app.descendants(matching: .any)["signin.codeHint"]
+            XCTAssertTrue(hint.exists)
+            XCTAssertGreaterThanOrEqual(hint.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(hint.frame.maxX, app.frame.maxX)
             XCTAssertTrue(scrollUntilHittable(code, in: app.scrollViews.firstMatch, maxSwipes: 8))
             typeText("424242", into: code)
             XCTAssertTrue(app.keyboards.firstMatch.exists)

@@ -94,11 +94,11 @@ layer must feel like Savvy.
 ### Savvy Brand
 
 The current identity is the supplied cream script Savvy wordmark on orange,
-with the supplied forest-green pin banner for entry screens. Elephant artwork
+with an ink-colored transparent adaptation of that brush wordmark for entry screens. Elephant artwork
 and the Memo character are retired across all bundled app surfaces.
 
 - `SavvyBrandMark` uses `SavvyLogo`, the same image as the current app icon.
-- Sign-in and opening use the complete `SavvyEntryBanner` without cropping it.
+- Sign-in and opening use `SavvyWordmark` lettering only; no banner or illustration.
 - Use the logo for onboarding, empty states and Passport brand lockups.
 - The logo is branding, never a confirmed place or verified-visit stamp.
 - Do not bring back elephant illustrations, stickers, overlays or mascot copy.

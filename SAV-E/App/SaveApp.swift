@@ -1168,17 +1168,8 @@ struct AuthLoadingView: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 24) {
                     SaveInkEntryBrand()
-                    Text(languageSettings.localized(
-                        english: "Keep the places you find.\nGo when the time is right.",
-                        traditionalChinese: "把刷到的好店，\n變成真的去過"
-                    ))
-                    .font(SaveInkType.sheetTitle)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer(minLength: 48)
-
                     HStack(spacing: 12) {
                         ProgressView()
                             .tint(SaveInkPalette.ink)
@@ -1189,21 +1180,18 @@ struct AuthLoadingView: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(languageSettings.text(.opening))
                     .accessibilityIdentifier("opening.loading")
-
                     Text(languageSettings.localized(
                         english: "Just a moment.",
                         traditionalChinese: "稍等一下，就好。"
                     ))
-                    .font(SaveInkType.aux)
+                    .font(SaveInkType.body)
                     .foregroundStyle(SaveInkPalette.inkSub)
                 }
-                .frame(maxWidth: 430, alignment: .leading)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 40)
-                .frame(minHeight: proxy.size.height, alignment: .topLeading)
+                .frame(maxWidth: 390, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
+            .clipped()
         }
         .foregroundStyle(SaveInkPalette.ink)
         .background(SaveInkPalette.paper.ignoresSafeArea())
@@ -1213,10 +1201,10 @@ struct AuthLoadingView: View {
 
 private struct SaveInkEntryBrand: View {
     var body: some View {
-        Image("SavvyEntryBanner")
+        Image("SavvyWordmark")
             .resizable()
             .scaledToFit()
-            .clipShape(SaveInkRoughRoundedRect(cornerRadius: 18, seed: 510))
+            .frame(width: 164)
             .accessibilityLabel("Savvy")
             .accessibilityAddTraits(.isHeader)
     }
@@ -1250,17 +1238,26 @@ struct SignInView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    SignInHero()
+                    SaveInkEntryBrand()
+                        .padding(.bottom, 28)
 
-                    Spacer(minLength: 24)
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(languageSettings.text(.signInOrCreateAccount))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(languageSettings.localized(english: "Sign in to Savvy", traditionalChinese: "登入 Savvy"))
                             .font(SaveInkType.subpageTitle)
                             .foregroundStyle(SaveInkPalette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("signin.title")
+                        Text(languageSettings.localized(
+                            english: "Keep the places you want to visit.",
+                            traditionalChinese: "把想去的地方，留在自己的手帳裡。"
+                        ))
+                        .font(SaveInkType.body)
+                        .foregroundStyle(SaveInkPalette.inkSub)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.bottom, 24)
 
+                    VStack(alignment: .leading, spacing: 14) {
                         appleSignInButton
                         googleSignInButton
                         emailSignInSection
@@ -1279,14 +1276,12 @@ struct SignInView: View {
                         .accessibilityIdentifier("signin.loading")
                     }
                 }
-                .frame(maxWidth: 430, alignment: .leading)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 28)
-                .frame(minHeight: proxy.size.height, alignment: .topLeading)
+                .frame(maxWidth: 390, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .top)
             }
             .scrollDismissesKeyboard(.interactively)
+            .clipped()
         }
         .background(SaveInkPalette.paper.ignoresSafeArea())
         .preferredColorScheme(.light)
@@ -1390,6 +1385,7 @@ struct SignInView: View {
                     .foregroundStyle(SaveInkPalette.inkSub)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
                 Rectangle()
                     .fill(SaveInkPalette.emptyLine)
                     .frame(height: 1)
@@ -1419,13 +1415,20 @@ struct SignInView: View {
                     }
                 }
             } else {
-                Text(languageSettings.localized(
-                    english: "Enter the code sent to \(email)",
-                    traditionalChinese: "輸入寄到 \(email) 的驗證碼"
-                ))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(languageSettings.localized(
+                        english: "Enter the code sent to",
+                        traditionalChinese: "輸入寄到以下信箱的驗證碼"
+                    ))
+                    .fixedSize(horizontal: false, vertical: true)
+                    Text(email)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.inkSub)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("signin.codeHint")
 
                 SignInInputRow(
@@ -1468,23 +1471,6 @@ enum PendingOnboardingClueAccess {
     }
 }
 
-private struct SignInHero: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            SaveInkEntryBrand()
-            Text(languageSettings.localized(
-                english: "Your next good find,\nremembered.",
-                traditionalChinese: "下一間想去的店，\n替自己記下來。"
-            ))
-            .font(SaveInkType.sheetTitle)
-            .foregroundStyle(SaveInkPalette.ink)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
 private struct SignInInputRow: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let placeholder: String
@@ -1501,7 +1487,7 @@ private struct SignInInputRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField(placeholder, text: $text)
+            TextField("", text: $text, prompt: Text(placeholder).foregroundStyle(SaveInkPalette.inkSub))
                 .font(SaveInkType.secondaryButton)
                 .keyboardType(keyboardType)
                 .textContentType(keyboardType == .emailAddress ? .emailAddress : .oneTimeCode)
