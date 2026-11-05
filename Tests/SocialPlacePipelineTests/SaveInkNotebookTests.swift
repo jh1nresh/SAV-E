@@ -1910,18 +1910,21 @@ final class SaveInkNotebookTests: XCTestCase {
             // Observe the public fixture's raw Apple reply separately. Calling
             // destinationPlacemark again would discard the same failure detail.
             let geocoder = CLGeocoder()
-            var serviceError = "no callback"
+            @MainActor final class LookupObservation {
+                var serviceError = "no callback"
+            }
+            let observation = LookupObservation()
             let probe = SaveInkMapCountryRequest(start: { _, address, finish in
                 geocoder.geocodeAddressString(address, in: nil, preferredLocale: Locale(identifier: "en_US")) { matches, error in
                     Task { @MainActor in
-                        serviceError = error.map { "\(($0 as NSError).domain)/\(($0 as NSError).code)" } ?? "none"
+                        observation.serviceError = error.map { "\(($0 as NSError).domain)/\(($0 as NSError).code)" } ?? "none"
                         finish(matches)
                     }
                 }
             }, stop: { geocoder.cancelGeocode() })
             let reference = try XCTUnwrap(hq.mapReference)
             let matches = await probe.matches(reference: reference, address: hq.street)
-            diagnosticText += "\nSeparate public address query: count=\(matches?.count ?? 0) serviceError=\(serviceError)"
+            diagnosticText += "\nSeparate public address query: count=\(matches?.count ?? 0) serviceError=\(observation.serviceError)"
             for match in (matches ?? []).prefix(5) {
                 let nearby = match.location.map {
                     SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
