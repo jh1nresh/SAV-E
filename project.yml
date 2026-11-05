@@ -35,6 +35,7 @@ targets:
         excludes:
           - DebugBridge
           - Legacy/README.md
+          - Legacy/DESIGN.md
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
           - Resources/SAVEPro.storekit

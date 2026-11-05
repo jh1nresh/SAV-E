@@ -1384,7 +1384,7 @@ final class SaveDoodleHomeTests: XCTestCase {
             collectedAt.lowerBound,
             "Collected must stay after the Eat/Go empty branch, not inside it"
         )
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("keep the Collected strip and show a filter-empty message"))
         // DESIGN wraps "the nearest / save across every category".
         XCTAssertTrue(design.contains("save across every category"))
@@ -1635,7 +1635,7 @@ final class SaveDoodleHomeTests: XCTestCase {
                 "SAV-E/Legacy/Views/TileTown/SaveTileTownHomeView.swift"
             ).path
         ))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("Savvy + small elephant + Eat/Go in the header"))
         XCTAssertTrue(design.contains("no map component"))
         XCTAssertTrue(design.contains("official DESIGN color die-cut"))

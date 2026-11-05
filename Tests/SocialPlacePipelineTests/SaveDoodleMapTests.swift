@@ -402,7 +402,7 @@ final class SaveDoodleMapTests: XCTestCase {
                 "SAV-E/Legacy/Views/TileTown/SaveTileTownRootMap.swift"
             ).path
         ))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("judged manually by DESIGN"))
         XCTAssertTrue(design.contains("DESIGN still signs off"))
         XCTAssertTrue(design.contains("Home and Map still fail CI below 0.90"))

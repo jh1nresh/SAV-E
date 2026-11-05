@@ -26,7 +26,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         let clip = try source(at: "SAV-EClip/ClipContentView.swift")
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
         let pin = try source(at: "SAV-E/Legacy/Views/TileTown/SaveTileTownMap.swift")
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertEqual(SaveAtlasPalette.creamHex, "FFF9EB")
         XCTAssertEqual(SaveAtlasPalette.coralLightHex, SaveAtlasPalette.brandCoralHex)
         XCTAssertEqual(SaveAtlasPalette.brandCoralHex, "F26B4A")

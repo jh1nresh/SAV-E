@@ -1307,11 +1307,6 @@ struct SaveInkLanguageSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(preference.displayName(language: languageSettings.language))
                         .font(SaveInkType.friendShop)
-                    if preference == .system {
-                        Text(languageSettings.language.displayName)
-                            .font(SaveInkType.aux)
-                            .foregroundStyle(SaveInkPalette.inkSub)
-                    }
                 }
                 Spacer(minLength: 8)
                 SaveInkRoughCircle(seed: 17, amplitude: 0.35)

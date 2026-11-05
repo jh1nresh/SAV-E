@@ -2,6 +2,8 @@
 
 The shipping main app uses `Views/InkNotebook`: its paper, Iansui type, rough ink outlines and arrival-only accent are the current visual system. Its welcome and Passport language controls use `SaveInkLanguageSheet`.
 
+Earlier main-app design rules are preserved in `DESIGN.md` here; the repository-root `DESIGN.md` is the current Ink-only contract. The active App Clip contract is separate at repository-root `DESIGN-CLIP.md`.
+
 This directory archives the previous five-tab shell, Atlas/Doodle screens, old Passport, map chrome, planning, trips and related view components. Prototype-only source is also isolated under `Prototypes/AtlasPostcard/Legacy/Sources`.
 
 Sources stay compiled for existing models, compatibility routes and regression coverage. Archival does not remove saved places, account behavior, imports, sharing, attribution, or tests. Current Ink screens must not instantiate these archived designs; build success alone does not prove that boundary.

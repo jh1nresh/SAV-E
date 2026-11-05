@@ -181,7 +181,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(rail.contains("--uitest-friends-town"))
         XCTAssertFalse(rail.contains("atlas-friends-town"))
         XCTAssertFalse(rail.contains("friends.mapStrip\"].waitForExistence"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("SaveFriendsView"))
         XCTAssertTrue(design.contains("shared map stays hidden"))
         XCTAssertTrue(design.contains("Codex packet spec §7.4"))

@@ -201,7 +201,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         let entitlement = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
         XCTAssertTrue(entitlement.contains("AI quota never opens the places paywall"))
         XCTAssertTrue(entitlement.contains("return false"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertFalse(design.contains("Upgrade to Savvy Pro"))
         XCTAssertTrue(design.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(design.contains("never a hardcoded $6.99"))

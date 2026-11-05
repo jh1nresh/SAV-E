@@ -386,7 +386,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(readme.contains("23cca55"))
         XCTAssertFalse(readme.contains("2026-10-19-doodle-v1-passport.png"))
         XCTAssertFalse(readme.contains("padded with paper"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("passport-light.png"))
         XCTAssertTrue(design.contains("passport-dark.png"))
         XCTAssertTrue(design.contains("Passport (Doodle v1)"))

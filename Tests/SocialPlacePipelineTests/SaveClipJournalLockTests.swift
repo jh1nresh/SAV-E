@@ -258,7 +258,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(content.contains("guard mapVM.sessionGeneration == generation"))
         XCTAssertFalse(app.contains("if PendingShareStore.load()?.kind == .list {\n                PendingShareStore.clear()"))
         XCTAssertFalse(clip.contains("PendingSharePayload(\n                    kind: .place"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "DESIGN-CLIP.md")
         XCTAssertTrue(design.contains("Save all N"))
         XCTAssertTrue(design.contains("19b"))
         XCTAssertTrue(design.contains("SL6"))

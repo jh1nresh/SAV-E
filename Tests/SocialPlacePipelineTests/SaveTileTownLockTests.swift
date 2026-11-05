@@ -60,7 +60,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(friends.contains("friends.author."))
         XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertFalse(friends.contains("SaveTileTownPin"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("Product navigation does not mount"))
         XCTAssertTrue(design.contains("TileTown Home, RootMap, or Canvas"))
     }
@@ -96,7 +96,7 @@ final class SaveTileTownLockTests: XCTestCase {
         let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertTrue(stamp.contains("struct SaveDoodleTabIcon"))
         XCTAssertTrue(stamp.contains("lineWidth: 1.5"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("coral on the active destination only"))
         XCTAssertTrue(design.contains("full-pixel tile-town"))
         XCTAssertTrue(design.contains("superseded for the map base"))
@@ -234,7 +234,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(home.contains("map.lens.saved"))
         XCTAssertFalse(home.contains("map.lens.friends"))
         XCTAssertFalse(home.contains("SaveTileTownMapLens"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("SaveDoodleHomeView"))
         XCTAssertTrue(design.contains("Eat/Go"))
     }
