@@ -155,7 +155,12 @@ enum SaveInkPlaceCatalog {
             shopLongitude: mappable ? place.longitude : ink?.shopLongitude,
             aliasIDs: (place.mergedPlaceIDs ?? []).map(\.uuidString),
             blurbIsUserContent: nonempty(ink?.blurb) != nil ? (ink?.blurbIsUserContent ?? false) : note != nil,
-            detailNoteIsUserContent: nonempty(ink?.detailNote) != nil ? (ink?.detailNoteIsUserContent ?? false) : note != nil
+            detailNoteIsUserContent: nonempty(ink?.detailNote) != nil ? (ink?.detailNoteIsUserContent ?? false) : note != nil,
+            mapReference: place.hasValidCoordinate ? SaveInkMapReference(
+                latitude: place.latitude, longitude: place.longitude,
+                coordinateSystem: place.resolvedCoordinateSystem,
+                provider: place.locationProvider, providerPlaceID: place.providerPlaceId
+            ) : ink?.mapReference
         )
     }
 
@@ -710,6 +715,378 @@ struct SaveInkLivePlaceEngine {
             userCoordinate: userLocation?.coordinate,
             countIsAuthoritative: countIsAuthoritative
         )
+    }
+}
+
+/// Transient, typed map provenance. The arrival engine keeps its independent
+/// WGS84-only shop position, even when a provider map can display this reference.
+struct SaveInkMapReference: Equatable {
+    var latitude: Double
+    var longitude: Double
+    var coordinateSystem: PlaceCoordinateSystem
+    var provider: PlaceMatchProvider?
+    var providerPlaceID: String?
+
+    var hasValidCoordinate: Bool {
+        latitude.isFinite && longitude.isFinite &&
+        (-90...90).contains(latitude) && (-180...180).contains(longitude) &&
+        (latitude != 0 || longitude != 0)
+    }
+}
+
+enum SaveInkMapDisplay: Equatable {
+    case loading
+    case apple
+    case amap(URL)
+    case unavailable
+}
+
+enum SaveInkMapPolicy {
+    static func reference(for place: SaveInkPlace) -> SaveInkMapReference? {
+        if let reference = place.mapReference {
+            return reference.hasValidCoordinate ? reference : nil
+        }
+        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return nil }
+        let reference = SaveInkMapReference(latitude: latitude, longitude: longitude,
+                                            coordinateSystem: .wgs84, provider: nil, providerPlaceID: nil)
+        return reference.hasValidCoordinate ? reference : nil
+    }
+
+    /// The viewed destination controls the map, never the user's GPS or locale.
+    static func target(in places: [SaveInkPlace], focusedID: String?) -> SaveInkPlace? {
+        if let focusedID { return places.first { $0.id == focusedID } }
+        return places.first
+    }
+
+    static func token(for place: SaveInkPlace?) -> String {
+        guard let place else { return "empty" }
+        let reference = reference(for: place)
+        return [place.id, place.name, place.addressLine ?? place.street,
+                reference.map { "\($0.latitude),\($0.longitude)|\($0.coordinateSystem.rawValue)|\($0.provider?.rawValue ?? "")|\($0.providerPlaceID ?? "")" } ?? "unlocated"].joined(separator: "|")
+    }
+
+    static func display(for place: SaveInkPlace, countryCode: String?) -> SaveInkMapDisplay {
+        guard let reference = reference(for: place), let code = normalizedCountry(countryCode) else { return .unavailable }
+        if code == "CN" {
+            return amapEmbedURL(for: place).map(SaveInkMapDisplay.amap) ?? .unavailable
+        }
+        // HK, MO and TW are distinct ISO regions. GCJ-02 / BD-09 never become
+        // Apple coordinates just because the country lookup returned outside CN.
+        return reference.coordinateSystem == .wgs84 ? .apple : .unavailable
+    }
+
+    static func normalizedCountry(_ raw: String?) -> String? {
+        guard let code = raw?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+              Locale.isoRegionCodes.contains(code) else { return nil }
+        return code
+    }
+
+    /// Apple can report aggregate CN metadata for Taiwan, Hong Kong and Macao.
+    /// Resolve the destination's exact administrative labels, never the viewer's
+    /// region/time zone. Unknown CN subdivisions stay unavailable rather than
+    /// silently selecting a mainland provider. Labels use CLDR subdivision names
+    /// plus the SAR locality labels returned by Apple's en_US geocoder.
+    static func routingRegionCode(
+        isoCountryCode: String?, administrativeArea: String?, locality: String?, subLocality: String?
+    ) -> String? {
+        guard let code = normalizedCountry(isoCountryCode) else { return nil }
+        guard code == "CN" else { return code }
+        let area = administrativeLabel(administrativeArea)
+        let city = administrativeLabel(locality)
+        let district = administrativeLabel(subLocality)
+        let taiwan = ["Taiwan", "Taiwan Province", "台湾", "台湾省", "台灣", "台灣省", "臺灣", "臺灣省"]
+        let hongKong = ["Hong Kong", "Hong Kong SAR", "Hong Kong SAR China", "香港", "香港特别行政区", "香港特別行政區"]
+        let macao = ["Macao", "Macau", "Macao SAR", "Macau SAR", "Macao SAR China", "澳門", "澳门", "澳门特别行政区", "澳門特別行政區"]
+        if containsLabel(area, in: taiwan) { return "TW" }
+        if containsLabel(area, in: hongKong) { return "HK" }
+        if containsLabel(area, in: macao) { return "MO" }
+        if area.isEmpty {
+            // Apple's public HQ address result can omit Beijing's admin field.
+            // Only the four exact municipality names are sufficient on their own.
+            if containsLabel(city, in: ["Beijing", "Shanghai", "Tianjin", "Chongqing", "北京市", "上海市", "天津市", "重庆市", "重慶市"]) { return "CN" }
+            if containsLabel(city, in: ["Hong Kong SAR", "Hong Kong SAR China", "香港特别行政区", "香港特別行政區"]) { return "HK" }
+            if containsLabel(city, in: ["Macao SAR", "Macau SAR", "Macao SAR China", "澳门特别行政区", "澳門特別行政區"]) { return "MO" }
+            return nil
+        }
+        // Apple's public Kinmen/Matsu results can say Fujian/Quanzhou/Jinmen
+        // and Fujian/Fuzhou/Lianjiang. Those labels are ambiguous across the
+        // strait: do not turn them into either mainland or Taiwan user truth.
+        if containsLabel(area, in: ["Fujian", "Fujian Province", "福建", "福建省"]),
+           [city, district].contains(where: { containsLabel($0, in: [
+               "Jinmen", "Kinmen", "Jinmen County", "Kinmen County", "金门", "金門", "金门县", "金門縣",
+               "Lianjiang", "Lienchiang", "Lianjiang County", "Lienchiang County", "连江", "連江", "连江县", "連江縣"
+           ]) }) { return nil }
+        let mainland = [
+            "Anhui", "Beijing", "Chongqing", "Fujian", "Guangdong", "Gansu", "Guangxi", "Guizhou",
+            "Henan", "Hubei", "Hebei", "Hainan", "Heilongjiang", "Hunan", "Jilin", "Jiangsu", "Jiangxi",
+            "Liaoning", "Inner Mongolia", "Ningxia", "Qinghai", "Sichuan", "Shandong", "Shanghai",
+            "Shaanxi", "Shanxi", "Tianjin", "Xinjiang", "Tibet", "Yunnan", "Zhejiang"
+        ]
+        let chinese = [
+            "安徽省", "北京市", "重庆市", "重慶市", "福建省", "广东省", "廣東省", "甘肃省", "甘肅省",
+            "广西壮族自治区", "廣西壯族自治區", "贵州省", "貴州省", "河南省", "湖北省", "河北省", "海南省",
+            "黑龙江省", "黑龍江省", "湖南省", "吉林省", "江苏省", "江蘇省", "江西省", "辽宁省", "遼寧省",
+            "内蒙古自治区", "內蒙古自治區", "宁夏回族自治区", "寧夏回族自治區", "青海省", "四川省",
+            "山东省", "山東省", "上海市", "陕西省", "陝西省", "山西省", "天津市", "新疆维吾尔自治区",
+            "新疆維吾爾自治區", "西藏自治区", "西藏自治區", "云南省", "雲南省", "浙江省"
+        ]
+        let provinces = mainland.filter { ![
+            "Beijing", "Chongqing", "Shanghai", "Tianjin", "Guangxi", "Inner Mongolia", "Ningxia", "Xinjiang", "Tibet"
+        ].contains($0) }
+        let aliases = mainland + provinces.map { "\($0) Province" } + chinese
+        return containsLabel(area, in: aliases) ? "CN" : nil
+    }
+
+    private static func administrativeLabel(_ value: String?) -> String {
+        (value ?? "").folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                               locale: Locale(identifier: "en_US_POSIX"))
+            .split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+    }
+
+    private static func containsLabel(_ label: String, in aliases: [String]) -> Bool {
+        !label.isEmpty && aliases.contains { administrativeLabel($0) == label }
+    }
+
+    static func amapEmbedURL(for place: SaveInkPlace) -> URL? {
+        guard let reference = reference(for: place), supportsAmap(reference) else { return nil }
+        var components = URLComponents()
+        var items: [URLQueryItem]
+        if let id = amapID(reference) {
+            // The provider resolves its own POI; no WGS84 -> GCJ-02 conversion.
+            components.scheme = "https"
+            components.host = "www.amap.com"
+            components.path = "/ssr/embed/place"
+            items = [URLQueryItem(name: "id", value: id)]
+        } else if reference.coordinateSystem == .gcj02 {
+            components.scheme = "https"
+            components.host = "www.amap.com"
+            components.path = "/ssr/embed/place"
+            items = [URLQueryItem(name: "lng", value: String(reference.longitude)),
+                     URLQueryItem(name: "lat", value: String(reference.latitude))]
+        } else {
+            // The embed endpoint documents only Amap coordinates. The official
+            // H5 marker endpoint explicitly accepts WGS84 and converts it itself.
+            return amapMarkerURL(for: place, opensApp: false)
+        }
+        items += [URLQueryItem(name: "name", value: place.name),
+                  URLQueryItem(name: "platform", value: "pc"),
+                  URLQueryItem(name: "zoom", value: "16"),
+                  URLQueryItem(name: "src", value: "savvy")]
+        components.queryItems = items
+        return components.url
+    }
+
+    static func amapMarkerURL(for place: SaveInkPlace, opensApp: Bool) -> URL? {
+        guard let reference = reference(for: place), supportsAmap(reference) else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "uri.amap.com"
+        components.path = "/marker"
+        var items: [URLQueryItem]
+        if let id = amapID(reference) {
+            items = [URLQueryItem(name: "poiid", value: id)]
+        } else {
+            items = [URLQueryItem(name: "position", value: "\(reference.longitude),\(reference.latitude)"),
+                     URLQueryItem(name: "coordinate", value: reference.coordinateSystem == .wgs84 ? "wgs84" : "gaode")]
+        }
+        components.queryItems = items + [URLQueryItem(name: "name", value: place.name),
+                                        URLQueryItem(name: "src", value: "savvy"),
+                                        URLQueryItem(name: "callnative", value: opensApp ? "1" : "0")]
+        return components.url
+    }
+
+    /// The documented WGS84 marker URI currently redirects to a mobile card.
+    /// Adapt only the observed official redirect into the documented GCJ embed;
+    /// a changed response shape fails closed, never stores converted coordinates.
+    static func amapWGS84Reference(in url: URL) -> SaveInkMapReference? {
+        guard safeHTTPS(url, host: "uri.amap.com"), url.path == "/marker", url.fragment == nil,
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              Set(items.map(\.name)).count == items.count,
+              Set(items.map(\.name)).isSubset(of: ["position", "coordinate", "callnative", "name", "src"]),
+              items.first(where: { $0.name == "coordinate" })?.value == "wgs84",
+              items.first(where: { $0.name == "callnative" })?.value == "0",
+              let position = items.first(where: { $0.name == "position" })?.value else { return nil }
+        return coordinatePair(position, system: .wgs84)
+    }
+
+    static func amapEmbedFromWGS84Redirect(_ redirect: URL, original: URL) -> URL? {
+        guard let input = amapWGS84Reference(in: original), safeHTTPS(redirect, host: "m.amap.com"),
+              redirect.query == nil, redirect.fragment == nil,
+              let components = URLComponents(url: redirect, resolvingAgainstBaseURL: false) else { return nil }
+        let prefix = "/share/index/lnglat="
+        let path = components.percentEncodedPath
+        guard path.hasPrefix(prefix) else { return nil }
+        let fields = String(path.dropFirst(prefix.count)).split(separator: "&", omittingEmptySubsequences: false)
+        guard let first = fields.first, let point = coordinatePair(String(first), system: .gcj02),
+              countryMatchIsNearby(input, latitude: point.latitude, longitude: point.longitude) else { return nil }
+        // Provider response fields are never copied into the embed. Validate the
+        // known response shape and keep the original destination name instead.
+        let tail = fields.dropFirst().joined(separator: "&")
+        guard let response = URLComponents(string: "https://m.amap.com/?" + tail)?.queryItems,
+              Set(response.map(\.name)).count == response.count,
+              Set(response.map(\.name)).isSubset(of: ["name", "src", "callnative", "innersrc"]),
+              response.allSatisfy({ $0.value != nil }),
+              response.first(where: { $0.name == "src" })?.value == "savvy",
+              response.first(where: { $0.name == "callnative" })?.value == "0" else { return nil }
+        let name = URLComponents(url: original, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "name" }?.value ?? ""
+        var embed = URLComponents()
+        embed.scheme = "https"
+        embed.host = "www.amap.com"
+        embed.path = "/ssr/embed/place"
+        embed.queryItems = [URLQueryItem(name: "lng", value: String(point.longitude)),
+                            URLQueryItem(name: "lat", value: String(point.latitude)),
+                            URLQueryItem(name: "name", value: name), URLQueryItem(name: "platform", value: "pc"),
+                            URLQueryItem(name: "zoom", value: "16"), URLQueryItem(name: "src", value: "savvy")]
+        return embed.url
+    }
+
+    static func isAmapEmbed(_ url: URL?) -> Bool {
+        guard let url else { return false }
+        return safeHTTPS(url, host: "www.amap.com") && url.path == "/ssr/embed/place"
+    }
+
+    private static func safeHTTPS(_ url: URL, host: String) -> Bool {
+        url.scheme?.lowercased() == "https" && url.host?.lowercased() == host &&
+        url.user == nil && url.password == nil && (url.port == nil || url.port == 443)
+    }
+
+    private static func coordinatePair(_ raw: String, system: PlaceCoordinateSystem) -> SaveInkMapReference? {
+        let values = raw.split(separator: ",", omittingEmptySubsequences: false)
+        guard values.count == 2, let longitude = Double(values[0]), let latitude = Double(values[1]) else { return nil }
+        let point = SaveInkMapReference(latitude: latitude, longitude: longitude,
+                                       coordinateSystem: system, provider: system == .gcj02 ? .amap : nil, providerPlaceID: nil)
+        return point.hasValidCoordinate ? point : nil
+    }
+
+    /// Only initial requests and HTTPS redirects inside the official map hosts
+    /// may load. In-map links/new windows do not navigate the containing app.
+    static func permitsWebNavigation(_ url: URL?, userInitiated: Bool) -> Bool {
+        guard !userInitiated, let url, url.scheme?.lowercased() == "https",
+              url.user == nil, url.password == nil, url.port == nil || url.port == 443,
+              let host = url.host?.lowercased() else { return false }
+        return ["www.amap.com", "m.amap.com", "uri.amap.com"].contains(host)
+    }
+
+    private static func supportsAmap(_ reference: SaveInkMapReference) -> Bool {
+        reference.coordinateSystem == .wgs84 ||
+        (reference.coordinateSystem == .gcj02 && reference.provider == .amap)
+    }
+
+    private static func amapID(_ reference: SaveInkMapReference) -> String? {
+        guard reference.provider == .amap,
+              let id = reference.providerPlaceID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              id.range(of: #"^[A-Za-z0-9_-]{1,128}$"#, options: .regularExpression) != nil else { return nil }
+        return id
+    }
+
+    /// Country is display-only. WGS84 is reverse geocoded; a non-WGS84 provider
+    /// reference uses its saved address, never mislabeled raw provider points.
+    @MainActor
+    static func destinationCountryCode(for place: SaveInkPlace) async -> String? {
+        guard let match = await destinationPlacemark(for: place) else { return nil }
+        return routingRegionCode(isoCountryCode: match.isoCountryCode, administrativeArea: match.administrativeArea,
+                                 locality: match.locality, subLocality: match.subLocality)
+    }
+
+    @MainActor
+    static func destinationPlacemark(for place: SaveInkPlace) async -> CLPlacemark? {
+        guard !Task.isCancelled, let reference = reference(for: place) else { return nil }
+        let address = (place.addressLine ?? place.street).trimmingCharacters(in: .whitespacesAndNewlines)
+        if reference.coordinateSystem != .wgs84, address.isEmpty || address == place.name { return nil }
+        let request = SaveInkMapCountryRequest()
+        let matches = await request.matches(reference: reference, address: address)
+        guard !Task.isCancelled, let matches, matches.count == 1, let match = matches.first else { return nil }
+        if reference.coordinateSystem != .wgs84 {
+            // A bare/ambiguous address must not choose a distant country. This
+            // coarse consistency check tolerates GCJ's offset; it neither
+            // converts the provider point nor promotes it into user truth.
+            guard let location = match.location,
+                  countryMatchIsNearby(reference, latitude: location.coordinate.latitude,
+                                       longitude: location.coordinate.longitude) else { return nil }
+        }
+        return match
+    }
+
+    static func countryMatchIsNearby(_ reference: SaveInkMapReference, latitude: Double, longitude: Double) -> Bool {
+        guard reference.hasValidCoordinate, latitude.isFinite, longitude.isFinite,
+              (-90...90).contains(latitude), (-180...180).contains(longitude) else { return false }
+        let radians = Double.pi / 180
+        let dy = (latitude - reference.latitude) * radians
+        let dx = (longitude - reference.longitude) * radians
+        let a = pow(sin(dy / 2), 2) + cos(reference.latitude * radians) * cos(latitude * radians) * pow(sin(dx / 2), 2)
+        let distance = 6_371_000 * 2 * atan2(sqrt(max(0, a)), sqrt(max(0, 1 - a)))
+        return distance <= 2_000
+    }
+}
+
+@MainActor
+final class SaveInkMapCountryRequest {
+    typealias Completion = @MainActor ([CLPlacemark]?) -> Void
+    typealias Start = @MainActor (SaveInkMapReference, String, @escaping Completion) -> Void
+
+    private let geocoder = CLGeocoder()
+    private let timeout: Duration
+    private let start: Start?
+    private let stop: (@MainActor () -> Void)?
+    private var continuation: CheckedContinuation<[CLPlacemark]?, Never>?
+    private var deadlineTask: Task<Void, Never>?
+    private var finished = false
+
+    init(timeout: Duration = .seconds(12), start: Start? = nil, stop: (@MainActor () -> Void)? = nil) {
+        self.timeout = timeout
+        self.start = start
+        self.stop = stop
+    }
+
+    /// CLGeocoder cancellation does not guarantee its async wrapper will resume.
+    /// Own the continuation: deadline/cancellation finish exactly once, before
+    /// asking the underlying service to stop. Late Apple callbacks are harmless.
+    func matches(reference: SaveInkMapReference, address: String) async -> [CLPlacemark]? {
+        guard !Task.isCancelled, !finished, continuation == nil else { return nil }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled, !finished else { continuation.resume(returning: nil); return }
+                self.continuation = continuation
+                let timeout = timeout
+                deadlineTask = Task { @MainActor [weak self] in
+                    do { try await Task.sleep(for: timeout) } catch { return }
+                    self?.cancel()
+                }
+                if let start {
+                    start(reference, address) { [weak self] result in self?.finish(result) }
+                } else {
+                    let completion: @Sendable ([CLPlacemark]?, Error?) -> Void = { [weak self] result, error in
+                        Task { @MainActor [weak self] in self?.finish(error == nil ? result : nil) }
+                    }
+                    if reference.coordinateSystem == .wgs84 {
+                        geocoder.reverseGeocodeLocation(
+                            CLLocation(latitude: reference.latitude, longitude: reference.longitude),
+                            preferredLocale: Locale(identifier: "en_US"), completionHandler: completion)
+                    } else {
+                        geocoder.geocodeAddressString(address, in: nil, preferredLocale: Locale(identifier: "en_US"),
+                                                      completionHandler: completion)
+                    }
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in self.cancel() }
+        }
+    }
+
+    private func finish(_ result: [CLPlacemark]?) {
+        guard !finished else { return }
+        finished = true
+        deadlineTask?.cancel()
+        deadlineTask = nil
+        let pending = continuation
+        continuation = nil
+        pending?.resume(returning: result)
+    }
+
+    func cancel() {
+        guard !finished else { return }
+        finish(nil)
+        if let stop { stop() } else { geocoder.cancelGeocode() }
     }
 }
 

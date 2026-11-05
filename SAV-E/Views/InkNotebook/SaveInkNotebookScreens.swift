@@ -3,12 +3,7 @@ import SwiftUI
 struct SaveInkHomeScreen: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var store: SaveInkNotebookStore
-    @Environment(\.saveInkScreenshot) private var saveInkScreenshot
     @Environment(\.scenePhase) private var scenePhase
-
-    private var showsLiveMap: Bool {
-        store.usesLivePlaces && !saveInkScreenshot
-    }
 
     private var picks: [SaveInkPlace] {
         store.homePlaces()
@@ -19,15 +14,6 @@ struct SaveInkHomeScreen: View {
                 header
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if showsLiveMap {
-                            SaveInkLiveMap(
-                                places: picks,
-                                userCoordinate: store.userCoordinate,
-                                focusPlaceID: nil,
-                                showsRoute: false,
-                                onSelect: { store.openPlace($0) }
-                            )
-                        }
                         friendsEntry
                         ForEach(picks) { place in
                             Button {
@@ -814,7 +800,7 @@ struct SaveInkPlaceScreen: View {
         }
     }
 
-    /// Map, Apple Maps, and the note scroll. The title and「我到了」stay on screen.
+    /// The destination's map and handoff scroll with its note.
     private func liveDetails(_ place: SaveInkPlace?) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             if let place {
@@ -825,15 +811,6 @@ struct SaveInkPlaceScreen: View {
                     showsRoute: true,
                     onSelect: { _ in }
                 )
-                if SaveInkAppleMaps.canOpen(place) {
-                    SaveInkOutlineButton(
-                        title: languageSettings.localized(english: "Open in Apple Maps", traditionalChinese: "用 Apple 地圖打開"),
-                        identifier: "ink.place.openMaps",
-                        compact: true
-                    ) {
-                        SaveInkAppleMaps.open(place)
-                    }
-                }
                 facts(place)
             }
         }

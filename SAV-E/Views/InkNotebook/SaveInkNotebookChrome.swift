@@ -3,6 +3,7 @@ import CoreText
 import MapKit
 import SwiftUI
 import UIKit
+import WebKit
 
 enum SaveInkPalette {
     static let ink = Color(hex: "1E1D1B")
@@ -687,11 +688,399 @@ final class SaveInkMapRouteState: ObservableObject {
     }
 }
 
-/// Live ink map. Explicit screen/suite fixtures keep `SaveInkWalkMap`
-/// so the approved stills stay on the drawn roads. The canvas follows
-/// `SaveDoodleMapView`: SwiftUI `Map`, `UserAnnotation`, and `MapPolyline`.
-/// Ink pins and a light paper wash stay on this surface only.
+@MainActor
+final class SaveInkMapDestinationState: ObservableObject {
+    @Published private(set) var display = SaveInkMapDisplay.loading
+    private(set) var targetToken = ""
+    private var requestID = UUID()
+
+    func refresh(
+        place: SaveInkPlace?,
+        country: @MainActor (SaveInkPlace) async -> String? = SaveInkMapPolicy.destinationCountryCode
+    ) async {
+        guard !Task.isCancelled else { return }
+        let id = UUID()
+        requestID = id
+        targetToken = SaveInkMapPolicy.token(for: place)
+        display = .loading
+        guard let place, SaveInkMapPolicy.reference(for: place) != nil else {
+            display = .unavailable
+            return
+        }
+        let code = await country(place)
+        guard !Task.isCancelled, requestID == id else { return }
+        display = SaveInkMapPolicy.display(for: place, countryCode: code)
+    }
+}
+
+/// The destination controls the provider. Country and route results are
+/// transient; fixture screenshots continue to use the isolated drawn map.
 struct SaveInkLiveMap: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    var places: [SaveInkPlace]
+    var userCoordinate: CLLocationCoordinate2D?
+    var focusPlaceID: String?
+    var showsRoute: Bool
+    var onSelect: (String) -> Void
+
+    @StateObject private var destination = SaveInkMapDestinationState()
+    @State private var retryID = UUID()
+
+    private var target: SaveInkPlace? {
+        SaveInkMapPolicy.target(in: places, focusedID: focusPlaceID)
+    }
+
+    private var token: String { SaveInkMapPolicy.token(for: target) }
+    private var display: SaveInkMapDisplay {
+        destination.targetToken == token ? destination.display : .loading
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Group {
+                switch display {
+                case .loading:
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 190)
+                        .background(SaveInkPalette.paper)
+                        .accessibilityLabel(languageSettings.localized(english: "Loading map", traditionalChinese: "載入地圖中"))
+                case .apple:
+                    SaveInkAppleLiveMap(
+                        places: target.map { [$0] } ?? [],
+                        userCoordinate: userCoordinate, focusPlaceID: focusPlaceID,
+                        showsRoute: showsRoute, onSelect: onSelect
+                    )
+                    .id(token)
+                case .amap(let url):
+                    SaveInkAmapMap(url: url)
+                        .id(url)
+                        .frame(height: 190)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .overlay(SaveInkRoughRoundedRect(cornerRadius: 18, seed: 42, amplitude: 0.45)
+                            .stroke(SaveInkPalette.ink, lineWidth: 2))
+                        .accessibilityIdentifier("ink.place.map")
+                        .accessibilityLabel(languageSettings.localized(english: "Amap place map", traditionalChinese: "高德地點地圖"))
+                case .unavailable:
+                    VStack(spacing: 10) {
+                        Text(languageSettings.localized(english: "Map unavailable", traditionalChinese: "暫時無法顯示地圖"))
+                            .font(SaveInkType.body)
+                        Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) { retryID = UUID() }
+                            .font(SaveInkType.aux)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .foregroundStyle(SaveInkPalette.ink)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 190)
+                    .background(SaveInkPalette.paper)
+                    .accessibilityIdentifier("ink.map.unavailable")
+                }
+            }
+            if let target {
+                if case .amap = display, let url = SaveInkMapPolicy.amapMarkerURL(for: target, opensApp: true) {
+                    mapLink(url: url, title: languageSettings.localized(english: "Open in Amap", traditionalChinese: "用高德地圖打開"))
+                } else if case .unavailable = display,
+                          target.mapReference?.provider == .amap,
+                          let url = SaveInkMapPolicy.amapMarkerURL(for: target, opensApp: true) {
+                    mapLink(url: url, title: languageSettings.localized(english: "Open saved map", traditionalChinese: "開啟已存地圖"))
+                } else if showsRoute, display == .apple, SaveInkAppleMaps.canOpen(target) {
+                    SaveInkOutlineButton(
+                        title: languageSettings.localized(english: "Open in Apple Maps", traditionalChinese: "用 Apple 地圖打開"),
+                        identifier: "ink.place.openMaps", compact: true
+                    ) { SaveInkAppleMaps.open(target) }
+                }
+            }
+        }
+        .task(id: token + retryID.uuidString) { await destination.refresh(place: target) }
+    }
+
+    private func mapLink(url: URL, title: String) -> some View {
+        SaveInkOutlineButton(title: title, identifier: "ink.place.openMaps", compact: true) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+private struct SaveInkAmapMap: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let url: URL
+    @State private var failed = false
+    @State private var retryID = UUID()
+
+    var body: some View {
+        ZStack {
+            SaveInkAmapWebView(url: url, failed: $failed).id(retryID)
+            if failed {
+                SaveInkPalette.paper
+                VStack(spacing: 10) {
+                    Text(languageSettings.localized(english: "Map unavailable. Open in Amap to view this place.", traditionalChinese: "地圖暫時無法載入，請用高德開啟這個地點。"))
+                        .multilineTextAlignment(.center)
+                    Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
+                        failed = false
+                        retryID = UUID()
+                    }
+                    .frame(minWidth: 44, minHeight: 44)
+                }
+                .font(SaveInkType.aux)
+                .foregroundStyle(SaveInkPalette.ink)
+                .padding(20)
+                .accessibilityIdentifier("ink.map.unavailable")
+            }
+        }
+    }
+}
+
+struct SaveInkAmapWebView: UIViewRepresentable {
+    let url: URL
+    @Binding var failed: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator(failed: $failed, originalURL: url) }
+
+    // A completed HTML shell is not a rendered map. Only the compact embed may
+    // settle; the mobile marker card is deliberately never a successful surface.
+    static let renderReadinessScript = """
+        (() => {
+          if (location.protocol !== 'https:' || location.hostname !== 'www.amap.com' || location.pathname !== '/ssr/embed/place') return false;
+          const visible = x => { const r = x.getBoundingClientRect(); return r.width > 100 && r.height > 100 && getComputedStyle(x).visibility !== 'hidden' && getComputedStyle(x).display !== 'none'; };
+          const canvas = [...document.querySelectorAll('canvas')].some(x => x.width > 100 && x.height > 100 && visible(x));
+          const tiles = [...document.images].some(x => x.complete && x.naturalWidth >= 128 && x.naturalHeight >= 128 && visible(x) && /autonavi|amap/i.test(x.src));
+          const resources = performance.getEntriesByType('resource').some(x => x.responseEnd > 0 && /appmaptile|maptile|\\/web_map\\/get_tile|\\/tiles|\\/vt[/?]|\\/ws\\/mapapi\\//i.test(x.name));
+          return document.readyState === 'complete' && (canvas || tiles) && resources;
+        })()
+        """
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // A destination map does not need the viewer's GPS. No native message
+        // handlers, authentication headers, notes or account identity are exposed.
+        configuration.userContentController.addUserScript(WKUserScript(source: """
+            Object.defineProperty(navigator, 'geolocation', { configurable: false, value: Object.freeze({
+              getCurrentPosition: function(ok, fail) { if (fail) fail({code:1, message:'Location unavailable'}); },
+              watchPosition: function(ok, fail) { if (fail) fail({code:1, message:'Location unavailable'}); return 0; },
+              clearWatch: function() {}
+            }) });
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.navigationDelegate = context.coordinator
+        view.uiDelegate = context.coordinator
+        view.scrollView.isScrollEnabled = false
+        view.allowsBackForwardNavigationGestures = false
+        context.coordinator.start(in: view)
+        return view
+    }
+
+    func updateUIView(_ view: WKWebView, context: Context) {}
+
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+        coordinator.invalidate()
+        view.stopLoading()
+        view.navigationDelegate = nil
+        view.uiDelegate = nil
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        private enum Phase: Equatable { case resolvingWGS, embedding, ready, failed, disposed }
+        private var phase: Phase
+        private let originalURL: URL
+        private let timeout: Duration
+        private let readinessProbe: @MainActor (WKWebView) async -> Bool
+        private var failed: Binding<Bool>
+        private var generation = UUID()
+        private var deadlineTask: Task<Void, Never>?
+        private var pollingTask: Task<Void, Never>?
+        private var activeNavigation: WKNavigation?
+        private var originalNavigation: WKNavigation?
+        private var serverRedirectNavigation: WKNavigation?
+        private var convertedNavigation: WKNavigation?
+        private(set) var blockedNavigationLocations: [String] = []
+
+        var hasRenderedMap: Bool { phase == .ready }
+
+        init(failed: Binding<Bool>, originalURL: URL, timeout: Duration = .seconds(25),
+             readinessProbe: @escaping @MainActor (WKWebView) async -> Bool = { webView in
+                 (try? await webView.evaluateJavaScript(SaveInkAmapWebView.renderReadinessScript)) as? Bool == true
+             }) {
+            self.failed = failed
+            self.originalURL = originalURL
+            self.timeout = timeout
+            self.readinessProbe = readinessProbe
+            self.phase = SaveInkMapPolicy.amapWGS84Reference(in: originalURL) != nil ? .resolvingWGS : .embedding
+        }
+
+        func start(in webView: WKWebView) {
+            beginMonitoring(in: webView)
+            originalNavigation = webView.load(URLRequest(url: originalURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25))
+            activeNavigation = originalNavigation
+        }
+
+        /// One overall deadline covers redirects, HTTP 200 shells and tiles.
+        /// Keeping monitoring separate also permits a network-free empty-shell gate.
+        func beginMonitoring(in webView: WKWebView) {
+            guard deadlineTask == nil, phase != .disposed else { return }
+            let id = generation
+            let timeout = timeout
+            deadlineTask = Task { @MainActor [weak self, weak webView] in
+                do { try await Task.sleep(for: timeout) } catch { return }
+                guard let self, let webView, self.generation == id else { return }
+                self.fail(webView)
+            }
+        }
+
+        func invalidate() {
+            generation = UUID()
+            phase = .disposed
+            deadlineTask?.cancel()
+            pollingTask?.cancel()
+            deadlineTask = nil
+            pollingTask = nil
+            activeNavigation = nil
+            originalNavigation = nil
+            serverRedirectNavigation = nil
+            convertedNavigation = nil
+        }
+
+        private func fail(_ webView: WKWebView) {
+            guard phase != .disposed, phase != .failed else { return }
+            phase = .failed
+            generation = UUID()
+            deadlineTask?.cancel()
+            pollingTask?.cancel()
+            deadlineTask = nil
+            pollingTask = nil
+            webView.stopLoading()
+            failed.wrappedValue = true
+        }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            guard phase != .disposed else { return }
+            activeNavigation = navigation
+            serverRedirectNavigation = nil
+        }
+
+        func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) {
+            guard phase == .resolvingWGS, let navigation, let originalNavigation,
+                  navigation === originalNavigation, navigation === activeNavigation else { return }
+            serverRedirectNavigation = navigation
+        }
+
+        var hasOriginalServerRedirect: Bool {
+            guard let activeNavigation, let originalNavigation, let serverRedirectNavigation else { return false }
+            return activeNavigation === originalNavigation && serverRedirectNavigation === originalNavigation
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
+            guard phase != .disposed, phase != .failed else { decisionHandler(.cancel); return }
+            let url = navigationAction.request.url
+            let mainFrame = navigationAction.targetFrame?.isMainFrame == true
+            let userInitiated = navigationAction.navigationType == .linkActivated
+            var allowed = navigationAction.targetFrame != nil &&
+                SaveInkMapPolicy.permitsWebNavigation(url, userInitiated: userInitiated)
+            if mainFrame {
+                if phase == .resolvingWGS {
+                    let verifiedRedirect = hasOriginalServerRedirect && url.flatMap {
+                        SaveInkMapPolicy.amapEmbedFromWGS84Redirect($0, original: originalURL)
+                    } != nil
+                    allowed = allowed && (url == originalURL || verifiedRedirect)
+                } else { allowed = allowed && SaveInkMapPolicy.isAmapEmbed(url) }
+            }
+            if !allowed, blockedNavigationLocations.count < 8, let url {
+                blockedNavigationLocations.append((url.host ?? url.scheme ?? "unknown") + String(url.path.prefix(120)))
+            }
+            decisionHandler(allowed ? .allow : .cancel)
+            if !allowed, mainFrame, !userInitiated, phase != .ready { fail(webView) }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                     decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
+            guard phase != .disposed, phase != .failed else { decisionHandler(.cancel); return }
+            if let response = navigationResponse.response as? HTTPURLResponse, response.statusCode >= 400 {
+                decisionHandler(.cancel)
+                fail(webView)
+                return
+            }
+            if navigationResponse.isForMainFrame {
+                let responseURL = navigationResponse.response.url
+                if phase == .resolvingWGS, hasOriginalServerRedirect, let responseURL,
+                   let embed = SaveInkMapPolicy.amapEmbedFromWGS84Redirect(responseURL, original: originalURL) {
+                    // A server redirect can bypass navigation-action policy. Its
+                    // actual original-navigation callback is required before the
+                    // response URL may become transient provider coordinates.
+                    convertedNavigation = activeNavigation
+                    serverRedirectNavigation = nil
+                    phase = .embedding
+                    decisionHandler(.cancel)
+                    activeNavigation = webView.load(URLRequest(url: embed, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25))
+                    return
+                }
+                let expected = phase == .resolvingWGS ? responseURL == originalURL : SaveInkMapPolicy.isAmapEmbed(responseURL)
+                guard expected else {
+                    decisionHandler(.cancel)
+                    fail(webView)
+                    return
+                }
+            }
+            decisionHandler(.allow)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard phase == .embedding, pollingTask == nil else { return }
+            let id = generation
+            let probe = readinessProbe
+            pollingTask = Task { @MainActor [weak self, weak webView] in
+                while !Task.isCancelled {
+                    guard let webView else { return }
+                    let ready = await probe(webView)
+                    guard !Task.isCancelled, let self, self.generation == id, self.phase == .embedding else { return }
+                    if ready {
+                        self.phase = .ready
+                        self.deadlineTask?.cancel()
+                        self.deadlineTask = nil
+                        return
+                    }
+                    do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                }
+            }
+        }
+
+        private func navigationFailed(_ webView: WKWebView, navigation: WKNavigation?, error: Error) {
+            // Ignore only the verified WGS -> embed transition's cancellation.
+            // Other cancelled/failed navigations still reach the unavailable state.
+            // Response-policy cancellation can report WebKit's documented legacy
+            // FrameLoadInterruptedByPolicyChange (102), rather than URL error -999.
+            let failure = error as NSError
+            let cancelled = (failure.domain == NSURLErrorDomain && failure.code == NSURLErrorCancelled) ||
+                (failure.domain == "WebKitErrorDomain" && failure.code == 102)
+            if let navigation, let convertedNavigation, navigation === convertedNavigation,
+               cancelled {
+                self.convertedNavigation = nil
+                return
+            }
+            fail(webView)
+        }
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            navigationFailed(webView, navigation: navigation, error: error)
+        }
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            navigationFailed(webView, navigation: navigation, error: error)
+        }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { fail(webView) }
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { nil }
+        func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                     initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
+                     decisionHandler: @escaping @MainActor (WKPermissionDecision) -> Void) { decisionHandler(.deny) }
+        func webView(_ webView: WKWebView, requestDeviceOrientationAndMotionPermissionFor origin: WKSecurityOrigin,
+                     initiatedByFrame frame: WKFrameInfo,
+                     decisionHandler: @escaping @MainActor (WKPermissionDecision) -> Void) { decisionHandler(.deny) }
+    }
+}
+
+/// WGS84-only Apple renderer. Ink pins and a light paper wash remain unchanged.
+private struct SaveInkAppleLiveMap: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     var places: [SaveInkPlace]
     var userCoordinate: CLLocationCoordinate2D?
@@ -780,8 +1169,8 @@ struct SaveInkLiveMap: View {
                 .stroke(SaveInkPalette.ink, lineWidth: 2)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(focusPlaceID == nil ? "ink.home.map" : "ink.place.map")
-        .accessibilityLabel(focusPlaceID == nil ? languageSettings.localized(english: "Saved places map", traditionalChinese: "已存地點地圖") : languageSettings.localized(english: "Walking map", traditionalChinese: "步行地圖"))
+        .accessibilityIdentifier("ink.place.map")
+        .accessibilityLabel(languageSettings.localized(english: "Walking map", traditionalChinese: "步行地圖"))
         .onAppear(perform: fit)
         .onChange(of: cameraToken) { _, _ in fit() }
         .task(id: routeToken) { await loadRoute() }
@@ -841,11 +1230,9 @@ struct SaveInkLiveMap: View {
     }
 
     private static func coordinate(of place: SaveInkPlace) -> CLLocationCoordinate2D? {
-        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return nil }
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
-        guard coordinate.latitude != 0 || coordinate.longitude != 0 else { return nil }
-        return coordinate
+        guard let reference = SaveInkMapPolicy.reference(for: place),
+              reference.coordinateSystem == .wgs84 else { return nil }
+        return CLLocationCoordinate2D(latitude: reference.latitude, longitude: reference.longitude)
     }
 
     private struct Pin: Identifiable {
@@ -871,11 +1258,9 @@ enum SaveInkAppleMaps {
     }
 
     private static func coordinate(of place: SaveInkPlace) -> CLLocationCoordinate2D? {
-        guard let latitude = place.shopLatitude, let longitude = place.shopLongitude else { return nil }
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        guard CLLocationCoordinate2DIsValid(coordinate) else { return nil }
-        guard latitude != 0 || longitude != 0 else { return nil }
-        return coordinate
+        guard let reference = SaveInkMapPolicy.reference(for: place),
+              reference.coordinateSystem == .wgs84 else { return nil }
+        return CLLocationCoordinate2D(latitude: reference.latitude, longitude: reference.longitude)
     }
 }
 

@@ -17,8 +17,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour",
             "--uitest-repair-review-demo-seed", "--savvy-ink-skip-welcome",
+            "--uitest-force-light",
             "--savvy-ink-suite=\(suite)", "-AppleLanguages", "(en, zh-Hant)"
-        ])
+        ], launchEnvironment: ["SAVE_CAPTURE_ENGLISH_ENTRY": "1"])
+        try signedInInkHome(app)
+        // Export the paper entry screens with their normal dark status bar,
+        // then force dark iOS appearance for the notebook contrast regression.
+        terminate(app)
+        app.launchArguments.removeAll { $0 == "--uitest-force-light" }
+        app.launchArguments.append("--uitest-force-dark")
         try signedInInkHome(app)
         XCTAssertTrue(app.staticTexts["Places nearby"].exists)
         app.buttons["ink.passport.entry"].tap()
@@ -45,9 +52,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["ink.language.option.en"].tap()
         XCTAssertTrue(app.staticTexts["Choose Language"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "language-options-en")
+        app.buttons["ink.language.close"].tap()
+        terminate(app)
+        let systemLanguagesIndex = try XCTUnwrap(app.launchArguments.firstIndex(of: "-AppleLanguages")) + 1
+        app.launchArguments[systemLanguagesIndex] = "(zh-Hant, en)"
+        try signedInInkHome(app)
+        XCTAssertTrue(app.staticTexts["Places nearby"].exists, "Explicit English must persist even when iOS prefers Chinese")
+        app.buttons["ink.passport.entry"].tap()
+        app.buttons["ink.passport.language"].tap()
+        XCTAssertTrue(app.buttons["ink.language.option.en"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["ink.language.option.en"].isSelected)
         app.buttons["ink.language.option.system"].tap()
         XCTAssertTrue(app.buttons["ink.language.option.system"].isSelected)
+        XCTAssertTrue(app.staticTexts["選擇語言"].waitForExistence(timeout: stepTimeout))
         app.buttons["ink.language.close"].tap()
+        terminate(app)
+        try signedInInkHome(app)
+        XCTAssertTrue(app.staticTexts["附近值得去的"].exists, "Follow iOS must persist after relaunch")
+        app.buttons["ink.passport.entry"].tap()
+        app.buttons["ink.passport.language"].tap()
+        XCTAssertTrue(app.buttons["ink.language.option.system"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["ink.language.option.system"].isSelected)
+        app.buttons["ink.language.close"].tap()
+        terminate(app)
+        app.launchArguments[systemLanguagesIndex] = "(en, zh-Hant)"
+        try signedInInkHome(app)
+        XCTAssertTrue(app.staticTexts["Places nearby"].exists, "Persisted Follow iOS must react to a changed iOS language")
+        app.buttons["ink.passport.entry"].tap()
         XCTAssertTrue(app.staticTexts["My Passport"].exists)
         attach(app, name: "language-passport-en")
         let savedPlace = app.buttons["ink.passport.place.qingtian"]
@@ -55,6 +86,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(savedPlace.label.contains("Saved"))
         savedPlace.tap()
         XCTAssertTrue(app.descendants(matching: .any)["ink.place"].waitForExistence(timeout: stepTimeout))
+        for value in ["0 visits", "1 friend", "—"] {
+            let label = app.staticTexts[value]
+            XCTAssertTrue(label.waitForExistence(timeout: stepTimeout))
+            try assertReadableLabel(label)
+        }
+        attach(app, name: "language-detail-en-dark-appearance")
         app.buttons["ink.back"].tap()
         XCTAssertTrue(app.staticTexts["My Passport"].waitForExistence(timeout: stepTimeout))
         app.buttons["ink.back"].tap()
@@ -254,7 +291,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             let findFriends = app.buttons["friends.findFriends"]
             XCTAssertTrue(findFriends.isHittable)
             XCTAssertEqual(findFriends.label, language == "en" ? "Find friends" : "追蹤朋友")
-            try assertReadableButtonLabel(findFriends)
+            try assertReadableLabel(findFriends)
             findFriends.tap()
             XCTAssertTrue(app.descendants(matching: .any)["profile.connections.root"].waitForExistence(timeout: stepTimeout))
             app.buttons["profile.connections.back"].tap()
@@ -326,8 +363,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Accessibility can still expose a label painted in the same color as its
     /// fill. Sample the rendered center, excluding rounded edges and shadows.
     @MainActor
-    private func assertReadableButtonLabel(_ button: XCUIElement) throws {
-        let image = try XCTUnwrap(button.screenshot().image.cgImage)
+    private func assertReadableLabel(_ element: XCUIElement) throws {
+        let image = try XCTUnwrap(element.screenshot().image.cgImage)
         let center = CGRect(x: CGFloat(image.width) * 0.2, y: CGFloat(image.height) * 0.25,
                             width: CGFloat(image.width) * 0.6, height: CGFloat(image.height) * 0.5)
         let crop = try XCTUnwrap(image.cropping(to: center.integral))
@@ -348,7 +385,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let low = luminances[luminances.count / 20]
         let high = luminances[luminances.count * 19 / 20]
         XCTAssertGreaterThanOrEqual((high + 0.05) / (low + 0.05), 4.5,
-            "The visible button label must contrast with its fill, not merely exist in accessibility.")
+            "The visible label must contrast with its fill, not merely exist in accessibility.")
     }
 
     @MainActor
@@ -4821,6 +4858,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             return
         }
 
+        let capturesEntry = app.launchEnvironment["SAVE_CAPTURE_ENGLISH_ENTRY"] == "1"
+        if capturesEntry { attach(app, name: "english-sign-in") }
         typeText("appreview@wanderly.app", into: emailField)
         dismissKeyboard(app: app)
 
@@ -4833,6 +4872,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         let codeField = app.textFields["signin.codeField"]
         XCTAssertTrue(codeField.waitForExistence(timeout: stepTimeout))
+        if capturesEntry {
+            attach(app, name: "english-verification-code")
+            app.launchEnvironment.removeValue(forKey: "SAVE_CAPTURE_ENGLISH_ENTRY")
+        }
         typeText("424242", into: codeField)
         dismissKeyboard(app: app)
 
