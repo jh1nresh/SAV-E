@@ -126,4 +126,3 @@ Uncompressed per-variant budget is **15 MB** until the Clip
 deployment-target / physical-invocation question is settled (Z1). Ship
 only the Clip catalog, Caveat, the Clip Iansui title subset, and vector
 stickers drawn in SwiftUI.
-
