@@ -33,6 +33,19 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(model.profile.id, UserProfile.empty.id)
         XCTAssertNil(model.profile.email)
         XCTAssertNotNil(model.errorMessage)
+
+        let configured = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: "https://example.invalid"),
+            avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("read-only-avatars")),
+            saveLocalVaultService: vault,
+            fetchProfileRemotely: { _ in self.profile(named: "Account A") },
+            currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
+        )
+        await configured.loadPassportIdentity()
+        XCTAssertEqual(configured.identityOwnerID, "account-a")
+        XCTAssertEqual(configured.profile.displayName, "Account A")
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent(), intent)
+        XCTAssertEqual(try Data(contentsOf: vaultURL), bytes)
     }
 
     @MainActor
