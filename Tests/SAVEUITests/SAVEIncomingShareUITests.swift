@@ -126,6 +126,38 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     }
 
     @MainActor
+    func testIncomingPlaceSurvivesAnExistingLanguageSheet() {
+        let app = fixture("existing-modal")
+        let language = app.buttons["ink.passport.language"]
+        XCTAssertTrue(language.waitForExistence(timeout: launchTimeout))
+        language.tap()
+        let close = app.buttons["ink.language.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout))
+        XCUIDevice.shared.system.open(firstURL)
+        if close.exists, close.isHittable { close.tap() }
+        waitForReceipt(app, name: "Fixture place A")
+        capture(app, name: "incoming-share-after-language-sheet")
+        app.buttons["Done"].tap()
+        assertJournal(app, pending: false, saves: 0)
+    }
+
+    @MainActor
+    func testIncomingPlaceSurvivesAnExistingParentAlert() {
+        let app = fixture("existing-alert")
+        let trigger = app.buttons["incoming.fixture.alert"]
+        XCTAssertTrue(trigger.waitForExistence(timeout: launchTimeout))
+        trigger.tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCUIDevice.shared.system.open(firstURL)
+        let alert = app.alerts.firstMatch
+        if alert.exists, alert.isHittable { alert.buttons.firstMatch.tap() }
+        waitForReceipt(app, name: "Fixture place A")
+        capture(app, name: "incoming-share-after-alert")
+        app.buttons["Done"].tap()
+        assertJournal(app, pending: false, saves: 0)
+    }
+
+    @MainActor
     func testChineseReceiptKeepsSourceTextAndLargeTypeActions() {
         let app = fixture("clip", extra: [
             "--uitest-incoming-share-zh",

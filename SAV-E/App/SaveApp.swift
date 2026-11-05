@@ -249,7 +249,8 @@ struct SaveApp: App {
                 requiresShareConfirmation: $requiresShareConfirmation,
                 requiresListConfirmation: $requiresListConfirmation,
                 pendingClipListSave: $pendingClipListSave,
-                requestID: $incomingShareRequestID
+                requestID: $incomingShareRequestID,
+                showParentAlert: { linkErrorMessage = "Synthetic existing alert" }
             )
         } else if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()

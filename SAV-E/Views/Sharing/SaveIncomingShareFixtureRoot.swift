@@ -23,6 +23,7 @@ struct SaveIncomingShareFixtureRoot: View {
     @Binding var requiresListConfirmation: Bool
     @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var requestID: UUID
+    let showParentAlert: () -> Void
     @StateObject private var language = AppLanguageSettings(userDefaults: Self.defaults, preferredLanguages: { ["en"] })
     @State private var verified = false
     @State private var prepared = false
@@ -34,7 +35,7 @@ struct SaveIncomingShareFixtureRoot: View {
     var body: some View {
         Group {
             if verified {
-                SaveInkNotebookRoot(launch: .preview(.main))
+                SaveInkNotebookRoot(launch: .preview(Self.scenario == "existing-modal" ? .passport : .main))
                     .modifier(SaveIncomingShareHost(
                         incomingPlaceReceipt: $incomingPlaceReceipt,
                         requiresShareConfirmation: $requiresShareConfirmation,
@@ -82,6 +83,11 @@ struct SaveIncomingShareFixtureRoot: View {
                             Text("Saves: \(saves)").accessibilityIdentifier("incoming.fixture.saves")
                             Text(PendingShareStore.load(from: Self.defaults) == nil ? "Journal: none" : "Journal: pending")
                                 .accessibilityIdentifier("incoming.fixture.journal")
+                            if Self.scenario == "existing-alert" {
+                                Button("Show synthetic alert", action: showParentAlert)
+                                    .frame(minHeight: 44)
+                                    .accessibilityIdentifier("incoming.fixture.alert")
+                            }
                         }
                         .font(SaveInkType.aux)
                         .foregroundStyle(SaveInkPalette.ink)
