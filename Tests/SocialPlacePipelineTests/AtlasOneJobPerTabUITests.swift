@@ -76,20 +76,22 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertEqual(components.queryItems?.first(where: { $0.name == "status" })?.value, "visited")
     }
 
-    func testPrimaryLoadingSurfacesShareTheAtlasLoadingCard() throws {
+    func testLegacyLoadingSurfacesAndActiveShareReceiptKeepLoadingStates() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
-        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let receipt = try source(at: "SAV-E/Views/Sharing/FriendShareReceiptView.swift")
         let trips = try source(at: "SAV-E/Legacy/Views/Trips/TripPackViews.swift")
         let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
 
         XCTAssertTrue(theme.contains("struct SaveAtlasLoadingCard"))
         XCTAssertTrue(theme.contains("SavePostcardPerforatedMedallion"))
-        XCTAssertTrue(content.contains("friendShareReceipt.loading"))
+        XCTAssertTrue(receipt.contains("friendShareReceipt.loading"))
+        XCTAssertTrue(receipt.contains("SaveInkPalette.paper"))
+        XCTAssertFalse(receipt.contains("SaveAtlasLoadingCard"))
         XCTAssertTrue(trips.contains("trips.loading"))
         XCTAssertTrue(drawer.contains("drawer.loading.card"))
         XCTAssertTrue(drawer.contains("drawer.loading.cancel"))
         XCTAssertFalse(trips.contains("ProgressView(localized(\"Loading Trip Packs"))
-        XCTAssertFalse(content.contains("Text(localized(\"Verifying this share receipt"))
+        XCTAssertFalse(receipt.contains("Text(localized(\"Verifying this share receipt"))
     }
 
     func testLiveHomeLeadsWithSavedPlacesAndKeepsSecondaryManagement() throws {

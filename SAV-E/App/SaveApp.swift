@@ -72,12 +72,13 @@ struct SaveApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(
         "pendingFriendShareURL",
-        store: UserDefaults(suiteName: "group.com.wanderly.app")
+        store: SaveApp.incomingShareDefaults
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @State private var requiresShareConfirmation = false
     @State private var requiresListConfirmation = false
     @State private var pendingClipListSave: SaveCollaborativeList?
+    @State private var incomingShareRequestID = UUID()
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
@@ -109,6 +110,13 @@ struct SaveApp: App {
     private let supabaseService = SupabaseService.shared
     private let pendingImportService = PendingPlaceImportService.shared
     private let accountScopedURLMaxBytes = 8 * 1024
+
+    private static var incomingShareDefaults: UserDefaults? {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveIncomingShareFixtureRoot.defaults }
+#endif
+        return UserDefaults(suiteName: "group.com.wanderly.app")
+    }
 
     private var minimumOpeningAnimationDuration: UInt64 {
 #if DEBUG
@@ -235,7 +243,15 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if photoAttributionEvidenceActive {
+        if SaveIncomingShareFixtureRoot.isEnabled {
+            SaveIncomingShareFixtureRoot(
+                incomingPlaceReceipt: $incomingPlaceReceipt,
+                requiresShareConfirmation: $requiresShareConfirmation,
+                requiresListConfirmation: $requiresListConfirmation,
+                pendingClipListSave: $pendingClipListSave,
+                requestID: $incomingShareRequestID
+            )
+        } else if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()
         } else if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
@@ -306,6 +322,11 @@ struct SaveApp: App {
                     sessionOrigin: authService.sessionOrigin,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
+                    pendingClipListSave: $pendingClipListSave,
+                    incomingShareRequestID: $incomingShareRequestID,
                     onVerificationChanged: updateVerifiedAccount
                 )
                     .environmentObject(authService)
@@ -336,6 +357,18 @@ struct SaveApp: App {
         minimumOpeningAnimationCompleted = true
     }
 
+    /// A new accepted link replaces only transient presentation. Its predecessor's
+    /// durable Clip journal is acknowledged only by a matching confirmed save.
+    private func prepareIncomingLink() {
+        incomingShareRequestID = UUID()
+        incomingPlaceReceipt = nil
+        requiresShareConfirmation = false
+        requiresListConfirmation = false
+        pendingClipListSave = nil
+        deferredAccountScopedLink = nil
+        accountScopedURLProcessingID = nil
+    }
+
     private func handleIncomingURL(_ url: URL) {
 #if DEBUG
         if SaveSmokeHarness.isSmokeURL(url) {
@@ -345,10 +378,10 @@ struct SaveApp: App {
 #endif
         if SaveSharedListPayload.isListLink(url) {
             guard let accepted = ClipListHandoff.acceptedListURL(
-                pending: PendingShareStore.load(),
+                pending: PendingShareStore.load(from: Self.incomingShareDefaults),
                 incomingURL: url
             ) else { return }
-            requiresShareConfirmation = false
+            prepareIncomingLink()
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: accepted,
@@ -361,7 +394,7 @@ struct SaveApp: App {
 
         if SaveReferralLink.target(from: url) != nil {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
-            requiresShareConfirmation = false
+            prepareIncomingLink()
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
@@ -373,6 +406,7 @@ struct SaveApp: App {
         }
 
         if isPlaceLink(url) {
+            prepareIncomingLink()
             guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
                 pendingFriendShareURL = ""
                 // A malformed new link does not acknowledge an existing intent.
@@ -382,7 +416,7 @@ struct SaveApp: App {
             pendingFriendShareURL = url.absoluteString
             requiresListConfirmation = false
             requiresShareConfirmation = ClipPlaceHandoff.shouldConfirmPlace(
-                pending: PendingShareStore.load(),
+                pending: PendingShareStore.load(from: Self.incomingShareDefaults),
                 incomingURL: url
             )
             if let place = SharedPlaceData.from(url: url) {
@@ -396,6 +430,7 @@ struct SaveApp: App {
         }
 
         if isTripLink(url), let trip = SharedTripData.from(url: url) {
+            prepareIncomingLink()
             openedTrip = trip
             return
         }
@@ -418,6 +453,10 @@ struct SaveApp: App {
 
     @MainActor
     private func handleAccountGenerationChange(_ generation: Int) {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return }
+#endif
+        incomingShareRequestID = UUID()
         let previousUserId = lastAccountUserId
         let currentUserId = authService.currentUserId
         lastAccountUserId = currentUserId
@@ -560,10 +599,13 @@ struct SaveApp: App {
     /// it; live list changes must not add or remove selected places.
     private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) {
         if let stamp = ClipListHandoff.stampList(
-            pending: PendingShareStore.load(),
+            pending: PendingShareStore.load(from: Self.incomingShareDefaults),
             incomingURL: incomingURL,
             joined: list
         ) {
+            incomingShareRequestID = UUID()
+            incomingPlaceReceipt = nil
+            requiresShareConfirmation = false
             requiresListConfirmation = true
             pendingClipListSave = stamp
             openedList = nil
@@ -645,11 +687,14 @@ struct SaveApp: App {
     }
 
     private func restorePendingShare() {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return }
+#endif
         if lastAccountUserId == nil {
             lastAccountUserId = authService.currentUserId
         }
         guard incomingPlaceReceipt == nil else { return }
-        if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
+        if let payload = PendingShareStore.load(from: Self.incomingShareDefaults), let url = URL(string: payload.url) {
             handleIncomingURL(url)
             return
         }
@@ -730,6 +775,11 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
+    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var requiresShareConfirmation: Bool
+    @Binding var requiresListConfirmation: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
+    @Binding var incomingShareRequestID: UUID
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
 
     @State private var isRebindConfirmationPresented = false
@@ -780,6 +830,22 @@ private struct AuthenticatedRootView: View {
 
     private var verifiedAccountContent: some View {
         SaveInkNotebookRoot()
+            .modifier(SaveIncomingShareHost(
+                incomingPlaceReceipt: $incomingPlaceReceipt,
+                requiresShareConfirmation: $requiresShareConfirmation,
+                requiresListConfirmation: $requiresListConfirmation,
+                pendingClipListSave: $pendingClipListSave,
+                requestID: $incomingShareRequestID,
+                session: SaveIncomingShareSession(owner: authService.currentUserId ?? "", generation: sessionGeneration),
+                currentSession: {
+                    guard case .authenticated = authService.authState,
+                          case .verified(let generation) = accountGate.state,
+                          generation == sessionGeneration,
+                          authService.sessionGeneration == generation,
+                          let owner = authService.currentUserId else { return nil }
+                    return SaveIncomingShareSession(owner: owner, generation: generation)
+                }
+            ))
             .onAppear(perform: claimPendingOnboardingClueIfNeeded)
     }
 
