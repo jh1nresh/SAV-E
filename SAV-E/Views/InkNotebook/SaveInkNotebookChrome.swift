@@ -996,14 +996,20 @@ struct SaveInkAmapWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                      decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
+            handleResponse(navigationResponse.response, isForMainFrame: navigationResponse.isForMainFrame,
+                           in: webView, decisionHandler: decisionHandler)
+        }
+
+        func handleResponse(_ response: URLResponse, isForMainFrame: Bool, in webView: WKWebView,
+                            decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
             guard phase != .disposed, phase != .failed else { decisionHandler(.cancel); return }
-            if let response = navigationResponse.response as? HTTPURLResponse, response.statusCode >= 400 {
+            if let response = response as? HTTPURLResponse, response.statusCode >= 400 {
                 decisionHandler(.cancel)
                 fail(webView)
                 return
             }
-            if navigationResponse.isForMainFrame {
-                let responseURL = navigationResponse.response.url
+            if isForMainFrame {
+                let responseURL = response.url
                 if phase == .resolvingWGS, hasOriginalServerRedirect, let responseURL,
                    let embed = SaveInkMapPolicy.amapEmbedFromWGS84Redirect(responseURL, original: originalURL) {
                     // A server redirect can bypass navigation-action policy. Its

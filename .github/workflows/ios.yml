@@ -26,6 +26,11 @@ on:
         required: false
         default: ""
         type: string
+      capture_live_maps:
+        description: "Also verify public Amap routes and export real WebKit screenshots (external network required)."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -378,6 +383,83 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
+
+      - name: Verify live destination maps
+        if: steps.scope.outputs.run == 'true' && github.event_name == 'workflow_dispatch' && inputs.capture_live_maps
+        timeout-minutes: 10
+        env:
+          SOURCE_XCTESTRUN: ${{ steps.products.outputs.xctestrun }}
+          SIM_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          # Keep the normal unit/UI products and environment unchanged. Only
+          # this explicit proof run admits external public map requests.
+          export AMAP_XCTESTRUN="$(dirname "$SOURCE_XCTESTRUN")/SAVE-Amap-Proof.xctestrun"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import plistlib
+
+          source = pathlib.Path(os.environ["SOURCE_XCTESTRUN"])
+          data = plistlib.loads(source.read_bytes())
+          injected = []
+          def inject(node):
+              if isinstance(node, dict):
+                  if "TestBundlePath" in node:
+                      injected.append(node["TestBundlePath"])
+                      for key in ("EnvironmentVariables", "TestingEnvironmentVariables"):
+                          node.setdefault(key, {})["SAVE_AMAP_CAPTURE"] = "1"
+                  for value in node.values():
+                      inject(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      inject(value)
+          inject(data)
+          assert any("SAVETests" in str(path) for path in injected), "No unit-test host received the live capture environment"
+          pathlib.Path(os.environ["AMAP_XCTESTRUN"]).write_bytes(plistlib.dumps(data))
+          PY
+          scripts/xcodebuild-clean.sh \
+            -xctestrun "$AMAP_XCTESTRUN" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 90 \
+            -maximum-test-execution-time-allowance 90 \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapDestinationCountryLookupForOptionalNetworkCapture \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapOfficialEmbedRendersForOptionalNetworkCapture \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapRawGCJEmbedRendersForOptionalNetworkCapture \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapWGS84MarkerRendersForOptionalNetworkCapture \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult" \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+            test-without-building
+          xcrun xcresulttool get test-results summary \
+            --path "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult" > "$RUNNER_TEMP/SAVE-Amap-Proof-Summary.json"
+          python3 - "$RUNNER_TEMP/SAVE-Amap-Proof-Summary.json" <<'PY'
+          import json
+          import sys
+          result = json.load(open(sys.argv[1]))
+          assert result.get("passedTests") == 4 and result.get("failedTests") == 0 and result.get("skippedTests") == 0, result
+          PY
+
+      - name: Export live map proof
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.capture_live_maps
+        run: |
+          if [[ -f "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult/Info.plist" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-Amap-Proof-Attachments"
+          fi
+
+      - name: Upload live map proof
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.capture_live_maps
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-live-map-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/SAVE-Amap-Proof.xcresult
+            ${{ runner.temp }}/SAVE-Amap-Proof-Attachments
+            ${{ runner.temp }}/SAVE-Amap-Proof-Summary.json
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Reset focused simulator before UI tests
         if: steps.scope.outputs.ui == 'true'

@@ -1674,12 +1674,12 @@ final class SaveInkNotebookTests: XCTestCase {
         let original = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
         let web = SaveInkAmapNavigationStub()
         let coordinator = SaveInkAmapWebView.Coordinator(failed: .constant(false), originalURL: original)
-        defer { coordinator.invalidate() }
+        defer { coordinator.invalidate(); web.stopLoading() }
         coordinator.start(in: web)
-        let initial = web.navigation
+        let initial = try XCTUnwrap(web.navigation)
         coordinator.webView(web, didStartProvisionalNavigation: initial)
         XCTAssertFalse(coordinator.hasOriginalServerRedirect)
-        let other = WKNavigation()
+        let other = try XCTUnwrap(web.makeNavigation())
         coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: other)
         XCTAssertFalse(coordinator.hasOriginalServerRedirect, "A different navigation cannot supply provider conversion provenance")
         coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: initial)
@@ -1694,6 +1694,51 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(coordinator.hasOriginalServerRedirect)
     }
 
+    func testAmapVerifiedConversionIgnoresOnlyItsPolicyCancellation() throws {
+        let original = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
+        let redirected = try XCTUnwrap(URL(string: "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Public&src=savvy&callnative=0&innersrc=u"))
+        let response = try XCTUnwrap(HTTPURLResponse(url: redirected, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil))
+        let cases: [(String, Int, Bool, Bool)] = [
+            ("WebKitErrorDomain", 102, true, false),
+            (NSURLErrorDomain, NSURLErrorCancelled, true, false),
+            ("WebKitErrorDomain", 102, false, true),
+            ("OtherDomain", 102, true, true),
+            ("WebKitErrorDomain", 101, true, true)
+        ]
+        for (domain, code, sameNavigation, shouldFail) in cases {
+            var failed = false
+            let web = SaveInkAmapNavigationStub()
+            let coordinator = SaveInkAmapWebView.Coordinator(
+                failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: original)
+            defer { coordinator.invalidate(); web.stopLoading() }
+            coordinator.start(in: web)
+            let originalNavigation = try XCTUnwrap(web.navigation)
+            coordinator.webView(web, didStartProvisionalNavigation: originalNavigation)
+            coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: originalNavigation)
+            var cancelled = false
+            coordinator.handleResponse(response, isForMainFrame: true, in: web) { cancelled = $0 == .cancel }
+            XCTAssertTrue(cancelled, "The verified redirect must actually enter the response-policy conversion")
+            XCTAssertFalse(failed)
+            let embedNavigation = try XCTUnwrap(web.navigation)
+            XCTAssertFalse(embedNavigation === originalNavigation, "Conversion starts a distinct embed navigation")
+            coordinator.webView(web, didFailProvisionalNavigation: sameNavigation ? originalNavigation : embedNavigation,
+                                withError: NSError(domain: domain, code: code))
+            XCTAssertEqual(failed, shouldFail, "domain=\(domain) code=\(code) sameNavigation=\(sameNavigation)")
+            if !shouldFail {
+                coordinator.webView(web, didFail: originalNavigation, withError: NSError(domain: domain, code: code))
+                XCTAssertTrue(failed, "The conversion exception must be consumed once")
+            }
+        }
+        var failed = false
+        let web = SaveInkAmapNavigationStub()
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: original)
+        defer { coordinator.invalidate(); web.stopLoading() }
+        coordinator.start(in: web)
+        coordinator.webView(web, didFailProvisionalNavigation: nil, withError: NSError(domain: "WebKitErrorDomain", code: 102))
+        XCTAssertTrue(failed, "A cancellation without verified conversion provenance must fail")
+    }
+
     func testAmapActualHTTP200ShellStillNeedsSemanticMap() async throws {
         let fixture = try SaveInkHTTP200MapFixture()
         defer { fixture.stop() }
@@ -1701,7 +1746,7 @@ final class SaveInkNotebookTests: XCTestCase {
             if fixture.port != nil { break }
             try await Task.sleep(for: .milliseconds(20))
         }
-        let port = try XCTUnwrap(fixture.port, "Loopback HTTP fixture must become ready")
+        let port = try XCTUnwrap(fixture.port, "Loopback HTTP fixture must become ready: \(fixture.listenerState)")
         let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/map-shell"))
         var failed = false
         let web = WKWebView()
@@ -1724,13 +1769,14 @@ final class SaveInkNotebookTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(20))
         }
         let body = (try? await web.evaluateJavaScript("document.body ? document.body.innerText : ''")) as? String
-        let diagnostics = "successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
+        let diagnostics = "listener=\(fixture.listenerState) successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
         let attachment = XCTAttachment(string: diagnostics)
         attachment.name = "ink-amap-http200-fixture-diagnostics"
         attachment.lifetime = .keepAlways
         add(attachment)
         try diagnostics.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("ink-amap-http200-fixture-diagnostics.txt"), atomically: true, encoding: .utf8)
         XCTAssertNil(observer.error)
+        XCTAssertGreaterThan(fixture.responseSentCount, 0, diagnostics)
         XCTAssertEqual(observer.statusCode, 200, diagnostics)
         XCTAssertTrue(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true, "The intended loopback HTML must actually be loaded")
         XCTAssertTrue(observer.finished, "An actual HTTP 200 HTML document must finish before testing render semantics")
@@ -1833,7 +1879,7 @@ final class SaveInkNotebookTests: XCTestCase {
         if outside == "TW" { XCTAssertEqual(SaveInkMapPolicy.display(for: taipei, countryCode: outside), .apple) }
     }
 
-    /// Explicit local verification only: normal CI stays deterministic and does
+    /// Explicit live verification only: normal CI stays deterministic and does
     /// not depend on an external map's network. The attachment is the actual
     /// WKWebView snapshot, not a drawn map fixture or a URL-success assertion.
     func testAmapOfficialEmbedRendersForOptionalNetworkCapture() async throws {
@@ -4459,8 +4505,16 @@ final class SaveInkNotebookTests: XCTestCase {
 
 @MainActor
 private final class SaveInkAmapNavigationStub: WKWebView {
-    let navigation = WKNavigation()
-    override func load(_ request: URLRequest) -> WKNavigation? { navigation }
+    private(set) var navigation: WKNavigation?
+    func makeNavigation() -> WKNavigation? {
+        // WebKit initializes WKNavigation's private storage. Direct init can
+        // crash in dealloc on the CI runtime; this loads only local HTML.
+        super.loadHTMLString("<html><body>Navigation fixture</body></html>", baseURL: nil)
+    }
+    override func load(_ request: URLRequest) -> WKNavigation? {
+        navigation = makeNavigation()
+        return navigation
+    }
 }
 
 /// Loopback-only, deterministic HTTP fixture. It never forwards requests outside
@@ -4473,7 +4527,18 @@ private final class SaveInkHTTP200MapFixture: @unchecked Sendable {
     private var connections: [NWConnection] = []
     private var stopped = false
     private var successfulSends = 0
-    var port: UInt16? { listener.port?.rawValue }
+    private var boundPort: UInt16?
+    private var stateDescription = "not started"
+    var port: UInt16? {
+        lock.lock()
+        defer { lock.unlock() }
+        return boundPort
+    }
+    var listenerState: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return stateDescription
+    }
     var responseSentCount: Int {
         lock.lock()
         defer { lock.unlock() }
@@ -4484,6 +4549,20 @@ private final class SaveInkHTTP200MapFixture: @unchecked Sendable {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
+        listener.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
+            // NWListener.port may expose .any (0) before the socket is bound.
+            // Publish an actual listening port only after the ready callback.
+            let actualPort = self.listener.port?.rawValue
+            self.lock.lock()
+            self.stateDescription = String(describing: state)
+            if case .ready = state, let actualPort, actualPort > 0, !self.stopped {
+                self.boundPort = actualPort
+            } else {
+                self.boundPort = nil
+            }
+            self.lock.unlock()
+        }
         let body = Data("<html><body>\(Self.bodySentinel)</body></html>".utf8)
         let response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
         listener.newConnectionHandler = { [weak self] connection in
