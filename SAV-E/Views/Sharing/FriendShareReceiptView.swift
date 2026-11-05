@@ -197,7 +197,7 @@ struct FriendShareReceiptView: View {
                             .accessibilityIdentifier("friendShareReceipt.saveError")
                     }
 
-                    if let mapsURL = receipt.payload.appleMapsURL {
+                    if let mapsURL = receipt.payload.incomingShareMapURL {
                         SaveInkOutlineButton(title: localized("Open in Maps", "在地圖中打開"), identifier: "friendShareReceipt.openMaps", compact: true) {
                             openURL(mapsURL)
                         }
@@ -244,6 +244,10 @@ struct FriendShareReceiptView: View {
         switch expectedDestination {
         case .embedded(let payload):
             guard activeLoadID == loadID else { return }
+            guard payload.supportsIncomingShareLocationReference else {
+                loadState = .failed(.invalidResponse)
+                return
+            }
             loadState = .loaded(.embedded(payload))
         case .malformed:
             guard activeLoadID == loadID else { return }
@@ -253,6 +257,9 @@ struct FriendShareReceiptView: View {
             do {
                 let receipt = try await resolveReceipt(url)
                 guard !Task.isCancelled, activeLoadID == loadID else { return }
+                guard receipt.payload.supportsIncomingShareLocationReference else {
+                    throw SharedPlaceReceiptError.invalidResponse
+                }
                 loadState = .loaded(receipt)
                 if let code = receipt.code {
                     guard !Task.isCancelled, activeLoadID == loadID else { return }
@@ -339,5 +346,24 @@ struct FriendShareReceiptView: View {
         case .serverUnavailable: return "分享收據暫時無法使用。"
         case .invalidResponse: return "Savvy 無法驗證這張分享收據。"
         }
+    }
+}
+
+extension SharedPlaceData {
+    /// Missing metadata is the existing legacy WGS84 format. An explicit
+    /// unknown reference must not silently become WGS84 during confirmation.
+    var supportsIncomingShareLocationReference: Bool {
+        guard hasValidCoordinate else { return false }
+        if coordinateSystem == nil || coordinateSystem == PlaceCoordinateSystem.wgs84.rawValue { return true }
+        return coordinateSystem == PlaceCoordinateSystem.gcj02.rawValue
+            && locationProvider == PlaceMatchProvider.amap.rawValue
+    }
+
+    var incomingShareMapURL: URL? {
+        guard supportsIncomingShareLocationReference, lat != 0 || lng != 0 else { return nil }
+        if coordinateSystem == nil || coordinateSystem == PlaceCoordinateSystem.wgs84.rawValue { return appleMapsURL }
+        guard let url = Place.validAmapMapURL(from: providerMapUrl),
+              url.user == nil, url.password == nil, url.port == nil || url.port == 443 else { return nil }
+        return url
     }
 }

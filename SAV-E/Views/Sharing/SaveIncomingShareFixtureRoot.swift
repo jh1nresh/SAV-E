@@ -50,7 +50,9 @@ struct SaveIncomingShareFixtureRoot: View {
                             if Self.scenario == "retry", resolutions == 1 {
                                 throw SharedPlaceReceiptError.networkUnavailable
                             }
-                            return .embedded(Self.payload(second: url.lastPathComponent.hasSuffix("-b")))
+                            var payload = Self.payload(second: url.lastPathComponent.hasSuffix("-b"))
+                            if Self.scenario == "unknown-reference" { payload.coordinateSystem = "unsupported-reference" }
+                            return .embedded(payload)
                         },
                         recordReceiptEvent: { _, _, _ in },
                         saveReceipt: { receipt, _ in

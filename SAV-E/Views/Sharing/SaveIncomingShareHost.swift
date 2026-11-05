@@ -155,6 +155,7 @@ struct SaveIncomingShareHost: ViewModifier {
         journal: PendingSharePayload?, token: UUID, owner: SaveIncomingShareSession
     ) async throws -> SharedPlaceSaveOutcome {
         try requireCurrent(token, owner: owner)
+        guard receipt.payload.supportsIncomingShareLocationReference else { throw SharedPlaceReceiptError.invalidResponse }
         guard incomingPlaceReceipt?.id == destination.id else { throw CancellationError() }
         let confirmsClip = requiresShareConfirmation
         let selectedJournal = ClipPlaceHandoff.journalForConfirmation(pending: journal, destination: destination)

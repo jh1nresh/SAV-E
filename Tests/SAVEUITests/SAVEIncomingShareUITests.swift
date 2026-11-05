@@ -47,6 +47,16 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     }
 
     @MainActor
+    func testUnsupportedLocationReferenceHasNoSaveAction() {
+        let app = fixture("unknown-reference")
+        XCUIDevice.shared.system.open(firstURL)
+        XCTAssertTrue(app.descendants(matching: .any)["friendShareReceipt.unavailable"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(saveButton(app).exists)
+        app.buttons["Done"].tap()
+        assertJournal(app, pending: false, saves: 0)
+    }
+
+    @MainActor
     func testFailedSaveKeepsTheClipJournal() {
         let app = fixture("failure")
         XCUIDevice.shared.system.open(firstURL)

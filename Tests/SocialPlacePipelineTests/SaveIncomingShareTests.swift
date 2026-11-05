@@ -12,4 +12,49 @@ final class SaveIncomingShareTests: XCTestCase {
         XCTAssertFalse(SaveIncomingShareSession(owner: "", generation: 7).accepts(.init(owner: "", generation: 7)))
     }
 
+    @MainActor
+    func testIncomingShareDoesNotSendProviderCoordinatesToAppleMaps() {
+        var payload = placePayload()
+        XCTAssertTrue(payload.supportsIncomingShareLocationReference)
+        XCTAssertEqual(payload.incomingShareMapURL?.host, "maps.apple.com")
+        payload.coordinateSystem = PlaceCoordinateSystem.wgs84.rawValue
+        XCTAssertEqual(payload.incomingShareMapURL?.host, "maps.apple.com")
+        payload.coordinateSystem = PlaceCoordinateSystem.gcj02.rawValue
+        payload.locationProvider = PlaceMatchProvider.amap.rawValue
+        payload.providerMapUrl = "https://uri.amap.com/marker?position=121.5654,25.033"
+        XCTAssertTrue(payload.supportsIncomingShareLocationReference)
+        XCTAssertEqual(payload.incomingShareMapURL?.host, "uri.amap.com")
+        payload.providerMapUrl = nil
+        XCTAssertNil(payload.incomingShareMapURL, "A missing provider handoff must not fall back to a false Apple point.")
+    }
+
+    @MainActor
+    func testUnknownReferencesAndUnsafeProviderLinksStayUnavailable() {
+        var payload = placePayload()
+        payload.coordinateSystem = "unsupported-reference"
+        XCTAssertFalse(payload.supportsIncomingShareLocationReference)
+        XCTAssertNil(payload.incomingShareMapURL)
+        payload.coordinateSystem = PlaceCoordinateSystem.gcj02.rawValue
+        XCTAssertFalse(payload.supportsIncomingShareLocationReference)
+        payload.locationProvider = PlaceMatchProvider.amap.rawValue
+        for raw in ["https://maps.apple.com/?ll=25.033,121.5654", "http://uri.amap.com/marker", "https://user:password@uri.amap.com/marker"] {
+            payload.providerMapUrl = raw
+            XCTAssertNil(payload.incomingShareMapURL)
+        }
+        let zero = SharedPlaceData(
+            id: "zero", name: "Unlocated fixture", address: "", lat: 0, lng: 0, category: "cafe",
+            rating: nil, reviewCount: nil, priceRange: nil, hours: nil, sourceLabel: "Fixture",
+            sourceURL: nil, photoURLs: [], note: nil
+        )
+        XCTAssertNil(zero.incomingShareMapURL)
+    }
+
+    @MainActor
+    private func placePayload() -> SharedPlaceData {
+        SharedPlaceData(
+            id: "fixture", name: "Fixture place", address: "Synthetic address",
+            lat: 25.033, lng: 121.5654, category: "cafe", rating: nil, reviewCount: nil,
+            priceRange: nil, hours: nil, sourceLabel: "Fixture", sourceURL: nil, photoURLs: [], note: nil
+        )
+    }
 }
