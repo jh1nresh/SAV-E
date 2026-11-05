@@ -448,8 +448,8 @@ Default Apple/MapKit POIs are background context. SAV-E objects are the interact
 Likely relevant files:
 
 ```text
-SAV-E/Views/Map/MapView.swift
-SAV-E/Views/Drawer/AIDrawerView.swift
+SAV-E/Legacy/Views/Map/MapView.swift
+SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
 SAV-E/ViewModels/AIDrawerViewModel.swift
 SAV-E/Services/SaveSearchController.swift
 SAV-E/Services/SaveAIService.swift
@@ -526,7 +526,7 @@ Likely files:
 
 ```text
 Create or modify: SAV-E/Models/SavePlaceDrawerPresentation.swift
-Modify: SAV-E/Views/Drawer/AIDrawerView.swift
+Modify: SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
 Test: SAVETests/SavePlaceDrawerPresentationTests.swift
 ```
 

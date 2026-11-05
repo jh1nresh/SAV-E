@@ -68,7 +68,7 @@ States:
 
 Files:
 
-- `SAV-E/Views/Map/MapView.swift`
+- `SAV-E/Legacy/Views/Map/MapView.swift`
 
 Change:
 
@@ -90,11 +90,11 @@ States:
 
 Files:
 
-- `SAV-E/Views/Drawer/AIDrawerView.swift`
-- `SAV-E/Views/Drawer/Components/SaveSearchResultsComponent.swift`
-- `SAV-E/Views/Drawer/Components/PlaceListComponent.swift`
-- `SAV-E/Views/Drawer/Components/NavigationCardComponent.swift`
-- `SAV-E/Views/Drawer/Components/TripItineraryComponent.swift`
+- `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift`
+- `SAV-E/Legacy/Views/Drawer/Components/SaveSearchResultsComponent.swift`
+- `SAV-E/Legacy/Views/Drawer/Components/PlaceListComponent.swift`
+- `SAV-E/Legacy/Views/Drawer/Components/NavigationCardComponent.swift`
+- `SAV-E/Legacy/Views/Drawer/Components/TripItineraryComponent.swift`
 
 Change:
 
@@ -123,9 +123,9 @@ States:
 Files:
 
 - `SAV-E/Views/List/PlaceCard.swift`
-- `SAV-E/Views/Map/PlaceBottomSheet.swift`
-- `SAV-E/Views/Shared/EvidenceLinkList.swift`
-- `SAV-E/Views/Shared/SaveMemoryBadge.swift`
+- `SAV-E/Legacy/Views/Map/PlaceBottomSheet.swift`
+- `SAV-E/Legacy/Views/Shared/EvidenceLinkList.swift`
+- `SAV-E/Legacy/Views/Shared/SaveMemoryBadge.swift`
 
 Change:
 
@@ -148,7 +148,7 @@ States:
 
 Files:
 
-- `SAV-E/Views/Drawer/AIDrawerView.swift`
+- `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift`
 - `SAV-E/ViewModels/AIDrawerViewModel.swift`
 - `SAV-E/ViewModels/MapViewModel.swift`
 
@@ -172,9 +172,9 @@ States:
 
 Files:
 
-- `SAV-E/Views/Profile/ProfileView.swift`
-- `SAV-E/Views/Profile/StatsView.swift`
-- `SAV-E/Views/Profile/SaveMemoryDebugView.swift`
+- `SAV-E/Legacy/Views/Profile/ProfileView.swift`
+- `SAV-E/Legacy/Views/Profile/StatsView.swift`
+- `SAV-E/Legacy/Views/Profile/SaveMemoryDebugView.swift`
 
 Change:
 

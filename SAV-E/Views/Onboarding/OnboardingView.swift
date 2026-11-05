@@ -280,15 +280,15 @@ struct OnboardingView: View {
     private var languageSheet: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                ForEach(AppLanguage.allCases) { choice in
+                ForEach(AppLanguagePreference.allCases) { choice in
                     Button {
-                        languageSettings.language = choice
+                        languageSettings.preference = choice
                         showsLanguage = false
                     } label: {
                         HStack {
-                            Text(choice.displayName)
+                            Text(choice.displayName(language: language))
                             Spacer()
-                            if language == choice { Image(systemName: "checkmark") }
+                            if languageSettings.preference == choice { Image(systemName: "checkmark") }
                         }
                         .padding(18)
                         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))

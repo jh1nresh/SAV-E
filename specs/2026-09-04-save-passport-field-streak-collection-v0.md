@@ -15,8 +15,8 @@ streak = confirm / save Map Stamp / Visited only; redesign Passport sections 1â€
 - Classification: feature
 - Demand: founder request + approved DESIGN amendment
 - Pricing: free core; streak/collection/missions never grant Pro
-- Files: `DESIGN.md`, `SAV-E/Models/UserProfile.swift`, `SAV-E/Views/Profile/ProfileView.swift`,
-  `SAV-E/ViewModels/MapViewModel.swift`, `SAV-E/App/ContentView.swift`, Passport Today tests/script
+- Files: `DESIGN.md`, `SAV-E/Models/UserProfile.swift`, `SAV-E/Legacy/Views/Profile/ProfileView.swift`,
+  `SAV-E/ViewModels/MapViewModel.swift`, `SAV-E/Legacy/App/ContentView.swift`, Passport Today tests/script
 - Verification: `python3 scripts/check-passport-today-on-savvy.py`; focused Passport catalog/streak tests
 - Security/privacy: streak days stay on-device in UserDefaults; no new network or entitlement path
 - Human approval: DESIGN amendment (approved); merge; no TestFlight/store publish from this ticket

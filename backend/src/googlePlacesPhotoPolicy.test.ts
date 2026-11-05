@@ -94,7 +94,7 @@ test("founder Google photo cleanup SQL is transactional and non-destructive", ()
 
 test("public city atlas pages do not embed Google Places photo hosts", () => {
   const files = [
-    ...walkFiles("SAV-E/Views/Atlas", new Set([".swift"])),
+    ...walkFiles("SAV-E/Legacy/Views/Atlas", new Set([".swift"])),
     ...walkFiles("Prototypes/AtlasPostcard", new Set([".md", ".swift", ".json"])),
     ...walkFiles("save-rn/src", new Set([".ts", ".tsx", ".js"])),
   ];

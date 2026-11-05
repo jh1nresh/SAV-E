@@ -58,13 +58,13 @@ Feature. Density / IA on existing Atlas and Postcard faces.
 
 ## Files and systems in scope
 
-- `Prototypes/AtlasPostcard/Sources/Presentation.swift`
-- `Prototypes/AtlasPostcard/Sources/Screens.swift`
+- `Prototypes/AtlasPostcard/Legacy/Sources/Presentation.swift`
+- `Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift`
 - `Prototypes/AtlasPostcard/design.md` (Home / Trips / Map rest IA only)
-- `SAV-E/Views/Home/SaveRootViews.swift`
-- `SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift`
-- `SAV-E/Views/Drawer/AIDrawerView.swift`
-- `SAV-E/Views/Profile/ProfileView.swift`
+- `SAV-E/Legacy/Views/Home/SaveRootViews.swift`
+- `SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift`
+- `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift`
+- `SAV-E/Legacy/Views/Profile/ProfileView.swift`
 - `Tests/SocialPlacePipelineTests/AtlasOneJobPerTabUITests.swift`
 - `Tests/SAVEUITests/SAVEScreenshotRailTests.swift`
 

@@ -224,6 +224,7 @@ struct SaveInkCircleButton: View {
 }
 
 struct SaveInkOutlineButton: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var title: String
     var identifier: String
     var compact: Bool = false
@@ -233,10 +234,13 @@ struct SaveInkOutlineButton: View {
         Button(action: action) {
             Text(title)
                 .font(compact ? SaveInkType.secondaryButton : SaveInkType.button)
-                .tracking(compact ? 1 : 3)
+                .tracking(languageSettings.language == .english ? 0 : (compact ? 1 : 3))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
                 .foregroundStyle(SaveInkPalette.ink)
                 .frame(maxWidth: .infinity)
-                .frame(height: compact ? 54 : 66)
+                .frame(minHeight: compact ? 54 : 66)
                 .background(
                     SaveInkRoughRoundedRect(cornerRadius: 24, seed: SaveInkSeed.of(identifier))
                         .fill(SaveInkPalette.card)
@@ -298,6 +302,7 @@ struct SaveInkLineField: View {
 
 /// The only accent control in the ink notebook.
 struct SaveInkArriveButton: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var isEnabled: Bool = true
     var action: () -> Void
 
@@ -306,9 +311,9 @@ struct SaveInkArriveButton: View {
             HStack(spacing: 8) {
                 SaveInkPinIcon()
                     .frame(width: 18, height: 22)
-                Text("我到了")
+                Text(languageSettings.localized(english: "I’m here", traditionalChinese: "我到了"))
                     .font(SaveInkType.button)
-                    .tracking(3)
+                    .tracking(languageSettings.language == .english ? 0 : 3)
             }
             .foregroundStyle(SaveInkPalette.onAccent)
             .frame(maxWidth: .infinity)
@@ -322,12 +327,13 @@ struct SaveInkArriveButton: View {
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.45)
         .accessibilityIdentifier("ink.arrived")
-        .accessibilityLabel("我到了")
+        .accessibilityLabel(languageSettings.localized(english: "I’m here", traditionalChinese: "我到了"))
         .frame(minHeight: 44)
     }
 }
 
 struct SaveInkBackButton: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var identifier: String = "ink.back"
     var action: () -> Void
 
@@ -344,7 +350,7 @@ struct SaveInkBackButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
-        .accessibilityLabel("返回")
+        .accessibilityLabel(languageSettings.localized(english: "Back", traditionalChinese: "返回"))
         .frame(minWidth: 44, minHeight: 44)
     }
 }
@@ -381,6 +387,7 @@ enum SaveInkStampKind: Equatable {
 }
 
 struct SaveInkStampMark: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var kind: SaveInkStampKind
     var name: String = ""
     var date: String = ""
@@ -389,7 +396,7 @@ struct SaveInkStampMark: View {
     var body: some View {
         switch kind {
         case .verified:
-            roundStamp(line: 4, inner: 1.6, symbol: "✓ 已驗證", fill: .clear, stroke: SaveInkPalette.ink, dashed: false)
+            roundStamp(line: 4, inner: 1.6, symbol: languageSettings.localized(english: "✓ Verified", traditionalChinese: "✓ 已驗證"), fill: .clear, stroke: SaveInkPalette.ink, dashed: false)
         case .unverified:
             squareStamp
         case .empty:
@@ -449,7 +456,7 @@ struct SaveInkStampMark: View {
             padding: 10
         ) {
             VStack(spacing: 2) {
-                Text("△ 未驗證")
+                Text(languageSettings.localized(english: "△ Unverified", traditionalChinese: "△ 未驗證"))
                     .font(SaveInkType.minimum)
                 Text(name)
                     .font(SaveInkType.aux)
@@ -468,7 +475,7 @@ struct SaveInkStampMark: View {
         ZStack {
             SaveInkRoughCircle(seed: seed, amplitude: 0.3)
                 .stroke(SaveInkPalette.emptyLine, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1.5, 4]))
-            Text("還沒蓋")
+            Text(languageSettings.localized(english: "No stamp yet", traditionalChinese: "還沒蓋"))
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.inkSub)
         }
@@ -478,7 +485,7 @@ struct SaveInkStampMark: View {
         ZStack {
             SaveInkRoughCircle(seed: seed, amplitude: 0.7)
                 .stroke(SaveInkPalette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [7, 6]))
-            Text("還沒蓋章")
+            Text(languageSettings.localized(english: "Not stamped yet", traditionalChinese: "還沒蓋章"))
                 .font(SaveInkType.aux)
                 .foregroundStyle(SaveInkPalette.ink)
         }
@@ -495,7 +502,7 @@ struct SaveInkStampMark: View {
                 .foregroundStyle(SaveInkPalette.ink)
         }
         .frame(width: 52, height: 52)
-        .accessibilityLabel("已驗證")
+        .accessibilityLabel(languageSettings.localized(english: "Verified", traditionalChinese: "已驗證"))
     }
 
     private var miniUnverifiedStamp: some View {
@@ -514,7 +521,7 @@ struct SaveInkStampMark: View {
                 .frame(width: 52, height: 52)
         }
         .frame(width: 52, height: 52)
-        .accessibilityLabel("未驗證造訪")
+        .accessibilityLabel(languageSettings.localized(english: "Unverified visit", traditionalChinese: "未驗證造訪"))
     }
 }
 
@@ -605,6 +612,7 @@ struct SaveInkLockIcon: View {
 }
 
 struct SaveInkWalkMap: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var label: String
 
     var body: some View {
@@ -651,7 +659,7 @@ struct SaveInkWalkMap: View {
             SaveInkRoughRoundedRect(cornerRadius: 18, seed: 42, amplitude: 0.45)
                 .stroke(SaveInkPalette.ink, lineWidth: 2)
         )
-        .accessibilityLabel("步行地圖")
+        .accessibilityLabel(languageSettings.localized(english: "Walking map", traditionalChinese: "步行地圖"))
     }
 }
 
@@ -684,6 +692,7 @@ final class SaveInkMapRouteState: ObservableObject {
 /// `SaveDoodleMapView`: SwiftUI `Map`, `UserAnnotation`, and `MapPolyline`.
 /// Ink pins and a light paper wash stay on this surface only.
 struct SaveInkLiveMap: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var places: [SaveInkPlace]
     var userCoordinate: CLLocationCoordinate2D?
     var focusPlaceID: String?
@@ -724,7 +733,7 @@ struct SaveInkLiveMap: View {
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(pin.visited ? "\(pin.name)，去過" : "\(pin.name)，存了還沒去")
+                    .accessibilityLabel(pin.visited ? languageSettings.localized(english: "\(pin.name), visited", traditionalChinese: "\(pin.name)，去過") : languageSettings.localized(english: "\(pin.name), saved, not visited", traditionalChinese: "\(pin.name)，存了還沒去"))
                 }
             }
             if let route = routeState.route, route.points.count >= 2 {
@@ -772,7 +781,7 @@ struct SaveInkLiveMap: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(focusPlaceID == nil ? "ink.home.map" : "ink.place.map")
-        .accessibilityLabel(focusPlaceID == nil ? "已存地點地圖" : "步行地圖")
+        .accessibilityLabel(focusPlaceID == nil ? languageSettings.localized(english: "Saved places map", traditionalChinese: "已存地點地圖") : languageSettings.localized(english: "Walking map", traditionalChinese: "步行地圖"))
         .onAppear(perform: fit)
         .onChange(of: cameraToken) { _, _ in fit() }
         .task(id: routeToken) { await loadRoute() }
@@ -794,11 +803,11 @@ struct SaveInkLiveMap: View {
         guard showsRoute, let place = focused else { return nil }
         if let route = routeState.route {
             let minutes = SaveInkPlaceCatalog.minutes(fromTravelTime: route.seconds)
-            return "步行 \(minutes) 分・\(SaveInkClock.distance(route.meters))"
+            return languageSettings.localized(english: "\(minutes) min walk · \(SaveInkClock.distance(route.meters))", traditionalChinese: "步行 \(minutes) 分・\(SaveInkClock.distance(route.meters))")
         }
         if let minutes = place.walkMinutes {
             let distance = place.distanceMeters.map(SaveInkClock.distance) ?? ""
-            return distance.isEmpty ? "步行 \(minutes) 分" : "步行 \(minutes) 分・\(distance)"
+            return distance.isEmpty ? languageSettings.localized(english: "\(minutes) min walk", traditionalChinese: "步行 \(minutes) 分") : languageSettings.localized(english: "\(minutes) min walk · \(distance)", traditionalChinese: "步行 \(minutes) 分・\(distance)")
         }
         return nil
     }

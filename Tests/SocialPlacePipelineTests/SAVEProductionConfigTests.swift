@@ -10,7 +10,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     /// launch paywall, core memory loop free, enforcement off until Slice 3.
     func testPaywallExistsButNeverPresentsAutomaticallyAtLaunch() throws {
         let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
-        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let paywall = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
         let backend = try source(at: "backend/src/server.ts")
 
         XCTAssertFalse(SAVEProAccessPolicy.showsAutomaticLaunchPaywall)
@@ -81,7 +81,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(paywall.contains("boundaryGroup"))
         XCTAssertFalse(policy.contains("saved-place memory loop is free forever"))
 
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         XCTAssertTrue(profile.contains("english: \"Savvy Pro\""))
         XCTAssertTrue(profile.contains("english: \"Free: 50 places\""))
         XCTAssertTrue(profile.contains("traditionalChinese: \"免費：50 個地點\""))
@@ -94,8 +94,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
 
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
-        let social = try source(at: "SAV-E/Views/Origin/SharedPostViews.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let social = try source(at: "SAV-E/Legacy/Views/Origin/SharedPostViews.swift")
         XCTAssertTrue(share.contains("SaveShareExtensionPlaceDestination.resolve"))
         XCTAssertTrue(share.contains("unplacedReviewCandidate"))
         XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
@@ -144,7 +144,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     func testFreeCapE4ScreenshotFixturesStayOnDebugLaunchArgs() throws {
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(content.contains("--uitest-show-saved-place-limit-paywall"))
         XCTAssertTrue(content.contains("--uitest-show-unplaced-candidate"))
         XCTAssertTrue(content.contains("--uitest-show-ai-quota-notice"))
@@ -262,7 +262,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             rail.contains("staticTexts[\"home.featuredName\"]"),
             "Home B removed the mini-map featured-name wait"
         )
-        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let saves = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("saves.unplaced"))
         XCTAssertTrue(saves.contains("saves.unplaced.row.\\(candidate.id.uuidString)"))
         XCTAssertTrue(
@@ -1402,7 +1402,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
         }
 
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertFalse(content.contains("Free Savvy is full (50 places)."))
         XCTAssertFalse(content.contains("免費版 Savvy 已滿 50 個地點。"))
         XCTAssertFalse(content.contains("已滿 50 個"))
@@ -2970,11 +2970,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(persisted.name, "Ruling B New Venue")
         XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
 
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(content.contains(".onChange(of: mapVM.shouldPresentSavedPlaceLimitPaywall)"))
         XCTAssertTrue(content.contains("presentSavedPlaceLimitPaywall()"))
         XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
-        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let paywall = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
@@ -3773,8 +3773,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         for sibling in [
             "SAV-E/ViewModels/SharedPostsStore.swift",
-            "SAV-E/Views/Origin/SaveFriendsView.swift",
-            "SAV-E/Views/Origin/SharedPostViews.swift",
+            "SAV-E/Legacy/Views/Origin/SaveFriendsView.swift",
+            "SAV-E/Legacy/Views/Origin/SharedPostViews.swift",
         ] {
             let text = try source(at: sibling)
             XCTAssertTrue(
@@ -4129,7 +4129,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("alignAuthoritativeSavedPlaceCountWithPlaces"),
             "P2 4347594688: assigning places.count after delete keeps a stale vault row at 50"
         )
-        let memoryInspector = try source(at: "SAV-E/Views/Profile/SaveMemoryDebugView.swift")
+        let memoryInspector = try source(at: "SAV-E/Legacy/Views/Profile/SaveMemoryDebugView.swift")
         XCTAssertTrue(memoryInspector.contains("SaveMemoryInspector.records"))
         XCTAssertTrue(
             memoryInspector.contains("belongingTo: PrivyAuthService.shared.currentUserId"),
@@ -4616,8 +4616,8 @@ final class SAVEProductionConfigTests: XCTestCase {
 
     @MainActor
     func testHopU1ExactSearchAtFreeCapParksToUnplacedWithoutManManCopy() async throws {
-        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
-        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let paywall = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
+        let saves = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(paywall.contains("accessibilityIdentifier(\"paywall.root\")"))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(saves.contains("saves.unplaced"))
@@ -5962,7 +5962,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     /// P2 4366181909: parked rows must show a visible Unplaced title, not only
     /// an accessibility identifier wrapping the same Review Candidate ticket.
     func testUnplacedSectionShowsVisibleKindTitle() throws {
-        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let saves = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("saves.unplaced"))
         XCTAssertTrue(saves.contains("saves.unplaced.row.\\(candidate.id.uuidString)"))
         XCTAssertTrue(saves.contains("localized(\"Unplaced\", \"暫未放入\")"))
@@ -7517,7 +7517,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         let shareInfo = try plistTemplate(at: "SAV-EShareExtension/Info.plist")
         let messageInfo = try plistTemplate(at: "SAV-EiMessage/Info.plist")
         let projectSpec = try source(at: "project.yml")
-        let brandHeader = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let brandHeader = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
         let storeKit = try source(at: "SAV-E/Resources/SAVEPro.storekit")
 
         XCTAssertEqual(mainInfo["CFBundleDisplayName"] as? String, "Savvy")
@@ -7557,7 +7557,7 @@ final class SAVEProductionConfigTests: XCTestCase {
                 "SAVEPro.storekit must not mention \(forbidden)"
             )
         }
-        let paywallCopy = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let paywallCopy = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
         for forbidden in ["AI", "assist", "次數"] {
             XCTAssertFalse(
                 paywallCopy.contains(forbidden),

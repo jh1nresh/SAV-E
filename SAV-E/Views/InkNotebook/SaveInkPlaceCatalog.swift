@@ -153,7 +153,9 @@ enum SaveInkPlaceCatalog {
             videoSource: ink?.videoSource,
             shopLatitude: mappable ? place.latitude : ink?.shopLatitude,
             shopLongitude: mappable ? place.longitude : ink?.shopLongitude,
-            aliasIDs: (place.mergedPlaceIDs ?? []).map(\.uuidString)
+            aliasIDs: (place.mergedPlaceIDs ?? []).map(\.uuidString),
+            blurbIsUserContent: nonempty(ink?.blurb) != nil ? (ink?.blurbIsUserContent ?? false) : note != nil,
+            detailNoteIsUserContent: nonempty(ink?.detailNote) != nil ? (ink?.detailNoteIsUserContent ?? false) : note != nil
         )
     }
 

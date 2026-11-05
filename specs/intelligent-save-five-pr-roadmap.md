@@ -725,7 +725,7 @@ struct SaveGuideCustomizationDraft: Hashable {
 
 - New: `SAV-E/Models/SaveGuideModels.swift`
 - New: `SAV-E/Services/SaveGuideCustomizationController.swift`
-- Possible UI shell under `SAV-E/Views/Trips/` or drawer integration
+- Possible UI shell under `SAV-E/Legacy/Views/Trips/` or drawer integration
 - Tests: new `Tests/SocialPlacePipelineTests/SaveGuideCustomizationControllerTests.swift`
 - Spec references: `specs/agent-map-trip-planner-v0.md`
 

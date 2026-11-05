@@ -247,7 +247,7 @@ struct ProfileView: View {
                     SettingsRow(
                         icon: "globe.asia.australia",
                         title: languageSettings.text(.language),
-                        detail: languageSettings.language.displayName,
+                        detail: languageSettings.preference.displayName(language: languageSettings.language),
                         color: .saveCocoa,
                         accessibilityIdentifier: "profile.language"
                     ) {
@@ -530,7 +530,7 @@ struct ProfileView: View {
             }
         }
         .sheet(isPresented: $showLanguageSettings) {
-            LanguageSettingsSheet()
+            LegacyLanguageSettingsSheet()
         }
         .fullScreenCover(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
@@ -2885,7 +2885,7 @@ struct SettingsRow: View {
     }
 }
 
-private struct LanguageSettingsSheet: View {
+private struct LegacyLanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
 
@@ -2909,6 +2909,9 @@ private struct LanguageSettingsSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
+                    .accessibilityLabel(languageSettings.localized(english: "Close", traditionalChinese: "關閉"))
+                    .accessibilityIdentifier("profile.language.close")
+
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                         Text(languageSettings.text(.chooseLanguage))
                             .font(SaveTheme.Typography.entryTitle)
@@ -2921,21 +2924,21 @@ private struct LanguageSettingsSheet: View {
                 .padding(.top, SaveTheme.Spacing.lg)
 
                 VStack(spacing: SaveTheme.Spacing.sm) {
-                    ForEach(AppLanguage.allCases) { language in
+                    ForEach(AppLanguagePreference.allCases) { preference in
                         Button {
                             SaveHaptics.select()
                             withAnimation(SaveTheme.Motion.standardSpring) {
-                                languageSettings.language = language
+                                languageSettings.preference = preference
                             }
                         } label: {
                             HStack(spacing: SaveTheme.Spacing.md) {
-                                Text(language.displayName)
+                                Text(preference.displayName(language: languageSettings.language))
                                     .font(.headline.weight(.bold))
                                     .foregroundColor(.saveInk)
 
                                 Spacer()
 
-                                if languageSettings.language == language {
+                                if languageSettings.preference == preference {
                                     Image(systemName: "checkmark.circle.fill")
                                         .font(.title3.weight(.bold))
                                         .foregroundColor(.saveSuccess)
@@ -2943,7 +2946,7 @@ private struct LanguageSettingsSheet: View {
                             }
                             .padding(SaveTheme.Spacing.md)
                             .background(
-                                languageSettings.language == language
+                                languageSettings.preference == preference
                                 ? SaveAtlasPalette.kraft.opacity(0.25)
                                 : SaveAtlasPalette.canvas.opacity(0.5)
                             )
@@ -2954,7 +2957,8 @@ private struct LanguageSettingsSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityIdentifier("profile.languageOption.\(language.id)")
+                        .accessibilityAddTraits(languageSettings.preference == preference ? .isSelected : [])
+                        .accessibilityIdentifier("profile.languageOption.\(preference.id)")
                     }
                 }
 
