@@ -177,6 +177,11 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
         let verify = app.buttons["incoming.fixture.verify"]
         XCTAssertTrue(verify.waitForExistence(timeout: stepTimeout))
         verify.tap()
+        let complete = app.buttons["incoming.fixture.completePreviousSave"]
+        XCTAssertTrue(complete.waitForExistence(timeout: stepTimeout))
+        waitForLabel("Returned saves: 0", element: app.staticTexts["incoming.fixture.returnedSaves"])
+        complete.tap()
+        waitForLabel("Returned saves: 1", element: app.staticTexts["incoming.fixture.returnedSaves"])
         assertJournal(app, pending: true, saves: 1)
         XCTAssertFalse(saveButton(app).exists)
         XCTAssertFalse(app.staticTexts["app.handoff.confirmationMessage"].exists)

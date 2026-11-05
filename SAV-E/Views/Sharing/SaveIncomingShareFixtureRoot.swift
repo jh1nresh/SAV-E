@@ -49,6 +49,7 @@ struct SaveIncomingShareFixtureRoot: View {
     @State private var prepared = false
     @State private var saves = 0
     @State private var resolutions = 0
+    @State private var returnedSaves = 0
     @State private var waiting: (CheckedContinuation<SharedPlaceSaveOutcome, Error>, SharedPlaceSaveOutcome)?
 
     var body: some View {
@@ -85,8 +86,15 @@ struct SaveIncomingShareFixtureRoot: View {
                                 account.generation += 1
                                 incomingPlaceReceipt = nil
                                 requestID = UUID()
-                                try? await Task.sleep(for: .milliseconds(300))
-                                return .saved(place)
+                                let outcome: SharedPlaceSaveOutcome = try await withCheckedThrowingContinuation { continuation in
+                                    waiting = (continuation, .saved(place))
+                                    Task {
+                                        try? await Task.sleep(for: .seconds(60))
+                                        finishWaiting(cancel: true)
+                                    }
+                                }
+                                returnedSaves += 1
+                                return outcome
                             }
                             if Self.scenario == "replacement", saves == 1 {
                                 // J2 arrives while J1 is still saving, before its URL is opened.
@@ -111,9 +119,15 @@ struct SaveIncomingShareFixtureRoot: View {
                         VStack {
                             Text("Synthetic share fixture").font(SaveInkType.aux)
                             Text("Saves: \(saves)").accessibilityIdentifier("incoming.fixture.saves")
+                            Text("Returned saves: \(returnedSaves)").accessibilityIdentifier("incoming.fixture.returnedSaves")
                             joinCounter
                             Text(PendingShareStore.load(from: Self.defaults) == nil ? "Journal: none" : "Journal: pending")
                                 .accessibilityIdentifier("incoming.fixture.journal")
+                            if Self.scenario == "account-switch", waiting != nil {
+                                Button("Complete previous save") { finishWaiting(cancel: false) }
+                                    .frame(minHeight: 44)
+                                    .accessibilityIdentifier("incoming.fixture.completePreviousSave")
+                            }
                             if Self.scenario == "existing-alert" {
                                 Button("Show synthetic alert", action: showParentAlert)
                                     .frame(minHeight: 44)
@@ -148,7 +162,9 @@ struct SaveIncomingShareFixtureRoot: View {
             account.verified = !ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-unverified")
             verificationChanged()
         }
-        .onChange(of: requestID) { _, _ in finishWaiting(cancel: false) }
+        .onChange(of: requestID) { _, _ in
+            if Self.scenario != "account-switch" { finishWaiting(cancel: false) }
+        }
         .onDisappear { finishWaiting(cancel: true) }
     }
 
