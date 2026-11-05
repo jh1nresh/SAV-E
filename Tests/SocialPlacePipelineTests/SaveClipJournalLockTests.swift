@@ -435,7 +435,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertFalse(content.contains("Free Savvy is full (50 places)."))
         XCTAssertFalse(content.contains("免費版 Savvy 已滿 50 個地點。"))
         XCTAssertFalse(content.contains("已滿 50 個"))
-        XCTAssertTrue(content.contains("catch is SavePlaceLimitError"))
+        XCTAssertTrue(receipt.contains("catch is SavePlaceLimitError"))
         XCTAssertTrue(content.contains("if error is SavePlaceLimitError { return }"))
         XCTAssertTrue(mapVM.contains("parkHandoffOverflowIfNeeded"))
         XCTAssertTrue(mapVM.contains("parkNovelHandoffItems"))
