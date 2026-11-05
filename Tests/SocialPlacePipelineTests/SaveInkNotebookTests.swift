@@ -1694,6 +1694,27 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertFalse(coordinator.hasOriginalServerRedirect)
     }
 
+    func testAmapWGSRequestBeforeRedirectCallbackCannotAuthorizeResponse() throws {
+        let source = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
+        let target = try XCTUnwrap(URL(string: "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Public&src=savvy&callnative=0&innersrc=uriapi"))
+        let response = try XCTUnwrap(HTTPURLResponse(url: target, statusCode: 200, httpVersion: nil, headerFields: nil))
+        let web = SaveInkAmapNavigationStub()
+        var failed = false
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: source)
+        defer { coordinator.invalidate(); web.stopLoading() }
+        coordinator.start(in: web)
+        let originalNavigation = try XCTUnwrap(web.navigation)
+        coordinator.webView(web, didStartProvisionalNavigation: originalNavigation)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect)
+        XCTAssertTrue(coordinator.permitsWGSRequest(target, type: .other))
+        XCTAssertFalse(coordinator.permitsWGSRequest(target, type: .linkActivated))
+        XCTAssertFalse(coordinator.permitsWGSRequest(target, type: .formSubmitted))
+        coordinator.handleResponse(response, isForMainFrame: true, in: web) { XCTAssertEqual($0, .cancel) }
+        XCTAssertTrue(failed, "A matching URL alone cannot authorize converted coordinates")
+        XCTAssertTrue(web.navigation === originalNavigation, "Unverified response must not start the embed")
+    }
+
     func testAmapVerifiedConversionIgnoresOnlyItsPolicyCancellation() throws {
         let original = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
         let redirected = try XCTUnwrap(URL(string: "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Public&src=savvy&callnative=0&innersrc=u"))

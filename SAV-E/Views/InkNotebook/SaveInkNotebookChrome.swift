@@ -971,6 +971,16 @@ struct SaveInkAmapWebView: UIViewRepresentable {
             return activeNavigation === originalNavigation && serverRedirectNavigation === originalNavigation
         }
 
+        /// WebKit asks about the redirected request before it reports the
+        /// server redirect. Only the later response may start the compact map.
+        func permitsWGSRequest(_ url: URL?, type: WKNavigationType) -> Bool {
+            guard let url else { return false }
+            if url == originalURL { return true }
+            guard phase == .resolvingWGS, type == .other, let originalNavigation,
+                  activeNavigation === originalNavigation else { return false }
+            return SaveInkMapPolicy.amapEmbedFromWGS84Redirect(url, original: originalURL) != nil
+        }
+
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                      decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
             guard phase != .disposed, phase != .failed else { decisionHandler(.cancel); return }
@@ -981,10 +991,7 @@ struct SaveInkAmapWebView: UIViewRepresentable {
                 SaveInkMapPolicy.permitsWebNavigation(url, userInitiated: userInitiated)
             if mainFrame {
                 if phase == .resolvingWGS {
-                    let verifiedRedirect = hasOriginalServerRedirect && url.flatMap {
-                        SaveInkMapPolicy.amapEmbedFromWGS84Redirect($0, original: originalURL)
-                    } != nil
-                    allowed = allowed && (url == originalURL || verifiedRedirect)
+                    allowed = allowed && permitsWGSRequest(url, type: navigationAction.navigationType)
                 } else { allowed = allowed && SaveInkMapPolicy.isAmapEmbed(url) }
             }
             if !allowed, blockedNavigationLocations.count < 8, let url {
