@@ -161,6 +161,90 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     }
 
     @MainActor
+    func testDeferredListFooterKeepsHomeActionsUsableWithoutDiagnostics() {
+        let app = fixture("list-layout")
+        XCUIDevice.shared.system.open(listURL)
+        XCTAssertTrue(app.buttons["app.handoff.confirmList"].waitForExistence(timeout: stepTimeout))
+        app.buttons["Later"].tap()
+        XCTAssertFalse(app.staticTexts["incoming.fixture.saves"].exists)
+        let review = app.buttons["app.handoff.reviewList"]
+        let arrival = app.buttons["ink.arrived"]
+        XCTAssertTrue(waitUntilHittable(review))
+        XCTAssertTrue(waitUntilHittable(arrival))
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(window.contains(review.frame), "Review action must fit: \(review.frame) in \(window)")
+        XCTAssertTrue(window.contains(arrival.frame), "Home action must fit: \(arrival.frame) in \(window)")
+        XCTAssertFalse(review.frame.intersects(arrival.frame), "The pending-list footer must not cover the Home action.")
+        capture(app, name: "incoming-list-footer-without-diagnostics")
+        arrival.tap()
+        let done = app.buttons["ink.checkin.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(waitUntilHittable(done))
+        done.tap()
+        XCTAssertTrue(waitUntilHittable(review))
+        review.tap()
+        XCTAssertTrue(app.buttons["app.handoff.confirmList"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
+    func testListJoinFailureDoesNotClaimThatTheListWasJoined() {
+        let app = fixture("list-join-failure", extra: [
+            "--savvy-ink-suite=savvy.incoming-share.join-failure.\(UUID().uuidString)",
+            "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+        ])
+        XCUIDevice.shared.system.open(listURL)
+        let alert = app.alerts["Could not open list"]
+        XCTAssertTrue(alert.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(alert.staticTexts["This list could not be opened. Check your connection and try the link again, or ask the sender for a new link."].exists)
+        XCTAssertFalse(app.alerts["Savvy list ready"].exists)
+        XCTAssertFalse(app.buttons["app.handoff.confirmList"].exists)
+        capture(app, name: "incoming-list-join-failed")
+        alert.buttons["OK"].tap()
+        assertJournal(app, pending: false, saves: 0)
+        waitForLabel("Joins: 1", element: app.staticTexts["incoming.fixture.joins"])
+        XCUIDevice.shared.system.open(listURL)
+        XCTAssertTrue(alert.waitForExistence(timeout: stepTimeout))
+        alert.buttons["OK"].tap()
+        waitForLabel("Joins: 2", element: app.staticTexts["incoming.fixture.joins"])
+        assertJournal(app, pending: false, saves: 0)
+    }
+
+    @MainActor
+    func testSuccessfulListRetryReplacesAnUndismissedFailure() {
+        let app = fixture("list-join-recovery", extra: [
+            "--savvy-ink-suite=savvy.incoming-share.join-recovery.\(UUID().uuidString)",
+            "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+        ])
+        XCUIDevice.shared.system.open(listURL)
+        let failure = app.alerts["Could not open list"]
+        XCTAssertTrue(failure.waitForExistence(timeout: stepTimeout))
+        // Deliberately leave the first failure visible when the retry arrives.
+        XCUIDevice.shared.system.open(listURL)
+        let ready = app.alerts["Savvy list ready"]
+        XCTAssertTrue(ready.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(failure.exists)
+        XCTAssertTrue(ready.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Synthetic joined list")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["app.handoff.confirmList"].exists)
+        capture(app, name: "incoming-list-join-recovered")
+        ready.buttons["OK"].tap()
+        waitForLabel("Joins: 2", element: app.staticTexts["incoming.fixture.joins"])
+        assertJournal(app, pending: false, saves: 0)
+    }
+
+    @MainActor
+    func testFailedListJoinKeepsTheClipSelectionForExplicitSave() {
+        let app = fixture("list-clip-join-failure")
+        XCUIDevice.shared.system.open(listURL)
+        let confirm = app.buttons["app.handoff.confirmList"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Fixture place A"].exists)
+        XCTAssertFalse(app.alerts.firstMatch.exists)
+        confirm.tap()
+        assertJournal(app, pending: false, saves: 1)
+        waitForLabel("Joins: 1", element: app.staticTexts["incoming.fixture.joins"])
+    }
+
+    @MainActor
     func testListCapRetainsTheSelectionForRetry() {
         let app = fixture("list-cap")
         XCUIDevice.shared.system.open(listURL)
@@ -179,7 +263,11 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
         let app = fixture("account-switch")
         XCUIDevice.shared.system.open(firstURL)
         waitForReceipt(app, name: "Fixture place A")
-        saveButton(app).tap()
+        let save = saveButton(app)
+        XCTAssertTrue(waitUntilHittable(save))
+        XCTAssertTrue(save.isEnabled)
+        capture(app, name: "incoming-account-save-ready")
+        save.tap()
         let verify = app.buttons["incoming.fixture.verify"]
         XCTAssertTrue(verify.waitForExistence(timeout: stepTimeout))
         verify.tap()

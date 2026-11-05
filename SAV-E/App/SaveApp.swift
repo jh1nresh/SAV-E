@@ -66,6 +66,11 @@ private struct UITestWindowAppearanceSetter: UIViewRepresentable {
 
 @main
 struct SaveApp: App {
+    private enum LinkFailure {
+        case friendProfile
+        case listJoin
+    }
+
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings(userDefaults: SaveInkLaunch.defaults)
     @Environment(\.scenePhase) private var scenePhase
@@ -82,7 +87,7 @@ struct SaveApp: App {
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
-    @State private var linkErrorMessage: String?
+    @State private var linkFailure: LinkFailure?
     @State private var verifiedAccountGeneration: Int?
     @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
     @State private var accountScopedURLProcessingID: UUID?
@@ -206,13 +211,13 @@ struct SaveApp: App {
                 handleAccountGenerationChange(generation)
             }
             .alert(linkAlertTitle, isPresented: Binding(
-                get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkErrorMessage != nil },
+                get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkFailure != nil },
                 set: {
                     if !$0 {
                         openedTrip = nil
                         openedList = nil
                         openedReferral = nil
-                        linkErrorMessage = nil
+                        linkFailure = nil
                     }
                 }
             )) {
@@ -220,11 +225,11 @@ struct SaveApp: App {
                     openedTrip = nil
                     openedList = nil
                     openedReferral = nil
-                    linkErrorMessage = nil
+                    linkFailure = nil
                 }
             } message: {
-                if let linkErrorMessage {
-                    Text(linkErrorMessage)
+                if let linkFailure {
+                    Text(linkFailureMessage(linkFailure))
                 } else if let openedReferral {
                     Text(referralReadyMessage(openedReferral))
                 } else if let openedList {
@@ -250,7 +255,7 @@ struct SaveApp: App {
                 requiresListConfirmation: $requiresListConfirmation,
                 pendingClipListSave: $pendingClipListSave,
                 requestID: $incomingShareRequestID,
-                showParentAlert: { linkErrorMessage = "Synthetic existing alert" },
+                showParentAlert: { linkFailure = .friendProfile },
                 verificationChanged: { processDeferredAccountURLIfVerified() }
             )
         } else if photoAttributionEvidenceActive {
@@ -484,7 +489,7 @@ struct SaveApp: App {
         }
         openedList = nil
         openedReferral = nil
-        linkErrorMessage = nil
+        linkFailure = nil
         guard ClipPlaceHandoff.shouldResetHandoffOnAccountChange(
             previousUserId: previousUserId,
             currentUserId: currentUserId
@@ -621,7 +626,9 @@ struct SaveApp: App {
 
     /// Clip selected a pending snapshot. A separate full App action confirms
     /// it; live list changes must not add or remove selected places.
-    private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) {
+    @discardableResult
+    private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) -> Bool {
+        if case .listJoin? = linkFailure { linkFailure = nil }
         if let stamp = ClipListHandoff.stampList(
             pending: PendingShareStore.load(from: Self.incomingShareDefaults),
             incomingURL: incomingURL,
@@ -633,18 +640,19 @@ struct SaveApp: App {
             requiresListConfirmation = true
             pendingClipListSave = stamp
             openedList = nil
+            return true
         } else if let list {
             openedList = list
+            return true
         }
+        return false
     }
 
     private func presentListJoinFailure(_ error: Error, incomingURL: URL) {
-        openedList = SaveCollaborativeList(
-            title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
-            note: error.localizedDescription,
-            viewerRole: .viewer
-        )
-        presentOpenedList(nil, incomingURL: incomingURL)
+        // A matching Clip selection may still be reviewed explicitly; an
+        // ordinary failed join must never masquerade as a joined list.
+        guard !presentOpenedList(nil, incomingURL: incomingURL) else { return }
+        linkFailure = .listJoin
     }
 
     /// Persists a server-joined list into the active local store (cache) and
@@ -690,10 +698,7 @@ struct SaveApp: App {
             return
         }
         guard let profile else {
-            linkErrorMessage = languageSettings.localized(
-                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new Savvy profile link.",
-                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 Savvy 個人連結。"
-            )
+            linkFailure = .friendProfile
             deferredAccountScopedLink = nil
             return
         }
@@ -734,8 +739,13 @@ struct SaveApp: App {
     }
 
     private var linkAlertTitle: String {
-        if linkErrorMessage != nil {
-            return languageSettings.localized(english: "Could not load friend profile", traditionalChinese: "無法載入朋友資料")
+        if let linkFailure {
+            switch linkFailure {
+            case .friendProfile:
+                return languageSettings.localized(english: "Could not load friend profile", traditionalChinese: "無法載入朋友資料")
+            case .listJoin:
+                return languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單")
+            }
         }
         if openedReferral != nil {
             switch languageSettings.language {
@@ -750,6 +760,21 @@ struct SaveApp: App {
             }
         }
         return languageSettings.text(.tripLinkReady)
+    }
+
+    private func linkFailureMessage(_ failure: LinkFailure) -> String {
+        switch failure {
+        case .friendProfile:
+            return languageSettings.localized(
+                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new Savvy profile link.",
+                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 Savvy 個人連結。"
+            )
+        case .listJoin:
+            return languageSettings.localized(
+                english: "This list could not be opened. Check your connection and try the link again, or ask the sender for a new link.",
+                traditionalChinese: "目前無法打開這份清單。請檢查網路後重新開啟連結，或請分享者提供新的連結。"
+            )
+        }
     }
 
     private func referralReadyMessage(_ profile: SaveReferralProfile) -> String {

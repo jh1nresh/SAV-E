@@ -14,6 +14,11 @@ final class SaveIncomingShareFixtureSession: ObservableObject {
     func join(code: String) throws -> SaveCollaborativeList {
         guard code == "fixture-list" else { throw SaveCollaborativeListError.invalidLink }
         joins += 1
+        let scenario = ProcessInfo.processInfo.environment["SAVE_INCOMING_SHARE_SCENARIO"] ?? ""
+        if ["list-join-failure", "list-clip-join-failure"].contains(scenario)
+            || (scenario == "list-join-recovery" && joins == 1) {
+            throw SaveCollaborativeListError.invalidLink
+        }
         // The live joined list deliberately differs from the Clip selection.
         return SaveCollaborativeList(title: "Synthetic joined list", items: [])
     }
@@ -118,28 +123,30 @@ struct SaveIncomingShareFixtureRoot: View {
                             return ClipListHandoffCounts(newlySaved: 1, alreadySaved: 0, overCap: 0, remaining: 49, limit: 50)
                         }
                     ))
-                    .safeAreaInset(edge: .top) {
-                        VStack {
-                            Text("Synthetic share fixture").font(SaveInkType.aux)
-                            Text("Saves: \(saves)").accessibilityIdentifier("incoming.fixture.saves")
-                            Text("Returned saves: \(returnedSaves)").accessibilityIdentifier("incoming.fixture.returnedSaves")
-                            joinCounter
-                            Text(PendingShareStore.load(from: Self.defaults) == nil ? "Journal: none" : "Journal: pending")
-                                .accessibilityIdentifier("incoming.fixture.journal")
-                            if Self.scenario == "account-switch", waiting != nil {
-                                Button("Complete previous save") { finishWaiting(cancel: false) }
-                                    .frame(minHeight: 44)
-                                    .accessibilityIdentifier("incoming.fixture.completePreviousSave")
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if Self.scenario != "list-layout" {
+                            VStack {
+                                Text("Synthetic share fixture").font(SaveInkType.aux)
+                                Text("Saves: \(saves)").accessibilityIdentifier("incoming.fixture.saves")
+                                Text("Returned saves: \(returnedSaves)").accessibilityIdentifier("incoming.fixture.returnedSaves")
+                                joinCounter
+                                Text(PendingShareStore.load(from: Self.defaults) == nil ? "Journal: none" : "Journal: pending")
+                                    .accessibilityIdentifier("incoming.fixture.journal")
+                                if Self.scenario == "account-switch", waiting != nil {
+                                    Button("Complete previous save") { finishWaiting(cancel: false) }
+                                        .frame(minHeight: 44)
+                                        .accessibilityIdentifier("incoming.fixture.completePreviousSave")
+                                }
+                                if Self.scenario == "existing-alert" {
+                                    Button("Show synthetic alert", action: showParentAlert)
+                                        .frame(minHeight: 44)
+                                        .accessibilityIdentifier("incoming.fixture.alert")
+                                }
                             }
-                            if Self.scenario == "existing-alert" {
-                                Button("Show synthetic alert", action: showParentAlert)
-                                    .frame(minHeight: 44)
-                                    .accessibilityIdentifier("incoming.fixture.alert")
-                            }
+                            .font(SaveInkType.aux)
+                            .foregroundStyle(SaveInkPalette.ink)
+                            .background(SaveInkPalette.paper)
                         }
-                        .font(SaveInkType.aux)
-                        .foregroundStyle(SaveInkPalette.ink)
-                        .background(SaveInkPalette.paper)
                     }
             } else {
                 VStack(spacing: 20) {
@@ -161,7 +168,7 @@ struct SaveIncomingShareFixtureRoot: View {
             guard !prepared else { return }
             prepared = true
             language.language = ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-zh") ? .traditionalChinese : .english
-            if ["clip", "replacement", "failure", "cap", "list", "list-cap", "clip-unknown-reference", "list-unknown-reference", "account-switch"].contains(Self.scenario) { writeJournal() }
+            if ["clip", "replacement", "failure", "cap", "list", "list-cap", "list-layout", "list-clip-join-failure", "clip-unknown-reference", "list-unknown-reference", "account-switch"].contains(Self.scenario) { writeJournal() }
             account.verified = !ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-unverified")
             verificationChanged()
         }

@@ -48,10 +48,10 @@ struct SaveIncomingShareHost: ViewModifier {
     @State private var completionMessage: String?
 
     func body(content: Content) -> some View {
-        content
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    if presentation == nil {
+        VStack(spacing: 0) {
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 8) {
+                if presentation == nil {
                     if requiresListConfirmation, pendingClipListSave != nil {
                         SaveInkOutlineButton(
                             title: localized("Review pending shared places", "查看待確認的分享地點"),
@@ -75,9 +75,9 @@ struct SaveIncomingShareHost: ViewModifier {
                         .frame(maxWidth: .infinity)
                         .background(SaveInkPalette.paper)
                     }
-                    }
                 }
             }
+        }
             .sheet(item: presentationBinding) { item in
                 switch item {
                 case .place(let destination, let journal, let token, let owner):
