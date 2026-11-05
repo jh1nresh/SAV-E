@@ -67,7 +67,8 @@ private struct UITestWindowAppearanceSetter: UIViewRepresentable {
 @main
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
-    @StateObject private var languageSettings = AppLanguageSettings()
+    @StateObject private var languageSettings = AppLanguageSettings(userDefaults: SaveInkLaunch.defaults)
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(
         "pendingFriendShareURL",
@@ -170,6 +171,13 @@ struct SaveApp: App {
                 rootContent
             }
             .environment(\.appLanguageSettings, languageSettings)
+            .environment(\.locale, languageSettings.locale)
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { languageSettings.refreshSystemLanguage() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)) { _ in
+                languageSettings.refreshSystemLanguage()
+            }
 #if DEBUG
             .modifier(UITestAppearanceOverride())
 #endif

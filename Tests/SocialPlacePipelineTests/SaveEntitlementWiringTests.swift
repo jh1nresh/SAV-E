@@ -235,7 +235,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// account cannot open the wall from Settings alone. Gate lives on the
     /// access policy so Passport never imports entitlement storefront types.
     func testPassportProEntryUsesSharedStampGate() throws {
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
         XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
         XCTAssertTrue(profile.contains("showProPaywall = true"))
@@ -248,8 +248,8 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// B7: Settings opens the informational paywall after a Map Stamp exists.
     /// The row is not gated on StoreKit, and exhausted AI quota is not this sheet.
     func testSettingsProRowOpensPassportPaywallWithoutPurchaseGate() throws {
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
         XCTAssertTrue(profile.contains("accessibilityIdentifier: \"profile.pro\""))
         XCTAssertTrue(
@@ -291,7 +291,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertTrue(auth.contains("SaveEntitlementStore.shared.refresh()"))
         XCTAssertTrue(map.contains("hasAuthoritativeSavedPlaceTier"))
         XCTAssertTrue(map.contains("entitlementResolvedProvider"))
-        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let paywall = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
         XCTAssertTrue(paywall.contains("paywall.retry"))
         XCTAssertFalse(paywall.contains("paywall.retryProducts"))
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))

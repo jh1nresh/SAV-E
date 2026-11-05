@@ -81,9 +81,9 @@ def check_catalog_decision_table() -> None:
 
 
 def check_sources(root: Path) -> None:
-    profile = (root / "SAV-E/Views/Profile/ProfileView.swift").read_text()
+    profile = (root / "SAV-E/Legacy/Views/Profile/ProfileView.swift").read_text()
     catalog = (root / "SAV-E/Models/UserProfile.swift").read_text()
-    content = (root / "SAV-E/App/ContentView.swift").read_text()
+    content = (root / "SAV-E/Legacy/App/ContentView.swift").read_text()
     spec = (root / "specs/2026-09-04-save-passport-today-on-savvy-v0.md").read_text()
 
     expect("if !todayMissions.isEmpty" in profile, "empty catalog must hide the strip")

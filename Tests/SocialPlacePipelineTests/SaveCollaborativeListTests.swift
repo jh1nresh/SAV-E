@@ -237,7 +237,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(mark.contains(".font(.system(size: 6, weight: .semibold))"))
         XCTAssertFalse(mark.contains("ForEach("))
 
-        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertTrue(stamp.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(stamp.contains("displaysGooglePhoto("))
         XCTAssertTrue(stamp.contains("gapAbove"))
@@ -246,7 +246,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(stamp.contains("GoogleMapsAttributionLogo"))
         XCTAssertFalse(stamp.contains(".font(.system(size: 6, weight: .semibold))"))
 
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("SaveDoodleSticker("))
         XCTAssertFalse(home.contains("CachedImageView("), "Current Home uses illustrations, not photo thumbnails")
         XCTAssertFalse(home.contains("SaveTileTownPeekCard("))
@@ -334,14 +334,14 @@ final class SaveCollaborativeListTests: XCTestCase {
             URL(string: "https://example.com/own.jpg")
         ))
 
-        let drawer = try source(at: "SAV-E/Views/Drawer/Components/SaveSearchResultsComponent.swift")
+        let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/Components/SaveSearchResultsComponent.swift")
         XCTAssertTrue(drawer.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(drawer.contains("displaysGooglePhoto("))
         XCTAssertTrue(drawer.contains("availableWidth: rowWidth"))
         XCTAssertFalse(drawer.contains("availableWidth: 52"))
         XCTAssertFalse(drawer.contains("homeStacked"))
 
-        let trip = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
+        let trip = try source(at: "SAV-E/Legacy/Views/Trips/TripPackViews.swift")
         XCTAssertTrue(trip.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(trip.contains("displaysGooglePhoto("))
         XCTAssertTrue(trip.contains("availableWidth: rowWidth"))
@@ -355,13 +355,13 @@ final class SaveCollaborativeListTests: XCTestCase {
             "Persist DTO must not reuse the TripStopRow view name"
         )
 
-        let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+        let origin = try source(at: "SAV-E/Legacy/Views/Origin/SaveOriginView.swift")
         XCTAssertTrue(origin.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(origin.contains("displaysGooglePhoto("))
         XCTAssertTrue(origin.contains("struct SaveOriginFoodCard"))
         XCTAssertFalse(origin.contains("homeStacked"))
 
-        let atlas = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let atlas = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
         // Was GooglePlacesPhotoSourceMark(style: .homeStacked) on 56pt.
         // HoP G6: no mark View on the map callout. Metrics.mapSafePhotoURL stays.
         XCTAssertFalse(atlas.contains("GooglePlacesPhotoSourceMark("))
@@ -379,14 +379,14 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(atlas.contains("callout"))
         XCTAssertFalse(atlas.contains("PlaceMapPin("))
 
-        let postcard = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let postcard = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
         XCTAssertTrue(postcard.contains("struct SavedPostcardPhoto"))
         XCTAssertTrue(postcard.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(postcard.contains("displaysGooglePhoto("))
         XCTAssertTrue(postcard.contains("availableWidth: 104"))
         XCTAssertTrue(postcard.contains("detailPlace.businessPhotoURLStrings"))
 
-        let carousel = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
+        let carousel = try source(at: "SAV-E/Legacy/Views/Map/PlaceBottomSheet.swift")
         XCTAssertTrue(
             carousel.contains("GooglePlacesPhotoAttributionBar"),
             "Detail (off the map) still marks Google photos"
@@ -449,12 +449,12 @@ final class SaveCollaborativeListTests: XCTestCase {
             GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 52, dynamicType: .large)
         )
 
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("SaveDoodleSticker("))
         XCTAssertFalse(home.contains("CachedImageView("), "Current Home uses illustrations, not photo thumbnails")
         XCTAssertFalse(home.contains("SaveTileTownPeekCard("))
 
-        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertTrue(stamp.contains("displaysGooglePhoto("))
         XCTAssertTrue(stamp.contains("style: .footer"))
         XCTAssertTrue(stamp.contains("max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth"))
@@ -1049,7 +1049,7 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     func testCompactAttributionRowIsAHittableButton() throws {
-        let sheet = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
+        let sheet = try source(at: "SAV-E/Legacy/Views/Map/PlaceBottomSheet.swift")
         let uiTest = try source(at: "Tests/SAVEUITests/SAVEGooglePhotoAttributionTests.swift")
         let evidence = try source(at: "SAV-E/Testing/GooglePlacesPhotoAttributionEvidenceView.swift")
 

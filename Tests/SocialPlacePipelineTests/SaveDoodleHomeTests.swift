@@ -195,7 +195,7 @@ final class SaveDoodleHomeTests: XCTestCase {
             ).map(\.name),
             ["Yingge Ceramics"]
         )
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("nearYouCityName"))
         XCTAssertFalse(home.contains("listedPlaces.first"))
     }
@@ -1367,7 +1367,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(goListed.isEmpty)
         XCTAssertEqual(count.visited, 1)
         XCTAssertEqual(count.saved, 2)
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("showsLensEmpty"))
         XCTAssertTrue(home.contains("home.lensEmpty"))
         XCTAssertTrue(home.contains("No \\(lens) saves here"))
@@ -1384,7 +1384,7 @@ final class SaveDoodleHomeTests: XCTestCase {
             collectedAt.lowerBound,
             "Collected must stay after the Eat/Go empty branch, not inside it"
         )
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("keep the Collected strip and show a filter-empty message"))
         // DESIGN wraps "the nearest / save across every category".
         XCTAssertTrue(design.contains("save across every category"))
@@ -1414,7 +1414,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         let count = SaveDoodleHomeCatalog.cityCollectedCount(in: empty)
         XCTAssertEqual(count.visited, 0)
         XCTAssertEqual(count.saved, 0)
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("if !collectedPlaces.isEmpty"))
         XCTAssertTrue(home.contains("collectedStrip"))
     }
@@ -1442,7 +1442,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(homeCount.saved, 12)
         XCTAssertEqual(SaveDoodleHomeProgressCatalog.visitedCount(in: passportPlaces), homeCount.visited)
         XCTAssertEqual(passportPlaces.count, homeCount.saved)
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         let strip = try XCTUnwrap(home.range(of: "private var collectedStrip"))
         let empty = try XCTUnwrap(home.range(of: "private var emptyHome"))
         XCTAssertTrue(home[strip.lowerBound..<empty.lowerBound].contains("onOpenCollectedPassport"))
@@ -1452,16 +1452,16 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(catalog.contains("enum SaveDoodlePassportCatalog"))
         XCTAssertTrue(catalog.contains("collectedScopePlaces"))
         XCTAssertTrue(catalog.contains("PR #295 already owns"))
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         XCTAssertTrue(profile.contains("places: passportPlaces,"))
         XCTAssertTrue(profile.contains("collectionMode: collectionMode,"))
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(content.contains("onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) }"))
         XCTAssertTrue(content.contains("openPassport(collectionMode: .collection)"))
         XCTAssertTrue(profile.contains("SaveDoodlePassportPage("))
         XCTAssertFalse(profile.contains("PassportTileTownCollection"))
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
-        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        let page = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(page.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
         XCTAssertTrue(page.contains("\\(progress.visited) of \\(progress.total) visited"))
         XCTAssertTrue(page.contains("profile.stampProgress"))
@@ -1502,8 +1502,8 @@ final class SaveDoodleHomeTests: XCTestCase {
     }
 
     func testProductionHomeIsDoodleNotTileTown() throws {
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(root.contains("SaveDoodleHomeView("))
         XCTAssertFalse(root.contains("onOpenMap"))
         XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
@@ -1570,7 +1570,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(home.contains("看全部收藏"))
         XCTAssertFalse(home.contains("if presentation.reviewCount > 0"))
         XCTAssertTrue(home.contains("clueCount: presentation.reviewCount"))
-        let factory = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let factory = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
         XCTAssertFalse(factory.contains("presentation.reviewCount = mapViewModel.reviewCandidates.count"))
         XCTAssertTrue(factory.contains("uiTestHintCountOverride"))
         XCTAssertTrue(factory.contains("--uitest-home-hint-count="))
@@ -1632,14 +1632,15 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(home.contains("map.lens.nearby"))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
+                "SAV-E/Legacy/Views/TileTown/SaveTileTownHomeView.swift"
             ).path
         ))
-        let design = try source(at: "DESIGN.md")
-        XCTAssertTrue(design.contains("Savvy + current logo + Eat/Go in the header"))
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
+        XCTAssertTrue(design.contains("Savvy + small elephant + Eat/Go in the header"))
+
         XCTAssertTrue(design.contains("no map component"))
         XCTAssertTrue(design.contains("official DESIGN color die-cut"))
-        XCTAssertTrue(design.contains("Elephant artwork\nand the Memo character are retired"))
+        XCTAssertTrue(design.contains("small Memo elephant"))
         XCTAssertTrue(design.contains("68pt"))
         XCTAssertTrue(design.contains("hint row is always shown"))
         XCTAssertTrue(design.contains("DESIGN v2 is the Home layout contract"))
@@ -1657,7 +1658,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(design.contains("像素小鎮已經不要了"))
         XCTAssertTrue(design.contains("tile-town is abandoned"))
         XCTAssertFalse(design.contains("Home hero and Map become a full-pixel isometric"))
-        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let bridge = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
         XCTAssertTrue(bridge.contains("Home is `SaveDoodleHomeView`"))
         XCTAssertFalse(bridge.contains("Live Home uses the tile-town peek"))
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
@@ -1849,19 +1850,19 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))
         XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))
         XCTAssertFalse(seed.contains("latitude: 0"))
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         XCTAssertTrue(profile.contains("places: passportPlaces,"))
         XCTAssertTrue(profile.contains("collectionMode: collectionMode,"))
         XCTAssertTrue(profile.contains("var collectionMode: SavePassportCollectionMode = .collection"))
         XCTAssertTrue(profile.contains("SaveDoodleVisitStore()"))
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
-        let passportPage = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        let passportPage = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(passportPage.contains("visitStore.recordVisit"))
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("map.eatGo"))
         XCTAssertTrue(map.contains("\"map.city\""))
         XCTAssertTrue(catalog.contains("pendingShowOnMapPlaceID"))
-        let contentView = try source(at: "SAV-E/App/ContentView.swift")
+        let contentView = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(contentView.contains(".environmentObject(doodleSession)"))
     }
 
@@ -1891,7 +1892,7 @@ final class SaveDoodleHomeTests: XCTestCase {
     }
 
     func testHomeShowsLocationDeniedPromptIdentifiers() throws {
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(home.contains("home.locationPrompt"))
         XCTAssertTrue(home.contains("home.locationAllow"))
@@ -1936,9 +1937,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         ).map(\.id)
         XCTAssertEqual(homeIDs, [tokyoGo.id])
 
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertFalse(map.contains("applyMiniMapHandoff()"))
         XCTAssertFalse(map.contains("beginMiniMapHandoff()"))
         XCTAssertFalse(map.contains("consumeMiniMapHandoff()"))
@@ -1975,7 +1976,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()"))
         XCTAssertTrue(content.contains("endExactSearchSessionAfterCandidateSave()"))
         XCTAssertTrue(content.contains("onClearMapSearchResults: { endsExactSearch in"))
-        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
         let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
@@ -1986,7 +1987,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(catalogSource.contains("func abandonMiniMapHandoff()"))
         XCTAssertFalse(catalogSource.contains("func applyMapTabSelection"))
         XCTAssertFalse(catalogSource.contains("pendingMiniMapHandoff"))
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertFalse(root.contains("consumeMiniMapHandoff()"))
         XCTAssertTrue(root.contains(".accessibilityIdentifier(\"map.root\")"))
         XCTAssertTrue(
@@ -2098,9 +2099,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
         XCTAssertEqual(notInCollection.map(\.place.id), [tokyoEat.id])
 
-        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("including: mapViewModel.selectedPlace"))
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("including: mapViewModel.selectedPlace"))
     }
 
@@ -2284,7 +2285,7 @@ final class SaveDoodleHomeTests: XCTestCase {
 
     func testHomeReviewActionUsesFounderC8442AOnLightOnly() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertEqual(SaveAtlasPalette.homeReviewActionLightHex, "C8442A")
         XCTAssertEqual(SaveAtlasPalette.homeReviewActionDarkHex, "F26B4A")
         XCTAssertEqual(SaveAtlasPalette.coralLightHex, "F26B4A")

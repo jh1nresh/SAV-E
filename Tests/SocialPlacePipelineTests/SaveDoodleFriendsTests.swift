@@ -80,7 +80,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
     }
 
     func testProductionFriendsIsDoodleNotTileTown() throws {
-        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        let friends = try source(at: "SAV-E/Legacy/Views/Origin/SaveFriendsView.swift")
         XCTAssertTrue(friends.contains("SaveDisplayTitle"))
         XCTAssertTrue(friends.contains("pointSize: 34"))
         XCTAssertTrue(friends.contains("locksPointSize: true"))
@@ -152,7 +152,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(store.contains(".wantToGo, \"leo\""))
         XCTAssertTrue(store.contains(".visited, \"kai\""))
         XCTAssertTrue(store.contains(".visited, \"ana\""))
-        let artwork = try source(at: "SAV-E/Views/Origin/SharedPostViews.swift")
+        let artwork = try source(at: "SAV-E/Legacy/Views/Origin/SharedPostViews.swift")
         XCTAssertTrue(artwork.contains("SaveDoodleFriendSticker"))
         XCTAssertTrue(artwork.contains("showsColor(for: post.status)"))
         XCTAssertFalse(artwork.contains("Image(systemName: post.icon)"))
@@ -168,10 +168,10 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertFalse(friends.contains("SaveTileTownPin"))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Views/TileTown/SavePostageSealAvatar.swift"
+                "SAV-E/Legacy/Views/TileTown/SavePostageSealAvatar.swift"
             ).path
         ))
-        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        let stamp = try source(at: "SAV-E/Legacy/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertFalse(stamp.contains("struct SavePostageSealAvatar"))
         XCTAssertFalse(stamp.contains("enum SaveFriendLastAt"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
@@ -181,7 +181,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(rail.contains("--uitest-friends-town"))
         XCTAssertFalse(rail.contains("atlas-friends-town"))
         XCTAssertFalse(rail.contains("friends.mapStrip\"].waitForExistence"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("SaveFriendsView"))
         XCTAssertTrue(design.contains("shared map stays hidden"))
         XCTAssertTrue(design.contains("Codex packet spec §7.4"))
@@ -203,7 +203,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertFalse(evidence.contains("--uitest-friends-width"))
         XCTAssertTrue(design.contains("no animation (F-B11)"))
         XCTAssertFalse(design.contains("Parity target is DESIGN v2 `friends-light.png`"))
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(content.contains("requestsSocialConnections = true; selectedRootTab = .profile"))
         XCTAssertTrue(content.contains("PassportConnectionsView (Friends section)"))
     }

@@ -10,7 +10,7 @@ class ClipPendingConfirmationTests(unittest.TestCase):
         self.assertFalse('case saved' in source)
         self.assertIn('case pending(Int)', source)
     def test_app_requires_explicit_confirmation(self):
-        source = (ROOT / "SAV-E/App/ContentView.swift").read_text()
+        source = (ROOT / "SAV-E/Legacy/App/ContentView.swift").read_text()
         self.assertFalse('performPendingShareAutoSave' in source)
         self.assertFalse('runLatest(' in source)
         self.assertIn('app.handoff.confirmList', source)

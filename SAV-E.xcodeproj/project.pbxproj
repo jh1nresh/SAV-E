@@ -753,7 +753,6 @@
 		4320D2B25C0E7653731FFABF /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
-				F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */,
 				F2A0F64C102747295852D0AA /* OnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -802,6 +801,7 @@
 				6C2DCF9FEA8961AD3AC2D8C2 /* Testing */,
 				D1C086CA678A70A2B9FC7D15 /* ViewModels */,
 				7588A6BDD6EE6C407B45B9C2 /* Views */,
+				8855FBE399562C25FA2B49A3 /* Legacy */,
 			);
 			path = "SAV-E";
 			sourceTree = "<group>";
@@ -887,14 +887,7 @@
 		7474D3EF06276FBAA7A7CE02 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				A5009253F9320E70D431D935 /* CategoryPill.swift */,
-				AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */,
-				688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */,
 				B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */,
-				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
-				898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */,
-				D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */,
-				367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -913,21 +906,9 @@
 			isa = PBXGroup;
 			children = (
 				INK1A000000000000000009 /* InkNotebook */,
-				68F2C25133736DAABDAA1B57 /* Atlas */,
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
-				9139D454B1CF7369056FEAD9 /* Drawer */,
-				C4P100000000000000000005 /* Capture */,
-				1C3D7D3EC0790BB3B200433A /* Home */,
-				T7A10000000000000000000B /* TileTown */,
-				0DEF737A97EB8D779D03246B /* Import */,
-				BE956518D9B2C4F8D91A4B28 /* Map */,
 				4320D2B25C0E7653731FFABF /* Onboarding */,
-				FC233FF308BCA01DD137B953 /* Origin */,
-				C2D3E4F5061728394A5B6C7D /* Plan */,
-				0CF873FD5E2B5B611179A1D6 /* Previews */,
-				DE053ABF257FAF333E4A2425 /* Profile */,
 				7474D3EF06276FBAA7A7CE02 /* Shared */,
-				E608936EEC1E44C0B807AA6A /* Trips */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -993,7 +974,7 @@
 				6C84069DBCF7887D8E65D10D /* Theme.swift */,
 			);
 			name = Sources;
-			path = Prototypes/AtlasPostcard/Sources;
+			path = Prototypes/AtlasPostcard/Legacy/Sources;
 			sourceTree = "<group>";
 		};
 		A2E50A68C45C77F93AD3F626 /* SAV-EShared */ = {
@@ -1037,7 +1018,6 @@
 		AE8E497E569CD63092A35D8B /* App */ = {
 			isa = PBXGroup;
 			children = (
-				8165C7FCD4C17E50EFFC6532 /* ContentView.swift */,
 				6791E7A348909E816148107C /* SaveApp.swift */,
 				8C1A0B0D0E0F1A2B3C4D5E60 /* SaveChromePresentation.swift */,
 			);
@@ -1226,6 +1206,66 @@
 				INK1A000000000000000007 /* SaveInkNotebookRoot.swift */,
 			);
 			path = InkNotebook;
+			sourceTree = "<group>";
+		};
+		8855FBE399562C25FA2B49A3 /* Legacy */ = {
+			isa = PBXGroup;
+			children = (
+				54754CC09A801F3C5100FFFB /* App */,
+				3D8531B4AB76D34F2FEB8186 /* Views */,
+			);
+			path = Legacy;
+			sourceTree = "<group>";
+		};
+		54754CC09A801F3C5100FFFB /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8165C7FCD4C17E50EFFC6532 /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		3D8531B4AB76D34F2FEB8186 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				68F2C25133736DAABDAA1B57 /* Atlas */,
+				9139D454B1CF7369056FEAD9 /* Drawer */,
+				C4P100000000000000000005 /* Capture */,
+				1C3D7D3EC0790BB3B200433A /* Home */,
+				T7A10000000000000000000B /* TileTown */,
+				0DEF737A97EB8D779D03246B /* Import */,
+				BE956518D9B2C4F8D91A4B28 /* Map */,
+				FC233FF308BCA01DD137B953 /* Origin */,
+				C2D3E4F5061728394A5B6C7D /* Plan */,
+				0CF873FD5E2B5B611179A1D6 /* Previews */,
+				DE053ABF257FAF333E4A2425 /* Profile */,
+				E608936EEC1E44C0B807AA6A /* Trips */,
+				D4D29451B50EE8D74158B71F /* Onboarding */,
+				D8FADAE9D22395016416996E /* Shared */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D8FADAE9D22395016416996E /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A5009253F9320E70D431D935 /* CategoryPill.swift */,
+				AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */,
+				688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */,
+				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
+				898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */,
+				D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */,
+				367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		D4D29451B50EE8D74158B71F /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */,
+			);
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

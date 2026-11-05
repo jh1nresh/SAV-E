@@ -4,7 +4,7 @@ import XCTest
 final class AtlasOneFaceUITests: XCTestCase {
     func testDesignTokensMatchLockedOneFacePalette() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
-        let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
+        let prototype = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Theme.swift")
         let spec = try source(at: "Prototypes/AtlasPostcard/design.md")
         let productionHexes = ["FFF9EB", "0E4A33", SaveAtlasPalette.coralLightHex, "B5E3F5", "2F2E23", "62594F"]
         let retiredDraftHexes = ["FFF8EE", "174E37", "F27D5C", "CDEDF4", "3F281A", "80664F"]
@@ -25,8 +25,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let clip = try source(at: "SAV-EClip/ClipContentView.swift")
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
-        let pin = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        let design = try source(at: "DESIGN.md")
+        let pin = try source(at: "SAV-E/Legacy/Views/TileTown/SaveTileTownMap.swift")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertEqual(SaveAtlasPalette.creamHex, "FFF9EB")
         XCTAssertEqual(SaveAtlasPalette.coralLightHex, SaveAtlasPalette.brandCoralHex)
         XCTAssertEqual(SaveAtlasPalette.brandCoralHex, "F26B4A")
@@ -63,7 +63,7 @@ final class AtlasOneFaceUITests: XCTestCase {
     }
 
     func testReviewTicketFaceOmitsMapReadyAndConfidencePercent() throws {
-        let review = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let review = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
         XCTAssertFalse(review.contains("map ready"))
         XCTAssertFalse(review.contains("MAP READY"))
         XCTAssertFalse(review.contains("% confidence"))
@@ -93,15 +93,15 @@ final class AtlasOneFaceUITests: XCTestCase {
     }
 
     func testHomeTripCardAndTripsTabShowBeta() throws {
-        let home = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let home = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
         XCTAssertTrue(home.contains("home.trip.beta"))
         XCTAssertTrue(home.contains("trips.beta.badge"))
     }
 
     func testSoftPixelH1ProductionHomeUsesPaperLibraryNotCityHero() throws {
-        let home = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
-        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
-        let mapRoot = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let home = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
+        let bridge = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let mapRoot = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
 
         XCTAssertTrue(bridge.contains("productionLocksOneFaceHomeComposition = false"))
         XCTAssertTrue(bridge.contains("productMapBaseIsTileTown = true"))
@@ -133,10 +133,10 @@ final class AtlasOneFaceUITests: XCTestCase {
     }
 
     func testSoftPixelM1StampSurfacesOmitHexAndPipelineTokens() throws {
-        let badgeSource = try source(at: "SAV-E/Views/Shared/SaveMemoryBadge.swift")
-        let pinSource = try source(at: "SAV-E/Views/Map/MapView.swift")
-        let stamp = try typeBody("RoundStamp", in: try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift"))
-        let chip = try typeBody("StampChip", in: try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift"))
+        let badgeSource = try source(at: "SAV-E/Legacy/Views/Shared/SaveMemoryBadge.swift")
+        let pinSource = try source(at: "SAV-E/Legacy/Views/Map/MapView.swift")
+        let stamp = try typeBody("RoundStamp", in: try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift"))
+        let chip = try typeBody("StampChip", in: try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift"))
         let medallion = try typeBody("SavePostcardPerforatedMedallion", in: try source(at: "SAV-E/Extensions/Color+Theme.swift"))
         let badge = try typeBody("SaveMemoryBadge", in: badgeSource)
         let pin = try typeBody("PlaceMapPin", in: pinSource)
@@ -163,20 +163,20 @@ final class AtlasOneFaceUITests: XCTestCase {
 
     func testOneFaceDiffDoesNotTouchGrantPath() {
         let oneFaceSwiftFiles: Set<String> = [
-            "Prototypes/AtlasPostcard/Sources/Components.swift",
-            "Prototypes/AtlasPostcard/Sources/Presentation.swift",
-            "Prototypes/AtlasPostcard/Sources/Screens.swift",
-            "Prototypes/AtlasPostcard/Sources/Theme.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Presentation.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Theme.swift",
             "SAV-E/App/SaveApp.swift",
             "SAV-E/Extensions/Color+Theme.swift",
             "SAV-E/Models/Trip.swift",
             "SAV-E/Services/PrivyAuthService.swift",
             "SAV-E/Services/ReviewDemoService.swift",
             "SAV-E/ViewModels/TripPackStore.swift",
-            "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift",
-            "SAV-E/Views/Drawer/AIDrawerView.swift",
-            "SAV-E/Views/Home/SaveRootViews.swift",
-            "SAV-E/Views/Onboarding/MapCoachmarkTour.swift",
+            "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift",
+            "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift",
+            "SAV-E/Legacy/Views/Home/SaveRootViews.swift",
+            "SAV-E/Legacy/Views/Onboarding/MapCoachmarkTour.swift",
             "SAV-E/Views/Onboarding/OnboardingView.swift",
             "SAV-E/Views/Shared/SavvyBrandMark.swift",
             "Tests/SAVEUITests/SAVEScreenshotRailTests.swift",

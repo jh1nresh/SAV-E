@@ -208,7 +208,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         )
         XCTAssertEqual(next.pitch, 0, accuracy: 0.001)
 
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("SavvyMapMotion.cardOpen"))
         XCTAssertTrue(root.contains("moveCamera(to:"))
         XCTAssertTrue(root.contains("SavvyMapCameraFollow.scheduleOpenMove"))
@@ -295,10 +295,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         session.select(UUID())
         XCTAssertEqual(session.requestCollapse(), .close)
 
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("onTapGesture"))
         XCTAssertTrue(root.contains("collapseSelection(clearPlace: true)"))
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(
             pins.contains("SavvyMapPinMetrics.collapseDrag"),
             "swipe-down collapse lives on the card, not the map root"
@@ -385,10 +385,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP7BeenHereUsesVisitedPinStyle() throws {
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("smallPinVisitedOuter"))
         XCTAssertTrue(pins.contains("SavvyMapPinMetrics.visitedRing"))
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("place.status == .visited || visits.visitCount"))
         XCTAssertTrue(root.contains("visits.recordPersistedVisit(placeID:"))
         XCTAssertTrue(root.contains("updated.status = .visited"))
@@ -397,12 +397,12 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     func testP8MapMotionTokensAreIsolatedFromThemeSprings() throws {
         XCTAssertEqual(SavvyMapPinMetrics.pinShadowOpacity, 0.45, accuracy: 0.0001)
         XCTAssertEqual(SavvyMapPinMetrics.cardShadowOpacity, 0.35, accuracy: 0.0001)
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("SavvyMapMotion"))
         XCTAssertFalse(home.contains("SavvyMapPinMetrics.cardShadow"))
-        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let paywall = try source(at: "SAV-E/Legacy/Views/Profile/SaveProPaywallView.swift")
         XCTAssertFalse(paywall.contains("SavvyMapMotion"))
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         XCTAssertFalse(profile.contains("SavvyMapMotion"))
     }
 
@@ -419,19 +419,19 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             String(describing: SavvyMapMotion.reduceMotion),
             String(describing: Animation.easeInOut(duration: 0.25))
         )
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("reduceMotion ? 1 : (showsBadge ? 1 : SavvyMapPinMetrics.badgeScaleFromPin)"))
         XCTAssertTrue(pins.contains("reduceMotion ? 1 : (isOpen ? 1 : SavvyMapPinMetrics.cardScaleFromBadge)"))
         XCTAssertTrue(pins.contains("reduceMotion ? (isOpen ? 1 : 0)"))
         XCTAssertTrue(pins.contains("if reduceMotion {\n                    if isFlipped"))
         XCTAssertTrue(pins.contains("usesQuarterSecondFade(reduceMotion)"))
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("SavvyMapCameraFollow.scheduleOpenMove"))
         XCTAssertTrue(root.contains("if reduceMotion"))
     }
 
     func testP10VoiceOverCopyNamesVisitState() throws {
-        let pin = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pin = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pin.contains("accessibilityAddTraits(.isButton)"))
         XCTAssertTrue(pin.contains("traditionalChinese: \"去過\""))
         XCTAssertTrue(pin.contains("traditionalChinese: \"沒去過\""))
@@ -514,7 +514,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(chineseDate.contains("October"))
         XCTAssertTrue(chineseDate.contains("10") && chineseDate.contains("24"))
 
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("SavvyMapCardCopy.directionsTitle"))
         XCTAssertFalse(pins.contains("Text(\"Directions\")"))
         XCTAssertTrue(pins.contains("traditionalChinese: \"怎麼去\""))
@@ -524,7 +524,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(pins.contains("SaveDoodleLens"))
         XCTAssertEqual(pins.components(separatedBy: "SavvyMapCardCopy.directionsTitle").count - 1, 2)
 
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("SavvyMapDirectionsLaunch.open"))
         XCTAssertTrue(
             root.contains("onDirections: { openDirections(place) }"),
@@ -541,7 +541,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP11ThirtyPinsStayIndividualAnnotations() throws {
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("ForEach(savvyPinPlaces)"))
         XCTAssertTrue(root.contains("Annotation("))
         XCTAssertFalse(root.contains("MKClusterAnnotation"))
@@ -637,7 +637,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP12SpringValuesMatchSpecSection6() throws {
-        let source = try self.source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let source = try self.source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(source.contains("response: 0.46, dampingFraction: 0.61"))
         XCTAssertTrue(source.contains("response: 0.46, dampingFraction: 0.74"))
         XCTAssertTrue(source.contains("response: 0.51, dampingFraction: 0.86"))
@@ -678,24 +678,24 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP13HomeCapAndUnplacedStayOutOfThisDiff() throws {
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("home.savedPlaces"))
         XCTAssertFalse(home.contains("SaveTileTownCanvas"))
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(root.contains("SaveDoodleHomeView("))
         XCTAssertTrue(root.contains("SaveDoodleMapView("))
         XCTAssertFalse(root.contains("SaveMapPhotoPinsRoot("))
-        let liveMap = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let liveMap = try source(at: "SAV-E/Legacy/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(liveMap.contains("nativeUnsavedCandidates"))
         XCTAssertTrue(liveMap.contains("routePolyline"))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
 
-        let map = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertFalse(map.contains("maxFree"))
         XCTAssertFalse(map.contains("Unplaced"))
         XCTAssertFalse(map.contains("freeSaved"))
 
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertFalse(pins.contains("maxFree"))
         XCTAssertFalse(pins.contains("Unplaced"))
 
@@ -772,7 +772,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         )
         XCTAssertEqual(afterSave.map(\.id), [saved.id])
 
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("savvyPinPlaces"))
         XCTAssertTrue(root.contains("SavvyMapStampPolicy.friendLensPins"))
         XCTAssertTrue(root.contains("selectMapFeature"))
@@ -846,7 +846,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertEqual(own.origin, .own)
         XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .failed), .coral)
 
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("CachedAsyncImage"))
         XCTAssertTrue(pins.contains("SavvyMapPinPhotoFill"))
         XCTAssertTrue(pins.contains("firstOwnSharedPhoto"))
@@ -855,7 +855,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(pins.contains("PlaceBusinessEnricher"))
         XCTAssertFalse(pins.contains("Photos: Google"))
 
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertFalse(root.contains("Photos: Google"))
         XCTAssertFalse(root.contains("map.photoAttribution"))
         XCTAssertFalse(root.contains("PlaceBusinessEnricher"))
@@ -926,7 +926,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(SavvyMapPhotoPinPreviewState.coralBadge.showsBadge)
         XCTAssertTrue(SavvyMapPhotoPinPreviewState.coralCardHero.showsCard)
 
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("SavvyMapPhotoPinPreviewCatalog"))
         XCTAssertTrue(pins.contains("savvyMapPreviewPhoto"))
         XCTAssertTrue(pins.contains("DEBUG FIXTURE"))
@@ -943,13 +943,13 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP0NoPhotoCardUsesFullCoralAndCreamIcon() throws {
-        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        let pins = try source(at: "SAV-E/Legacy/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("cardCoralIcon"))
         XCTAssertTrue(pins.contains("place.category.iconName"))
         XCTAssertTrue(pins.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(pins.contains("SaveTheme.Colors.cream"))
         XCTAssertTrue(pins.contains("SaveAtlasPalette.paper"))
-        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains(".camera(next)"))
         XCTAssertTrue(root.contains("pitch: 0"))
         XCTAssertFalse(root.contains("longitudeDelta: delta"))
@@ -1086,7 +1086,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testProductMapUsesAppleMapsNotTileTownCanvas() throws {
-        let map = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(map.contains(".standard("))
         XCTAssertTrue(map.contains("pointsOfInterest: .all"))
         XCTAssertFalse(map.contains("SaveTileTownCanvas"))

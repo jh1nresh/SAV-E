@@ -170,7 +170,7 @@ final class TapCrashP0Tests: XCTestCase {
     }
 
     func testMapEmbeddedDrawerDoesNotCarrySheetDetents() throws {
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(content.contains("presentedDrawerView"))
         XCTAssertTrue(content.contains("suppressChromeDismissSideEffects"))
         XCTAssertTrue(content.contains("SaveChromeNavigation.pathByOpening"))

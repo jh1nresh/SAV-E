@@ -186,8 +186,8 @@ final class SaveDoodlePassportTests: XCTestCase {
     }
 
     func testRootIsDoodleGridAndFlagsOffTileTownMissions() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
+        let page = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(passport.contains("NavigationStack {"))
         XCTAssertTrue(
             passport.contains("if isRootTab {\n                passportRoot"),
@@ -223,7 +223,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.collected.root"))
         XCTAssertTrue(passport.contains("SharedPostsGrid"))
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
-        let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
+        let stickers = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportStickers.swift")
         XCTAssertTrue(stickers.contains("SaveDoodleOfficialSticker"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportCatalog.slotSize"))
         XCTAssertTrue(stickers.contains("officialSticker"))
@@ -231,7 +231,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(stickers.contains("249 / 255"))
         XCTAssertFalse(stickers.contains("SaveDoodlePassportStickerArt"))
         XCTAssertTrue(stickers.contains(".fill(SaveDoodlePassportChrome.stampBase)"))
-        let catalog = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportCatalog.swift")
+        let catalog = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportCatalog.swift")
         XCTAssertTrue(catalog.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(catalog.contains("SaveDoodleHomeProgressCatalog.visitedCount"))
         XCTAssertFalse(catalog.contains("enum SaveDoodleHomeProgressCatalog"))
@@ -316,7 +316,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         }
         XCTAssertNil(SaveDoodlePassportUnvisitedArt.assetName(for: .duck))
         XCTAssertNil(SaveDoodlePassportUnvisitedArt.resolvedImageName(for: .duck))
-        let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
+        let stickers = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportStickers.swift")
         XCTAssertTrue(stickers.contains("DRAFT v0"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))
         XCTAssertTrue(stickers.contains("resolvedImageName(for: kind)"))
@@ -386,7 +386,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(readme.contains("23cca55"))
         XCTAssertFalse(readme.contains("2026-10-19-doodle-v1-passport.png"))
         XCTAssertFalse(readme.contains("padded with paper"))
-        let design = try source(at: "DESIGN.md")
+        let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("passport-light.png"))
         XCTAssertTrue(design.contains("passport-dark.png"))
         XCTAssertTrue(design.contains("Passport (Doodle v1)"))
