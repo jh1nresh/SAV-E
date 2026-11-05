@@ -716,10 +716,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
+                "--uitest-location-denied",
                 "-save.appLanguage", "en",
             ]
         )
         launch(app)
+        dismissEntryLocationPrompt()
 
         let title = app.staticTexts["signin.title"]
         let apple = app.buttons["signin.apple"]
@@ -737,6 +739,113 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThanOrEqual(apple.frame.height, 44)
         XCTAssertGreaterThanOrEqual(google.frame.height, 44)
         attach(app, name: "signin-card-all-routes")
+    }
+
+    @MainActor
+    func testInkSignInKeyboardAndLargeText() throws {
+        for (language, size) in [
+            ("zh-Hant", "UICTContentSizeCategoryL"),
+            ("en", "UICTContentSizeCategoryAccessibilityXXXL"),
+        ] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage", "--uitest-location-denied",
+                "-save.appLanguage", language,
+                "-UIPreferredContentSizeCategoryName", size,
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            dismissEntryLocationPrompt()
+            let email = app.textFields["signin.emailField"]
+            XCTAssertTrue(email.waitForExistence(timeout: launchTimeout))
+            attach(app, name: "ink-signin-\(language)-\(size)")
+            XCTAssertTrue(scrollUntilHittable(email, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            typeText("appreview@wanderly.app", into: email)
+            XCTAssertFalse(app.buttons["signin.google"].exists)
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertTrue(app.buttons["signin.keyboardDone"].waitForExistence(timeout: stepTimeout))
+            let send = app.buttons["signin.sendCode"]
+            let emailVisibleBottom = min(app.keyboards.firstMatch.frame.minY, app.buttons["signin.keyboardDone"].frame.minY)
+            XCTAssertLessThanOrEqual(email.frame.maxY, emailVisibleBottom)
+            XCTAssertLessThanOrEqual(send.frame.maxY, emailVisibleBottom)
+            XCTAssertTrue(send.isHittable)
+            attach(app, name: "ink-signin-email-keyboard-\(language)")
+            dismissKeyboard(app: app)
+            XCTAssertTrue(scrollUntilHittable(send, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            XCTAssertGreaterThanOrEqual(send.frame.height, 44)
+            send.tap()
+            let code = app.textFields["signin.codeField"]
+            XCTAssertTrue(code.waitForExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.buttons["signin.google"].exists)
+            if language == "zh-Hant" {
+                let back = app.buttons["signin.backToOptions"]
+                XCTAssertTrue(scrollUntilHittable(back, in: app.scrollViews.firstMatch, maxSwipes: 8))
+                back.tap()
+                XCTAssertTrue(email.waitForExistence(timeout: stepTimeout))
+                XCTAssertTrue(app.buttons["signin.apple"].exists)
+                XCTAssertTrue(app.buttons["signin.google"].exists)
+                XCTAssertEqual(email.value as? String, "appreview@wanderly.app")
+                XCTAssertTrue(scrollUntilHittable(send, in: app.scrollViews.firstMatch, maxSwipes: 8))
+                send.tap()
+                XCTAssertTrue(code.waitForExistence(timeout: stepTimeout))
+            }
+            let hint = app.descendants(matching: .any)["signin.codeHint"]
+            XCTAssertTrue(hint.exists)
+            XCTAssertGreaterThanOrEqual(hint.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(hint.frame.maxX, app.frame.maxX)
+            XCTAssertTrue(scrollUntilHittable(code, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            typeText("424242", into: code)
+            XCTAssertTrue(app.keyboards.firstMatch.exists)
+            XCTAssertTrue(app.buttons["signin.keyboardDone"].waitForExistence(timeout: stepTimeout))
+            let verify = app.buttons["signin.verify"]
+            let codeVisibleBottom = min(app.keyboards.firstMatch.frame.minY, app.buttons["signin.keyboardDone"].frame.minY)
+            XCTAssertLessThanOrEqual(code.frame.maxY, codeVisibleBottom)
+            XCTAssertLessThanOrEqual(verify.frame.maxY, codeVisibleBottom)
+            XCTAssertTrue(verify.isHittable)
+            attach(app, name: "ink-signin-code-keyboard-\(language)")
+            dismissKeyboard(app: app)
+            XCTAssertTrue(scrollUntilHittable(verify, in: app.scrollViews.firstMatch, maxSwipes: 8))
+            XCTAssertGreaterThanOrEqual(verify.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(verify.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(verify.frame.maxX, app.frame.maxX)
+            attach(app, name: "ink-signin-code-\(language)")
+            verify.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["ink.welcome"].waitForExistence(timeout: stepTimeout)
+                || app.descendants(matching: .any)["ink.home"].exists)
+            terminate(app)
+        }
+    }
+
+    @MainActor
+    func testInkOpeningUsesHonestWaitState() {
+        for language in ["en", "zh-Hant"] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--uitest-freeze-opening",
+                "--uitest-location-denied",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", language,
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            dismissEntryLocationPrompt()
+            let loading = app.descendants(matching: .any)["opening.loading"]
+            XCTAssertTrue(loading.waitForExistence(timeout: launchTimeout))
+            XCTAssertFalse(app.staticTexts["CLUE → STAMP"].exists)
+            attach(app, name: "ink-opening-\(language)")
+            terminate(app)
+        }
+    }
+
+    /// Unit-test host launches may leave an OS location prompt above the app.
+    /// Dismiss it before capturing the entry surface rather than accepting an obscured screenshot.
+    @MainActor
+    private func dismissEntryLocationPrompt() {
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
+        guard alert.waitForExistence(timeout: timeout(0.5)) else { return }
+        for label in ["Don’t Allow", "Don't Allow"] where alert.buttons[label].exists {
+            alert.buttons[label].tap()
+            XCTAssertTrue(alert.waitForNonExistence(timeout: stepTimeout))
+            return
+        }
+        XCTFail("Unexpected system alert obscures the entry screen: \(alert.label)")
     }
 
     @MainActor

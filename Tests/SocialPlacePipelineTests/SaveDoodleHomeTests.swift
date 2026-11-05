@@ -1551,7 +1551,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(catalogHint.contains("\\(fullPhrase) ·\""))
         XCTAssertTrue(catalogHint.contains("\\(shortPhrase) ·\""))
         XCTAssertTrue(catalogHint.contains("spoken: \"\\(leadingFull) \\(review)\""))
-        XCTAssertTrue(home.contains("MemoMascotMark"))
+        XCTAssertTrue(home.contains("SavvyBrandMark"))
         XCTAssertFalse(home.contains("import MapKit"))
         XCTAssertFalse(home.contains("MKMapView"))
         XCTAssertFalse(home.contains("Map(initialPosition:"))
@@ -1604,7 +1604,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("DoodleSticker"))
         XCTAssertFalse(home.contains("SaveDoodleStickerShape"))
         XCTAssertFalse(home.contains("SaveDoodleElephantShape"))
-        for name in ["Duck", "Noodle", "Coffee", "Temple", "Lantern", "Elephant"] {
+        for name in ["Duck", "Noodle", "Coffee", "Temple", "Lantern"] {
             for suffix in ["Color", "Color48", "Outline"] {
                 XCTAssertTrue(
                     FileManager.default.fileExists(
@@ -1637,6 +1637,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         ))
         let design = try source(at: "SAV-E/Legacy/DESIGN.md")
         XCTAssertTrue(design.contains("Savvy + small elephant + Eat/Go in the header"))
+
         XCTAssertTrue(design.contains("no map component"))
         XCTAssertTrue(design.contains("official DESIGN color die-cut"))
         XCTAssertTrue(design.contains("small Memo elephant"))
@@ -1865,29 +1866,27 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(contentView.contains(".environmentObject(doodleSession)"))
     }
 
-    func testElephantStickerExistsLoadsAndIsNeverAPlaceMark() throws {
-        let color = repositoryRoot.appendingPathComponent(
-            "SAV-E/Resources/Assets.xcassets/DoodleStickerElephantColor48.imageset/elephant-color-48.png"
-        )
-        let outline = repositoryRoot.appendingPathComponent(
-            "SAV-E/Resources/Assets.xcassets/DoodleStickerElephantOutline.imageset/elephant-outline.pdf"
-        )
-        XCTAssertTrue(FileManager.default.fileExists(atPath: color.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: outline.path))
-        let png = try Data(contentsOf: color)
-        XCTAssertEqual([UInt8](png.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        let image = try XCTUnwrap(UIImage(data: png))
-        XCTAssertGreaterThan(image.size.width, 0)
-        XCTAssertGreaterThan(image.size.height, 0)
-        XCTAssertFalse(SaveDoodleOfficialSticker.placeCases.contains(.elephant))
-        let elephantNames = ["Elephant Cafe", "White Elephant", "小象", ""]
+    func testSavvyLogoMatchesAppIconAndRetiresElephantArtwork() throws {
+        let assets = repositoryRoot.appendingPathComponent("SAV-E/Resources/Assets.xcassets")
+        let logo = try Data(contentsOf: assets.appendingPathComponent("SavvyLogo.imageset/savvy-logo.png"))
+        let icon = try Data(contentsOf: assets.appendingPathComponent("AppIcon.appiconset/SaveAppIcon.png"))
+        XCTAssertEqual(logo, icon)
+        let prototypeLogo = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Resources/Assets.xcassets/SavvyLogo.imageset/savvy-logo.png"
+        ))
+        XCTAssertEqual(prototypeLogo, icon)
+        XCTAssertNotNil(UIImage(data: logo))
+        for name in ["MemoMascot", "SavesMemoSorting", "OnboardingMemoClue",
+                     "OnboardingMemoReview", "OnboardingMemoStamp", "HomeAtlasScene", "MapAtlasScene",
+                     "DoodleStickerElephantColor", "DoodleStickerElephantColor48", "DoodleStickerElephantOutline"] {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: assets.appendingPathComponent("\(name).imageset").path))
+        }
+        XCTAssertFalse(SaveDoodleOfficialSticker.allCases.map(\.rawValue).contains("elephant"))
         for category in PlaceCategory.allCases {
-            for name in elephantNames {
-                XCTAssertNotEqual(
-                    SaveDoodleOfficialSticker.named(for: category, placeName: name),
-                    .elephant,
-                    "\(category.rawValue) / \(name) must not map to the brand elephant"
-                )
+            for name in ["Elephant Cafe", "White Elephant", "小象", ""] {
+                XCTAssertTrue(SaveDoodleOfficialSticker.placeCases.contains(
+                    SaveDoodleOfficialSticker.named(for: category, placeName: name)
+                ))
             }
         }
     }

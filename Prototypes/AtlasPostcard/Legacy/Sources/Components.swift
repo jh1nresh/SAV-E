@@ -1,15 +1,14 @@
 import SwiftUI
 
-struct MemoMark: View {
+struct AtlasBrandMark: View {
     let size: CGFloat
 
     var body: some View {
-        Image("MemoMascot")
+        Image("SavvyLogo")
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
-            .scaleEffect(1.6)
-            .accessibilityLabel("Memo")
+            .accessibilityLabel("Savvy")
     }
 }
 

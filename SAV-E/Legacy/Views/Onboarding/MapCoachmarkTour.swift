@@ -35,8 +35,8 @@ struct MapCoachmarkStep: Identifiable, Equatable {
     let title: String
     let body: String
     let target: Target
-    /// Show the Memo mascot on this step (welcome / final beat).
-    let showsMascot: Bool
+    /// Show the Savvy brand mark on this step (welcome / final beat).
+    let showsBrand: Bool
 }
 
 // MARK: - Tour overlay
@@ -69,7 +69,7 @@ struct MapCoachmarkTour: View {
                     traditionalChinese: "存的地點會變成地圖章落在這裡——點一下就能看細節和來源。"
                 ),
                 target: .map,
-                showsMascot: true
+                showsBrand: true
             ),
             MapCoachmarkStep(
                 id: 1,
@@ -82,7 +82,7 @@ struct MapCoachmarkTour: View {
                     traditionalChinese: "貼上 Instagram、TikTok 或小紅書連結，或直接問。Savvy 會找到地點並加進來。"
                 ),
                 target: .drawer,
-                showsMascot: false
+                showsBrand: false
             )
         ]
     }
@@ -134,8 +134,8 @@ struct MapCoachmarkTour: View {
     private var tooltipCard: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
             HStack(alignment: .top, spacing: SaveTheme.Spacing.md) {
-                if step.showsMascot {
-                    MemoMascotMark(size: 46)
+                if step.showsBrand {
+                    SavvyBrandMark(size: 46)
                         .accessibilityHidden(true)
                 }
 

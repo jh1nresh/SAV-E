@@ -326,7 +326,7 @@ enum SaveText {
         case .accountManagedByLogin:
             return localized(english: "Email and sign-in provider stay managed by your login account.", traditionalChinese: "電子信箱與登入方式仍由你的登入帳號管理。", language: language)
         case .localMemoHelper:
-            return localized(english: "Local Memo helper", traditionalChinese: "本機 Memo 小助手", language: language)
+            return localized(english: "Local Savvy helper", traditionalChinese: "本機 Savvy 小助手", language: language)
         case .memoHelper:
             return localized(english: "MEMO HELPER", traditionalChinese: "MEMO 助手", language: language)
         case .reviewFirst:

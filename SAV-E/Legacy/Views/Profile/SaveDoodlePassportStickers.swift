@@ -347,7 +347,7 @@ extension SaveDoodleStickerKind {
     }
 
     /// Place marks only. Extra catalog kinds map to the nearest official
-    /// place sticker. Never returns `.elephant` — that mark is brand-only.
+    /// place sticker, separate from the Savvy brand mark.
     var officialSticker: SaveDoodleOfficialSticker {
         let mapped: SaveDoodleOfficialSticker
         switch self {

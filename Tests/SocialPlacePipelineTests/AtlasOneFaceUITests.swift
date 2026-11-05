@@ -69,7 +69,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(review.contains("% confidence"))
         XCTAssertTrue(review.contains("drawer.review.memoPeek"))
         XCTAssertTrue(review.contains("Confirm"))
-        XCTAssertTrue(review.contains("SavePostcardMemoPeek"))
+        XCTAssertTrue(review.contains("SavvyBrandMark"))
     }
 
     func testReviewDemoFixtureIsHarborOvenNeverQuarterSheets() throws {
@@ -78,9 +78,9 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(seed.contains("Quarter Sheets Pizza Club"))
     }
 
-    func testOnboardingKeepsMemoMascotMark() throws {
+    func testOnboardingKeepsSavvyBrandMark() throws {
         let firstRun = try source(at: "SAV-E/Views/Onboarding/OnboardingView.swift")
-        XCTAssertTrue(firstRun.contains("MemoMascotMark"))
+        XCTAssertTrue(firstRun.contains("SavvyBrandMark"))
         XCTAssertTrue(firstRun.contains("Text(step == .candidate ? text(\"Review Candidate\""))
         XCTAssertFalse(firstRun.contains("Label(step == .candidate"))
         XCTAssertTrue(
@@ -122,7 +122,7 @@ final class AtlasOneFaceUITests: XCTestCase {
     @MainActor
     func testSoftPixelH1RejectsPixelCityHeroAssets() {
         XCTAssertTrue(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("HomeAtlasSceneTaipei"))
-        XCTAssertTrue(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("HomeAtlasScene"))
+        XCTAssertFalse(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("HomeAtlasScene"))
         XCTAssertFalse(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("SoftPixelCityTokyo"))
         XCTAssertFalse(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("HomeAtlasScene16bit"))
         XCTAssertFalse(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("pixel-art-city"))
@@ -178,7 +178,7 @@ final class AtlasOneFaceUITests: XCTestCase {
             "SAV-E/Legacy/Views/Home/SaveRootViews.swift",
             "SAV-E/Legacy/Views/Onboarding/MapCoachmarkTour.swift",
             "SAV-E/Views/Onboarding/OnboardingView.swift",
-            "SAV-E/Views/Shared/MemoMascotMark.swift",
+            "SAV-E/Views/Shared/SavvyBrandMark.swift",
             "Tests/SAVEUITests/SAVEScreenshotRailTests.swift",
             "Tests/SocialPlacePipelineTests/AtlasHomeHeroPresentationTests.swift",
             "Tests/SocialPlacePipelineTests/AtlasOneFaceUITests.swift",

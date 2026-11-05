@@ -30,7 +30,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: compact ? 18 : 24) {
                         heading
                         postcard(photoHeight: step == .clue ? (compact ? 168 : 214) : (compact ? 148 : 174))
-                        memoNote
+                        exampleNote
                     }
                     .padding(.horizontal, 28)
                     .padding(.top, compact ? 16 : 24)
@@ -217,11 +217,11 @@ struct OnboardingView: View {
         .accessibilityLabel(text("Example source: @hidden.moon.cafe", "範例來源：@hidden.moon.cafe"))
     }
 
-    private var memoNote: some View {
+    private var exampleNote: some View {
         HStack(alignment: .center, spacing: 10) {
-            MemoMascotMark(size: 44, framed: false)
+            SavvyBrandMark(size: 44, framed: false)
             Text(step == .clue
-                ? text("I’m Memo. Let’s try one together.", "我是 Memo，一起試存一個地方。")
+                ? text("Let’s try saving one place together.", "一起試存一個地方。")
                 : step == .candidate
                     ? text("Not the right place? Keep the clue and try again.", "找錯了也沒關係，線索會留下。")
                     : text("Just a preview. This example won’t enter your collection.", "這次只是示範，不會加入你的收藏。"))
@@ -426,7 +426,7 @@ enum OnboardingStep: Int, CaseIterable {
     func subtitle(language: AppLanguage) -> String {
         switch self {
         case .clue: return language.localized(english: "Start with a post, a link, or a passing thought.", traditionalChinese: "從一篇貼文、一個連結，或隨手筆記開始。")
-        case .candidate: return language.localized(english: "Memo finds a match. You have the final say.", traditionalChinese: "Memo 幫你找，你來確認是不是這裡。")
+        case .candidate: return language.localized(english: "Savvy finds a match. You have the final say.", traditionalChinese: "Savvy 幫你找，你來確認是不是這裡。")
         case .mapStamp: return language.localized(english: "Confirmed places become private Map Stamps.", traditionalChinese: "確認過的地點，才會成為你的私人地圖章。")
         }
     }
@@ -467,7 +467,7 @@ struct SaveFirstRunBrandLockup: View {
 
     var body: some View {
         HStack(spacing: compact ? 6 : 8) {
-            MemoMascotMark(size: compact ? 28 : 36, framed: false)
+            SavvyBrandMark(size: compact ? 28 : 36, framed: false)
 
             Text("Savvy")
                 .font(SaveAtlasType.strong(compact ? 20 : 25))

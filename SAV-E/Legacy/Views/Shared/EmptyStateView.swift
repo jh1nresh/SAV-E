@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Memo-led empty state per DESIGN.md: Memo signals guidance, the cream
+/// Savvy empty state per DESIGN.md: the brand mark signals guidance, the cream
 /// notebook card keeps it personal, and the CTA gives the next action.
 struct EmptyStateView: View {
     let icon: String
@@ -13,7 +13,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: SaveTheme.Spacing.lg) {
             ZStack(alignment: .bottomTrailing) {
-                MemoMascotMark(size: 88)
+                SavvyBrandMark(size: 88)
 
                 SaveIconTile(
                     systemName: icon,

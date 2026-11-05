@@ -13,7 +13,7 @@ enum SaveAtlasRuntime {
 /// product Map uses a full-pixel tile-town base, not MapKit / Atlas paper
 /// with Soft Pixel accents only. Home is `SaveDoodleHomeView` (founder
 /// 2026-10-20 abandoned tile-town on Home). Soft Pixel remains the accent
-/// language for pins, Map Stamp seals, and Memo *on* remaining town surfaces.
+/// language for pins, Map Stamp seals, and brand marks *on* remaining town surfaces.
 ///
 /// M1 is unchanged: seals never show raw hex, debug IDs, or pipeline tokens.
 ///
@@ -29,7 +29,6 @@ nonisolated enum SaveSoftPixelAccentsLock: Sendable {
     static let productMapBaseIsTileTown = true
 
     static let illustratedCityAtlasAssets: Set<String> = [
-        "HomeAtlasScene",
         "HomeAtlasSceneTaipei",
         "HomeAtlasSceneNewYork",
         "HomeAtlasSceneShanghai",

@@ -256,7 +256,7 @@ struct SaveLibraryView: View {
         VStack(spacing: 0) {
             if sortedCandidates.isEmpty {
                 VStack(spacing: 8) {
-                    MemoMascotMark(size: 72, framed: false)
+                    SavvyBrandMark(size: 72, framed: false)
                     Text(captureResultCount == nil
                         ? localized("No clues waiting", "沒有待確認線索")
                         : localized("This capture is reviewed", "本次線索已處理完"))
