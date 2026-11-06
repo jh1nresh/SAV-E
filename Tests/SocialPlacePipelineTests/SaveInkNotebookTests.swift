@@ -1734,8 +1734,7 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(operation.region.span.longitudeDelta, 360)
         XCTAssertEqual(operation.region.center.latitude, 0)
         XCTAssertEqual(operation.region.center.longitude, 0)
-        operation.cancel()
-        XCTAssertTrue(operation.isCancelled)
+        XCTAssertFalse(operation.isLoading, "Constructing a request must not start an external lookup")
     }
 
     func testStructuredAddressReplyRoutesNearbyMunicipalityWithoutReplacingProviderPoint() async throws {
