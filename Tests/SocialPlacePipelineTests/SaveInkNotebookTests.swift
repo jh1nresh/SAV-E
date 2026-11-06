@@ -1724,6 +1724,82 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: matches ?? []), "CN")
     }
 
+    func testStructuredAddressGeocoderKeepsOriginalAddressLocaleAndWorldRegion() throws {
+        guard #available(iOS 26.0, macOS 26.0, *) else { return }
+        let address = "中国北京市朝阳区望京东园四区4号楼"
+        let operation = try XCTUnwrap(SaveInkMapCountryRequest.addressGeocoder(for: address))
+        XCTAssertEqual(operation.addressString, address)
+        XCTAssertEqual(operation.preferredLocale?.identifier, "en_US")
+        XCTAssertEqual(operation.region.span.latitudeDelta, 180)
+        XCTAssertEqual(operation.region.span.longitudeDelta, 360)
+        XCTAssertEqual(operation.region.center.latitude, 0)
+        XCTAssertEqual(operation.region.center.longitude, 0)
+        operation.cancel()
+        XCTAssertTrue(operation.isCancelled)
+    }
+
+    func testStructuredAddressReplyRoutesNearbyMunicipalityWithoutReplacingProviderPoint() async throws {
+        var place = inkRow(id: "public-structured-country", name: "Original saved name", street: "Public address")
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: "original-id")
+        place.mapReference = reference
+        // The observed structured-geocoder shape omits the admin field.
+        let match = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 39.995238, longitude: 116.487146),
+                                addressDictionary: ["CountryCode": "CN", "City": "Beijing"])
+        XCTAssertEqual(match.locality, "Beijing")
+        XCTAssertNil(match.administrativeArea)
+        var started = false
+        var searches = 0
+        var phases: [String] = []
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true }, search: { point, address, _ in
+            XCTAssertEqual(point, reference)
+            XCTAssertEqual(address, "Public address")
+            searches += 1
+        }, observe: { phase, _, _ in phases.append(phase) })
+        let work = Task { @MainActor in await SaveInkMapPolicy.destinationCountryCode(for: place, request: request) }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        XCTAssertEqual(searches, 1)
+        request.completeAddressLookup([match], error: nil, phase: "addressGeocoder")
+        let country = await work.value
+        XCTAssertEqual(country, "CN")
+        XCTAssertEqual(phases, ["geocoder", "addressGeocoder"])
+        XCTAssertEqual(place.mapReference, reference)
+        XCTAssertEqual(place.name, "Original saved name")
+        request.completeAddressLookup([], error: nil, phase: "late")
+        XCTAssertEqual(phases, ["geocoder", "addressGeocoder"], "A completed backend cannot emit late observations or results")
+    }
+
+    func testCancelledStructuredAddressReplyIsIgnoredBeforeActorCleanup() async throws {
+        let reference = SaveInkMapReference(latitude: 40, longitude: 116.48,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var started = false
+        var phases: [String] = []
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true }, search: { _, _, _ in },
+                                              observe: { phase, _, _ in phases.append(phase) })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        work.cancel()
+        request.completeAddressLookup([MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 40, longitude: 116.48),
+            addressDictionary: ["CountryCode": "CN", "City": "Beijing"])], error: nil, phase: "addressGeocoder")
+        XCTAssertEqual(phases, ["geocoder"], "The cancellation flag must reject a queued backend reply before actor cleanup")
+        let result = await work.value
+        XCTAssertNil(result)
+    }
+
     func testAmapAddressFallbackOnlyHandlesProviderNoResult() async throws {
         let provider = SaveInkMapReference(latitude: 40, longitude: 116.48,
             coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)

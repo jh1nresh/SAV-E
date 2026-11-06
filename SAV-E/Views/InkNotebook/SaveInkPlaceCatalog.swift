@@ -1041,7 +1041,7 @@ final class SaveInkMapCountryRequest {
     private let search: Start?
     /// Optional observation for public live fixtures; no addresses or coordinates are logged.
     private let observe: (@MainActor (String, [CLPlacemark]?, Error?) -> Void)?
-    private var addressSearch: MKLocalSearch?
+    private var cancelAddressLookup: (@MainActor () -> Void)?
     private(set) var usedAddressSearch = false
     private var continuation: CheckedContinuation<[CLPlacemark]?, Never>?
     private var deadlineTask: Task<Void, Never>?
@@ -1110,19 +1110,41 @@ final class SaveInkMapCountryRequest {
             search(reference, address) { [weak self] matches in self?.finish(matches) }
             return
         }
+        if #available(iOS 26.0, macOS 26.0, *) {
+            guard let operation = Self.addressGeocoder(for: address) else { finish(nil); return }
+            cancelAddressLookup = { operation.cancel() }
+            operation.getMapItems { [weak self] items, error in
+                self?.completeAddressLookup(items?.map(\.placemark), error: error, phase: "addressGeocoder")
+            }
+            return
+        }
         let query = MKLocalSearch.Request()
         query.naturalLanguageQuery = address
         // A building address may be indexed as a POI rather than a street address.
         // Results still supply only nearby, unanimous region metadata; never identity.
         query.resultTypes = [.address, .pointOfInterest]
         let operation = MKLocalSearch(request: query)
-        addressSearch = operation
+        cancelAddressLookup = { operation.cancel() }
         operation.start { [weak self] response, error in
             Task { @MainActor [weak self] in
-                self?.observe?("addressSearch", response?.mapItems.map(\.placemark), error)
-                self?.finish(error == nil ? response?.mapItems.map(\.placemark) : nil)
+                self?.completeAddressLookup(response?.mapItems.map(\.placemark), error: error, phase: "addressSearch")
             }
         }
+    }
+
+    /// Structured address geocoding avoids interpreting a full street address
+    /// as a POI name. Leave its world region untouched: GCJ is never MapKit input.
+    @available(iOS 26.0, macOS 26.0, *)
+    static func addressGeocoder(for address: String) -> MKGeocodingRequest? {
+        let request = MKGeocodingRequest(addressString: address)
+        request?.preferredLocale = Locale(identifier: "en_US")
+        return request
+    }
+
+    func completeAddressLookup(_ result: [CLPlacemark]?, error: Error?, phase: String) {
+        guard !finished, usedAddressSearch, continuation != nil, !cancellation.withLock({ $0 }) else { return }
+        observe?(phase, result, error)
+        finish(error == nil ? result : nil)
     }
 
     private func finish(_ result: [CLPlacemark]?) {
@@ -1130,6 +1152,7 @@ final class SaveInkMapCountryRequest {
         finished = true
         deadlineTask?.cancel()
         deadlineTask = nil
+        cancelAddressLookup = nil
         let pending = continuation
         continuation = nil
         pending?.resume(returning: cancellation.withLock({ $0 }) ? nil : result)
@@ -1139,9 +1162,10 @@ final class SaveInkMapCountryRequest {
         cancellation.withLock { $0 = true }
         guard !finished else { return }
         observe?("cancelOrDeadline", nil, nil)
+        let cancelLookup = cancelAddressLookup
         finish(nil)
         if let stop { stop() } else { geocoder.cancelGeocode() }
-        addressSearch?.cancel()
+        cancelLookup?()
     }
 }
 
