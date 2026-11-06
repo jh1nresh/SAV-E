@@ -71,6 +71,13 @@ struct SaveApp: App {
         case listJoin
     }
 
+    private struct LinkAlertPresentation: Identifiable, Hashable {
+        let title: String
+        let message: String
+
+        var id: Self { self }
+    }
+
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings(userDefaults: SaveInkLaunch.defaults)
     @Environment(\.scenePhase) private var scenePhase
@@ -210,37 +217,14 @@ struct SaveApp: App {
             .onChange(of: authService.sessionGeneration) { _, generation in
                 handleAccountGenerationChange(generation)
             }
-            .alert(linkAlertTitle, isPresented: Binding(
-                get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkFailure != nil },
-                set: {
-                    if !$0 {
-                        openedTrip = nil
-                        openedList = nil
-                        openedReferral = nil
-                        linkFailure = nil
+            .alert(item: linkAlertBinding) { alert in
+                Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text(languageSettings.text(.ok))) {
+                        dismissLinkAlert(alert)
                     }
-                }
-            )) {
-                Button(languageSettings.text(.ok)) {
-                    openedTrip = nil
-                    openedList = nil
-                    openedReferral = nil
-                    linkFailure = nil
-                }
-            } message: {
-                if let linkFailure {
-                    Text(linkFailureMessage(linkFailure))
-                } else if let openedReferral {
-                    Text(referralReadyMessage(openedReferral))
-                } else if let openedList {
-                    Text(listReadyMessage(openedList))
-                } else if let openedTrip {
-                    Text(String(
-                        format: languageSettings.text(.tripLinkMessage),
-                        openedTrip.name,
-                        openedTrip.stops.count
-                    ))
-                }
+                )
             }
         }
     }
@@ -736,6 +720,47 @@ struct SaveApp: App {
         else { return }
         // Preview-only AppStorage URL is not a Clip save intent.
         handleIncomingURL(url)
+    }
+
+    private var linkAlertBinding: Binding<LinkAlertPresentation?> {
+        // Keep each presentation immutable. An undismissed failure and its
+        // successful retry are distinct items even while an alert stays open.
+        let alert = currentLinkAlert
+        return Binding(
+            get: { alert },
+            set: { next in
+                if next == nil { dismissLinkAlert(alert) }
+            }
+        )
+    }
+
+    private var currentLinkAlert: LinkAlertPresentation? {
+        let message: String
+        if let linkFailure {
+            message = linkFailureMessage(linkFailure)
+        } else if let openedReferral {
+            message = referralReadyMessage(openedReferral)
+        } else if let openedList {
+            message = listReadyMessage(openedList)
+        } else if let openedTrip {
+            message = String(
+                format: languageSettings.text(.tripLinkMessage),
+                openedTrip.name,
+                openedTrip.stops.count
+            )
+        } else {
+            return nil
+        }
+        return LinkAlertPresentation(title: linkAlertTitle, message: message)
+    }
+
+    private func dismissLinkAlert(_ alert: LinkAlertPresentation?) {
+        // Dismissing the replaced alert must not consume a newer result.
+        guard let alert, currentLinkAlert?.id == alert.id else { return }
+        openedTrip = nil
+        openedList = nil
+        openedReferral = nil
+        linkFailure = nil
     }
 
     private var linkAlertTitle: String {
