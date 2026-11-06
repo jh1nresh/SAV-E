@@ -980,10 +980,14 @@ enum SaveInkMapPolicy {
     /// used only for nearby-result validation, never as a MapKit search region.
     @MainActor
     static func destinationCountryCode(for place: SaveInkPlace) async -> String? {
+        await destinationCountryCode(for: place, request: SaveInkMapCountryRequest())
+    }
+
+    @MainActor
+    static func destinationCountryCode(for place: SaveInkPlace, request: SaveInkMapCountryRequest) async -> String? {
         guard !Task.isCancelled, let reference = reference(for: place) else { return nil }
         let address = (place.addressLine ?? place.street).trimmingCharacters(in: .whitespacesAndNewlines)
         if reference.coordinateSystem != .wgs84, address.isEmpty || address == place.name { return nil }
-        let request = SaveInkMapCountryRequest()
         guard let matches = await request.matches(reference: reference, address: address), !Task.isCancelled else { return nil }
         if request.usedAddressSearch {
             return searchCountryCode(reference: reference, matches: matches)
@@ -1036,6 +1040,8 @@ final class SaveInkMapCountryRequest {
     private let start: Start?
     private let stop: (@MainActor () -> Void)?
     private let search: Start?
+    /// Optional observation for public live fixtures; no addresses or coordinates are logged.
+    private let observe: (@MainActor (String, [CLPlacemark]?, Error?) -> Void)?
     private var addressSearch: MKLocalSearch?
     private(set) var usedAddressSearch = false
     private var continuation: CheckedContinuation<[CLPlacemark]?, Never>?
@@ -1043,11 +1049,12 @@ final class SaveInkMapCountryRequest {
     private var finished = false
 
     init(timeout: Duration = .seconds(12), start: Start? = nil, stop: (@MainActor () -> Void)? = nil,
-         search: Start? = nil) {
+         search: Start? = nil, observe: (@MainActor (String, [CLPlacemark]?, Error?) -> Void)? = nil) {
         self.timeout = timeout
         self.start = start
         self.stop = stop
         self.search = search
+        self.observe = observe
     }
 
     /// CLGeocoder cancellation does not guarantee its async wrapper will resume.
@@ -1091,6 +1098,7 @@ final class SaveInkMapCountryRequest {
 
     func completeGeocoding(_ result: [CLPlacemark]?, error: Error?, reference: SaveInkMapReference, address: String) {
         guard !finished, !usedAddressSearch, continuation != nil, !cancellation.withLock({ $0 }) else { return }
+        observe?("geocoder", result, error)
         let failure = error as NSError?
         guard reference.coordinateSystem == .gcj02, reference.provider == .amap, !address.isEmpty,
               failure?.domain == kCLErrorDomain, failure?.code == CLError.geocodeFoundNoResult.rawValue,
@@ -1110,6 +1118,7 @@ final class SaveInkMapCountryRequest {
         addressSearch = operation
         operation.start { [weak self] response, error in
             Task { @MainActor [weak self] in
+                self?.observe?("addressSearch", response?.mapItems.map(\.placemark), error)
                 self?.finish(error == nil ? response?.mapItems.map(\.placemark) : nil)
             }
         }
@@ -1128,6 +1137,7 @@ final class SaveInkMapCountryRequest {
     func cancel() {
         cancellation.withLock { $0 = true }
         guard !finished else { return }
+        observe?("cancelOrDeadline", nil, nil)
         finish(nil)
         if let stop { stop() } else { geocoder.cancelGeocode() }
         addressSearch?.cancel()

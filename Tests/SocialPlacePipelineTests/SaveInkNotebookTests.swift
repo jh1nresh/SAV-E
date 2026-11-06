@@ -2030,38 +2030,24 @@ final class SaveInkNotebookTests: XCTestCase {
         hq.addressLine = hq.street
         hq.mapReference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
             coordinateSystem: .gcj02, provider: .amap, providerPlaceID: "B0K3C7EM0G")
-        let mainland = await SaveInkMapPolicy.destinationCountryCode(for: hq)
-        var taipei = inkRow(id: "public-tw-country", name: "Taipei public coordinate", street: "Taipei")
-        taipei.shopLatitude = 25.033964
-        taipei.shopLongitude = 121.564468
-        let outside = await SaveInkMapPolicy.destinationCountryCode(for: taipei)
-        var diagnosticText = "Public HQ region=\(mainland ?? "unresolved")\nPublic Taipei region=\(outside ?? "unresolved")"
-        if mainland == nil {
-            // Observe the public fixture's raw Apple reply separately. Calling
-            // destinationPlacemark again would discard the same failure detail.
-            let geocoder = CLGeocoder()
-            @MainActor final class LookupObservation {
-                var serviceError = "no callback"
-            }
-            let observation = LookupObservation()
-            let probe = SaveInkMapCountryRequest(start: { _, address, finish in
-                geocoder.geocodeAddressString(address, in: nil, preferredLocale: Locale(identifier: "en_US")) { matches, error in
-                    Task { @MainActor in
-                        observation.serviceError = error.map { "\(($0 as NSError).domain)/\(($0 as NSError).code)" } ?? "none"
-                        finish(matches)
-                    }
-                }
-            }, stop: { geocoder.cancelGeocode() })
-            let reference = try XCTUnwrap(hq.mapReference)
-            let matches = await probe.matches(reference: reference, address: hq.street)
-            diagnosticText += "\nSeparate public address query: count=\(matches?.count ?? 0) serviceError=\(observation.serviceError)"
+        let reference = try XCTUnwrap(hq.mapReference)
+        var observations: [String] = []
+        let request = SaveInkMapCountryRequest(observe: { phase, matches, error in
+            let failure = error as NSError?
+            observations.append("phase=\(phase) count=\(matches?.count ?? 0) error=\(failure.map { "\($0.domain)/\($0.code)" } ?? "none")")
             for match in (matches ?? []).prefix(5) {
                 let nearby = match.location.map {
                     SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
                 } ?? false
-                diagnosticText += "\niso=\(match.isoCountryCode ?? "nil") admin=\(match.administrativeArea ?? "nil") city=\(match.locality ?? "nil") near=\(nearby)"
+                observations.append("iso=\(match.isoCountryCode ?? "nil") admin=\(match.administrativeArea ?? "nil") city=\(match.locality ?? "nil") near=\(nearby)")
             }
-        }
+        })
+        let mainland = await SaveInkMapPolicy.destinationCountryCode(for: hq, request: request)
+        var taipei = inkRow(id: "public-tw-country", name: "Taipei public coordinate", street: "Taipei")
+        taipei.shopLatitude = 25.033964
+        taipei.shopLongitude = 121.564468
+        let outside = await SaveInkMapPolicy.destinationCountryCode(for: taipei)
+        let diagnosticText = "Public HQ region=\(mainland ?? "unresolved")\nPublic Taipei region=\(outside ?? "unresolved")\nusedAddressSearch=\(request.usedAddressSearch)\n" + observations.joined(separator: "\n")
         try diagnosticText.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("ink-map-live-country-results.txt"), atomically: true, encoding: .utf8)
         let result = XCTAttachment(string: diagnosticText)
         result.name = "ink-map-live-country-results"
