@@ -49,6 +49,52 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertNil(PendingShareStore.load(from: store))
     }
 
+    func testListProjectionRetainsRecipientPendingIDsAcrossModernAndLegacyJournalReloads() throws {
+        let sourceID = UUID().uuidString
+        let snapshot = PendingConfirmedPlace(placeId: sourceID, name: "Same display name", address: "Public address",
+            latitude: 40.002539, longitude: 116.489729, category: "cafe", sourceURL: nil,
+            coordinateSystem: "GCJ-02", locationProvider: "amap",
+            providerMapUrl: "https://uri.amap.com/marker?position=116.489729,40.002539&coordinate=gaode")
+        let url = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=stable-pending"))
+        var journal = PendingSharePayload(kind: .list, shareCode: "stable-pending", placeId: nil, listId: nil,
+            sender: nil, url: url.absoluteString, confirmedPlaces: [snapshot, snapshot])
+        for legacy in [false, true] {
+            if legacy { journal.invocationID = nil }
+            let before = ClipListHandoff.itemsToStamp(pending: journal, incomingURL: url, liveItems: [])
+            let encoded = try JSONEncoder().encode(journal)
+            let restored = try JSONDecoder().decode(PendingSharePayload.self, from: encoded)
+            if legacy {
+                let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+                XCTAssertNil(object["invocationID"], "Legacy missing-invocation JSON must remain supported")
+            }
+            let after = ClipListHandoff.itemsToStamp(pending: restored, incomingURL: url, liveItems: [])
+            XCTAssertEqual(before, after)
+            XCTAssertEqual(Set(after.map(\.id)).count, 2, "Snapshot position distinguishes even identical visible items")
+            XCTAssertTrue(after.allSatisfy { $0.id.uuidString != sourceID }, "Sender IDs never become recipient pending IDs")
+            let expected = snapshot.asListItem()
+            for item in after {
+                var normalized = item
+                normalized.id = expected.id
+                XCTAssertEqual(normalized, expected, "Identity derivation must preserve every selected place and provider field")
+            }
+            var changedSelection = restored
+            changedSelection.confirmedPlaces?[0].placeId = "another-provider-identity"
+            XCTAssertNotEqual(after.map(\.id), ClipListHandoff.itemsToStamp(
+                pending: changedSelection, incomingURL: url, liveItems: []).map(\.id))
+            var newInvocation = restored
+            newInvocation.invocationID = UUID()
+            XCTAssertNotEqual(after.map(\.id), ClipListHandoff.itemsToStamp(
+                pending: newInvocation, incomingURL: url, liveItems: []).map(\.id))
+            var differentList = restored
+            differentList.shareCode = "another-list"
+            differentList.url = "https://sav-e-app.vercel.app/list?c=another-list"
+            let otherURL = try XCTUnwrap(URL(string: differentList.url))
+            let otherItems = ClipListHandoff.itemsToStamp(pending: differentList, incomingURL: otherURL, liveItems: [])
+            XCTAssertEqual(otherItems.count, 2)
+            XCTAssertNotEqual(after.map(\.id), otherItems.map(\.id), "Identical venues in another list are a separate pending selection")
+        }
+    }
+
     func testConfirmationCannotAcknowledgeAnotherPendingSelection() throws {
         let a = PendingConfirmedPlace(placeId: "a", name: "A", address: "Tokyo", latitude: 35.6,
                                       longitude: 139.7, category: "Cafe", sourceURL: nil)

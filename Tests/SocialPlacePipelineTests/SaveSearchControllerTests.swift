@@ -7878,7 +7878,18 @@ final class MapReviewLocationRepairTests: XCTestCase {
         var second = first
         second.id = UUID()
         second.sourceID = "amap-selected-b"
-        let list = SaveCollaborativeList(title: "Two distinct selected identities", items: [first, second])
+        let incomingURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=retry-identities"))
+        let snapshots = [first, second].map { item in
+            PendingConfirmedPlace(placeId: item.sourceID, name: item.title, address: item.subtitle,
+                latitude: item.latitude, longitude: item.longitude, category: "cafe", sourceURL: item.sourceURL,
+                coordinateSystem: item.coordinateSystem?.rawValue, locationProvider: item.locationProvider?.rawValue,
+                providerMapUrl: item.providerMapUrl)
+        }
+        let journal = PendingSharePayload(kind: .list, shareCode: "retry-identities", placeId: nil,
+            listId: nil, sender: nil, url: incomingURL.absoluteString, confirmedPlaces: snapshots)
+        let serializedJournal = try JSONEncoder().encode(journal)
+        let initialList = try XCTUnwrap(ClipListHandoff.stampList(pending: journal, incomingURL: incomingURL, joined: nil))
+        let expectedIDs = Set(initialList.items.map(\.id))
         let service = RecordingSupabaseService()
         service.clipSaveHandler = { _ in
             (201, try JSONSerialization.data(withJSONObject: [
@@ -7887,18 +7898,24 @@ final class MapReviewLocationRepairTests: XCTestCase {
         }
         for owner in ["overflow-owner-a", "overflow-owner-b"] {
             auth.authState = .authenticated(userId: owner)
-            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
-                                   entitlementTierProvider: { .free }, entitlementResolvedProvider: { true },
-                                   usesRemotePersistence: true)
             for _ in 0..<2 {
+                // Reopening the link reconstructs both the journal projection
+                // and persistence owner instead of reusing in-memory item IDs.
+                let restored = try JSONDecoder().decode(PendingSharePayload.self, from: serializedJournal)
+                let list = try XCTUnwrap(ClipListHandoff.stampList(pending: restored, incomingURL: incomingURL, joined: nil))
+                XCTAssertEqual(Set(list.items.map(\.id)), expectedIDs)
+                XCTAssertTrue(ClipListHandoff.matchesPendingSelection(list, pending: restored))
+                let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                                       entitlementTierProvider: { .free }, entitlementResolvedProvider: { true },
+                                       usesRemotePersistence: true)
                 do {
                     _ = try await map.saveClipListHandoff(list, requiringAuthenticatedSession: true, reportPartialOutcome: true)
                     XCTFail("All-overflow selection must remain pending")
                 } catch SavePlaceLimitError.parkedInUnplacedInbox {}
                 let pending = try vault.reviewCandidates(belongingTo: owner)
-                XCTAssertEqual(Set(pending.map(\.id)), Set([first.id, second.id]))
+                XCTAssertEqual(Set(pending.map(\.id)), expectedIDs)
                 XCTAssertEqual(pending.count, 2, "Retry may reuse the same selected item, not a different identity with matching display fields")
-                XCTAssertEqual(Set(map.reviewCandidates.map(\.id)), Set([first.id, second.id]))
+                XCTAssertEqual(Set(map.reviewCandidates.map(\.id)), expectedIDs)
                 XCTAssertTrue(pending.allSatisfy { $0.ownerSubject == owner && $0.isUnplacedInbox })
                 XCTAssertTrue(pending.allSatisfy { $0.providerLocation?.coordinateSystem == .gcj02 })
                 XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
