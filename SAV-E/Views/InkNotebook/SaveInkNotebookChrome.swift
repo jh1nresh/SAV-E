@@ -1072,7 +1072,7 @@ struct SaveInkAmapWebView: UIViewRepresentable {
             guard phase != .disposed, phase != .failed else { decisionHandler(.cancel); return }
             if let response = response as? HTTPURLResponse, response.statusCode >= 400 {
                 decisionHandler(.cancel)
-                fail(webView)
+                if isForMainFrame { fail(webView) }
                 return
             }
             if isForMainFrame {

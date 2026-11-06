@@ -4848,8 +4848,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func signInViaReviewDemoRequired(app: XCUIApplication) throws {
+        let capturesEntry = app.launchEnvironment["SAVE_CAPTURE_ENGLISH_ENTRY"] == "1"
         let emailField = app.textFields["signin.emailField"]
         if !emailField.waitForExistence(timeout: timeout(20)) {
+            if capturesEntry {
+                XCTFail("English entry capture requires sign-in; an existing session cannot satisfy both entry screenshots.")
+                return
+            }
             if app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout)
                 || app.descendants(matching: .any)["ink.welcome"].exists {
                 return
@@ -4861,7 +4866,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             return
         }
 
-        let capturesEntry = app.launchEnvironment["SAVE_CAPTURE_ENGLISH_ENTRY"] == "1"
         if capturesEntry { attach(app, name: "english-sign-in") }
         typeText("appreview@wanderly.app", into: emailField)
         dismissKeyboard(app: app)

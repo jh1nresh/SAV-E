@@ -1917,6 +1917,34 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(web.navigation === originalNavigation, "Unverified response must not start the embed")
     }
 
+    func testAmapSubframeHTTPErrorsDoNotFailLoadingOrRenderedMap() async throws {
+        let url = try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9"))
+        let errorResponse = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 503, httpVersion: nil, headerFields: nil))
+        for rendered in [false, true] {
+            var failed = false
+            let web = SaveInkAmapNavigationStub()
+            let coordinator = SaveInkAmapWebView.Coordinator(
+                failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: url,
+                readinessProbe: { _ in true })
+            defer { coordinator.invalidate(); web.stopLoading() }
+            coordinator.start(in: web)
+            if rendered {
+                coordinator.webView(web, didFinish: web.navigation)
+                for _ in 0..<100 {
+                    if coordinator.hasRenderedMap { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                XCTAssertTrue(coordinator.hasRenderedMap)
+            }
+            coordinator.handleResponse(errorResponse, isForMainFrame: false, in: web) { XCTAssertEqual($0, .cancel) }
+            XCTAssertFalse(failed, "An unrelated iframe HTTP error must not replace the destination map")
+            XCTAssertEqual(coordinator.hasRenderedMap, rendered)
+            coordinator.handleResponse(errorResponse, isForMainFrame: true, in: web) { XCTAssertEqual($0, .cancel) }
+            XCTAssertTrue(failed, "The same error in the actual map document must remain unavailable")
+            XCTAssertFalse(coordinator.hasRenderedMap)
+        }
+    }
+
     func testAmapVerifiedConversionIgnoresOnlyItsPolicyCancellation() throws {
         let original = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
         let redirected = try XCTUnwrap(URL(string: "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Public&src=savvy&callnative=0&innersrc=u"))
