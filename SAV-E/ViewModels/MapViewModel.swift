@@ -3534,7 +3534,10 @@ final class MapViewModel: ObservableObject {
 
     private func parkNovelHandoffItems(_ confirmed: [SaveListItem]) throws {
         for item in confirmed {
-            let place = item.asPlace(includeSenderMemory: false)
+            // The retained selection owns this local pending identity. Reusing
+            // it lets the vault upsert by account + ID on an explicit retry;
+            // a newly minted place UUID would duplicate the same Unplaced item.
+            let place = item.asPlace(id: item.id, includeSenderMemory: false)
             if existingSavedPlace(matching: place) != nil { continue }
             try parkPlaceInUnplacedInbox(place)
         }

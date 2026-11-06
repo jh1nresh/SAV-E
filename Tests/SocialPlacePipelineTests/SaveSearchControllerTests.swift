@@ -7860,6 +7860,55 @@ final class MapReviewLocationRepairTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testClipOverflowRetryReusesOnlyTheSameAccountAndSelectedItemIdentity() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        defer { auth.authState = original; SavePlaceLimitHandoff.testDefaults = previousDefaults }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "overflow-identity-\(UUID())")
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("overflow-identity-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var first = SaveListItem.from(place: savedPlace(name: "Same visible name", address: "Same visible address", coordinate: taipei))
+        first.coordinateSystem = .gcj02
+        first.locationProvider = .amap
+        first.sourceID = "amap-selected-a"
+        first.providerMapUrl = "https://uri.amap.com/marker?position=121.5654,25.033&coordinate=gaode"
+        var second = first
+        second.id = UUID()
+        second.sourceID = "amap-selected-b"
+        let list = SaveCollaborativeList(title: "Two distinct selected identities", items: [first, second])
+        let service = RecordingSupabaseService()
+        service.clipSaveHandler = { _ in
+            (201, try JSONSerialization.data(withJSONObject: [
+                "newly_saved": 0, "already_saved": 0, "over_cap": 2, "remaining": 0, "limit": 50, "saved": []
+            ]))
+        }
+        for owner in ["overflow-owner-a", "overflow-owner-b"] {
+            auth.authState = .authenticated(userId: owner)
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                                   entitlementTierProvider: { .free }, entitlementResolvedProvider: { true },
+                                   usesRemotePersistence: true)
+            for _ in 0..<2 {
+                do {
+                    _ = try await map.saveClipListHandoff(list, requiringAuthenticatedSession: true, reportPartialOutcome: true)
+                    XCTFail("All-overflow selection must remain pending")
+                } catch SavePlaceLimitError.parkedInUnplacedInbox {}
+                let pending = try vault.reviewCandidates(belongingTo: owner)
+                XCTAssertEqual(Set(pending.map(\.id)), Set([first.id, second.id]))
+                XCTAssertEqual(pending.count, 2, "Retry may reuse the same selected item, not a different identity with matching display fields")
+                XCTAssertEqual(Set(map.reviewCandidates.map(\.id)), Set([first.id, second.id]))
+                XCTAssertTrue(pending.allSatisfy { $0.ownerSubject == owner && $0.isUnplacedInbox })
+                XCTAssertTrue(pending.allSatisfy { $0.providerLocation?.coordinateSystem == .gcj02 })
+                XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
+            }
+        }
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: "overflow-owner-a").count, 2)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: "overflow-owner-b").count, 2)
+        XCTAssertEqual(try vault.reviewCandidates().count, 4, "An item ID never crosses the vault's account boundary")
+    }
+
     func testClipHandoffResponseCannotMutateAnotherAccountOrSignedOutVault() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState
