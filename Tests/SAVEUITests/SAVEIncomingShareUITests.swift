@@ -276,7 +276,11 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
         confirm.tap()
         waitForLabel("Refresh requests: 2", element: app.staticTexts["incoming.fixture.refreshes"])
-        XCTAssertTrue(message.label.contains("Saved 0; already saved 1"), "The retry must report the duplicate instead of a second new save")
+        XCTAssertTrue(message.waitForExistence(timeout: stepTimeout))
+        let duplicateMessage = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Saved 0; already saved 1"), object: message)
+        XCTAssertEqual(XCTWaiter.wait(for: [duplicateMessage], timeout: stepTimeout), .completed,
+                       "The retry must report the duplicate instead of a second new save")
         app.buttons["Later"].tap()
         assertJournal(app, pending: true, saves: 2)
     }
