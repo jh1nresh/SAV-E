@@ -259,6 +259,46 @@ final class SAVEIncomingShareUITests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPartialListSaveReportsCountsRefreshesAndRetainsSelectionForRetry() {
+        let app = fixture("list-partial")
+        XCUIDevice.shared.system.open(listURL)
+        let confirm = app.buttons["app.handoff.confirmList"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Fixture place B"].exists)
+        confirm.tap()
+        let message = app.staticTexts["app.handoff.confirmationMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(message.label.contains("Saved 1 of 2"))
+        waitForLabel("Refresh requests: 1", element: app.staticTexts["incoming.fixture.refreshes"])
+        app.buttons["Later"].tap()
+        assertJournal(app, pending: true, saves: 1)
+        app.buttons["app.handoff.reviewList"].tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        confirm.tap()
+        waitForLabel("Refresh requests: 2", element: app.staticTexts["incoming.fixture.refreshes"])
+        XCTAssertTrue(message.label.contains("Saved 0; already saved 1"), "The retry must report the duplicate instead of a second new save")
+        app.buttons["Later"].tap()
+        assertJournal(app, pending: true, saves: 2)
+    }
+
+    @MainActor
+    func testPartialListParkingFailureStillRefreshesAndKeepsTheJournal() {
+        let app = fixture("list-parking-failure")
+        XCUIDevice.shared.system.open(listURL)
+        let confirm = app.buttons["app.handoff.confirmList"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        confirm.tap()
+        let message = app.staticTexts["app.handoff.confirmationMessage"]
+        XCTAssertTrue(message.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(message.label.contains("Saved 1; already saved 0"))
+        XCTAssertTrue(message.label.contains("Couldn't keep the remaining places"))
+        waitForLabel("Refresh requests: 1", element: app.staticTexts["incoming.fixture.refreshes"])
+        app.buttons["Later"].tap()
+        assertJournal(app, pending: true, saves: 1)
+        XCTAssertTrue(app.buttons["app.handoff.reviewList"].exists)
+    }
+
+    @MainActor
     func testAccountChangeRejectsASuspendedSaveCompletion() {
         let app = fixture("account-switch")
         XCUIDevice.shared.system.open(firstURL)

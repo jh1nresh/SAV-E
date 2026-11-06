@@ -24,6 +24,22 @@ extension Notification.Name {
     static let saveInkIncomingShareSaved = Notification.Name("saveInkIncomingShareSaved")
 }
 
+private enum SaveIncomingListSummary {
+    static func english(_ counts: ClipListHandoffCounts, selected: Int) -> String {
+        if counts.overCap > 0, counts.alreadySaved > 0 {
+            return "Saved \(counts.newlySaved); already saved \(counts.alreadySaved). \(counts.overCap) stay pending over your saved-place limit."
+        }
+        return ClipListHandoff.toastEnglish(counts: counts, confirmedCount: selected)
+    }
+
+    static func traditionalChinese(_ counts: ClipListHandoffCounts, selected: Int) -> String {
+        if counts.overCap > 0, counts.alreadySaved > 0 {
+            return "已收藏 \(counts.newlySaved) 家，之前已收藏 \(counts.alreadySaved) 家。另有 \(counts.overCap) 家超過收藏上限，仍保留待辦。"
+        }
+        return ClipListHandoff.toastTraditionalChinese(counts: counts, confirmedCount: selected)
+    }
+}
+
 /// The verified root owns presentation; persistence retains its existing
 /// server, account, deduplication and saved-place-limit checks.
 @MainActor
@@ -194,13 +210,15 @@ struct SaveIncomingShareHost: ViewModifier {
         guard requiresListConfirmation, pendingClipListSave == list,
               PendingShareStore.load(from: journalStore) == journal,
               ClipListHandoff.matchesPendingSelection(list, pending: journal) else { throw CancellationError() }
+        // A batch can persist accepted rows before parking its overflow fails.
+        // Refresh even on that error; the scoped subscriber rejects old sessions.
+        defer { NotificationCenter.default.post(name: .saveInkIncomingShareSaved, object: owner) }
         let counts: ClipListHandoffCounts
         if let saveList {
             counts = try await saveList(list)
         } else {
-            counts = try await saver().saveClipListHandoff(list, requiringAuthenticatedSession: true).counts
+            counts = try await saver().saveClipListHandoff(list, requiringAuthenticatedSession: true, reportPartialOutcome: true).counts
         }
-        NotificationCenter.default.post(name: .saveInkIncomingShareSaved, object: owner)
         try requireCurrent(token, owner: owner)
         guard pendingClipListSave == list, PendingShareStore.load(from: journalStore) == journal else { throw CancellationError() }
         return counts
@@ -213,8 +231,8 @@ struct SaveIncomingShareHost: ViewModifier {
         do { try requireCurrent(token, owner: owner) } catch { return }
         guard pendingClipListSave == list, PendingShareStore.load(from: journalStore) == journal else { return }
         completionMessage = localized(
-            ClipListHandoff.toastEnglish(counts: counts, confirmedCount: list.items.count),
-            ClipListHandoff.toastTraditionalChinese(counts: counts, confirmedCount: list.items.count)
+            SaveIncomingListSummary.english(counts, selected: list.items.count),
+            SaveIncomingListSummary.traditionalChinese(counts, selected: list.items.count)
         )
         if counts.overCap == 0, PendingShareStore.clear(ifUnchanged: journal, from: journalStore) {
             requiresListConfirmation = false
@@ -303,12 +321,17 @@ private struct SaveIncomingListConfirmation: View {
         do {
             let counts = try await save()
             message = localized(
-                ClipListHandoff.toastEnglish(counts: counts, confirmedCount: list.items.count),
-                ClipListHandoff.toastTraditionalChinese(counts: counts, confirmedCount: list.items.count)
+                SaveIncomingListSummary.english(counts, selected: list.items.count),
+                SaveIncomingListSummary.traditionalChinese(counts, selected: list.items.count)
             )
             completed(counts)
         } catch is CancellationError {
             return
+        } catch let failure as MapViewModel.ClipListPartialFailure {
+            message = localized(
+                "Saved \(failure.counts.newlySaved); already saved \(failure.counts.alreadySaved). Couldn't keep the remaining places in Unplaced. The selection stays pending; try again.",
+                "已收藏 \(failure.counts.newlySaved) 家，之前已收藏 \(failure.counts.alreadySaved) 家。其餘地點無法保留在待定位；選取內容仍保留待辦，請再試一次。"
+            )
         } catch {
             message = error is SavePlaceLimitError
                 ? localized("Your saved-place limit has been reached. These places stay pending.", "已達收藏地點上限，這些地點仍保留待辦。")

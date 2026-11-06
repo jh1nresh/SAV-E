@@ -54,6 +54,7 @@ struct SaveIncomingShareFixtureRoot: View {
     @ObservedObject private var account = SaveIncomingShareFixtureSession.shared
     @State private var prepared = false
     @State private var saves = 0
+    @State private var refreshRequests = 0
     @State private var resolutions = 0
     @State private var returnedSaves = 0
     @State private var waiting: (CheckedContinuation<SharedPlaceSaveOutcome, Error>, SharedPlaceSaveOutcome)?
@@ -120,6 +121,15 @@ struct SaveIncomingShareFixtureRoot: View {
                         saveList: { _ in
                             saves += 1
                             if Self.scenario == "list-cap" { throw SavePlaceLimitError.parkedInUnplacedInbox }
+                            if ["list-partial", "list-parking-failure"].contains(Self.scenario) {
+                                let counts = ClipListHandoffCounts(newlySaved: saves == 1 ? 1 : 0,
+                                    alreadySaved: saves == 1 ? 0 : 1, overCap: 1, remaining: 0, limit: 50)
+                                if Self.scenario == "list-parking-failure" {
+                                    throw MapViewModel.ClipListPartialFailure(counts: counts,
+                                        parkingError: NSError(domain: "fixture-parking", code: 41))
+                                }
+                                return counts
+                            }
                             return ClipListHandoffCounts(newlySaved: 1, alreadySaved: 0, overCap: 0, remaining: 49, limit: 50)
                         }
                     ))
@@ -128,6 +138,7 @@ struct SaveIncomingShareFixtureRoot: View {
                             VStack {
                                 Text("Synthetic share fixture").font(SaveInkType.aux)
                                 Text("Saves: \(saves)").accessibilityIdentifier("incoming.fixture.saves")
+                                Text("Refresh requests: \(refreshRequests)").accessibilityIdentifier("incoming.fixture.refreshes")
                                 Text("Returned saves: \(returnedSaves)").accessibilityIdentifier("incoming.fixture.returnedSaves")
                                 joinCounter
                                 Text(PendingShareStore.load(from: Self.defaults) == nil ? "Journal: none" : "Journal: pending")
@@ -168,7 +179,7 @@ struct SaveIncomingShareFixtureRoot: View {
             guard !prepared else { return }
             prepared = true
             language.language = ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-zh") ? .traditionalChinese : .english
-            if ["clip", "replacement", "failure", "cap", "list", "list-cap", "list-layout", "list-clip-join-failure", "clip-unknown-reference", "list-unknown-reference", "account-switch"].contains(Self.scenario) { writeJournal() }
+            if ["clip", "replacement", "failure", "cap", "list", "list-cap", "list-partial", "list-parking-failure", "list-layout", "list-clip-join-failure", "clip-unknown-reference", "list-unknown-reference", "account-switch"].contains(Self.scenario) { writeJournal() }
             account.verified = !ProcessInfo.processInfo.arguments.contains("--uitest-incoming-share-unverified")
             verificationChanged()
         }
@@ -176,6 +187,11 @@ struct SaveIncomingShareFixtureRoot: View {
             if Self.scenario != "account-switch" { finishWaiting(cancel: false) }
         }
         .onDisappear { finishWaiting(cancel: true) }
+        .onReceive(NotificationCenter.default.publisher(for: .saveInkIncomingShareSaved)) { notification in
+            if let owner = notification.object as? SaveIncomingShareSession, owner == account.session {
+                refreshRequests += 1
+            }
+        }
     }
 
     private var joinCounter: some View {
@@ -197,11 +213,19 @@ struct SaveIncomingShareFixtureRoot: View {
 
     private func writeJournal() {
         let list = Self.scenario.hasPrefix("list")
+        var snapshots = [Self.snapshot]
+        if ["list-partial", "list-parking-failure"].contains(Self.scenario) {
+            var second = Self.snapshot
+            second.placeId = "fixture-place-b"
+            second.name = "Fixture place B"
+            second.latitude += 0.01
+            snapshots.append(second)
+        }
         _ = PendingShareStore.write(PendingSharePayload(
             kind: list ? .list : .place, shareCode: list ? "fixture-list" : "share-fixture",
             placeId: nil, listId: nil, sender: nil,
             url: list ? "savvy://list?c=fixture-list" : "savvy://p/share-fixture",
-            confirmedPlaces: [Self.snapshot]
+            confirmedPlaces: snapshots
         ), to: Self.defaults)
     }
 
