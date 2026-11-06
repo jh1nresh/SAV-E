@@ -1887,6 +1887,49 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(failed, "A cancellation without verified conversion provenance must fail")
     }
 
+    func testAmapLoadedTilesBehindVisibleLoginAreNotReady() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let host = UIViewController()
+        let web = WKWebView(frame: scene.coordinateSpace.bounds)
+        host.view = web
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            web.stopLoading()
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
+        }
+        web.loadHTMLString("""
+            <html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+            <body><canvas width="300" height="190" style="width:300px;height:190px"></canvas>
+            <input type="tel" placeholder="请输入验证码" style="display:none;position:fixed;top:0;left:0;width:200px;height:50px">
+            </body></html>
+            """, baseURL: nil)
+        let deadline = ContinuousClock.now + .seconds(30)
+        while ContinuousClock.now < deadline {
+            if (try? await web.evaluateJavaScript("document.readyState === 'complete' && document.querySelector('canvas') !== null")) as? Bool == true { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        // Exercise the exact production predicate against a real DOM. Only
+        // external origin/resource metadata is injected to keep this offline.
+        let readiness = """
+            const location = {protocol:'https:',hostname:'www.amap.com',pathname:'/ssr/embed/place'};
+            const performance = {getEntriesByType: () => [{responseEnd:1,name:'https://jsapi.amap.com/web_map/get_tile'}]};
+            return \(SaveInkAmapWebView.renderReadinessScript);
+            """
+        let unobscured = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(unobscured as? Bool, true, "Hidden login markup must not reject a rendered map")
+        _ = try await web.evaluateJavaScript("document.querySelector('input').style.display = 'block'")
+        let login = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(login as? Bool, false, "Loaded canvas/tiles behind a visible login form are not map proof")
+        _ = try await web.evaluateJavaScript("document.querySelector('input').remove()")
+        let cleared = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(cleared as? Bool, true)
+    }
+
     func testAmapActualHTTP200ShellStillNeedsSemanticMap() async throws {
         let fixture = try SaveInkHTTP200MapFixture()
         defer { fixture.stop() }
@@ -2180,6 +2223,8 @@ final class SaveInkNotebookTests: XCTestCase {
             }
         }
         let data = try XCTUnwrap(snapshot.pngData())
+        let readyAtCapture = try await web.evaluateJavaScript(SaveInkAmapWebView.renderReadinessScript) as? Bool == true
+        XCTAssertTrue(readyAtCapture, "The actual captured surface must remain a usable map, including after async provider UI appears")
         let attachment = XCTAttachment(image: snapshot)
         attachment.name = "\(prefix)-real-web-map"
         attachment.lifetime = .keepAlways
@@ -2238,7 +2283,7 @@ final class SaveInkNotebookTests: XCTestCase {
         let url = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: row))
         let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
         XCTAssertEqual(url.host, "www.amap.com")
-        XCTAssertEqual(query.first { $0.name == "id" }?.value, "B000TEST")
+        XCTAssertNil(query.first { $0.name == "id" }, "Embedded POI details can trigger provider login; use the saved point")
         XCTAssertEqual(query.first { $0.name == "lng" }?.value, "121.47")
         XCTAssertEqual(query.first { $0.name == "lat" }?.value, "31.23")
 

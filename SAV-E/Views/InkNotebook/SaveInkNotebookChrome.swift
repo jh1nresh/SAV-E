@@ -842,6 +842,9 @@ struct SaveInkAmapWebView: UIViewRepresentable {
         (() => {
           if (location.protocol !== 'https:' || location.hostname !== 'www.amap.com' || location.pathname !== '/ssr/embed/place') return false;
           const visible = x => { const r = x.getBoundingClientRect(); return r.width > 100 && r.height > 100 && getComputedStyle(x).visibility !== 'hidden' && getComputedStyle(x).display !== 'none'; };
+          const exposed = x => { const r = x.getBoundingClientRect(); const s = getComputedStyle(x); return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight && s.visibility !== 'hidden' && s.display !== 'none'; };
+          // Loaded tiles behind an authentication overlay are not a usable map.
+          if ([...document.querySelectorAll('input[type="tel"],input[type="password"],input[autocomplete="one-time-code"],input[placeholder*="验证码"],input[placeholder*="驗證碼"]')].some(exposed)) return false;
           const canvas = [...document.querySelectorAll('canvas')].some(x => x.width > 100 && x.height > 100 && visible(x));
           const tiles = [...document.images].some(x => x.complete && x.naturalWidth >= 128 && x.naturalHeight >= 128 && visible(x) && /autonavi|amap/i.test(x.src));
           const resources = performance.getEntriesByType('resource').some(x => x.responseEnd > 0 && /appmaptile|maptile|\\/web_map\\/get_tile|\\/tiles|\\/vt[/?]|\\/ws\\/mapapi\\//i.test(x.name));

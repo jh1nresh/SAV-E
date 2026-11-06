@@ -858,11 +858,10 @@ enum SaveInkMapPolicy {
         components.scheme = "https"
         components.host = "www.amap.com"
         components.path = "/ssr/embed/place"
-        // Amap can return an invalid-coordinate page for an ID alone.
-        // Send its saved coordinate pair even when this place also has a POI ID.
+        // POI details may open provider login even with a valid coordinate.
+        // Embed the saved point; retain the original POI ID only for external handoff.
         var items = [URLQueryItem(name: "lng", value: String(reference.longitude)),
                      URLQueryItem(name: "lat", value: String(reference.latitude))]
-        if let id = amapID(reference) { items.append(URLQueryItem(name: "id", value: id)) }
         items += [URLQueryItem(name: "name", value: place.name),
                   URLQueryItem(name: "platform", value: "pc"),
                   URLQueryItem(name: "zoom", value: "16"),
