@@ -2,6 +2,7 @@ import CoreLocation
 import CryptoKit
 import Foundation
 import MapKit
+import os
 
 /// Reads the three place stores the ink Home can see and keeps one row per venue.
 ///
@@ -975,32 +976,41 @@ enum SaveInkMapPolicy {
         return id
     }
 
-    /// Country is display-only. WGS84 is reverse geocoded; a non-WGS84 provider
-    /// reference uses its saved address, never mislabeled raw provider points.
+    /// The destination's region is display-only. Provider coordinates are
+    /// used only for nearby-result validation, never as a MapKit search region.
     @MainActor
     static func destinationCountryCode(for place: SaveInkPlace) async -> String? {
-        guard let match = await destinationPlacemark(for: place) else { return nil }
-        return routingRegionCode(isoCountryCode: match.isoCountryCode, administrativeArea: match.administrativeArea,
-                                 locality: match.locality, subLocality: match.subLocality)
-    }
-
-    @MainActor
-    static func destinationPlacemark(for place: SaveInkPlace) async -> CLPlacemark? {
         guard !Task.isCancelled, let reference = reference(for: place) else { return nil }
         let address = (place.addressLine ?? place.street).trimmingCharacters(in: .whitespacesAndNewlines)
         if reference.coordinateSystem != .wgs84, address.isEmpty || address == place.name { return nil }
         let request = SaveInkMapCountryRequest()
-        let matches = await request.matches(reference: reference, address: address)
-        guard !Task.isCancelled, let matches, matches.count == 1, let match = matches.first else { return nil }
+        guard let matches = await request.matches(reference: reference, address: address), !Task.isCancelled else { return nil }
+        if request.usedAddressSearch {
+            return searchCountryCode(reference: reference, matches: matches)
+        }
+        guard matches.count == 1, let match = matches.first else { return nil }
         if reference.coordinateSystem != .wgs84 {
-            // A bare/ambiguous address must not choose a distant country. This
-            // coarse consistency check tolerates GCJ's offset; it neither
-            // converts the provider point nor promotes it into user truth.
             guard let location = match.location,
                   countryMatchIsNearby(reference, latitude: location.coordinate.latitude,
                                        longitude: location.coordinate.longitude) else { return nil }
         }
-        return match
+        return routingRegionCode(isoCountryCode: match.isoCountryCode, administrativeArea: match.administrativeArea,
+                                 locality: match.locality, subLocality: match.subLocality)
+    }
+
+    /// Nearby address-search results may establish a common region. They do
+    /// not choose a replacement POI or change the user's stored coordinates.
+    static func searchCountryCode(reference: SaveInkMapReference, matches: [CLPlacemark]) -> String? {
+        let nearby = matches.filter { match in
+            guard let coordinate = match.location?.coordinate else { return false }
+            return countryMatchIsNearby(reference, latitude: coordinate.latitude, longitude: coordinate.longitude)
+        }
+        let codes = nearby.map {
+            routingRegionCode(isoCountryCode: $0.isoCountryCode, administrativeArea: $0.administrativeArea,
+                              locality: $0.locality, subLocality: $0.subLocality)
+        }
+        guard let first = codes.first, let code = first, codes.allSatisfy({ $0 == code }) else { return nil }
+        return code
     }
 
     static func countryMatchIsNearby(_ reference: SaveInkMapReference, latitude: Double, longitude: Double) -> Bool {
@@ -1021,17 +1031,23 @@ final class SaveInkMapCountryRequest {
     typealias Start = @MainActor (SaveInkMapReference, String, @escaping Completion) -> Void
 
     private let geocoder = CLGeocoder()
+    private let cancellation = OSAllocatedUnfairLock(initialState: false)
     private let timeout: Duration
     private let start: Start?
     private let stop: (@MainActor () -> Void)?
+    private let search: Start?
+    private var addressSearch: MKLocalSearch?
+    private(set) var usedAddressSearch = false
     private var continuation: CheckedContinuation<[CLPlacemark]?, Never>?
     private var deadlineTask: Task<Void, Never>?
     private var finished = false
 
-    init(timeout: Duration = .seconds(12), start: Start? = nil, stop: (@MainActor () -> Void)? = nil) {
+    init(timeout: Duration = .seconds(12), start: Start? = nil, stop: (@MainActor () -> Void)? = nil,
+         search: Start? = nil) {
         self.timeout = timeout
         self.start = start
         self.stop = stop
+        self.search = search
     }
 
     /// CLGeocoder cancellation does not guarantee its async wrapper will resume.
@@ -1052,7 +1068,9 @@ final class SaveInkMapCountryRequest {
                     start(reference, address) { [weak self] result in self?.finish(result) }
                 } else {
                     let completion: @Sendable ([CLPlacemark]?, Error?) -> Void = { [weak self] result, error in
-                        Task { @MainActor [weak self] in self?.finish(error == nil ? result : nil) }
+                        Task { @MainActor [weak self] in
+                            self?.completeGeocoding(result, error: error, reference: reference, address: address)
+                        }
                     }
                     if reference.coordinateSystem == .wgs84 {
                         geocoder.reverseGeocodeLocation(
@@ -1064,8 +1082,36 @@ final class SaveInkMapCountryRequest {
                     }
                 }
             }
-        } onCancel: {
+        } onCancel: { [cancellation] in
+            // A queued geocoder callback may run before the MainActor cleanup.
+            cancellation.withLock { $0 = true }
             Task { @MainActor in self.cancel() }
+        }
+    }
+
+    func completeGeocoding(_ result: [CLPlacemark]?, error: Error?, reference: SaveInkMapReference, address: String) {
+        guard !finished, !usedAddressSearch, continuation != nil, !cancellation.withLock({ $0 }) else { return }
+        let failure = error as NSError?
+        guard reference.coordinateSystem == .gcj02, reference.provider == .amap, !address.isEmpty,
+              failure?.domain == kCLErrorDomain, failure?.code == CLError.geocodeFoundNoResult.rawValue,
+              result?.isEmpty != false else {
+            finish(error == nil ? result : nil)
+            return
+        }
+        usedAddressSearch = true
+        if let search {
+            search(reference, address) { [weak self] matches in self?.finish(matches) }
+            return
+        }
+        let query = MKLocalSearch.Request()
+        query.naturalLanguageQuery = address
+        query.resultTypes = .address
+        let operation = MKLocalSearch(request: query)
+        addressSearch = operation
+        operation.start { [weak self] response, error in
+            Task { @MainActor [weak self] in
+                self?.finish(error == nil ? response?.mapItems.map(\.placemark) : nil)
+            }
         }
     }
 
@@ -1076,13 +1122,15 @@ final class SaveInkMapCountryRequest {
         deadlineTask = nil
         let pending = continuation
         continuation = nil
-        pending?.resume(returning: result)
+        pending?.resume(returning: cancellation.withLock({ $0 }) ? nil : result)
     }
 
     func cancel() {
+        cancellation.withLock { $0 = true }
         guard !finished else { return }
         finish(nil)
         if let stop { stop() } else { geocoder.cancelGeocode() }
+        addressSearch?.cancel()
     }
 }
 

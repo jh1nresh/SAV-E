@@ -1622,6 +1622,133 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertNil(reused, "A finished country request is single-use")
     }
 
+    func testAmapAddressSearchRequiresUnanimousNearbyRegions() {
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        func placemark(_ code: String, _ state: String, _ latitude: Double = 40.0025,
+                       _ longitude: Double = 116.4897) -> CLPlacemark {
+            MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                        addressDictionary: ["CountryCode": code, "State": state])
+        }
+        let beijing = placemark("CN", "Beijing")
+        let nearby = placemark("CN", "Beijing", 40.003, 116.489)
+        let taipei = placemark("TW", "Taipei", 25.033964, 121.564468)
+        XCTAssertEqual(beijing.isoCountryCode, "CN")
+        XCTAssertEqual(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [beijing, nearby, taipei]), "CN")
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: []))
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [taipei]))
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [beijing, placemark("HK", "")]))
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [beijing, placemark("CN", "Unknown")]))
+    }
+
+    func testAmapNoResultSearchUsesOriginalDeadlineAndIgnoresLateReplies() async throws {
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var started = false
+        var searches = 0
+        var stops = 0
+        var finishSearch: SaveInkMapCountryRequest.Completion?
+        let request = SaveInkMapCountryRequest(timeout: .milliseconds(100), start: { _, _, _ in
+            started = true
+        }, stop: { stops += 1 }, search: { point, address, finish in
+            XCTAssertEqual(point, reference)
+            XCTAssertEqual(address, "Public address")
+            searches += 1
+            finishSearch = finish
+        })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        let noResult = NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue)
+        request.completeGeocoding(nil, error: noResult, reference: reference, address: "Public address")
+        request.completeGeocoding(nil, error: noResult, reference: reference, address: "Public address")
+        XCTAssertTrue(request.usedAddressSearch)
+        XCTAssertEqual(searches, 1)
+        let result = await work.value
+        XCTAssertNil(result)
+        XCTAssertEqual(stops, 1)
+        finishSearch?([MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 40, longitude: 116.48))])
+        request.completeGeocoding(nil, error: noResult, reference: reference, address: "Public address")
+        request.cancel()
+        XCTAssertEqual(searches, 1)
+        XCTAssertEqual(stops, 1)
+    }
+
+    func testAmapCancelledWaitCannotStartAddressSearchBeforeActorCleanup() async throws {
+        let reference = SaveInkMapReference(latitude: 40, longitude: 116.48,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var started = false
+        var searches = 0
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true },
+                                              search: { _, _, _ in searches += 1 })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        work.cancel()
+        // Do not yield to the onCancel MainActor task before this late callback.
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        XCTAssertEqual(searches, 0)
+        XCTAssertFalse(request.usedAddressSearch)
+        let result = await work.value
+        XCTAssertNil(result)
+    }
+
+    func testAmapAddressSearchCanCompleteWithRealPlacemarkValues() async throws {
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 40.0025, longitude: 116.4897),
+                                   addressDictionary: ["CountryCode": "CN", "State": "Beijing"])
+        var started = false
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true },
+                                              search: { _, _, finish in finish([placemark]) })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        let matches = await work.value
+        XCTAssertEqual(matches?.count, 1)
+        XCTAssertEqual(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: matches ?? []), "CN")
+    }
+
+    func testAmapAddressFallbackOnlyHandlesProviderNoResult() async throws {
+        let provider = SaveInkMapReference(latitude: 40, longitude: 116.48,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var wgs = provider
+        wgs.coordinateSystem = .wgs84
+        let noResult = NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue)
+        let network = NSError(domain: kCLErrorDomain, code: CLError.network.rawValue)
+        for (reference, address, error) in [(wgs, "Public", noResult), (provider, "", noResult), (provider, "Public", network)] {
+            var started = false
+            let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true },
+                                                  search: { _, _, _ in XCTFail("This response must not start address search") })
+            let work = Task { @MainActor in await request.matches(reference: reference, address: address) }
+            defer { request.cancel(); work.cancel() }
+            for _ in 0..<100 {
+                if started { break }
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            XCTAssertTrue(started)
+            request.completeGeocoding(nil, error: error, reference: reference, address: address)
+            let result = await work.value
+            XCTAssertNil(result)
+            XCTAssertFalse(request.usedAddressSearch)
+        }
+    }
+
     func testAmapCountryCancellationFinishesBeforeLateBackendCallback() async throws {
         var completed = false
         var stopped = 0
@@ -1770,8 +1897,11 @@ final class SaveInkNotebookTests: XCTestCase {
         let port = try XCTUnwrap(fixture.port, "Loopback HTTP fixture must become ready: \(fixture.listenerState)")
         let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/map-shell"))
         var failed = false
-        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }, "The HTTP fixture needs a foreground test host")
+        // This negative test needs an attached document, even while XCTest
+        // has the host scene inactive. Actual map images use the separate
+        // foreground capture gate below.
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+                                 "The HTTP fixture needs an attached window scene")
         let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
         let window = UIWindow(windowScene: scene)
         let host = UIViewController()
@@ -1816,7 +1946,7 @@ final class SaveInkNotebookTests: XCTestCase {
             let failure = error as NSError
             scriptError = "\(failure.domain)/\(failure.code)"
         }
-        let diagnostics = "listener=\(fixture.listenerState) successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) attached=\(web.window === window) scriptError=\(scriptError ?? "none") bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
+        let diagnostics = "listener=\(fixture.listenerState) successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) attached=\(web.window === window) scene=\(scene.activationState.rawValue) app=\(UIApplication.shared.applicationState.rawValue) scriptError=\(scriptError ?? "none") bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
         let attachment = XCTAttachment(string: diagnostics)
         attachment.name = "ink-amap-http200-fixture-diagnostics"
         attachment.lifetime = .keepAlways
