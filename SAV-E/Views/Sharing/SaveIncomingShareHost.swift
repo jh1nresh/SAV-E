@@ -176,7 +176,7 @@ struct SaveIncomingShareHost: ViewModifier {
                 receipt, requiringAuthenticatedSession: true, confirmedJournal: selectedJournal
             )
         }
-        NotificationCenter.default.post(name: .saveInkIncomingShareSaved, object: nil)
+        NotificationCenter.default.post(name: .saveInkIncomingShareSaved, object: owner)
         try requireCurrent(token, owner: owner)
         guard incomingPlaceReceipt?.id == destination.id else { throw CancellationError() }
         if confirmsClip, PendingShareStore.clear(ifUnchanged: selectedJournal, from: journalStore) {
@@ -200,7 +200,7 @@ struct SaveIncomingShareHost: ViewModifier {
         } else {
             counts = try await saver().saveClipListHandoff(list, requiringAuthenticatedSession: true).counts
         }
-        NotificationCenter.default.post(name: .saveInkIncomingShareSaved, object: nil)
+        NotificationCenter.default.post(name: .saveInkIncomingShareSaved, object: owner)
         try requireCurrent(token, owner: owner)
         guard pendingClipListSave == list, PendingShareStore.load(from: journalStore) == journal else { throw CancellationError() }
         return counts
