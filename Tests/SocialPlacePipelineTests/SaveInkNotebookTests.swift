@@ -2182,11 +2182,15 @@ final class SaveInkNotebookTests: XCTestCase {
         defer { web.stopLoading() }
         XCTAssertFalse(web.configuration.websiteDataStore.isPersistent)
         var ready = false
+        var readySamples = 0
         for _ in 0..<40 {
             try Task.checkCancellation()
             if failed { break }
             let result = try? await web.evaluateJavaScript(SaveInkAmapWebView.renderReadinessScript)
-            if result as? Bool == true { ready = true; break }
+            readySamples = result as? Bool == true ? readySamples + 1 : 0
+            // The first completed tile may still precede the vector paint.
+            // Require a stable usable surface before taking the actual image.
+            if readySamples >= 3 { ready = true; break }
             try await Task.sleep(for: .seconds(1))
         }
         let diagnostics = try? await web.evaluateJavaScript("""

@@ -1112,7 +1112,9 @@ final class SaveInkMapCountryRequest {
         }
         let query = MKLocalSearch.Request()
         query.naturalLanguageQuery = address
-        query.resultTypes = .address
+        // A building address may be indexed as a POI rather than a street address.
+        // Results still supply only nearby, unanimous region metadata; never identity.
+        query.resultTypes = [.address, .pointOfInterest]
         let operation = MKLocalSearch(request: query)
         addressSearch = operation
         operation.start { [weak self] response, error in
