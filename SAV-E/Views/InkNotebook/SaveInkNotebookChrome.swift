@@ -836,6 +836,60 @@ struct SaveInkAmapWebView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(failed: $failed, originalURL: url) }
 
+    static let tileURLPredicateScript = #"raw => { try { return /(?:^|\/)(?:appmaptile|maptile|tiles|vt)(?:\/|$)|\/web_map\/get_tile(?:\/|$)/i.test(new URL(String(raw), document.baseURI).pathname); } catch { return false; } }"#
+
+    // Observe successful tile delivery and subsequent drawing without reading
+    // response bodies or passing provider/user data back to native code.
+    static let renderEvidenceScript = """
+        (() => {
+          const tile = \(tileURLPredicateScript);
+          let delivered = false;
+          const painted = new WeakSet();
+          Object.defineProperty(window, '__savvyMapRenderEvidence', {value: Object.freeze({
+            hasPainted: canvas => painted.has(canvas), hasDeliveredTile: () => delivered
+          })});
+          const accept = (url, status) => { if (tile(url) && status >= 200 && status < 300) delivered = true; };
+          const fetch = window.fetch;
+          window.fetch = function(...args) {
+            return fetch.apply(this, args).then(response => { accept(response.url, response.status); return response; });
+          };
+          const tileRequests = new WeakMap();
+          const open = XMLHttpRequest.prototype.open;
+          const send = XMLHttpRequest.prototype.send;
+          XMLHttpRequest.prototype.open = function(method, url, ...args) {
+            tileRequests.set(this, tile(url)); return open.call(this, method, url, ...args);
+          };
+          XMLHttpRequest.prototype.send = function(...args) {
+            this.addEventListener('load', () => {
+              if (tileRequests.get(this)) accept(this.responseURL, this.status);
+            }, {capture:true, once:true});
+            return send.apply(this, args);
+          };
+          const observeDraw = (prototype, names) => {
+            if (!prototype) return;
+            for (const name of names) {
+              const draw = prototype[name];
+              if (!draw) continue;
+              prototype[name] = function(...args) {
+                const result = draw.apply(this, args);
+                let nonzero = args[name === 'drawArrays' ? 2 : 1] > 0;
+                if (name === 'drawImage') {
+                  const source = args[0];
+                  const width = args.length >= 9 ? args[7] : args.length >= 5 ? args[3] : source.naturalWidth || source.videoWidth || source.width;
+                  const height = args.length >= 9 ? args[8] : args.length >= 5 ? args[4] : source.naturalHeight || source.videoHeight || source.height;
+                  nonzero = Math.abs(width) > 0 && Math.abs(height) > 0 && (args.length < 9 || (Math.abs(args[3]) > 0 && Math.abs(args[4]) > 0));
+                }
+                if (delivered && this.canvas && nonzero) painted.add(this.canvas);
+                return result;
+              };
+            }
+          };
+          observeDraw(window.CanvasRenderingContext2D?.prototype, ['drawImage']);
+          observeDraw(window.WebGLRenderingContext?.prototype, ['drawArrays', 'drawElements']);
+          observeDraw(window.WebGL2RenderingContext?.prototype, ['drawArrays', 'drawElements']);
+        })()
+        """
+
     // A completed HTML shell is not a rendered map. Only the compact embed may
     // settle; the mobile marker card is deliberately never a successful surface.
     static let renderReadinessScript = """
@@ -845,16 +899,19 @@ struct SaveInkAmapWebView: UIViewRepresentable {
           const exposed = x => { const r = x.getBoundingClientRect(); const s = getComputedStyle(x); return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight && s.visibility !== 'hidden' && s.display !== 'none'; };
           // Loaded tiles behind an authentication overlay are not a usable map.
           if ([...document.querySelectorAll('input[type="tel"],input[type="password"],input[autocomplete="one-time-code"],input[placeholder*="验证码"],input[placeholder*="驗證碼"]')].some(exposed)) return false;
-          const canvas = [...document.querySelectorAll('canvas')].some(x => x.width > 100 && x.height > 100 && visible(x));
-          const tiles = [...document.images].some(x => x.complete && x.naturalWidth >= 128 && x.naturalHeight >= 128 && visible(x) && /autonavi|amap/i.test(x.src));
-          const resources = performance.getEntriesByType('resource').some(x => x.responseEnd > 0 && /appmaptile|maptile|\\/web_map\\/get_tile|\\/tiles|\\/vt[/?]|\\/ws\\/mapapi\\//i.test(x.name));
-          return document.readyState === 'complete' && (canvas || tiles) && resources;
+          const evidence = window.__savvyMapRenderEvidence;
+          const canvas = evidence?.hasDeliveredTile() && [...document.querySelectorAll('canvas')].some(x => x.width > 100 && x.height > 100 && visible(x) && evidence.hasPainted(x));
+          const tile = \(tileURLPredicateScript);
+          const tiles = [...document.images].some(x => x.complete && x.naturalWidth >= 128 && x.naturalHeight >= 128 && visible(x) && tile(x.currentSrc || x.src));
+          return document.readyState === 'complete' && (canvas || tiles);
         })()
         """
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: Self.renderEvidenceScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         // A destination map does not need the viewer's GPS. No native message
         // handlers, authentication headers, notes or account identity are exposed.

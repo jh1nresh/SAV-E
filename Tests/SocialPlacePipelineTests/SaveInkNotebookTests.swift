@@ -1962,12 +1962,27 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(failed, "A cancellation without verified conversion provenance must fail")
     }
 
-    func testAmapLoadedTilesBehindVisibleLoginAreNotReady() async throws {
+    func testAmapReadinessRequiresSuccessfulTilesAndPaintWithoutLogin() async throws {
+        let tileImage = UIGraphicsImageRenderer(size: CGSize(width: 180, height: 180)).image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 180, height: 180))
+        }
+        let fixture = try SaveInkHTTP200MapFixture(tileImage: XCTUnwrap(tileImage.pngData()))
+        defer { fixture.stop() }
+        for _ in 0..<100 {
+            if fixture.port != nil { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let port = try XCTUnwrap(fixture.port)
+        let origin = "http://127.0.0.1:\(port)"
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
         let window = UIWindow(windowScene: scene)
         let host = UIViewController()
-        let web = WKWebView(frame: scene.coordinateSpace.bounds)
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: SaveInkAmapWebView.renderEvidenceScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let web = WKWebView(frame: scene.coordinateSpace.bounds, configuration: configuration)
         host.view = web
         window.rootViewController = host
         window.makeKeyAndVisible()
@@ -1977,32 +1992,94 @@ final class SaveInkNotebookTests: XCTestCase {
             window.rootViewController = nil
             originalKeyWindow?.makeKeyAndVisible()
         }
-        web.loadHTMLString("""
-            <html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-            <body><canvas width="300" height="190" style="width:300px;height:190px"></canvas>
-            <input type="tel" placeholder="请输入验证码" style="display:none;position:fixed;top:0;left:0;width:200px;height:50px">
-            </body></html>
-            """, baseURL: nil)
-        let deadline = ContinuousClock.now + .seconds(30)
-        while ContinuousClock.now < deadline {
-            if (try? await web.evaluateJavaScript("document.readyState === 'complete' && document.querySelector('canvas') !== null")) as? Bool == true { break }
-            try await Task.sleep(for: .milliseconds(50))
-        }
-        // Exercise the exact production predicate against a real DOM. Only
-        // external origin/resource metadata is injected to keep this offline.
+        // Only the top-level origin is substituted. Tile status, decoded images,
+        // draw calls and resource timing come from real WebKit and loopback HTTP.
         let readiness = """
             const location = {protocol:'https:',hostname:'www.amap.com',pathname:'/ssr/embed/place'};
-            const performance = {getEntriesByType: () => [{responseEnd:1,name:'https://jsapi.amap.com/web_map/get_tile'}]};
             return \(SaveInkAmapWebView.renderReadinessScript);
             """
-        let unobscured = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
-        XCTAssertEqual(unobscured as? Bool, true, "Hidden login markup must not reject a rendered map")
-        _ = try await web.evaluateJavaScript("document.querySelector('input').style.display = 'block'")
-        let login = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
-        XCTAssertEqual(login as? Bool, false, "Loaded canvas/tiles behind a visible login form are not map proof")
-        _ = try await web.evaluateJavaScript("document.querySelector('input').remove()")
-        let cleared = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
-        XCTAssertEqual(cleared as? Bool, true)
+        let draw = """
+            (() => {
+            const source = document.createElement('canvas'); source.width = source.height = 180;
+            const paint = source.getContext('2d'); paint.fillStyle = 'blue'; paint.fillRect(0,0,180,180);
+            document.querySelector('canvas').getContext('2d').drawImage(source, 0, 0);
+            })()
+            """
+        for transport in ["fetch", "xhr"] {
+            web.loadHTMLString("""
+                <html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+                <body><canvas width="300" height="190" style="width:300px;height:190px"></canvas>
+                <input type="tel" placeholder="请输入验证码" style="display:none;position:fixed;top:0;left:0;width:200px;height:50px">
+                </body></html>
+                """, baseURL: URL(string: origin))
+            let deadline = ContinuousClock.now + .seconds(30)
+            while ContinuousClock.now < deadline {
+                if (try? await web.evaluateJavaScript("document.readyState === 'complete' && document.querySelector('canvas') !== null && !window.fixtureStarted")) as? Bool == true {
+                    _ = try await web.evaluateJavaScript("window.fixtureStarted = true")
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            let request = """
+                const url = origin + '/tiles/' + status;
+                if (transport === 'fetch') return (await fetch(url)).status;
+                return await new Promise((resolve, reject) => {
+                  const xhr = new XMLHttpRequest(); xhr.open('GET', url);
+                  xhr.onload = () => {
+                    if (status === '200') { \(draw) }
+                    resolve(xhr.status);
+                  }; xhr.onerror = reject; xhr.send();
+                });
+                """
+            let denied = try await web.callAsyncJavaScript(request,
+                arguments: ["origin": origin, "transport": transport, "status": "403"], in: nil, contentWorld: .page)
+            XCTAssertEqual(denied as? Int, 403)
+            let empty = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(empty as? Bool, false, "An empty canvas plus a completed HTTP403 tile is not ready: \(transport)")
+            _ = try await web.evaluateJavaScript(draw)
+            let deniedPaint = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(deniedPaint as? Bool, false, "A draw does not turn a failed tile into success")
+            let redirected = try await web.callAsyncJavaScript(request,
+                arguments: ["origin": origin, "transport": transport, "status": "redirect"], in: nil, contentWorld: .page)
+            XCTAssertEqual(redirected as? Int, 200)
+            _ = try await web.evaluateJavaScript(draw)
+            let loginResponse = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(loginResponse as? Bool, false, "A tile redirect to an HTTP200 non-map page is not delivery")
+            let loaded = try await web.callAsyncJavaScript(request,
+                arguments: ["origin": origin, "transport": transport, "status": "200"], in: nil, contentWorld: .page)
+            XCTAssertEqual(loaded as? Int, 200)
+            let beforePaint = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(beforePaint as? Bool, transport == "xhr",
+                           "XHR onload may paint immediately; successful delivery must be observed before the provider callback")
+            if transport == "fetch" {
+                _ = try await web.evaluateJavaScript("document.querySelector('canvas').getContext('2d').drawImage(document.querySelector('canvas'), 0, 0, 0, 0)")
+                let zeroDraw = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+                XCTAssertEqual(zeroDraw as? Bool, false, "A zero-size draw is a native no-op")
+            }
+            _ = try await web.evaluateJavaScript(draw)
+            let unobscured = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(unobscured as? Bool, true, "Successful delivery and a subsequent real draw may settle: \(transport)")
+            _ = try await web.evaluateJavaScript("document.querySelector('input').style.display = 'block'")
+            let login = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(login as? Bool, false, "Painted tiles behind visible login are unusable")
+            _ = try await web.evaluateJavaScript("document.querySelector('input').remove(); document.querySelector('canvas').remove()")
+            // A decoded non-tile image (avatar/QR) cannot substitute for a map.
+            let image = """
+                return await new Promise((resolve, reject) => {
+                  const image = new Image(); image.width = image.height = 180;
+                  image.onload = () => resolve(image.naturalWidth); image.onerror = reject;
+                  document.body.appendChild(image); image.src = url;
+                });
+                """
+            let avatar = try await web.callAsyncJavaScript(image, arguments: ["url": origin + "/avatar"], in: nil, contentWorld: .page)
+            XCTAssertEqual(avatar as? Int, 180)
+            let notTile = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(notTile as? Bool, false)
+            let decodedTile = try await web.callAsyncJavaScript(image, arguments: ["url": origin + "/tiles/image"], in: nil, contentWorld: .page)
+            XCTAssertEqual(decodedTile as? Int, 180)
+            let tileReady = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(tileReady as? Bool, true, "A visible, decoded real tile image is an alternative to canvas drawing")
+        }
     }
 
     func testAmapActualHTTP200ShellStillNeedsSemanticMap() async throws {
@@ -2274,7 +2351,8 @@ final class SaveInkNotebookTests: XCTestCase {
               return {location:locationOnly(location.href), title:document.title.slice(0,80),
                 body:document.body.innerText.slice(0,240), visibility:document.visibilityState,
                 viewport:[innerWidth,innerHeight,devicePixelRatio], readyState:document.readyState,
-                canvases:[...document.querySelectorAll('canvas')].slice(0,8).map(x => [x.width,x.height,x.clientWidth,x.clientHeight]),
+                tileDelivered:window.__savvyMapRenderEvidence?.hasDeliveredTile() ?? false,
+                canvases:[...document.querySelectorAll('canvas')].slice(0,8).map(x => [x.width,x.height,x.clientWidth,x.clientHeight,window.__savvyMapRenderEvidence?.hasPainted(x) ?? false]),
                 images:[...document.images].slice(0,16).map(x => ({location:locationOnly(x.src), complete:x.complete,width:x.naturalWidth,height:x.naturalHeight})),
                 frames:[...document.querySelectorAll('iframe')].slice(0,8).map(x => locationOnly(x.src)),
                 resources:performance.getEntriesByType('resource').slice(-30).map(x => ({location:locationOnly(x.name), completed:x.responseEnd > 0}))};
@@ -4867,7 +4945,7 @@ private final class SaveInkHTTP200MapFixture: @unchecked Sendable {
         return successfulSends
     }
 
-    init() throws {
+    init(tileImage: Data? = nil) throws {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
@@ -4894,9 +4972,19 @@ private final class SaveInkHTTP200MapFixture: @unchecked Sendable {
             self.connections.append(connection)
             self.lock.unlock()
             connection.start(queue: self.queue)
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { _, _, _, error in
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { request, _, _, error in
                 guard error == nil else { connection.cancel(); return }
-                connection.send(content: response, completion: .contentProcessed { [weak self] error in
+                let line = request.flatMap { String(data: $0, encoding: .utf8) }?.components(separatedBy: "\r\n").first ?? ""
+                var selectedResponse = response
+                if tileImage != nil, line.contains(" /tiles/redirect ") {
+                    selectedResponse = Data("HTTP/1.1 302 Found\r\nLocation: /login\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".utf8)
+                } else if let tileImage {
+                    let denied = line.contains(" /tiles/403 ")
+                    let isImage = line.contains(" /tiles/image ") || line.contains(" /avatar ")
+                    let payload = isImage ? tileImage : body
+                    selectedResponse = Data("HTTP/1.1 \(denied ? "403 Forbidden" : "200 OK")\r\nContent-Type: \(isImage ? "image/png" : "text/html")\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: \(payload.count)\r\nConnection: close\r\n\r\n".utf8) + payload
+                }
+                connection.send(content: selectedResponse, completion: .contentProcessed { [weak self] error in
                     if error == nil, let self {
                         self.lock.lock()
                         self.successfulSends += 1
