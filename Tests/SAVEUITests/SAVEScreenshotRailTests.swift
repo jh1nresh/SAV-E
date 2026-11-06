@@ -119,8 +119,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["ink.language.option.system"].waitForExistence(timeout: stepTimeout))
         app.buttons["ink.language.close"].tap()
         let start = app.buttons["ink.welcome.start"]
-        if !start.isHittable { app.swipeUp() }
-        XCTAssertTrue(start.isHittable)
+        for _ in 0..<3 {
+            if waitUntilHittable(start, timeout: 1) { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(waitUntilHittable(start))
         attach(app, name: "language-welcome-en-large-type")
         start.tap()
         XCTAssertTrue(app.descendants(matching: .any)["ink.home"].waitForExistence(timeout: stepTimeout))
