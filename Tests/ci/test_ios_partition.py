@@ -55,7 +55,7 @@ class PartitionTests(unittest.TestCase):
             self.assertIn(f"lane: width-{width}", supplemental)
             for surface in ("Map", "Friends", "Passport"):
                 self.assertIn(f"test{surface}Width{width}", supplemental)
-                self.assertIn(f"Capture {surface} width evidence", supplemental)
+        self.assertIn("Capture Map, Friends, and Passport width evidence", supplemental)
         self.assertIn("lane: home-evidence", supplemental)
         self.assertIn("for surface in map friends passport", supplemental)
         self.assertIn('ios-ui-home-args.txt', supplemental)
@@ -81,3 +81,13 @@ class PartitionTests(unittest.TestCase):
                                             capture_output=True, text=True)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("::error::Required iOS lane did not succeed", result.stdout)
+
+    def test_t3_simulator_reset_requires_the_same_work_as_its_capture(self):
+        workflow = (ROOT / ".github/workflows/ios.yml").read_text()
+        def condition(name):
+            step = workflow.split(f"      - name: {name}\n", 1)[1].split("      - name:", 1)[0]
+            return re.search(r"^        if: (.+)$", step, re.MULTILINE).group(1)
+        capture = condition("Capture T3 coral-token screens")
+        self.assertEqual(condition("Reset focused simulator before T3 screenshot rail"), capture)
+        self.assertIn("profile != 'ink'", capture)
+        self.assertIn("!cancelled()", capture)

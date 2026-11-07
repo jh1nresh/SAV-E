@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Boot a real 375 / 390 / 430 simulator and run one UI test on it.
+# Boot one real 375 / 390 / 430 simulator for one or all three width tests.
 # Letterboxing a 402pt device does not count as width evidence.
 set -euo pipefail
 
@@ -13,11 +13,14 @@ Usage:
     --output-dir DIR \
     --result-bundle PATH \
     --log PATH
+
+Repeat --test for Map, Friends and Passport to run the complete width group
+in one XCTest session. A single --test remains supported.
 EOF
 }
 
 width=""
-test_selector=""
+test_selectors=()
 xctestrun=""
 output_dir=""
 result_bundle=""
@@ -31,7 +34,7 @@ while (($#)); do
             shift 2
             ;;
         --test)
-            test_selector="${2:?missing value for --test}"
+            test_selectors+=("${2:?missing value for --test}")
             shift 2
             ;;
         --xctestrun)
@@ -66,20 +69,31 @@ while (($#)); do
     esac
 done
 
-if [[ -z "$width" || -z "$test_selector" || -z "$xctestrun" || -z "$output_dir" || -z "$result_bundle" || -z "$log_path" ]]; then
+if [[ -z "$width" || ${#test_selectors[@]} -eq 0 || -z "$xctestrun" || -z "$output_dir" || -z "$result_bundle" || -z "$log_path" ]]; then
     usage >&2
     exit 2
 fi
 
-case "$test_selector" in
-    */testMapWidth"$width") surface=map ;;
-    */testFriendsWidth"$width") surface=friends ;;
-    */testPassportWidth"$width") surface=passport ;;
-    *)
-        echo "unsupported width screenshot test: $test_selector" >&2
-        exit 2
-        ;;
-esac
+surfaces=()
+for test_selector in "${test_selectors[@]}"; do
+    case "$test_selector" in
+        */testMapWidth"$width") surface=map ;;
+        */testFriendsWidth"$width") surface=friends ;;
+        */testPassportWidth"$width") surface=passport ;;
+        *)
+            echo "unsupported width screenshot test: $test_selector" >&2
+            exit 2
+            ;;
+    esac
+    case " ${surfaces[*]-} " in
+        *" $surface "*) echo "duplicate width screenshot test: $test_selector" >&2; exit 2 ;;
+    esac
+    surfaces+=("$surface")
+done
+if ((${#surfaces[@]} != 1 && ${#surfaces[@]} != 3)); then
+    echo "select one surface or the complete Map/Friends/Passport width group" >&2
+    exit 2
+fi
 
 case "$width" in
     375)
@@ -116,7 +130,9 @@ fi
 mkdir -p "$output_dir"
 args_file="$(mktemp)"
 trap 'rm -f "$args_file"' EXIT
-printf '%s\n' "-only-testing:${test_selector}" > "$args_file"
+for test_selector in "${test_selectors[@]}"; do
+    printf '%s\n' "-only-testing:${test_selector}"
+done > "$args_file"
 
 # Host env does not reach the xctestrun UI runner. Inject a simulator-writable
 # fallback; copy those files out from the device data root after the test.
@@ -160,10 +176,30 @@ PY
 udid="$(xcrun simctl create "SAV-E CI ${width}pt" "$device_type" "$runtime")"
 status=1
 cleanup() {
+    local cleanup_status=0
+    local devices=""
     xcrun simctl shutdown "$udid" || true
-    xcrun simctl delete "$udid" || true
+    if ! devices="$(xcrun simctl list devices)"; then
+        cleanup_status=1
+    elif ! grep -F "$udid" <<< "$devices" | grep -Fq '(Shutdown)'; then
+        echo "width simulator shutdown could not be verified" >&2
+        cleanup_status=1
+    else
+        echo "Verified width ${width} simulator shutdown: $udid"
+    fi
+    if ! xcrun simctl delete "$udid"; then
+        cleanup_status=1
+    elif ! devices="$(xcrun simctl list devices)"; then
+        cleanup_status=1
+    elif grep -Fq "$udid" <<< "$devices"; then
+        echo "width simulator deletion could not be verified" >&2
+        cleanup_status=1
+    else
+        echo "Verified width ${width} simulator deletion: $udid"
+    fi
+    return "$cleanup_status"
 }
-trap 'rm -f "$args_file"; cleanup' EXIT
+trap 'script_status=$?; rm -f "$args_file"; if ! cleanup; then script_status=1; fi; exit "$script_status"' EXIT
 
 xcrun simctl bootstatus "$udid" -b
 set +e
@@ -186,19 +222,25 @@ if [[ -d "$sim_shots" ]]; then
     echo "copied simulator SAVE_SCREENSHOT_DIR from $sim_shots"
 fi
 if [[ -f "$result_bundle/Info.plist" ]]; then
-    # Each export writes its own manifest. Exporting all three surfaces into
-    # output_dir both collides on manifest.json and leaves UUID-named rasters.
-    attachments="$(mktemp -d "$output_dir/${surface}-${width}-attachments.XXXXXX")"
+    # One export contains the entire group. Keep its manifest separate from
+    # named rasters, including when legacy single-test calls share output_dir.
+    attachment_prefix="${surfaces[0]}"
+    if ((${#surfaces[@]} == 3)); then attachment_prefix=width; fi
+    attachments="$(mktemp -d "$output_dir/${attachment_prefix}-${width}-attachments.XXXXXX")"
     xcrun xcresulttool export attachments \
         --path "$result_bundle" \
         --output-path "$attachments" \
         || echo "xcresulttool export failed; keep SAVE_SCREENSHOT_DIR rasters."
     if [[ -f "$attachments/manifest.json" ]]; then
+        expected=()
+        for surface in "${surfaces[@]}"; do expected+=(--expect "${surface}-${width}"); done
         python3 scripts/extract-named-ui-screenshots.py "$attachments" "$output_dir" \
-            --expect "${surface}-${width}"
+            "${expected[@]}"
     fi
 fi
 
-[[ -s "$output_dir/${surface}-${width}.png" ]] || status=1
+for surface in "${surfaces[@]}"; do
+    [[ -s "$output_dir/${surface}-${width}.png" ]] || status=1
+done
 
 exit "$status"

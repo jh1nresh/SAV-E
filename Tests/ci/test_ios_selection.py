@@ -244,9 +244,10 @@ class CoverageTests(unittest.TestCase):
             ios_workflow,
         )
         self.assertNotIn("Build without booting a simulator", ios_workflow)
-        self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 160\s*$")
-        self.assertIn("timeout-minutes: 100", ios_workflow)
-        self.assertNotIn("timeout-minutes: 60", ios_workflow)
+        core_job = ios_workflow.split("\n  ios-tests:\n", 1)[1].split("\n  ios-supplemental:\n", 1)[0]
+        self.assertRegex(core_job, r"(?m)^    timeout-minutes: 160\s*$")
+        self.assertIn("timeout-minutes: 100", core_job)
+        self.assertNotRegex(core_job, r"(?m)^    timeout-minutes: 60\s*$")
         self.assertIn("testCoralTokenContrastScreens", ios_workflow)
         self.assertIn("save-coral-t3-screens-${{ github.sha }}", ios_workflow)
         self.assertIn("scripts/extract-named-ui-screenshots.py", ios_workflow)

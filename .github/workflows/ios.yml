@@ -643,7 +643,7 @@ jobs:
             --output-path "$RUNNER_TEMP/SAVE-Trip-Sheets"
 
       - name: Reset focused simulator before T3 screenshot rail
-        if: always() && steps.scope.outputs.ui == 'true'
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink' }}
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
@@ -652,7 +652,7 @@ jobs:
       - name: Capture T3 coral-token screens
         id: t3_screens
         timeout-minutes: 15
-        if: always() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink'
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink' }}
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-T3-screens-tests.log
         run: |
@@ -931,54 +931,28 @@ jobs:
       # Real device types are selected by run-ios-width-device-test.sh:
       # iPhone-SE-3rd-generation, iPhone-14, and iPhone-15-Pro-Max.
       # Do not substitute iPhone-16-Pro-Max (440pt); assert real widths.
-      # Hosted first-boot migration can consume ten minutes before XCTest.
-      # Allow 25 minutes for boot + tests + export. Test waits and the
-      # 65-minute lane cap stay fixed; retain raw logs on interruption.
-      - name: Capture Map width evidence
-        timeout-minutes: 25
+      # One genuine device and XCTest session per width avoid repeating
+      # first-boot migration. All three selectors and named rasters gate success.
+      # Keep the existing 65-minute lane budget, with room for teardown.
+      - name: Capture Map, Friends, and Passport width evidence
+        timeout-minutes: 60
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
         env:
           WIDTH: ${{ matrix.width }}
-          TEST: ${{ matrix.map_test }}
+          MAP_TEST: ${{ matrix.map_test }}
+          FRIENDS_TEST: ${{ matrix.friends_test }}
+          PASSPORT_TEST: ${{ matrix.passport_test }}
           XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
         run: |
           scripts/run-ios-width-device-test.sh \
             --width "$WIDTH" \
-            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$MAP_TEST" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$FRIENDS_TEST" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$PASSPORT_TEST" \
             --xctestrun "$XCTESTRUN_PATH" \
             --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Map-$WIDTH.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Map-$WIDTH-tests.log"
-      - name: Capture Friends width evidence
-        timeout-minutes: 25
-        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
-        env:
-          WIDTH: ${{ matrix.width }}
-          TEST: ${{ matrix.friends_test }}
-          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width "$WIDTH" \
-            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
-            --xctestrun "$XCTESTRUN_PATH" \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Friends-$WIDTH.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Friends-$WIDTH-tests.log"
-      - name: Capture Passport width evidence
-        timeout-minutes: 25
-        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
-        env:
-          WIDTH: ${{ matrix.width }}
-          TEST: ${{ matrix.passport_test }}
-          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width "$WIDTH" \
-            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
-            --xctestrun "$XCTESTRUN_PATH" \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Passport-$WIDTH.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Passport-$WIDTH-tests.log"
+            --result-bundle "$RUNNER_TEMP/SAVE-Width-$WIDTH.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Width-$WIDTH-tests.log"
       - name: Require every width raster
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && startsWith(matrix.lane, 'width-') }}
         env:

@@ -4850,6 +4850,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func signInViaReviewDemoRequired(app: XCUIApplication) throws {
         let capturesEntry = app.launchEnvironment["SAVE_CAPTURE_ENGLISH_ENTRY"] == "1"
         let emailField = app.textFields["signin.emailField"]
+        // A restored Ink session already satisfies this helper. Keep mandatory
+        // English entry captures on the sign-in path, with their existing wait.
+        if !capturesEntry, !emailField.exists,
+           app.descendants(matching: .any)["ink.home"].exists {
+            return
+        }
         if !emailField.waitForExistence(timeout: timeout(20)) {
             if capturesEntry {
                 XCTFail("English entry capture requires sign-in; an existing session cannot satisfy both entry screenshots.")
