@@ -10,6 +10,8 @@ struct PendingSharePayload: Codable, Equatable {
 
     /// Distinguishes a newer tap on the same link from an older completion.
     var invocationID: UUID? = UUID()
+    /// Recipient-local identity of one frozen Clip list selection across retries.
+    var selectionID: UUID? = nil
     var kind: Kind
     var shareCode: String?
     var placeId: String?

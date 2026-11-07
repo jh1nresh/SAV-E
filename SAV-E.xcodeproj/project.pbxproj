@@ -255,6 +255,11 @@
 		INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000005 /* SaveInkNotebookScreens.swift */; };
 		INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000007 /* SaveInkNotebookRoot.swift */; };
 		INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000A /* SaveInkNotebookTests.swift */; };
+		98000D4B4342304E0C7875C4 /* SaveIncomingShareTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E5712864CFF5171467D1D9D /* SaveIncomingShareTests.swift */; };
+		9E6743E6E1922EDD32E082C8 /* SaveIncomingShareHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC713DCAE98B7A95565120A /* SaveIncomingShareHost.swift */; };
+		B69B48F018182F382CD1FFE1 /* FriendShareReceiptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C174278B321BFEB4FDF9B7B /* FriendShareReceiptView.swift */; };
+		BDF0A95DC4F21861E40857AC /* SaveIncomingShareFixtureRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7558382420ED6313E2E6E84 /* SaveIncomingShareFixtureRoot.swift */; };
+		9A334AE3FEA79F651BA30B8D /* SAVEIncomingShareUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8082C08C2476D6A9772D514 /* SAVEIncomingShareUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -606,6 +611,11 @@
 		INK1A000000000000000005 /* SaveInkNotebookScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookScreens.swift; sourceTree = "<group>"; };
 		INK1A000000000000000007 /* SaveInkNotebookRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookRoot.swift; sourceTree = "<group>"; };
 		INK1A00000000000000000A /* SaveInkNotebookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookTests.swift; sourceTree = "<group>"; };
+		1AC713DCAE98B7A95565120A /* SaveIncomingShareHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveIncomingShareHost.swift; sourceTree = "<group>"; };
+		2E5712864CFF5171467D1D9D /* SaveIncomingShareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveIncomingShareTests.swift; sourceTree = "<group>"; };
+		6C174278B321BFEB4FDF9B7B /* FriendShareReceiptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendShareReceiptView.swift; sourceTree = "<group>"; };
+		A7558382420ED6313E2E6E84 /* SaveIncomingShareFixtureRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveIncomingShareFixtureRoot.swift; sourceTree = "<group>"; };
+		F8082C08C2476D6A9772D514 /* SAVEIncomingShareUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEIncomingShareUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -906,6 +916,7 @@
 			isa = PBXGroup;
 			children = (
 				INK1A000000000000000009 /* InkNotebook */,
+				6ACC46BA3E1E8F52FD8B5EB7 /* Sharing */,
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
 				4320D2B25C0E7653731FFABF /* Onboarding */,
 				7474D3EF06276FBAA7A7CE02 /* Shared */,
@@ -1008,6 +1019,7 @@
 				A306E01D0000000000000003 /* SAVEGooglePhotoAttributionTests.swift */,
 				7966C389379C2C27D0974740 /* SAVEOnboardingCarouselTests.swift */,
 				2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */,
+				F8082C08C2476D6A9772D514 /* SAVEIncomingShareUITests.swift */,
 				33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */,
 				087079BA81CF1E30FDEDEA1D /* SAVEUITestCase.swift */,
 			);
@@ -1034,6 +1046,7 @@
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
 				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
 				C1A000000000000000000016 /* SaveClipJournalLockTests.swift */,
+				2E5712864CFF5171467D1D9D /* SaveIncomingShareTests.swift */,
 				C1A000000000000000000048 /* PendingShareStoreTests.swift */,
 				C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */,
 				C8A10000000000000000000A /* ClipListSaveTests.swift */,
@@ -1266,6 +1279,16 @@
 				F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */,
 			);
 			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		6ACC46BA3E1E8F52FD8B5EB7 /* Sharing */ = {
+			isa = PBXGroup;
+			children = (
+				6C174278B321BFEB4FDF9B7B /* FriendShareReceiptView.swift */,
+				1AC713DCAE98B7A95565120A /* SaveIncomingShareHost.swift */,
+				A7558382420ED6313E2E6E84 /* SaveIncomingShareFixtureRoot.swift */,
+			);
+			path = Sharing;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1698,6 +1721,7 @@
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
 				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
 				C1A000000000000000000015 /* SaveClipJournalLockTests.swift in Sources */,
+				98000D4B4342304E0C7875C4 /* SaveIncomingShareTests.swift in Sources */,
 				C1A000000000000000000049 /* PendingShareStoreTests.swift in Sources */,
 				C8A100000000000000000006 /* ClipSignInCarryOverTests.swift in Sources */,
 				C8A100000000000000000009 /* ClipListSavePlanner.swift in Sources */,
@@ -1860,6 +1884,9 @@
 				AA5100000000000000000002 /* ShareAnalysisClient.swift in Sources */,
 				38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */,
 				3E9B1B6E38A02AACF2C022D0 /* SaveApp.swift in Sources */,
+				B69B48F018182F382CD1FFE1 /* FriendShareReceiptView.swift in Sources */,
+				9E6743E6E1922EDD32E082C8 /* SaveIncomingShareHost.swift in Sources */,
+				BDF0A95DC4F21861E40857AC /* SaveIncomingShareFixtureRoot.swift in Sources */,
 				8C1A0B0D0E0F1A2B3C4D5E61 /* SaveChromePresentation.swift in Sources */,
 				F89CCBC9CA4B249D1C5B7BDC /* SaveAtlasProductionBridge.swift in Sources */,
 				8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */,
@@ -1948,6 +1975,7 @@
 				A306E01D0000000000000004 /* SAVEGooglePhotoAttributionTests.swift in Sources */,
 				733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */,
 				243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */,
+				9A334AE3FEA79F651BA30B8D /* SAVEIncomingShareUITests.swift in Sources */,
 				B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */,
 				4F0D78F6B793A1B0F5B3F4CC /* SAVEUITestCase.swift in Sources */,
 			);

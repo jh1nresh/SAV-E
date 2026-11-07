@@ -3421,7 +3421,15 @@ final class MapViewModel: ObservableObject {
         Task { await refreshSocialSignals() }
     }
 
-    func saveClipListHandoff(_ list: SaveCollaborativeList, requiringAuthenticatedSession: Bool = false) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+    struct ClipListPartialFailure: Error {
+        let counts: ClipListHandoffCounts
+        let parkingError: Error
+    }
+
+    /// Incoming confirmation can report accepted rows while retaining the
+    /// overflow journal. Legacy callers still receive the existing cap error.
+    func saveClipListHandoff(_ list: SaveCollaborativeList, requiringAuthenticatedSession: Bool = false,
+                             reportPartialOutcome: Bool = false) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
         let owner = authService.currentUserId
         let generation = authService.sessionGeneration
         guard !requiringAuthenticatedSession || owner != nil else { throw SupabaseError.notAuthenticated }
@@ -3430,14 +3438,17 @@ final class MapViewModel: ObservableObject {
         }
         if let owner {
             return try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
-                try await saveClipListHandoff(list, owner: owner, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession)
+                try await saveClipListHandoff(list, owner: owner, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession,
+                                              reportPartialOutcome: reportPartialOutcome)
             }
         }
-        return try await saveClipListHandoff(list, owner: nil, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession)
+        return try await saveClipListHandoff(list, owner: nil, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession,
+                                             reportPartialOutcome: reportPartialOutcome)
     }
 
     private func saveClipListHandoff(
-        _ list: SaveCollaborativeList, owner: String?, generation: Int, requiringAuthenticatedSession: Bool
+        _ list: SaveCollaborativeList, owner: String?, generation: Int, requiringAuthenticatedSession: Bool,
+        reportPartialOutcome: Bool
     ) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
         func requireSession() throws {
             try Task.checkCancellation()
@@ -3488,7 +3499,7 @@ final class MapViewModel: ObservableObject {
                 ) {
                     throw ClipListHandoffError.unconfirmed
                 }
-                try parkHandoffOverflowIfNeeded(confirmed: confirmed, overCap: remote.counts.overCap)
+                try parkHandoffOverflowIfNeeded(confirmed: confirmed, counts: remote.counts, reportPartialOutcome: reportPartialOutcome)
                 return (Self.stampedHandoffItems(confirmed: confirmed, imported: insertedPlaces), remote.counts)
             } catch SupabaseError.notConfigured {
                 try requireSession()
@@ -3503,19 +3514,30 @@ final class MapViewModel: ObservableObject {
             savedPlaceCount: places.count
         )
         applyHandoffPlaces(planned.toStamp.map { $0.asPlace(includeSenderMemory: false) })
-        try parkHandoffOverflowIfNeeded(confirmed: confirmed, overCap: planned.counts.overCap)
+        try parkHandoffOverflowIfNeeded(confirmed: confirmed, counts: planned.counts, reportPartialOutcome: reportPartialOutcome)
         return planned
     }
 
-    private func parkHandoffOverflowIfNeeded(confirmed: [SaveListItem], overCap: Int) throws {
-        guard overCap > 0 else { return }
-        try parkNovelHandoffItems(confirmed)
+    private func parkHandoffOverflowIfNeeded(confirmed: [SaveListItem], counts: ClipListHandoffCounts, reportPartialOutcome: Bool) throws {
+        guard counts.overCap > 0 else { return }
+        do {
+            try parkNovelHandoffItems(confirmed)
+        } catch {
+            if reportPartialOutcome, counts.newlySaved > 0 || counts.alreadySaved > 0 {
+                throw ClipListPartialFailure(counts: counts, parkingError: error)
+            }
+            throw error
+        }
+        if reportPartialOutcome, counts.newlySaved > 0 || counts.alreadySaved > 0 { return }
         throw SavePlaceLimitError.parkedInUnplacedInbox
     }
 
     private func parkNovelHandoffItems(_ confirmed: [SaveListItem]) throws {
         for item in confirmed {
-            let place = item.asPlace(includeSenderMemory: false)
+            // The retained selection owns this local pending identity. Reusing
+            // it lets the vault upsert by account + ID on an explicit retry;
+            // a newly minted place UUID would duplicate the same Unplaced item.
+            let place = item.asPlace(id: item.id, includeSenderMemory: false)
             if existingSavedPlace(matching: place) != nil { continue }
             try parkPlaceInUnplacedInbox(place)
         }

@@ -1286,6 +1286,153 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(SaveInkLaunch.usesLivePlaces(arguments: []))
     }
 
+    func testIncomingShareRefreshUpdatesHomeAndOpenPassportWithoutRelaunch() async {
+        var saved: [SaveInkPlace] = []
+        var loads = 0
+        let loader = SaveInkLivePlaceLoader(localPlaces: { _ in [] }, load: { _ in
+            loads += 1
+            return SaveInkLivePlaceLoad(places: saved, userCoordinate: nil, countIsAuthoritative: true)
+        })
+        let store = SaveInkNotebookStore(
+            defaults: inkSuite("incoming-refresh"), usesLivePlaces: true, liveLoader: loader,
+            liveOwner: { "account-a" }, liveSessionGeneration: { 7 }
+        )
+        let event = Notification(name: .saveInkIncomingShareSaved,
+                                 object: SaveIncomingShareSession(owner: "account-a", generation: 7))
+        XCTAssertTrue(store.homePlaces().isEmpty)
+        saved = [inkRow(id: "incoming-first", name: "Shared place", street: "Public fixture")]
+        await store.refreshAfterIncomingShare(event)
+        XCTAssertEqual(store.homePlaces().map(\.id), ["incoming-first"])
+        XCTAssertTrue(store.stampedPlaceIDs().isEmpty, "Saving must not fabricate a visit")
+        store.openPassport()
+        saved.append(inkRow(id: "incoming-second", name: "Another shared place", street: "Public fixture"))
+        await store.refreshAfterIncomingShare(event)
+        XCTAssertEqual(store.path, [.passport], "A refresh must retain the current screen")
+        XCTAssertEqual(store.places.map(\.id), ["incoming-first", "incoming-second"])
+        XCTAssertEqual(loads, 2)
+        XCTAssertEqual(store.totalVisits(), 0)
+    }
+
+    func testIncomingShareSavedNotificationReachesMountedNotebookOnPassport() async throws {
+        var saved: [SaveInkPlace] = []
+        var loads = 0
+        let loader = SaveInkLivePlaceLoader(localPlaces: { _ in [] }, load: { _ in
+            loads += 1
+            return SaveInkLivePlaceLoad(places: saved, userCoordinate: nil, countIsAuthoritative: true)
+        })
+        let store = SaveInkNotebookStore(
+            defaults: inkSuite("incoming-notification"), usesLivePlaces: true, liveLoader: loader,
+            liveOwner: { "account-a" }, liveSessionGeneration: { 7 }
+        )
+        // The actual navigator consumes the real notification. Only identity
+        // and map rendering are fixtures; the live catalog uses the loader above.
+        let host = UIHostingController(rootView: SaveInkNavigator(store: store)
+            .environment(\.saveInkScreenshot, true))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+                                 "The notebook subscription needs an attached window scene")
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.coordinateSpace.bounds
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
+        }
+        let mountDeadline = ContinuousClock.now + .seconds(2)
+        while loads == 0 && ContinuousClock.now < mountDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertGreaterThan(loads, 0, "The notebook must mount before posting the save event")
+        store.openPassport()
+        // Allow navigation to settle before changing the synthetic saved catalog.
+        try await Task.sleep(for: .milliseconds(100))
+        saved = [inkRow(id: "new-shared-stamp", name: "New shared place", street: "Public fixture")]
+        NotificationCenter.default.post(name: .saveInkIncomingShareSaved,
+            object: SaveIncomingShareSession(owner: "account-a", generation: 7))
+        let refreshDeadline = ContinuousClock.now + .seconds(2)
+        while store.place("new-shared-stamp") == nil && ContinuousClock.now < refreshDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.places.map(\.id), ["new-shared-stamp"])
+        XCTAssertEqual(store.path, [.passport])
+        XCTAssertEqual(store.homePlaces().map(\.id), ["new-shared-stamp"])
+        XCTAssertEqual(store.totalVisits(), 0)
+    }
+
+    func testIncomingShareRefreshRejectsOtherAccountsSessionsAndUnscopedEvents() async {
+        var loads = 0
+        let loader = SaveInkLivePlaceLoader(localPlaces: { _ in [] }, load: { _ in
+            loads += 1
+            return SaveInkLivePlaceLoad(places: [], userCoordinate: nil)
+        })
+        let store = SaveInkNotebookStore(
+            defaults: inkSuite("incoming-refresh-reject"), usesLivePlaces: true, liveLoader: loader,
+            liveOwner: { "account-b" }, liveSessionGeneration: { 8 }
+        )
+        for session in [
+            SaveIncomingShareSession(owner: "account-a", generation: 8),
+            SaveIncomingShareSession(owner: "account-b", generation: 7),
+            SaveIncomingShareSession(owner: "", generation: 8)
+        ] {
+            await store.refreshAfterIncomingShare(Notification(name: .saveInkIncomingShareSaved, object: session))
+        }
+        await store.refreshAfterIncomingShare(Notification(name: .saveInkIncomingShareSaved))
+        XCTAssertEqual(loads, 0)
+        XCTAssertTrue(store.places.isEmpty)
+        let fixture = SaveInkNotebookStore(
+            defaults: inkSuite("incoming-refresh-fixture"), seedFixture: true, usesLivePlaces: false,
+            liveLoader: loader, liveOwner: { "account-b" }, liveSessionGeneration: { 8 }
+        )
+        let original = fixture.places.map(\.id)
+        await fixture.refreshAfterIncomingShare(Notification(name: .saveInkIncomingShareSaved,
+            object: SaveIncomingShareSession(owner: "account-b", generation: 8)))
+        XCTAssertEqual(loads, 0)
+        XCTAssertEqual(fixture.places.map(\.id), original)
+    }
+
+    func testIncomingShareRefreshCannotPublishAfterAccountOrSessionReplacement() async throws {
+        for replacement in [("account-b", 8), ("account-a", 9)] {
+            var owner = "account-a"
+            var generation = 7
+            var pending: CheckedContinuation<SaveInkLivePlaceLoad, Never>?
+            let loader = SaveInkLivePlaceLoader(localPlaces: { _ in [] }, load: { _ in
+                guard !Task.isCancelled else { return SaveInkLivePlaceLoad(places: [], userCoordinate: nil) }
+                return await withCheckedContinuation { pending = $0 }
+            })
+            let store = SaveInkNotebookStore(
+                defaults: inkSuite("incoming-refresh-suspended"), usesLivePlaces: true, liveLoader: loader,
+                liveOwner: { owner }, liveSessionGeneration: { generation }
+            )
+            let task = Task {
+                await store.refreshAfterIncomingShare(Notification(name: .saveInkIncomingShareSaved,
+                    object: SaveIncomingShareSession(owner: "account-a", generation: 7)))
+            }
+            defer {
+                task.cancel()
+                pending?.resume(returning: SaveInkLivePlaceLoad(places: [], userCoordinate: nil))
+                pending = nil
+            }
+            for _ in 0..<100 {
+                if pending != nil { break }
+                await Task.yield()
+            }
+            let completion = try XCTUnwrap(pending, "The original session must have an in-flight catalog load")
+            pending = nil
+            owner = replacement.0
+            generation = replacement.1
+            completion.resume(returning: SaveInkLivePlaceLoad(
+                places: [inkRow(id: "old-private-place", name: "Original account", street: "Private fixture")],
+                userCoordinate: nil, countIsAuthoritative: true
+            ))
+            await task.value
+            XCTAssertTrue(store.places.isEmpty, "A suspended load must not publish across account or session replacement")
+        }
+    }
+
     func testLiveUnverifiedVisitKeepsAccountScopeAndDraftOwnership() throws {
         let defaults = inkSuite("live-unverified-owner")
         let row = inkRow(id: "saved-unlocated", name: "沒有座標的小店", street: "小店")

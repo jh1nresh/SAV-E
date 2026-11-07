@@ -28,11 +28,13 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Use the standard Intel pool while hosted arm64 capacity is constrained.
+# Build and test consumers must stay on the same architecture.
 jobs:
   # Compile-only gate so an iOS compile error fails in ~10 min instead of
   # waiting on the 75-minute unit+UI job. No tests and no simulator boot.
   ios-build:
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
 
     steps:
@@ -48,17 +50,17 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache DerivedData
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/Build
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          key: deriveddata-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
           restore-keys: |
-            deriveddata-${{ runner.os }}-
+            deriveddata-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build app, Share Extension, and tests without booting a simulator
         run: |
@@ -79,7 +81,7 @@ jobs:
     name: ios-fast
     if: github.event_name == 'pull_request'
     needs: [ios-build]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 50
 
     steps:
@@ -98,17 +100,17 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache DerivedData
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/Build
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          key: deriveddata-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
           restore-keys: |
-            deriveddata-${{ runner.os }}-
+            deriveddata-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build without booting a simulator
         run: |
@@ -187,7 +189,7 @@ jobs:
           retention-days: 14
 
       - name: Capture E4 free-cap screenshots
-        if: always() && steps.simulator.outputs.udid != ''
+        if: ${{ !cancelled() && steps.simulator.outputs.udid != '' }}
         timeout-minutes: 25
         run: |
           scripts/xcodebuild-clean.sh \
@@ -252,8 +254,10 @@ jobs:
   # Draft-safe App Clip journal screenshots. XCTAttachments are produced on
   # the macOS runner and uploaded as appclip-doodle-screenshots-<sha>.
   appclip-screenshots:
-    runs-on: macos-26
-    timeout-minutes: 25
+    runs-on: macos-26-intel
+    # Cold Intel boot/build plus the full rail exceeded 25 minutes after
+    # 30 passing cases (run 42331800289). Keep every test and allow teardown.
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -268,9 +272,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVEClip-DerivedData/SourcePackages
-          key: clip-spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: clip-spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            clip-spm-${{ runner.os }}-
+            clip-spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Create focused test simulator
         id: simulator

@@ -42,6 +42,8 @@ concurrency:
   group: ios-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Use the standard Intel pool while hosted arm64 capacity is constrained.
+# Build and test consumers must stay on the same architecture.
 jobs:
   # Cheap ubuntu gate so drafts without ready-for-merge fail before the
   # duplicate macOS ios-build. The required `ios` job still always runs
@@ -78,7 +80,7 @@ jobs:
   # are reused by ios via test-without-building.
   ios-build:
     needs: [ios-gate]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
 
     steps:
@@ -94,17 +96,17 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache DerivedData
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/Build
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          key: deriveddata-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
           restore-keys: |
-            deriveddata-${{ runner.os }}-
+            deriveddata-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build app, Share Extension, and tests without booting a simulator
         run: |
@@ -145,15 +147,14 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped: still runs
-  # when ios-build fails. !cancelled() (not always()) lets the existing
-  # concurrency group cancel a superseded run.
-  ios:
+  # Start core tests alongside supplemental evidence as soon as products exist.
+  # The final `ios` job below retains the required check and joins both lanes.
+  ios-tests:
     if: ${{ !cancelled() }}
-    needs: [ios-build, ios-supplemental]
-    runs-on: macos-26
+    needs: [ios-build]
+    runs-on: macos-26-intel
     # Keep all coverage, with Home evidence and width captures on isolated
-    # runners. This final ios gate also requires every supplemental lane.
+    # runners. Neither lane waits for the other before starting its tests.
     timeout-minutes: 160
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
@@ -213,9 +214,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Restore this-run test products
         id: products_cache
@@ -764,12 +765,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Require every supplemental lane
-        if: always()
-        env:
-          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
-        run: '[[ "$SUPPLEMENTAL_RESULT" == success ]]'
-
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'
         run: |
@@ -793,7 +788,7 @@ jobs:
 
   ios-supplemental:
     needs: [ios-build]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 65
     strategy:
       fail-fast: false
@@ -978,6 +973,27 @@ jobs:
             ${{ runner.temp }}/ios-ui-*-args.txt
           if-no-files-found: error
           retention-days: 14
+
+  # Required check name `ios` (ruleset 19331432). Dependency failure or a
+  # skipped/cancelled lane must fail this check rather than silently pass.
+  ios:
+    if: ${{ !cancelled() }}
+    needs: [ios-build, ios-tests, ios-supplemental]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require build, core tests, and every supplemental lane
+        env:
+          BUILD_RESULT: ${{ needs.ios-build.result }}
+          TEST_RESULT: ${{ needs.ios-tests.result }}
+          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
+        run: |
+          for result in "$BUILD_RESULT" "$TEST_RESULT" "$SUPPLEMENTAL_RESULT"; do
+            if [[ "$result" != success ]]; then
+              echo "::error::Required iOS lane did not succeed: build=$BUILD_RESULT tests=$TEST_RESULT supplemental=$SUPPLEMENTAL_RESULT"
+              exit 1
+            fi
+          done
 
   release-readiness:
     if: github.event_name == 'push'

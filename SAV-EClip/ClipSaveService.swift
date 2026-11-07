@@ -149,7 +149,8 @@ enum ClipSaveService {
         shareCode: String?,
         url: URL,
         sender: String?,
-        drafts: [ClipPlaceDraft]
+        drafts: [ClipPlaceDraft],
+        selectionID: UUID = UUID()
     ) -> Bool {
         let unique = ClipListSavePlanner.uniqueItems(from: drafts.map(\.listSaveItem))
         let places = unique.map {
@@ -170,6 +171,7 @@ enum ClipSaveService {
         }
         return PendingShareStore.write(
             PendingSharePayload(
+                selectionID: selectionID,
                 kind: .list,
                 shareCode: shareCode,
                 placeId: nil,
@@ -213,6 +215,7 @@ enum ClipSaveService {
         shareCode: String?,
         handoffURL: URL,
         sender: String?,
+        selectionID: UUID = UUID(),
         isInstalled: Bool = ClipFullApp.isInstalled,
         openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp
     ) async -> ClipSaveOutcome {
@@ -224,7 +227,7 @@ enum ClipSaveService {
         )
         let written = persistList(
             listId: listId, shareCode: shareCode, url: handoffURL,
-            sender: sender, drafts: drafts
+            sender: sender, drafts: drafts, selectionID: selectionID
         )
         guard written else { return .failed }
         guard isInstalled else { return .pending(unique.count) }

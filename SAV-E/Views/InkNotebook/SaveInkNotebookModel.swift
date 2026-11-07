@@ -660,6 +660,7 @@ final class SaveInkNotebookStore: ObservableObject {
     private let makeLocator: () -> any SaveInkLocating
     private let liveLoader: SaveInkLivePlaceLoader
     private let liveOwner: () -> String?
+    private let liveSessionGeneration: () -> Int
     private let canSaveAnotherLivePlace: @MainActor (Int) -> Bool
     private let liveSavedPlaceTierIsAuthoritative: @MainActor () -> Bool
     private let parkCappedLiveSave: (@MainActor (String) -> Bool)?
@@ -698,6 +699,7 @@ final class SaveInkNotebookStore: ObservableObject {
                 cachedOwner: SavePlaceLimitHandoff.cachedActiveOwner()
             )
         },
+        liveSessionGeneration: @escaping () -> Int = { PrivyAuthService.shared.sessionGeneration },
         canSaveAnotherLivePlace: @escaping @MainActor (Int) -> Bool = SaveInkNotebookStore.allowsAnotherLivePlace,
         liveSavedPlaceTierIsAuthoritative: @escaping @MainActor () -> Bool = {
             SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier
@@ -714,6 +716,7 @@ final class SaveInkNotebookStore: ObservableObject {
         let loader = liveLoader ?? (usesLivePlaces ? SaveInkLivePlaceLoader.production() : .inactive)
         self.liveLoader = loader
         self.liveOwner = liveOwner
+        self.liveSessionGeneration = liveSessionGeneration
         self.canSaveAnotherLivePlace = canSaveAnotherLivePlace
         self.liveSavedPlaceTierIsAuthoritative = liveSavedPlaceTierIsAuthoritative
         self.parkCappedLiveSave = parkCappedLiveSave
@@ -1216,6 +1219,16 @@ final class SaveInkNotebookStore: ObservableObject {
         }
     }
 
+    /// A save may finish after a different account or session has become active.
+    /// Its event can refresh only the notebook for the session that performed it.
+    func refreshAfterIncomingShare(_ notification: Notification) async {
+        guard usesLivePlaces,
+              let session = notification.object as? SaveIncomingShareSession,
+              !session.owner.isEmpty, liveOwner() == session.owner,
+              liveSessionGeneration() == session.generation else { return }
+        await refreshLivePlaces()
+    }
+
     /// Reloads vault stamps, the share queue, and ink saves. Fixture launches
     /// no-op so screenshot baselines and ink UI tests keep their seeded rows.
     /// Overlapping callers wait for the in-flight load, then run one more pass.
@@ -1242,6 +1255,7 @@ final class SaveInkNotebookStore: ObservableObject {
         liveGeneration += 1
         let generation = liveGeneration
         let owner = liveOwner()
+        let sessionGeneration = liveSessionGeneration()
         let ink = Self.loadSavedPlaces(
             defaults: placesDefaults,
             key: placesKey,
@@ -1250,7 +1264,7 @@ final class SaveInkNotebookStore: ObservableObject {
         )
         let loaded = await liveLoader.load(ink)
         guard generation == liveGeneration else { return }
-        guard liveOwner() == owner else { return }
+        guard liveOwner() == owner, liveSessionGeneration() == sessionGeneration else { return }
         catalogOwner = owner
         places = loaded.places
         userCoordinate = loaded.userCoordinate

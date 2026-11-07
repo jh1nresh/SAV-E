@@ -1,8 +1,13 @@
 """Pending Clip intent must not become saved state without a full-App tap."""
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 ROOT = Path(__file__).resolve().parents[2]
 class ClipPendingConfirmationTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'darwin', 'The production Clip host regression uses Apple frameworks')
+    def test_real_clip_retry_writer_preserves_selection_and_fresh_acknowledgement(self):
+        subprocess.run([sys.executable, str(ROOT / 'scripts/check-clip-pending.py')], check=True, timeout=180)
     def test_clip_has_no_direct_identity_or_place_write(self):
         source = (ROOT / "SAV-EClip/ClipSaveService.swift").read_text()
         self.assertFalse('request.httpMethod = "POST"' in source)

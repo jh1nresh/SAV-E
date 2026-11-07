@@ -78,6 +78,7 @@ struct ClipContentView: View {
     @State private var lastSaveWasList = false
     @State private var pendingSaveDraft: ClipPlaceDraft?
     @State private var pendingListDrafts: [ClipPlaceDraft]?
+    @State private var pendingListSelectionID: UUID?
     @State private var pendingSaveListTitle: String?
     @State private var listPage = 0
     @State private var showListSwipeHint = !ClipListSwipeHint.isDismissed()
@@ -557,6 +558,7 @@ struct ClipContentView: View {
         lastSaveWasList = true
         if pendingListDrafts == nil {
             pendingListDrafts = list.items.map(ClipPlaceDraft.from(item:))
+            pendingListSelectionID = UUID()
         }
         enqueueSave { await saveWholeList() }
     }
@@ -571,7 +573,8 @@ struct ClipContentView: View {
     }
 
     private func saveWholeList() async {
-        guard let drafts = pendingListDrafts, !drafts.isEmpty else { return }
+        guard let drafts = pendingListDrafts, !drafts.isEmpty,
+              let selectionID = pendingListSelectionID else { return }
         lastSaveWasList = true
         let saveID = activeSaveRequestID ?? UUID()
         activeSaveRequestID = saveID
@@ -584,7 +587,8 @@ struct ClipContentView: View {
             listId: listData?.id.uuidString,
             shareCode: shareCode,
             handoffURL: url,
-            sender: listData?.ownerDisplayName.isEmpty == false ? listData?.ownerDisplayName : nil
+            sender: listData?.ownerDisplayName.isEmpty == false ? listData?.ownerDisplayName : nil,
+            selectionID: selectionID
         )
         guard !Task.isCancelled, activeSaveRequestID == saveID else { return }
         switch outcome {
@@ -826,6 +830,7 @@ struct ClipContentView: View {
         pendingSaveListTitle = nil
         if !lastSaveWasList {
             pendingListDrafts = nil
+            pendingListSelectionID = nil
         }
     }
 

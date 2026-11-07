@@ -1,4 +1,5 @@
 import CoreLocation
+import CryptoKit
 import Foundation
 import Observation
 
@@ -54,6 +55,8 @@ struct PendingSharePayload: Codable, Equatable {
 
     /// Distinguishes a newer tap on the same link from an older completion.
     var invocationID: UUID? = UUID()
+    /// Recipient-local identity of one frozen Clip list selection across retries.
+    var selectionID: UUID? = nil
     var kind: Kind
     var shareCode: String?
     var placeId: String?
@@ -369,10 +372,29 @@ enum ClipListHandoff {
         liveItems: [SaveListItem]
     ) -> [SaveListItem] {
         _ = liveItems
-        guard shouldConfirmList(pending: pending, incomingURL: incomingURL),
-              let places = pending?.confirmedPlaces, !places.isEmpty
+        guard let pending, shouldConfirmList(pending: pending, incomingURL: incomingURL),
+              let places = pending.confirmedPlaces, !places.isEmpty
         else { return [] }
-        return places.map { $0.asListItem() }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        var identityJournal = pending
+        if identityJournal.selectionID != nil { identityJournal.invocationID = nil }
+        guard let journal = try? encoder.encode(identityJournal) else { return [] }
+        return places.enumerated().map { index, snapshot in
+            var item = snapshot.asListItem()
+            // Recipient-local pending identity, never a sender/provider stamp ID.
+            // Modern retries retain the selection, excluding the fresh ack nonce.
+            // Older journals retain their original full-content identity.
+            var key = Data("savvy.clip.pending-item.v1\n".utf8)
+            key.append(journal)
+            key.append(Data("\nitem:\(index)".utf8))
+            let bytes = Array(SHA256.hash(data: key))
+            item.id = UUID(uuid: (
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+            ))
+            return item
+        }
     }
 
     static func stampList(

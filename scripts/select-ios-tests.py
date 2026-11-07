@@ -60,11 +60,10 @@ TESTS = {
     "onboarding": list(INK),
     "plan": list(INK),
 }
-# Full/main retains every frozen selector plus the social passport flow. Plan extras belong on the
-# Plan route only. Folding them into FULL made this CI-scoping PR require
-# testPlanTabDraftsFromSavedMapStamps, which is not on current main and
-# failed 3/3 on run 34019378064 after compose never produced plan.draft.
-FULL = list(INK)
+# Shared entry changes and main retain every maintained Ink selector and the
+# incoming-share regression class. No shared source gains a focused allowlist.
+INCOMING_SHARES = "SAVEUITests/SAVEIncomingShareUITests"
+FULL = list(INK) + [INCOMING_SHARES]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
 # selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()

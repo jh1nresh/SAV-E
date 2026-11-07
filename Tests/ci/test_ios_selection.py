@@ -14,10 +14,10 @@ SPEC.loader.exec_module(selection)
 
 
 class CoverageTests(unittest.TestCase):
-    def test_full_matches_frozen_baseline_without_plan_extras(self):
+    def test_full_retains_ink_and_incoming_share_coverage(self):
         full = selection.select([], full=True)
         self.assertEqual(full["profile"], "ink")
-        self.assertEqual(full["tests"], selection.INK)
+        self.assertEqual(full["tests"], selection.INK + [selection.INCOMING_SHARES])
         self.assertFalse(full["trip"])
         self.assertTrue(full["units"])
 
@@ -51,7 +51,20 @@ class CoverageTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertTrue(plan["ui"])
                 self.assertEqual(plan["tests"], selection.INK)
-        self.assertEqual(selection.select([], full=True)["tests"], selection.INK)
+        self.assertEqual(selection.select([], full=True)["tests"], selection.FULL)
+
+    def test_incoming_share_entry_and_presenters_force_full_coverage(self):
+        for path in (
+            "SAV-E/App/SaveApp.swift",
+            "SAV-E/Views/Sharing/SaveIncomingShareHost.swift",
+            "SAV-E/Views/Sharing/FriendShareReceiptView.swift",
+        ):
+            with self.subTest(path=path):
+                plan = selection.select([path])
+                self.assertEqual(plan["tests"], selection.FULL)
+                self.assertIn(selection.INCOMING_SHARES, plan["tests"])
+                self.assertTrue(set(selection.INK) <= set(plan["tests"]))
+                self.assertTrue(plan["units"])
 
     def test_onboarding_keeps_entire_carousel_class_and_replay(self):
         plan = selection.select(["SAV-E/Views/Onboarding/OnboardingView.swift"])

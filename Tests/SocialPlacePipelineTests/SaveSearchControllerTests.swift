@@ -7774,6 +7774,167 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
     }
 
+    @MainActor
+    func testIncomingClipListReportsRealPartialCommitsWithoutChangingLegacyCapErrors() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = original
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+        }
+        auth.authState = .authenticated(userId: "partial-list-owner")
+        for scenario in ["partial", "legacy-partial", "complete", "all-overflow", "parking-failure"] {
+            let defaults = UserDefaults(suiteName: "partial-list-\(UUID())")!
+            SavePlaceLimitHandoff.testDefaults = defaults
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("partial-list-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let initialCount = scenario == "complete" ? 48 : (scenario == "all-overflow" ? 50 : 49)
+            let existing = (0..<initialCount).map { index in
+                savedPlace(name: "Existing \(index)", address: "Synthetic \(index)",
+                           coordinate: CLLocationCoordinate2D(latitude: 25 + Double(index) * 0.003, longitude: 121))
+            }
+            for place in existing { _ = try vault.saveConfirmedPlace(place, ownerSubject: "partial-list-owner") }
+            let incoming = [
+                savedPlace(name: "Accepted fixture", address: "Synthetic first", coordinate: CLLocationCoordinate2D(latitude: 26, longitude: 121)),
+                savedPlace(name: "Overflow fixture", address: "Synthetic second", coordinate: CLLocationCoordinate2D(latitude: 26.01, longitude: 121))
+            ]
+            let list = SaveCollaborativeList(title: "Selected two", items: incoming.map { SaveListItem.from(place: $0) })
+            let newlySaved = scenario == "complete" ? 2 : (scenario == "all-overflow" ? 0 : 1)
+            let overCap = 2 - newlySaved
+            let service = RecordingSupabaseService()
+            var requests = 0
+            service.clipSaveHandler = { items in
+                requests += 1
+                XCTAssertEqual(items.count, 2, "Only the explicitly selected snapshot is sent")
+                let retry = requests > 1
+                return (201, try JSONSerialization.data(withJSONObject: [
+                    "newly_saved": retry ? 0 : newlySaved, "already_saved": retry ? newlySaved : 0,
+                    "over_cap": overCap, "remaining": 0, "limit": 50,
+                    "saved": retry ? [] : Array(zip(incoming, list.items).prefix(newlySaved)).map { place, item in
+                        ["id": place.id.uuidString, "provider_place_id": item.sourceID,
+                         "name": item.title, "latitude": item.latitude, "longitude": item.longitude] as [String: Any]
+                    }
+                ]))
+            }
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                                   entitlementTierProvider: { .free }, entitlementResolvedProvider: { true },
+                                   usesRemotePersistence: true)
+            map.places = existing
+            if scenario == "parking-failure" { vault.saveReviewCandidateError = NSError(domain: "fixture-parking", code: 41) }
+            var returned = false
+            do {
+                let result = try await map.saveClipListHandoff(list, requiringAuthenticatedSession: true,
+                                                             reportPartialOutcome: scenario != "legacy-partial")
+                returned = true
+                XCTAssertTrue(["partial", "complete"].contains(scenario), scenario)
+                XCTAssertEqual(result.counts.newlySaved, newlySaved)
+                XCTAssertEqual(result.counts.overCap, overCap)
+                XCTAssertEqual(result.toStamp.count, newlySaved)
+            } catch SavePlaceLimitError.parkedInUnplacedInbox {
+                XCTAssertTrue(["legacy-partial", "all-overflow"].contains(scenario), scenario)
+            } catch let failure as MapViewModel.ClipListPartialFailure {
+                XCTAssertEqual(scenario, "parking-failure")
+                XCTAssertEqual(failure.counts.newlySaved, 1)
+                XCTAssertEqual(failure.counts.overCap, 1)
+                XCTAssertEqual((failure.parkingError as NSError).domain, "fixture-parking", "Durable parking failures must propagate")
+            } catch {
+                XCTFail("Unexpected \(scenario) error: \(error)")
+            }
+            XCTAssertEqual(returned, ["partial", "complete"].contains(scenario))
+            XCTAssertEqual(map.places.count, initialCount + newlySaved)
+            XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "partial-list-owner").count, initialCount + newlySaved)
+            XCTAssertEqual(try vault.reviewCandidates(belongingTo: "partial-list-owner").count,
+                           scenario == "parking-failure" ? 0 : overCap)
+            if scenario == "partial" {
+                XCTAssertEqual(map.reviewCandidates.map(\.name), ["Overflow fixture"])
+                XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+                let retry = try await map.saveClipListHandoff(list, requiringAuthenticatedSession: true, reportPartialOutcome: true)
+                XCTAssertEqual(retry.counts, ClipListHandoffCounts(newlySaved: 0, alreadySaved: 1, overCap: 1, remaining: 0, limit: 50))
+                XCTAssertEqual(map.places.count, 50, "Retry must retain the server's duplicate result without adding a second stamp")
+                XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "partial-list-owner").count, 50)
+                XCTAssertEqual(try vault.reviewCandidates(belongingTo: "partial-list-owner").map(\.name), ["Overflow fixture"])
+            }
+            XCTAssertEqual(service.savePlaceStarted, 0, "No ordinary save may bypass the batch contract")
+        }
+    }
+
+    @MainActor
+    func testClipOverflowRetryReusesOnlyTheSameAccountAndSelectedItemIdentity() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        defer { auth.authState = original; SavePlaceLimitHandoff.testDefaults = previousDefaults }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "overflow-identity-\(UUID())")
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("overflow-identity-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var first = SaveListItem.from(place: savedPlace(name: "Same visible name", address: "Same visible address", coordinate: taipei))
+        first.coordinateSystem = .gcj02
+        first.locationProvider = .amap
+        first.sourceID = "amap-selected-a"
+        first.providerMapUrl = "https://uri.amap.com/marker?position=121.5654,25.033&coordinate=gaode"
+        var second = first
+        second.id = UUID()
+        second.sourceID = "amap-selected-b"
+        let incomingURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=retry-identities"))
+        let snapshots = [first, second].map { item in
+            PendingConfirmedPlace(placeId: item.sourceID, name: item.title, address: item.subtitle,
+                latitude: item.latitude, longitude: item.longitude, category: "cafe", sourceURL: item.sourceURL,
+                coordinateSystem: item.coordinateSystem?.rawValue, locationProvider: item.locationProvider?.rawValue,
+                providerMapUrl: item.providerMapUrl)
+        }
+        let journal = PendingSharePayload(selectionID: UUID(), kind: .list, shareCode: "retry-identities", placeId: nil,
+            listId: nil, sender: nil, url: incomingURL.absoluteString, confirmedPlaces: snapshots)
+        let serializedJournal = try JSONEncoder().encode(journal)
+        let initialList = try XCTUnwrap(ClipListHandoff.stampList(pending: journal, incomingURL: incomingURL, joined: nil))
+        let expectedIDs = Set(initialList.items.map(\.id))
+        let service = RecordingSupabaseService()
+        service.clipSaveHandler = { _ in
+            (201, try JSONSerialization.data(withJSONObject: [
+                "newly_saved": 0, "already_saved": 0, "over_cap": 2, "remaining": 0, "limit": 50, "saved": []
+            ]))
+        }
+        for owner in ["overflow-owner-a", "overflow-owner-b"] {
+            auth.authState = .authenticated(userId: owner)
+            var capturedAt: [UUID: Date] = [:]
+            for _ in 0..<2 {
+                // Reopening the link reconstructs both the journal projection
+                // and persistence owner instead of reusing in-memory item IDs.
+                var restored = try JSONDecoder().decode(PendingSharePayload.self, from: serializedJournal)
+                restored.invocationID = UUID() // A real Clip retry rewrites the journal with a fresh acknowledgement.
+                let list = try XCTUnwrap(ClipListHandoff.stampList(pending: restored, incomingURL: incomingURL, joined: nil))
+                XCTAssertEqual(Set(list.items.map(\.id)), expectedIDs)
+                XCTAssertTrue(ClipListHandoff.matchesPendingSelection(list, pending: restored))
+                let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                                       entitlementTierProvider: { .free }, entitlementResolvedProvider: { true },
+                                       usesRemotePersistence: true)
+                do {
+                    _ = try await map.saveClipListHandoff(list, requiringAuthenticatedSession: true, reportPartialOutcome: true)
+                    XCTFail("All-overflow selection must remain pending")
+                } catch SavePlaceLimitError.parkedInUnplacedInbox {}
+                let pending = try vault.reviewCandidates(belongingTo: owner)
+                XCTAssertEqual(Set(pending.map(\.id)), expectedIDs)
+                XCTAssertEqual(pending.count, 2, "Retry may reuse the same selected item, not a different identity with matching display fields")
+                XCTAssertEqual(Set(map.reviewCandidates.map(\.id)), expectedIDs)
+                XCTAssertTrue(pending.allSatisfy { $0.ownerSubject == owner && $0.isUnplacedInbox })
+                XCTAssertTrue(pending.allSatisfy { $0.providerLocation?.coordinateSystem == .gcj02 })
+                for candidate in pending {
+                    if let original = capturedAt[candidate.id] {
+                        XCTAssertEqual(candidate.createdAt, original, "Retry retains the original durable capture time")
+                    } else {
+                        capturedAt[candidate.id] = candidate.createdAt
+                    }
+                }
+                XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
+            }
+        }
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: "overflow-owner-a").count, 2)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: "overflow-owner-b").count, 2)
+        XCTAssertEqual(try vault.reviewCandidates().count, 4, "An item ID never crosses the vault's account boundary")
+    }
+
     func testClipHandoffResponseCannotMutateAnotherAccountOrSignedOutVault() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState
@@ -7792,7 +7953,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
             defer { try? FileManager.default.removeItem(at: vaultURL) }
             let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
             let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
-            let task = Task { try await map.saveClipListHandoff(SaveCollaborativeList(title: "A", items: [item])) }
+            let task = Task { try await map.saveClipListHandoff(SaveCollaborativeList(title: "A", items: [item]),
+                                                              requiringAuthenticatedSession: true, reportPartialOutcome: true) }
             await gate.waitUntilStarted()
             XCTAssertEqual(service.clipOwner, "clip-owner-a")
             auth.authState = signOut ? .unauthenticated : .authenticated(userId: "clip-owner-b")

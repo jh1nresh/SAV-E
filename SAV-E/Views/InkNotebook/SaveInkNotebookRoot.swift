@@ -154,6 +154,9 @@ struct SaveInkNavigator: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .saveInkIncomingShareSaved)) { notification in
+            Task { await store.refreshAfterIncomingShare(notification) }
+        }
     }
 
     @ViewBuilder

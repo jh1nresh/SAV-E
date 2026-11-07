@@ -488,7 +488,9 @@ enum ShareRouteCodec {
     }
 
     private static func token<T: Encodable>(for payload: T) -> String? {
-        guard let data = try? JSONEncoder().encode(payload) else { return nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(payload) else { return nil }
         return data.base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")

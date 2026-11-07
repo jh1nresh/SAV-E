@@ -66,22 +66,35 @@ private struct UITestWindowAppearanceSetter: UIViewRepresentable {
 
 @main
 struct SaveApp: App {
+    private enum LinkFailure {
+        case friendProfile
+        case listJoin
+    }
+
+    private struct LinkAlertPresentation: Identifiable, Hashable {
+        let title: String
+        let message: String
+
+        var id: Self { self }
+    }
+
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings(userDefaults: SaveInkLaunch.defaults)
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(
         "pendingFriendShareURL",
-        store: UserDefaults(suiteName: "group.com.wanderly.app")
+        store: SaveApp.incomingShareDefaults
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @State private var requiresShareConfirmation = false
     @State private var requiresListConfirmation = false
     @State private var pendingClipListSave: SaveCollaborativeList?
+    @State private var incomingShareRequestID = UUID()
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
-    @State private var linkErrorMessage: String?
+    @State private var linkFailure: LinkFailure?
     @State private var verifiedAccountGeneration: Int?
     @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
     @State private var accountScopedURLProcessingID: UUID?
@@ -109,6 +122,13 @@ struct SaveApp: App {
     private let supabaseService = SupabaseService.shared
     private let pendingImportService = PendingPlaceImportService.shared
     private let accountScopedURLMaxBytes = 8 * 1024
+
+    private static var incomingShareDefaults: UserDefaults? {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveIncomingShareFixtureRoot.defaults }
+#endif
+        return UserDefaults(suiteName: "group.com.wanderly.app")
+    }
 
     private var minimumOpeningAnimationDuration: UInt64 {
 #if DEBUG
@@ -197,37 +217,14 @@ struct SaveApp: App {
             .onChange(of: authService.sessionGeneration) { _, generation in
                 handleAccountGenerationChange(generation)
             }
-            .alert(linkAlertTitle, isPresented: Binding(
-                get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkErrorMessage != nil },
-                set: {
-                    if !$0 {
-                        openedTrip = nil
-                        openedList = nil
-                        openedReferral = nil
-                        linkErrorMessage = nil
+            .alert(item: linkAlertBinding) { alert in
+                Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text(languageSettings.text(.ok))) {
+                        dismissLinkAlert(alert)
                     }
-                }
-            )) {
-                Button(languageSettings.text(.ok)) {
-                    openedTrip = nil
-                    openedList = nil
-                    openedReferral = nil
-                    linkErrorMessage = nil
-                }
-            } message: {
-                if let linkErrorMessage {
-                    Text(linkErrorMessage)
-                } else if let openedReferral {
-                    Text(referralReadyMessage(openedReferral))
-                } else if let openedList {
-                    Text(listReadyMessage(openedList))
-                } else if let openedTrip {
-                    Text(String(
-                        format: languageSettings.text(.tripLinkMessage),
-                        openedTrip.name,
-                        openedTrip.stops.count
-                    ))
-                }
+                )
             }
         }
     }
@@ -235,7 +232,17 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if photoAttributionEvidenceActive {
+        if SaveIncomingShareFixtureRoot.isEnabled {
+            SaveIncomingShareFixtureRoot(
+                incomingPlaceReceipt: $incomingPlaceReceipt,
+                requiresShareConfirmation: $requiresShareConfirmation,
+                requiresListConfirmation: $requiresListConfirmation,
+                pendingClipListSave: $pendingClipListSave,
+                requestID: $incomingShareRequestID,
+                showParentAlert: { linkFailure = .friendProfile },
+                verificationChanged: { processDeferredAccountURLIfVerified() }
+            )
+        } else if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()
         } else if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
@@ -306,6 +313,11 @@ struct SaveApp: App {
                     sessionOrigin: authService.sessionOrigin,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
+                    pendingClipListSave: $pendingClipListSave,
+                    incomingShareRequestID: $incomingShareRequestID,
                     onVerificationChanged: updateVerifiedAccount
                 )
                     .environmentObject(authService)
@@ -336,8 +348,24 @@ struct SaveApp: App {
         minimumOpeningAnimationCompleted = true
     }
 
+    /// A new accepted link replaces only transient presentation. Its predecessor's
+    /// durable Clip journal is acknowledged only by a matching confirmed save.
+    private func prepareIncomingLink() {
+        incomingShareRequestID = UUID()
+        incomingPlaceReceipt = nil
+        requiresShareConfirmation = false
+        requiresListConfirmation = false
+        pendingClipListSave = nil
+        deferredAccountScopedLink = nil
+        accountScopedURLProcessingID = nil
+    }
+
     private func handleIncomingURL(_ url: URL) {
 #if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled {
+            // Fixture verification must never authorize real inbound links.
+            guard ["savvy://p/share-fixture", "savvy://p/share-fixture-b", "savvy://p/", "savvy://list?c=fixture-list"].contains(url.absoluteString) else { return }
+        }
         if SaveSmokeHarness.isSmokeURL(url) {
             smokeHarnessActive = true
             return
@@ -345,14 +373,14 @@ struct SaveApp: App {
 #endif
         if SaveSharedListPayload.isListLink(url) {
             guard let accepted = ClipListHandoff.acceptedListURL(
-                pending: PendingShareStore.load(),
+                pending: PendingShareStore.load(from: Self.incomingShareDefaults),
                 incomingURL: url
             ) else { return }
-            requiresShareConfirmation = false
+            prepareIncomingLink()
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: accepted,
-                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+                ownerGeneration: isCurrentAccountVerified ? incomingAccountGeneration : nil
             )
             accountScopedURLProcessingID = nil
             processDeferredAccountURLIfVerified()
@@ -361,11 +389,11 @@ struct SaveApp: App {
 
         if SaveReferralLink.target(from: url) != nil {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
-            requiresShareConfirmation = false
+            prepareIncomingLink()
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
-                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+                ownerGeneration: isCurrentAccountVerified ? incomingAccountGeneration : nil
             )
             accountScopedURLProcessingID = nil
             processDeferredAccountURLIfVerified()
@@ -373,6 +401,7 @@ struct SaveApp: App {
         }
 
         if isPlaceLink(url) {
+            prepareIncomingLink()
             guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
                 pendingFriendShareURL = ""
                 // A malformed new link does not acknowledge an existing intent.
@@ -382,7 +411,7 @@ struct SaveApp: App {
             pendingFriendShareURL = url.absoluteString
             requiresListConfirmation = false
             requiresShareConfirmation = ClipPlaceHandoff.shouldConfirmPlace(
-                pending: PendingShareStore.load(),
+                pending: PendingShareStore.load(from: Self.incomingShareDefaults),
                 incomingURL: url
             )
             if let place = SharedPlaceData.from(url: url) {
@@ -396,6 +425,7 @@ struct SaveApp: App {
         }
 
         if isTripLink(url), let trip = SharedTripData.from(url: url) {
+            prepareIncomingLink()
             openedTrip = trip
             return
         }
@@ -412,12 +442,26 @@ struct SaveApp: App {
     }
 
     private var isCurrentAccountVerified: Bool {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveIncomingShareFixtureSession.shared.verified }
+#endif
         guard case .authenticated = authService.authState else { return false }
         return verifiedAccountGeneration == authService.sessionGeneration
     }
 
+    private var incomingAccountGeneration: Int {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveIncomingShareFixtureSession.shared.generation }
+#endif
+        return authService.sessionGeneration
+    }
+
     @MainActor
     private func handleAccountGenerationChange(_ generation: Int) {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return }
+#endif
+        incomingShareRequestID = UUID()
         let previousUserId = lastAccountUserId
         let currentUserId = authService.currentUserId
         lastAccountUserId = currentUserId
@@ -429,7 +473,7 @@ struct SaveApp: App {
         }
         openedList = nil
         openedReferral = nil
-        linkErrorMessage = nil
+        linkFailure = nil
         guard ClipPlaceHandoff.shouldResetHandoffOnAccountChange(
             previousUserId: previousUserId,
             currentUserId: currentUserId
@@ -454,7 +498,7 @@ struct SaveApp: App {
               accountScopedURLProcessingID == nil,
               var link = deferredAccountScopedLink else { return }
 
-        let generation = authService.sessionGeneration
+        let generation = incomingAccountGeneration
         guard link.ownerGeneration == nil || link.ownerGeneration == generation else {
             deferredAccountScopedLink = nil
             return
@@ -521,8 +565,7 @@ struct SaveApp: App {
         var joined: SaveCollaborativeList?
         var joinError: Error?
         do {
-            let row = try await supabaseService.joinCollaborativeList(code: code)
-            joined = SaveCollaborativeList(serverRow: row)
+            joined = try await joinIncomingList(code: code)
             if joined == nil {
                 joinError = SaveCollaborativeListError.invalidLink
             }
@@ -536,7 +579,7 @@ struct SaveApp: App {
               link.id == linkID,
               link.ownerGeneration == generation,
               isCurrentAccountVerified,
-              authService.sessionGeneration == generation,
+              incomingAccountGeneration == generation,
               SaveSharedListPayload.isListLink(link.url) else {
             if deferredAccountScopedLink?.id == linkID {
                 deferredAccountScopedLink = nil
@@ -556,29 +599,44 @@ struct SaveApp: App {
         deferredAccountScopedLink = nil
     }
 
+    @MainActor
+    private func joinIncomingList(code: String) async throws -> SaveCollaborativeList? {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return try SaveIncomingShareFixtureSession.shared.join(code: code) }
+#endif
+        let row = try await supabaseService.joinCollaborativeList(code: code)
+        return SaveCollaborativeList(serverRow: row)
+    }
+
     /// Clip selected a pending snapshot. A separate full App action confirms
     /// it; live list changes must not add or remove selected places.
-    private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) {
+    @discardableResult
+    private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) -> Bool {
+        if case .listJoin? = linkFailure { linkFailure = nil }
         if let stamp = ClipListHandoff.stampList(
-            pending: PendingShareStore.load(),
+            pending: PendingShareStore.load(from: Self.incomingShareDefaults),
             incomingURL: incomingURL,
             joined: list
         ) {
+            incomingShareRequestID = UUID()
+            incomingPlaceReceipt = nil
+            requiresShareConfirmation = false
             requiresListConfirmation = true
             pendingClipListSave = stamp
             openedList = nil
+            return true
         } else if let list {
             openedList = list
+            return true
         }
+        return false
     }
 
     private func presentListJoinFailure(_ error: Error, incomingURL: URL) {
-        openedList = SaveCollaborativeList(
-            title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
-            note: error.localizedDescription,
-            viewerRole: .viewer
-        )
-        presentOpenedList(nil, incomingURL: incomingURL)
+        // A matching Clip selection may still be reviewed explicitly; an
+        // ordinary failed join must never masquerade as a joined list.
+        guard !presentOpenedList(nil, incomingURL: incomingURL) else { return }
+        linkFailure = .listJoin
     }
 
     /// Persists a server-joined list into the active local store (cache) and
@@ -624,10 +682,7 @@ struct SaveApp: App {
             return
         }
         guard let profile else {
-            linkErrorMessage = languageSettings.localized(
-                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new Savvy profile link.",
-                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 Savvy 個人連結。"
-            )
+            linkFailure = .friendProfile
             deferredAccountScopedLink = nil
             return
         }
@@ -637,7 +692,10 @@ struct SaveApp: App {
     }
 
     private var activeCollaborativeListStore: SaveCollaborativeListStore {
-        authService.isReviewerDemo ? ReviewDemoStorage.collaborativeListStore : .shared
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return SaveCollaborativeListStore(defaults: SaveIncomingShareFixtureRoot.defaults) }
+#endif
+        return authService.isReviewerDemo ? ReviewDemoStorage.collaborativeListStore : .shared
     }
 
     private var activeReferralHandoffStore: SaveReferralHandoffStore {
@@ -645,11 +703,14 @@ struct SaveApp: App {
     }
 
     private func restorePendingShare() {
+#if DEBUG
+        if SaveIncomingShareFixtureRoot.isEnabled { return }
+#endif
         if lastAccountUserId == nil {
             lastAccountUserId = authService.currentUserId
         }
         guard incomingPlaceReceipt == nil else { return }
-        if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
+        if let payload = PendingShareStore.load(from: Self.incomingShareDefaults), let url = URL(string: payload.url) {
             handleIncomingURL(url)
             return
         }
@@ -661,9 +722,55 @@ struct SaveApp: App {
         handleIncomingURL(url)
     }
 
+    private var linkAlertBinding: Binding<LinkAlertPresentation?> {
+        // Keep each presentation immutable. An undismissed failure and its
+        // successful retry are distinct items even while an alert stays open.
+        let alert = currentLinkAlert
+        return Binding(
+            get: { alert },
+            set: { next in
+                if next == nil { dismissLinkAlert(alert) }
+            }
+        )
+    }
+
+    private var currentLinkAlert: LinkAlertPresentation? {
+        let message: String
+        if let linkFailure {
+            message = linkFailureMessage(linkFailure)
+        } else if let openedReferral {
+            message = referralReadyMessage(openedReferral)
+        } else if let openedList {
+            message = listReadyMessage(openedList)
+        } else if let openedTrip {
+            message = String(
+                format: languageSettings.text(.tripLinkMessage),
+                openedTrip.name,
+                openedTrip.stops.count
+            )
+        } else {
+            return nil
+        }
+        return LinkAlertPresentation(title: linkAlertTitle, message: message)
+    }
+
+    private func dismissLinkAlert(_ alert: LinkAlertPresentation?) {
+        // Dismissing the replaced alert must not consume a newer result.
+        guard let alert, currentLinkAlert?.id == alert.id else { return }
+        openedTrip = nil
+        openedList = nil
+        openedReferral = nil
+        linkFailure = nil
+    }
+
     private var linkAlertTitle: String {
-        if linkErrorMessage != nil {
-            return languageSettings.localized(english: "Could not load friend profile", traditionalChinese: "無法載入朋友資料")
+        if let linkFailure {
+            switch linkFailure {
+            case .friendProfile:
+                return languageSettings.localized(english: "Could not load friend profile", traditionalChinese: "無法載入朋友資料")
+            case .listJoin:
+                return languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單")
+            }
         }
         if openedReferral != nil {
             switch languageSettings.language {
@@ -678,6 +785,21 @@ struct SaveApp: App {
             }
         }
         return languageSettings.text(.tripLinkReady)
+    }
+
+    private func linkFailureMessage(_ failure: LinkFailure) -> String {
+        switch failure {
+        case .friendProfile:
+            return languageSettings.localized(
+                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new Savvy profile link.",
+                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 Savvy 個人連結。"
+            )
+        case .listJoin:
+            return languageSettings.localized(
+                english: "This list could not be opened. Check your connection and try the link again, or ask the sender for a new link.",
+                traditionalChinese: "目前無法打開這份清單。請檢查網路後重新開啟連結，或請分享者提供新的連結。"
+            )
+        }
     }
 
     private func referralReadyMessage(_ profile: SaveReferralProfile) -> String {
@@ -730,6 +852,11 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
+    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var requiresShareConfirmation: Bool
+    @Binding var requiresListConfirmation: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
+    @Binding var incomingShareRequestID: UUID
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
 
     @State private var isRebindConfirmationPresented = false
@@ -780,6 +907,22 @@ private struct AuthenticatedRootView: View {
 
     private var verifiedAccountContent: some View {
         SaveInkNotebookRoot()
+            .modifier(SaveIncomingShareHost(
+                incomingPlaceReceipt: $incomingPlaceReceipt,
+                requiresShareConfirmation: $requiresShareConfirmation,
+                requiresListConfirmation: $requiresListConfirmation,
+                pendingClipListSave: $pendingClipListSave,
+                requestID: $incomingShareRequestID,
+                session: SaveIncomingShareSession(owner: authService.currentUserId ?? "", generation: sessionGeneration),
+                currentSession: {
+                    guard case .authenticated = authService.authState,
+                          case .verified(let generation) = accountGate.state,
+                          generation == sessionGeneration,
+                          authService.sessionGeneration == generation,
+                          let owner = authService.currentUserId else { return nil }
+                    return SaveIncomingShareSession(owner: owner, generation: generation)
+                }
+            ))
             .onAppear(perform: claimPendingOnboardingClueIfNeeded)
     }
 
