@@ -1991,7 +1991,10 @@ final class SaveInkNotebookTests: XCTestCase {
     }
 
     func testAmapReadinessRequiresSuccessfulTilesAndPaintWithoutLogin() async throws {
-        let tileImage = UIGraphicsImageRenderer(size: CGSize(width: 180, height: 180)).image { context in
+        // The HTTP fixture promises 180 pixels, independent of screen scale.
+        let tileFormat = UIGraphicsImageRendererFormat()
+        tileFormat.scale = 1
+        let tileImage = UIGraphicsImageRenderer(size: CGSize(width: 180, height: 180), format: tileFormat).image { context in
             UIColor.blue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 180, height: 180))
         }
