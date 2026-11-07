@@ -255,7 +255,9 @@ jobs:
   # the macOS runner and uploaded as appclip-doodle-screenshots-<sha>.
   appclip-screenshots:
     runs-on: macos-26-intel
-    timeout-minutes: 25
+    # Cold Intel boot/build plus the full rail exceeded 25 minutes after
+    # 30 passing cases (run 42331800289). Keep every test and allow teardown.
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
