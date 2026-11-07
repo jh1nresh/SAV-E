@@ -1,8 +1,10 @@
 import CoreLocation
 import CryptoKit
 import MapKit
+import Network
 import SwiftUI
 import UIKit
+import WebKit
 import XCTest
 @testable import SAVE
 
@@ -1499,6 +1501,1086 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertGreaterThan(abs(dateline?.center.longitude ?? 0), 170)
     }
 
+    func testDestinationAdministrativeMetadataDisambiguatesAggregateCN() {
+        func region(_ iso: String? = "CN", _ area: String?, _ city: String? = nil, _ district: String? = nil) -> String? {
+            SaveInkMapPolicy.routingRegionCode(isoCountryCode: iso, administrativeArea: area,
+                                              locality: city, subLocality: district)
+        }
+        // Observed public Apple en_US fixtures; all reported Asia/Shanghai, so
+        // time zone cannot resolve the user's mainland-only provider boundary.
+        XCTAssertEqual(region("CN", "Taiwan", "Taibei"), "TW")
+        XCTAssertEqual(region("CN", nil, "Hong Kong SAR", "Central & Western District"), "HK")
+        XCTAssertEqual(region("CN", nil, "Macau SAR", "St. Anthony Parish"), "MO")
+        XCTAssertNil(region("CN", "Fujian", "Quanzhou", "Jinmen"))
+        XCTAssertNil(region("CN", "Fujian", "Fuzhou", "Lianjiang"))
+        XCTAssertEqual(region("CN", "Beijing", "Beijing"), "CN")
+        for city in ["Beijing", "Shanghai", "Tianjin", "Chongqing"] {
+            XCTAssertEqual(region("CN", nil, city, "Chaoyang"), "CN")
+        }
+        XCTAssertNil(region("CN", nil, "Beijing extra"))
+        XCTAssertNil(region("CN", nil, "Fuzhou"))
+        XCTAssertEqual(region("CN", "Shanghai", "Shanghai"), "CN")
+        XCTAssertEqual(region("CN", "Fujian", "Xiamen", "Siming"), "CN")
+        for area in ["Taiwan Province", "臺灣省", "台灣", "台湾省"] {
+            XCTAssertEqual(region("CN", area), "TW")
+        }
+        XCTAssertEqual(region("CN", "Hong Kong"), "HK")
+        XCTAssertEqual(region("CN", "Macao SAR China"), "MO")
+        for area in [nil, "", "Unknown", "Not Taiwan", "Beijing extra"] {
+            XCTAssertNil(region("CN", area))
+        }
+        XCTAssertNil(region("CN", nil, "Hong Kong SAR extra"))
+        XCTAssertEqual(region("US", "Taiwan", "Hong Kong SAR"), "US", "Destination ISO outside CN is not rewritten by unrelated labels")
+        XCTAssertEqual(region("TW", nil), "TW")
+        XCTAssertNil(region(nil, "Beijing"))
+    }
+
+    func testWGS84OfficialRedirectAdapterIsTransientAndFailsClosed() throws {
+        var place = inkRow(id: "wgs-adapter", name: "Original destination & name", street: "Beijing")
+        place.shopLatitude = 39.9087
+        place.shopLongitude = 116.3975
+        let original = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: place))
+        let response = "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Provider%20name&src=savvy&callnative=0&innersrc=u"
+        let embed = try XCTUnwrap(SaveInkMapPolicy.amapEmbedFromWGS84Redirect(try XCTUnwrap(URL(string: response)), original: original))
+        XCTAssertTrue(SaveInkMapPolicy.isAmapEmbed(embed))
+        let query = try XCTUnwrap(URLComponents(url: embed, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(query.first { $0.name == "lng" }?.value, "116.403742675782")
+        XCTAssertEqual(query.first { $0.name == "lat" }?.value, "39.910102539063")
+        XCTAssertEqual(query.first { $0.name == "name" }?.value, place.name)
+        XCTAssertEqual(query.first { $0.name == "platform" }?.value, "pc")
+        XCTAssertEqual(place.shopLatitude, 39.9087, "Provider conversion must not rewrite saved WGS84 coordinates")
+        XCTAssertNil(place.mapReference)
+        for bad in [
+            response.replacingOccurrences(of: "https:", with: "http:"),
+            response.replacingOccurrences(of: "m.amap.com", with: "m.amap.com.evil.example"),
+            response.replacingOccurrences(of: "m.amap.com", with: "user:password@m.amap.com"),
+            response.replacingOccurrences(of: "m.amap.com", with: "m.amap.com:8443"),
+            response + "?unexpected=1", response + "#fragment",
+            response.replacingOccurrences(of: "/share/index/", with: "/other/"),
+            response.replacingOccurrences(of: "116.403742675782", with: "nan"),
+            response.replacingOccurrences(of: "39.910102539063", with: "inf"),
+            response.replacingOccurrences(of: "116.403742675782", with: "181"),
+            response.replacingOccurrences(of: "116.403742675782", with: "121.5"),
+            response + "&src=savvy", response + "&unknown=1",
+            response.replacingOccurrences(of: "callnative=0", with: "callnative=1")
+        ] {
+            XCTAssertNil(SaveInkMapPolicy.amapEmbedFromWGS84Redirect(try XCTUnwrap(URL(string: bad)), original: original))
+        }
+        let gaode = try XCTUnwrap(URL(string: original.absoluteString.replacingOccurrences(of: "coordinate=wgs84", with: "coordinate=gaode")))
+        XCTAssertNil(SaveInkMapPolicy.amapEmbedFromWGS84Redirect(try XCTUnwrap(URL(string: response)), original: gaode))
+        let duplicate = try XCTUnwrap(URL(string: original.absoluteString + "&coordinate=wgs84"))
+        XCTAssertNil(SaveInkMapPolicy.amapWGS84Reference(in: duplicate))
+    }
+
+    func testAmapWebKitPolicyAndPermissionDelegatesAreObjectiveCProtocolWitnesses() throws {
+        let coordinator = SaveInkAmapWebView.Coordinator(failed: .constant(false),
+            originalURL: try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9")))
+        for selector in [
+            "webView:decidePolicyForNavigationAction:decisionHandler:",
+            "webView:decidePolicyForNavigationResponse:decisionHandler:",
+            "webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:",
+            "webView:requestDeviceOrientationAndMotionPermissionForOrigin:initiatedByFrame:decisionHandler:",
+            "webView:didReceiveServerRedirectForProvisionalNavigation:",
+            "webView:didFinishNavigation:"
+        ] {
+            XCTAssertTrue(coordinator.responds(to: NSSelectorFromString(selector)), selector)
+        }
+        let observer = SaveInkHTTP200MapObserver { _, _ in }
+        XCTAssertTrue(observer.responds(to: NSSelectorFromString("webView:decidePolicyForNavigationResponse:decisionHandler:")))
+    }
+
+    func testAmapCountryHardDeadlineFinishesWhenBackendNeverCallsBack() async throws {
+        var completed = false
+        var stopped = 0
+        var callback: SaveInkMapCountryRequest.Completion?
+        let request = SaveInkMapCountryRequest(timeout: .milliseconds(30), start: { _, _, completion in
+            callback = completion
+        }, stop: { stopped += 1 })
+        let reference = SaveInkMapReference(latitude: 39.9, longitude: 116.4, coordinateSystem: .wgs84,
+                                            provider: nil, providerPlaceID: nil)
+        let work = Task { @MainActor in
+            let result = await request.matches(reference: reference, address: "Public fixture")
+            completed = true
+            return result
+        }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if completed { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(completed, "The hard deadline must resume without any backend callback")
+        if !completed { request.cancel() }
+        let result = await work.value
+        XCTAssertNil(result)
+        XCTAssertEqual(stopped, 1)
+        let late = try XCTUnwrap(callback)
+        late([MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 39.9, longitude: 116.4))])
+        late(nil) // Neither callback may resume the continuation a second time.
+        request.cancel()
+        XCTAssertEqual(stopped, 1)
+        let reused = await request.matches(reference: reference, address: "Public fixture")
+        XCTAssertNil(reused, "A finished country request is single-use")
+    }
+
+    func testAmapAddressSearchRequiresUnanimousNearbyRegions() {
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        func placemark(_ code: String, _ state: String, _ latitude: Double = 40.0025,
+                       _ longitude: Double = 116.4897) -> CLPlacemark {
+            MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                        addressDictionary: ["CountryCode": code, "State": state])
+        }
+        let beijing = placemark("CN", "Beijing")
+        let nearby = placemark("CN", "Beijing", 40.003, 116.489)
+        let taipei = placemark("TW", "Taipei", 25.033964, 121.564468)
+        XCTAssertEqual(beijing.isoCountryCode, "CN")
+        XCTAssertEqual(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [beijing, nearby, taipei]), "CN")
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: []))
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [taipei]))
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [beijing, placemark("HK", "")]))
+        XCTAssertNil(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: [beijing, placemark("CN", "Unknown")]))
+    }
+
+    func testAmapNoResultSearchUsesOriginalDeadlineAndIgnoresLateReplies() async throws {
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var started = false
+        var searches = 0
+        var stops = 0
+        var finishSearch: SaveInkMapCountryRequest.Completion?
+        let request = SaveInkMapCountryRequest(timeout: .milliseconds(100), start: { _, _, _ in
+            started = true
+        }, stop: { stops += 1 }, search: { point, address, finish in
+            XCTAssertEqual(point, reference)
+            XCTAssertEqual(address, "Public address")
+            searches += 1
+            finishSearch = finish
+        })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        let noResult = NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue)
+        request.completeGeocoding(nil, error: noResult, reference: reference, address: "Public address")
+        request.completeGeocoding(nil, error: noResult, reference: reference, address: "Public address")
+        XCTAssertTrue(request.usedAddressSearch)
+        XCTAssertEqual(searches, 1)
+        let result = await work.value
+        XCTAssertNil(result)
+        XCTAssertEqual(stops, 1)
+        finishSearch?([MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 40, longitude: 116.48))])
+        request.completeGeocoding(nil, error: noResult, reference: reference, address: "Public address")
+        request.cancel()
+        XCTAssertEqual(searches, 1)
+        XCTAssertEqual(stops, 1)
+    }
+
+    func testAmapCancelledWaitCannotStartAddressSearchBeforeActorCleanup() async throws {
+        let reference = SaveInkMapReference(latitude: 40, longitude: 116.48,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var started = false
+        var searches = 0
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true },
+                                              search: { _, _, _ in searches += 1 })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        work.cancel()
+        // Do not yield to the onCancel MainActor task before this late callback.
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        XCTAssertEqual(searches, 0)
+        XCTAssertFalse(request.usedAddressSearch)
+        let result = await work.value
+        XCTAssertNil(result)
+    }
+
+    func testAmapAddressSearchCanCompleteWithRealPlacemarkValues() async throws {
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 40.0025, longitude: 116.4897),
+                                   addressDictionary: ["CountryCode": "CN", "State": "Beijing"])
+        var started = false
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true },
+                                              search: { _, _, finish in finish([placemark]) })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        let matches = await work.value
+        XCTAssertEqual(matches?.count, 1)
+        XCTAssertEqual(SaveInkMapPolicy.searchCountryCode(reference: reference, matches: matches ?? []), "CN")
+    }
+
+    func testStructuredAddressGeocoderKeepsOriginalAddressLocaleAndWorldRegion() throws {
+        guard #available(iOS 26.0, macOS 26.0, *) else { return }
+        let address = "中国北京市朝阳区望京东园四区4号楼"
+        let operation = try XCTUnwrap(SaveInkMapCountryRequest.addressGeocoder(for: address))
+        XCTAssertEqual(operation.addressString, address)
+        XCTAssertEqual(operation.preferredLocale?.identifier, "en_US")
+        XCTAssertEqual(operation.region.span.latitudeDelta, 180)
+        XCTAssertEqual(operation.region.span.longitudeDelta, 360)
+        XCTAssertEqual(operation.region.center.latitude, 0)
+        XCTAssertEqual(operation.region.center.longitude, 0)
+        XCTAssertFalse(operation.isLoading, "Constructing a request must not start an external lookup")
+    }
+
+    func testStructuredAddressReplyRoutesNearbyMunicipalityWithoutReplacingProviderPoint() async throws {
+        var place = inkRow(id: "public-structured-country", name: "Original saved name", street: "Public address")
+        let reference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: "original-id")
+        place.mapReference = reference
+        // The observed structured-geocoder shape omits the admin field.
+        let match = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 39.995238, longitude: 116.487146),
+                                addressDictionary: ["CountryCode": "CN", "City": "Beijing"])
+        XCTAssertEqual(match.locality, "Beijing")
+        XCTAssertNil(match.administrativeArea)
+        var started = false
+        var searches = 0
+        var phases: [String] = []
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true }, search: { point, address, _ in
+            XCTAssertEqual(point, reference)
+            XCTAssertEqual(address, "Public address")
+            searches += 1
+        }, observe: { phase, _, _ in phases.append(phase) })
+        let work = Task { @MainActor in await SaveInkMapPolicy.destinationCountryCode(for: place, request: request) }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        XCTAssertEqual(searches, 1)
+        request.completeAddressLookup([match], error: nil, phase: "addressGeocoder")
+        let country = await work.value
+        XCTAssertEqual(country, "CN")
+        XCTAssertEqual(phases, ["geocoder", "addressGeocoder"])
+        XCTAssertEqual(place.mapReference, reference)
+        XCTAssertEqual(place.name, "Original saved name")
+        request.completeAddressLookup([], error: nil, phase: "late")
+        XCTAssertEqual(phases, ["geocoder", "addressGeocoder"], "A completed backend cannot emit late observations or results")
+    }
+
+    func testCancelledStructuredAddressReplyIsIgnoredBeforeActorCleanup() async throws {
+        let reference = SaveInkMapReference(latitude: 40, longitude: 116.48,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var started = false
+        var phases: [String] = []
+        let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true }, search: { _, _, _ in },
+                                              observe: { phase, _, _ in phases.append(phase) })
+        let work = Task { @MainActor in await request.matches(reference: reference, address: "Public address") }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if started { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        XCTAssertTrue(started)
+        request.completeGeocoding(nil, error: NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue),
+                                  reference: reference, address: "Public address")
+        work.cancel()
+        request.completeAddressLookup([MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 40, longitude: 116.48),
+            addressDictionary: ["CountryCode": "CN", "City": "Beijing"])], error: nil, phase: "addressGeocoder")
+        XCTAssertEqual(phases, ["geocoder"], "The cancellation flag must reject a queued backend reply before actor cleanup")
+        let result = await work.value
+        XCTAssertNil(result)
+    }
+
+    func testAmapAddressFallbackOnlyHandlesProviderNoResult() async throws {
+        let provider = SaveInkMapReference(latitude: 40, longitude: 116.48,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        var wgs = provider
+        wgs.coordinateSystem = .wgs84
+        let noResult = NSError(domain: kCLErrorDomain, code: CLError.geocodeFoundNoResult.rawValue)
+        let network = NSError(domain: kCLErrorDomain, code: CLError.network.rawValue)
+        for (reference, address, error) in [(wgs, "Public", noResult), (provider, "", noResult), (provider, "Public", network)] {
+            var started = false
+            let request = SaveInkMapCountryRequest(start: { _, _, _ in started = true },
+                                                  search: { _, _, _ in XCTFail("This response must not start address search") })
+            let work = Task { @MainActor in await request.matches(reference: reference, address: address) }
+            defer { request.cancel(); work.cancel() }
+            for _ in 0..<100 {
+                if started { break }
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            XCTAssertTrue(started)
+            request.completeGeocoding(nil, error: error, reference: reference, address: address)
+            let result = await work.value
+            XCTAssertNil(result)
+            XCTAssertFalse(request.usedAddressSearch)
+        }
+    }
+
+    func testAmapCountryCancellationFinishesBeforeLateBackendCallback() async throws {
+        var completed = false
+        var stopped = 0
+        var callback: SaveInkMapCountryRequest.Completion?
+        let request = SaveInkMapCountryRequest(timeout: .seconds(30), start: { _, _, completion in
+            callback = completion
+        }, stop: { stopped += 1 })
+        let reference = SaveInkMapReference(latitude: 39.9, longitude: 116.4, coordinateSystem: .wgs84,
+                                            provider: nil, providerPlaceID: nil)
+        let work = Task { @MainActor in
+            let result = await request.matches(reference: reference, address: "Public fixture")
+            completed = true
+            return result
+        }
+        defer { request.cancel(); work.cancel() }
+        for _ in 0..<100 {
+            if callback != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let late = try XCTUnwrap(callback, "Observe a pending backend request before cancellation")
+        work.cancel()
+        for _ in 0..<100 {
+            if completed { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(completed, "Task cancellation must finish without waiting for the backend")
+        if !completed { request.cancel() }
+        let result = await work.value
+        XCTAssertNil(result)
+        late([MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 39.9, longitude: 116.4))])
+        XCTAssertEqual(stopped, 1)
+    }
+
+    func testAmapCountrySuccessfulCallbackCancelsHardDeadline() async throws {
+        var stopped = 0
+        let match = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: 39.9, longitude: 116.4))
+        let request = SaveInkMapCountryRequest(timeout: .milliseconds(30), start: { _, _, completion in
+            completion([match])
+        }, stop: { stopped += 1 })
+        defer { request.cancel() }
+        let reference = SaveInkMapReference(latitude: 39.9, longitude: 116.4, coordinateSystem: .wgs84,
+                                            provider: nil, providerPlaceID: nil)
+        let result = await request.matches(reference: reference, address: "Public fixture")
+        XCTAssertEqual(result?.count, 1)
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(stopped, 0, "A completed request must not retain a deadline that cancels a later result")
+    }
+
+    func testAmapRedirectProvenanceRequiresOriginalHTTPNavigation() throws {
+        let original = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
+        let web = SaveInkAmapNavigationStub()
+        let coordinator = SaveInkAmapWebView.Coordinator(failed: .constant(false), originalURL: original)
+        defer { coordinator.invalidate(); web.stopLoading() }
+        coordinator.start(in: web)
+        let initial = try XCTUnwrap(web.navigation)
+        coordinator.webView(web, didStartProvisionalNavigation: initial)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect)
+        let other = try XCTUnwrap(web.makeNavigation())
+        coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: other)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect, "A different navigation cannot supply provider conversion provenance")
+        coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: initial)
+        XCTAssertTrue(coordinator.hasOriginalServerRedirect)
+        coordinator.webView(web, didStartProvisionalNavigation: other)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect, "A script/form/new navigation must clear the original HTTP redirect proof")
+        coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: other)
+        coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: initial)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect)
+        coordinator.invalidate()
+        coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: initial)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect)
+    }
+
+    func testAmapWGSRequestBeforeRedirectCallbackCannotAuthorizeResponse() throws {
+        let source = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
+        let target = try XCTUnwrap(URL(string: "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Public&src=savvy&callnative=0&innersrc=uriapi"))
+        let response = try XCTUnwrap(HTTPURLResponse(url: target, statusCode: 200, httpVersion: nil, headerFields: nil))
+        let web = SaveInkAmapNavigationStub()
+        var failed = false
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: source)
+        defer { coordinator.invalidate(); web.stopLoading() }
+        coordinator.start(in: web)
+        let originalNavigation = try XCTUnwrap(web.navigation)
+        coordinator.webView(web, didStartProvisionalNavigation: originalNavigation)
+        XCTAssertFalse(coordinator.hasOriginalServerRedirect)
+        XCTAssertTrue(coordinator.permitsWGSRequest(target, type: .other))
+        XCTAssertFalse(coordinator.permitsWGSRequest(target, type: .linkActivated))
+        XCTAssertFalse(coordinator.permitsWGSRequest(target, type: .formSubmitted))
+        coordinator.handleResponse(response, isForMainFrame: true, in: web) { XCTAssertEqual($0, .cancel) }
+        XCTAssertTrue(failed, "A matching URL alone cannot authorize converted coordinates")
+        XCTAssertTrue(web.navigation === originalNavigation, "Unverified response must not start the embed")
+    }
+
+    func testAmapSubframeHTTPErrorsDoNotFailLoadingOrRenderedMap() async throws {
+        let url = try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9"))
+        let errorResponse = try XCTUnwrap(HTTPURLResponse(url: url, statusCode: 503, httpVersion: nil, headerFields: nil))
+        for rendered in [false, true] {
+            var failed = false
+            let web = SaveInkAmapNavigationStub()
+            let coordinator = SaveInkAmapWebView.Coordinator(
+                failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: url,
+                readinessProbe: { _ in true })
+            defer { coordinator.invalidate(); web.stopLoading() }
+            coordinator.start(in: web)
+            if rendered {
+                coordinator.webView(web, didFinish: web.navigation)
+                for _ in 0..<100 {
+                    if coordinator.hasRenderedMap { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                XCTAssertTrue(coordinator.hasRenderedMap)
+            }
+            coordinator.handleResponse(errorResponse, isForMainFrame: false, in: web) { XCTAssertEqual($0, .cancel) }
+            XCTAssertFalse(failed, "An unrelated iframe HTTP error must not replace the destination map")
+            XCTAssertEqual(coordinator.hasRenderedMap, rendered)
+            coordinator.handleResponse(errorResponse, isForMainFrame: true, in: web) { XCTAssertEqual($0, .cancel) }
+            XCTAssertTrue(failed, "The same error in the actual map document must remain unavailable")
+            XCTAssertFalse(coordinator.hasRenderedMap)
+        }
+    }
+
+    func testAmapVerifiedConversionIgnoresOnlyItsPolicyCancellation() throws {
+        let original = try XCTUnwrap(URL(string: "https://uri.amap.com/marker?position=116.3975,39.9087&coordinate=wgs84&callnative=0&name=Public&src=savvy"))
+        let redirected = try XCTUnwrap(URL(string: "https://m.amap.com/share/index/lnglat=116.403742675782,39.910102539063&name=Public&src=savvy&callnative=0&innersrc=u"))
+        let response = try XCTUnwrap(HTTPURLResponse(url: redirected, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil))
+        let cases: [(String, Int, Bool, Bool)] = [
+            ("WebKitErrorDomain", 102, true, false),
+            (NSURLErrorDomain, NSURLErrorCancelled, true, false),
+            ("WebKitErrorDomain", 102, false, true),
+            ("OtherDomain", 102, true, true),
+            ("WebKitErrorDomain", 101, true, true)
+        ]
+        for (domain, code, sameNavigation, shouldFail) in cases {
+            var failed = false
+            let web = SaveInkAmapNavigationStub()
+            let coordinator = SaveInkAmapWebView.Coordinator(
+                failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: original)
+            defer { coordinator.invalidate(); web.stopLoading() }
+            coordinator.start(in: web)
+            let originalNavigation = try XCTUnwrap(web.navigation)
+            coordinator.webView(web, didStartProvisionalNavigation: originalNavigation)
+            coordinator.webView(web, didReceiveServerRedirectForProvisionalNavigation: originalNavigation)
+            var cancelled = false
+            coordinator.handleResponse(response, isForMainFrame: true, in: web) { cancelled = $0 == .cancel }
+            XCTAssertTrue(cancelled, "The verified redirect must actually enter the response-policy conversion")
+            XCTAssertFalse(failed)
+            let embedNavigation = try XCTUnwrap(web.navigation)
+            XCTAssertFalse(embedNavigation === originalNavigation, "Conversion starts a distinct embed navigation")
+            coordinator.webView(web, didFailProvisionalNavigation: sameNavigation ? originalNavigation : embedNavigation,
+                                withError: NSError(domain: domain, code: code))
+            XCTAssertEqual(failed, shouldFail, "domain=\(domain) code=\(code) sameNavigation=\(sameNavigation)")
+            if !shouldFail {
+                coordinator.webView(web, didFail: originalNavigation, withError: NSError(domain: domain, code: code))
+                XCTAssertTrue(failed, "The conversion exception must be consumed once")
+            }
+        }
+        var failed = false
+        let web = SaveInkAmapNavigationStub()
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }), originalURL: original)
+        defer { coordinator.invalidate(); web.stopLoading() }
+        coordinator.start(in: web)
+        coordinator.webView(web, didFailProvisionalNavigation: nil, withError: NSError(domain: "WebKitErrorDomain", code: 102))
+        XCTAssertTrue(failed, "A cancellation without verified conversion provenance must fail")
+    }
+
+    func testAmapReadinessRequiresSuccessfulTilesAndPaintWithoutLogin() async throws {
+        // The HTTP fixture promises 180 pixels, independent of screen scale.
+        let tileFormat = UIGraphicsImageRendererFormat()
+        tileFormat.scale = 1
+        let tileImage = UIGraphicsImageRenderer(size: CGSize(width: 180, height: 180), format: tileFormat).image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 180, height: 180))
+        }
+        let fixture = try SaveInkHTTP200MapFixture(tileImage: XCTUnwrap(tileImage.pngData()))
+        defer { fixture.stop() }
+        for _ in 0..<100 {
+            if fixture.port != nil { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let port = try XCTUnwrap(fixture.port)
+        let origin = "http://127.0.0.1:\(port)"
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let host = UIViewController()
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: SaveInkAmapWebView.renderEvidenceScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let web = WKWebView(frame: scene.coordinateSpace.bounds, configuration: configuration)
+        host.view = web
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            web.stopLoading()
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
+        }
+        // Only the top-level origin is substituted. Tile status, decoded images,
+        // draw calls and resource timing come from real WebKit and loopback HTTP.
+        let readiness = """
+            const location = {protocol:'https:',hostname:'www.amap.com',pathname:'/ssr/embed/place'};
+            return \(SaveInkAmapWebView.renderReadinessScript);
+            """
+        let draw = """
+            (() => {
+            const source = document.createElement('canvas'); source.width = source.height = 180;
+            const paint = source.getContext('2d'); paint.fillStyle = 'blue'; paint.fillRect(0,0,180,180);
+            document.querySelector('canvas').getContext('2d').drawImage(source, 0, 0);
+            })()
+            """
+        for transport in ["fetch", "xhr"] {
+            web.loadHTMLString("""
+                <html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+                <body><canvas width="300" height="190" style="width:300px;height:190px"></canvas>
+                <input type="tel" placeholder="请输入验证码" style="display:none;position:fixed;top:0;left:0;width:200px;height:50px">
+                </body></html>
+                """, baseURL: URL(string: origin))
+            let deadline = ContinuousClock.now + .seconds(30)
+            while ContinuousClock.now < deadline {
+                if (try? await web.evaluateJavaScript("document.readyState === 'complete' && document.querySelector('canvas') !== null && !window.fixtureStarted")) as? Bool == true {
+                    _ = try await web.evaluateJavaScript("window.fixtureStarted = true")
+                    break
+                }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            let request = """
+                const url = origin + '/tiles/' + status;
+                if (transport === 'fetch') return (await fetch(url)).status;
+                return await new Promise((resolve, reject) => {
+                  const xhr = new XMLHttpRequest(); xhr.open('GET', url);
+                  xhr.onload = () => {
+                    if (status === '200') { \(draw) }
+                    resolve(xhr.status);
+                  }; xhr.onerror = reject; xhr.send();
+                });
+                """
+            let denied = try await web.callAsyncJavaScript(request,
+                arguments: ["origin": origin, "transport": transport, "status": "403"], in: nil, contentWorld: .page)
+            XCTAssertEqual(denied as? Int, 403)
+            let empty = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(empty as? Bool, false, "An empty canvas plus a completed HTTP403 tile is not ready: \(transport)")
+            _ = try await web.evaluateJavaScript(draw)
+            let deniedPaint = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(deniedPaint as? Bool, false, "A draw does not turn a failed tile into success")
+            let redirected = try await web.callAsyncJavaScript(request,
+                arguments: ["origin": origin, "transport": transport, "status": "redirect"], in: nil, contentWorld: .page)
+            XCTAssertEqual(redirected as? Int, 200)
+            _ = try await web.evaluateJavaScript(draw)
+            let loginResponse = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(loginResponse as? Bool, false, "A tile redirect to an HTTP200 non-map page is not delivery")
+            let loaded = try await web.callAsyncJavaScript(request,
+                arguments: ["origin": origin, "transport": transport, "status": "200"], in: nil, contentWorld: .page)
+            XCTAssertEqual(loaded as? Int, 200)
+            let beforePaint = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(beforePaint as? Bool, transport == "xhr",
+                           "XHR onload may paint immediately; successful delivery must be observed before the provider callback")
+            if transport == "fetch" {
+                _ = try await web.evaluateJavaScript("document.querySelector('canvas').getContext('2d').drawImage(document.querySelector('canvas'), 0, 0, 0, 0)")
+                let zeroDraw = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+                XCTAssertEqual(zeroDraw as? Bool, false, "A zero-size draw is a native no-op")
+            }
+            _ = try await web.evaluateJavaScript(draw)
+            let unobscured = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(unobscured as? Bool, true, "Successful delivery and a subsequent real draw may settle: \(transport)")
+            _ = try await web.evaluateJavaScript("document.querySelector('input').style.display = 'block'")
+            let login = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(login as? Bool, false, "Painted tiles behind visible login are unusable")
+            _ = try await web.evaluateJavaScript("document.querySelector('input').remove(); document.querySelector('canvas').remove()")
+            // A decoded non-tile image (avatar/QR) cannot substitute for a map.
+            let image = """
+                return await new Promise((resolve, reject) => {
+                  const image = new Image(); image.width = image.height = 180;
+                  image.onload = () => resolve(image.naturalWidth); image.onerror = reject;
+                  document.body.appendChild(image); image.src = url;
+                });
+                """
+            let avatar = try await web.callAsyncJavaScript(image, arguments: ["url": origin + "/avatar"], in: nil, contentWorld: .page)
+            XCTAssertEqual(avatar as? Int, 180)
+            let notTile = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(notTile as? Bool, false)
+            let decodedTile = try await web.callAsyncJavaScript(image, arguments: ["url": origin + "/tiles/image"], in: nil, contentWorld: .page)
+            XCTAssertEqual(decodedTile as? Int, 180)
+            let tileReady = try await web.callAsyncJavaScript(readiness, arguments: [:], in: nil, contentWorld: .page)
+            XCTAssertEqual(tileReady as? Bool, true, "A visible, decoded real tile image is an alternative to canvas drawing")
+        }
+    }
+
+    func testAmapActualHTTP200ShellStillNeedsSemanticMap() async throws {
+        let fixture = try SaveInkHTTP200MapFixture()
+        defer { fixture.stop() }
+        for _ in 0..<100 {
+            if fixture.port != nil { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let port = try XCTUnwrap(fixture.port, "Loopback HTTP fixture must become ready: \(fixture.listenerState)")
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/map-shell"))
+        var failed = false
+        // This negative test needs an attached document, even while XCTest
+        // has the host scene inactive. Actual map images use the separate
+        // foreground capture gate below.
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+                                 "The HTTP fixture needs an attached window scene")
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let host = UIViewController()
+        let web = WKWebView(frame: scene.coordinateSpace.bounds)
+        host.view = web
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        web.layoutIfNeeded()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
+        }
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }),
+            originalURL: try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9")),
+            timeout: .milliseconds(100))
+        defer { coordinator.invalidate(); web.stopLoading(); web.navigationDelegate = nil }
+        // Only this test delegate admits loopback. Production origin policy is
+        // unchanged; the real HTTP 200 completion forwards into render monitoring.
+        let observer = SaveInkHTTP200MapObserver(expectedURL: url) { web, navigation in
+            coordinator.beginMonitoring(in: web)
+            coordinator.webView(web, didFinish: navigation)
+        }
+        web.navigationDelegate = observer
+        web.load(URLRequest(url: url))
+        // A cold WebKit process may take seconds to start on a hosted simulator.
+        // Keep that loading budget separate from the 100 ms semantic deadline.
+        let loadDeadline = ContinuousClock.now + .seconds(30)
+        while !observer.finished && observer.error == nil && ContinuousClock.now < loadDeadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let semanticDeadline = ContinuousClock.now + .seconds(2)
+        while observer.finished && !failed && ContinuousClock.now < semanticDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        var body: String?
+        var scriptError: String?
+        do {
+            body = try await web.evaluateJavaScript("document.body?.textContent ?? ''") as? String
+        } catch {
+            let failure = error as NSError
+            scriptError = "\(failure.domain)/\(failure.code)"
+        }
+        let diagnostics = "listener=\(fixture.listenerState) successfulServer200Sends=\(fixture.responseSentCount) expected=\(url.absoluteString) attached=\(web.window === window) scene=\(scene.activationState.rawValue) app=\(UIApplication.shared.applicationState.rawValue) scriptError=\(scriptError ?? "none") bodySentinel=\(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true)\n" + observer.trace.joined(separator: "\n")
+        let attachment = XCTAttachment(string: diagnostics)
+        attachment.name = "ink-amap-http200-fixture-diagnostics"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        try diagnostics.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("ink-amap-http200-fixture-diagnostics.txt"), atomically: true, encoding: .utf8)
+        XCTAssertNil(observer.error)
+        XCTAssertGreaterThan(fixture.responseSentCount, 0, diagnostics)
+        XCTAssertEqual(observer.statusCode, 200, diagnostics)
+        XCTAssertTrue(body?.contains(SaveInkHTTP200MapFixture.bodySentinel) == true, "The intended loopback HTML must actually be loaded")
+        XCTAssertTrue(observer.finished, "An actual HTTP 200 HTML document must finish before testing render semantics")
+        XCTAssertTrue(failed, "HTTP 200 without map tiles must still hit the semantic render deadline")
+        XCTAssertFalse(coordinator.hasRenderedMap)
+    }
+
+    func testAmapInFlightReadinessCannotPublishAfterTeardown() async throws {
+        var failed = false
+        var pending: CheckedContinuation<Bool, Never>?
+        let web = WKWebView()
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }),
+            originalURL: try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9")),
+            timeout: .seconds(2), readinessProbe: { _ in
+                await withCheckedContinuation { pending = $0 }
+            })
+        defer { coordinator.invalidate(); pending?.resume(returning: false) }
+        coordinator.beginMonitoring(in: web)
+        coordinator.webView(web, didFinish: nil)
+        for _ in 0..<100 {
+            if pending != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let callback = try XCTUnwrap(pending, "Observe readiness probe entry before teardown")
+        pending = nil
+        coordinator.invalidate()
+        callback.resume(returning: true)
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertFalse(coordinator.hasRenderedMap, "A successful in-flight script result cannot revive a dismantled map")
+        XCTAssertFalse(failed)
+    }
+
+    func testAmapEmptyHTMLShellHitsOverallRenderDeadline() async throws {
+        var failed = false
+        let web = WKWebView()
+        web.loadHTMLString("<html><body>Successful document shell without map tiles</body></html>", baseURL: nil)
+        defer { web.stopLoading() }
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }),
+            originalURL: try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9")),
+            timeout: .milliseconds(100))
+        defer { coordinator.invalidate() }
+        coordinator.beginMonitoring(in: web)
+        coordinator.webView(web, didFinish: nil)
+        try await Task.sleep(for: .milliseconds(60))
+        coordinator.webView(web, didFinish: nil) // HTTP/document completion cannot reset the deadline.
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertTrue(failed, "A finished document without a semantic map must become unavailable")
+    }
+
+    func testAmapTeardownCancelsDeadlineAndIgnoresLateCallbacks() async throws {
+        var failed = false
+        let web = WKWebView()
+        let coordinator = SaveInkAmapWebView.Coordinator(
+            failed: Binding(get: { failed }, set: { failed = $0 }),
+            originalURL: try XCTUnwrap(URL(string: "https://www.amap.com/ssr/embed/place?lng=116.4&lat=39.9")),
+            timeout: .milliseconds(100))
+        coordinator.beginMonitoring(in: web)
+        coordinator.webView(web, didFinish: nil)
+        coordinator.invalidate()
+        coordinator.webView(web, didFinish: nil)
+        coordinator.webViewWebContentProcessDidTerminate(web)
+        coordinator.webView(web, didFailProvisionalNavigation: nil, withError: NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled))
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertFalse(failed, "Removed/replaced maps must not publish old timeout, script or navigation failures")
+    }
+
+    func testAmapDestinationCountryLookupForOptionalNetworkCapture() async throws {
+        guard ProcessInfo.processInfo.environment["SAVE_AMAP_CAPTURE"] == "1" else {
+            throw XCTSkip("Set SAVE_AMAP_CAPTURE=1 for the explicit live destination-country gate")
+        }
+        var hq = inkRow(id: "public-cn-country", name: "高德地图总部", street: "中国北京市朝阳区望京东园四区4号楼")
+        hq.addressLine = hq.street
+        hq.mapReference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: "B0K3C7EM0G")
+        let reference = try XCTUnwrap(hq.mapReference)
+        var observations: [String] = []
+        let request = SaveInkMapCountryRequest(observe: { phase, matches, error in
+            let failure = error as NSError?
+            observations.append("phase=\(phase) count=\(matches?.count ?? 0) error=\(failure.map { "\($0.domain)/\($0.code)" } ?? "none")")
+            for match in (matches ?? []).prefix(5) {
+                let nearby = match.location.map {
+                    SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+                } ?? false
+                observations.append("iso=\(match.isoCountryCode ?? "nil") admin=\(match.administrativeArea ?? "nil") city=\(match.locality ?? "nil") near=\(nearby)")
+            }
+        })
+        let mainland = await SaveInkMapPolicy.destinationCountryCode(for: hq, request: request)
+        var taipei = inkRow(id: "public-tw-country", name: "Taipei public coordinate", street: "Taipei")
+        taipei.shopLatitude = 25.033964
+        taipei.shopLongitude = 121.564468
+        let outside = await SaveInkMapPolicy.destinationCountryCode(for: taipei)
+        let diagnosticText = "Public HQ region=\(mainland ?? "unresolved")\nPublic Taipei region=\(outside ?? "unresolved")\nusedAddressSearch=\(request.usedAddressSearch)\n" + observations.joined(separator: "\n")
+        try diagnosticText.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("ink-map-live-country-results.txt"), atomically: true, encoding: .utf8)
+        let result = XCTAttachment(string: diagnosticText)
+        result.name = "ink-map-live-country-results"
+        result.lifetime = .keepAlways
+        add(result)
+        XCTAssertEqual(mainland, "CN", "Do not infer mainland success when the live country lookup is unavailable")
+        XCTAssertEqual(outside, "TW", "Taipei must route by the destination, not the viewer's region")
+        if mainland == "CN" {
+            guard case .amap = SaveInkMapPolicy.display(for: hq, countryCode: mainland) else {
+                return XCTFail("Live mainland result must select Amap")
+            }
+        }
+        if outside == "TW" { XCTAssertEqual(SaveInkMapPolicy.display(for: taipei, countryCode: outside), .apple) }
+    }
+
+    /// Explicit live verification only: normal CI stays deterministic and does
+    /// not depend on an external map's network. The attachment is the actual
+    /// WKWebView snapshot, not a drawn map fixture or a URL-success assertion.
+    func testAmapOfficialEmbedRendersForOptionalNetworkCapture() async throws {
+        guard ProcessInfo.processInfo.environment["SAVE_AMAP_CAPTURE"] == "1" else {
+            throw XCTSkip("Set SAVE_AMAP_CAPTURE=1 for the explicit live Amap capture gate")
+        }
+        var place = inkRow(id: "public-amap-hq", name: "高德地图总部", street: "Official documentation example")
+        place.mapReference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: "B0K3C7EM0G")
+        try await captureOfficialAmap(place, prefix: "ink-amap-gcj-poi")
+    }
+
+    func testAmapRawGCJEmbedRendersForOptionalNetworkCapture() async throws {
+        guard ProcessInfo.processInfo.environment["SAVE_AMAP_CAPTURE"] == "1" else {
+            throw XCTSkip("Set SAVE_AMAP_CAPTURE=1 for the explicit live Amap capture gate")
+        }
+        var place = inkRow(id: "public-amap-raw-gcj", name: "Public GCJ02 map point", street: "Beijing")
+        place.mapReference = SaveInkMapReference(latitude: 40.002539, longitude: 116.489729,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        let url = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: place))
+        XCTAssertEqual(url.path, "/ssr/embed/place")
+        let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertNil(query.first { $0.name == "id" })
+        XCTAssertEqual(query.first { $0.name == "lng" }?.value, "116.489729")
+        try await captureOfficialAmap(place, prefix: "ink-amap-raw-gcj")
+    }
+
+    func testAmapWGS84MarkerRendersForOptionalNetworkCapture() async throws {
+        guard ProcessInfo.processInfo.environment["SAVE_AMAP_CAPTURE"] == "1" else {
+            throw XCTSkip("Set SAVE_AMAP_CAPTURE=1 for the explicit live Amap capture gate")
+        }
+        // Public approximate central-Beijing WGS84 point, not an asserted POI.
+        var place = inkRow(id: "public-amap-wgs84", name: "Public WGS84 map point", street: "Beijing")
+        place.shopLatitude = 39.9087
+        place.shopLongitude = 116.3975
+        let url = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: place))
+        XCTAssertEqual(url.host, "uri.amap.com")
+        let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(query.first { $0.name == "coordinate" }?.value, "wgs84")
+        XCTAssertNil(query.first { $0.name == "poiid" })
+        try await captureOfficialAmap(place, prefix: "ink-amap-wgs84-marker")
+    }
+
+    private func captureOfficialAmap(_ place: SaveInkPlace, prefix: String) async throws {
+        let url = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: place))
+        var failed = false
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = try XCTUnwrap(scenes.first { $0.activationState == .foregroundActive }, "Real WebKit rendering needs a foreground UIWindowScene")
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let host = UIHostingController(rootView: VStack(spacing: 0) {
+            Text("Public Amap render verification").font(.caption)
+            SaveInkAmapWebView(url: url, failed: Binding(get: { failed }, set: { failed = $0 }))
+                .frame(height: 190)
+            Spacer()
+        }.background(Color.white).preferredColorScheme(.light))
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.coordinateSpace.bounds
+        window.overrideUserInterfaceStyle = .light
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.overrideUserInterfaceStyle = .light
+        host.view.backgroundColor = .white
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKeyAndVisible()
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        host.view.layoutIfNeeded()
+        let web = try XCTUnwrap(findAmapWebView(in: host.view))
+        defer { web.stopLoading() }
+        XCTAssertFalse(web.configuration.websiteDataStore.isPersistent)
+        var ready = false
+        var readySamples = 0
+        for _ in 0..<40 {
+            try Task.checkCancellation()
+            if failed { break }
+            let result = try? await web.evaluateJavaScript(SaveInkAmapWebView.renderReadinessScript)
+            readySamples = result as? Bool == true ? readySamples + 1 : 0
+            // The first completed tile may still precede the vector paint.
+            // Require a stable usable surface before taking the actual image.
+            if readySamples >= 3 { ready = true; break }
+            try await Task.sleep(for: .seconds(1))
+        }
+        let diagnostics = try? await web.evaluateJavaScript("""
+            JSON.stringify((() => {
+              const locationOnly = raw => { try { const u = new URL(raw); return /^https?:$/.test(u.protocol) ? u.host + u.pathname.slice(0,120) : u.protocol; } catch { return 'invalid'; } };
+              return {location:locationOnly(location.href), title:document.title.slice(0,80),
+                body:document.body.innerText.slice(0,240), visibility:document.visibilityState,
+                viewport:[innerWidth,innerHeight,devicePixelRatio], readyState:document.readyState,
+                tileDelivered:window.__savvyMapRenderEvidence?.hasDeliveredTile() ?? false,
+                canvases:[...document.querySelectorAll('canvas')].slice(0,8).map(x => [x.width,x.height,x.clientWidth,x.clientHeight,window.__savvyMapRenderEvidence?.hasPainted(x) ?? false]),
+                images:[...document.images].slice(0,16).map(x => ({location:locationOnly(x.src), complete:x.complete,width:x.naturalWidth,height:x.naturalHeight})),
+                frames:[...document.querySelectorAll('iframe')].slice(0,8).map(x => locationOnly(x.src)),
+                resources:performance.getEntriesByType('resource').slice(-30).map(x => ({location:locationOnly(x.name), completed:x.responseEnd > 0}))};
+            })())
+            """)
+        let blocked = (web.navigationDelegate as? SaveInkAmapWebView.Coordinator)?.blockedNavigationLocations ?? []
+        let diagnosticText = "scene=\(scene.activationState.rawValue) app=\(UIApplication.shared.applicationState.rawValue) attached=\(web.window != nil) frame=\(web.frame) blocked=\(blocked)\n\(diagnostics as? String ?? "DOM unavailable")"
+        let diagnosticAttachment = XCTAttachment(string: diagnosticText)
+        diagnosticAttachment.name = "\(prefix)-public-dom-diagnostics"
+        diagnosticAttachment.lifetime = .keepAlways
+        add(diagnosticAttachment)
+        try diagnosticText.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("\(prefix)-diagnostics.txt"), atomically: true, encoding: .utf8)
+        let hostImage = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+        let hostAttachment = XCTAttachment(image: hostImage)
+        hostAttachment.name = "\(prefix)-foreground-native-window"
+        hostAttachment.lifetime = .keepAlways
+        add(hostAttachment)
+        try XCTUnwrap(hostImage.pngData()).write(to: FileManager.default.temporaryDirectory.appendingPathComponent("\(prefix)-native-window.png"))
+        let snapshot = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UIImage, Error>) in
+            web.takeSnapshot(with: nil) { image, error in
+                if let image { continuation.resume(returning: image) }
+                else { continuation.resume(throwing: error ?? NSError(domain: "SavvyAmapSnapshot", code: 1)) }
+            }
+        }
+        let data = try XCTUnwrap(snapshot.pngData())
+        let readyAtCapture = try await web.evaluateJavaScript(SaveInkAmapWebView.renderReadinessScript) as? Bool == true
+        XCTAssertTrue(readyAtCapture, "The actual captured surface must remain a usable map, including after async provider UI appears")
+        let attachment = XCTAttachment(image: snapshot)
+        attachment.name = "\(prefix)-real-web-map"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        try data.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("\(prefix)-real-web-map.png"))
+        XCTAssertTrue(SaveInkMapPolicy.isAmapEmbed(web.url), "Every route must end in the compact official embed, never the mobile POI card")
+        XCTAssertFalse(failed, "The official map failed to navigate or load")
+        XCTAssertTrue(ready, "Require a rendered canvas/tile plus a completed map tile/vector resource; inspect the real WebKit attachment")
+        XCTAssertGreaterThan(data.count, 20_000, "A blank WebKit surface is not a visible map")
+        let geolocation = try await web.callAsyncJavaScript("""
+            return await Promise.race([
+              new Promise(resolve => navigator.geolocation.getCurrentPosition(
+                () => resolve('allowed'), () => resolve('blocked'))),
+              new Promise(resolve => setTimeout(() => resolve('timeout'), 3000))
+            ]);
+            """, arguments: [:], in: nil, contentWorld: .page)
+        XCTAssertEqual(geolocation as? String, "blocked", "The embedded destination map must not request the viewer's GPS")
+    }
+
+    private func findAmapWebView(in view: UIView) -> WKWebView? {
+        if let web = view as? WKWebView { return web }
+        for child in view.subviews {
+            if let web = findAmapWebView(in: child) { return web }
+        }
+        return nil
+    }
+
+    func testMapProviderFollowsDestinationCountryIncludingSeparateHKMOTWRegions() throws {
+        var place = inkRow(id: "destination", name: "Destination", street: "Saved address")
+        place.shopLatitude = 31.23
+        place.shopLongitude = 121.47
+        guard case .amap(let url) = SaveInkMapPolicy.display(for: place, countryCode: " cn ") else {
+            return XCTFail("Mainland destination must use Amap")
+        }
+        XCTAssertEqual(url.host, "uri.amap.com")
+        for code in ["HK", "MO", "TW", "KR", "US"] {
+            XCTAssertEqual(SaveInkMapPolicy.display(for: place, countryCode: code), .apple)
+        }
+        for code in [nil, "", "CN-HK", "not-a-country", "ZZ"] {
+            XCTAssertEqual(SaveInkMapPolicy.display(for: place, countryCode: code), .unavailable)
+        }
+    }
+
+    func testProviderReferencePreservesGCJWithoutMakingItAnArrivalOrAppleCoordinate() throws {
+        var original = Place.from(inkPending(name: "上海測試店", address: "上海市徐匯區永福路235號", latitude: 31.23, longitude: 121.47))
+        original.coordinateSystem = .gcj02
+        original.locationProvider = .amap
+        original.providerPlaceId = "B000TEST"
+        let row = SaveInkPlaceCatalog.row(place: original, ink: nil)
+        XCTAssertNil(row.shopLatitude)
+        XCTAssertNil(row.shopLongitude)
+        XCTAssertEqual(row.mapReference?.coordinateSystem, .gcj02)
+        XCTAssertEqual(row.mapReference?.latitude, original.latitude)
+        XCTAssertFalse(SaveInkAppleMaps.canOpen(row))
+        XCTAssertEqual(SaveInkMapPolicy.display(for: row, countryCode: "HK"), .unavailable)
+        let url = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: row))
+        let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(url.host, "www.amap.com")
+        XCTAssertNil(query.first { $0.name == "id" }, "Embedded POI details can trigger provider login; use the saved point")
+        XCTAssertEqual(query.first { $0.name == "lng" }?.value, "121.47")
+        XCTAssertEqual(query.first { $0.name == "lat" }?.value, "31.23")
+
+        var wgsRow = row
+        wgsRow.mapReference?.coordinateSystem = .wgs84
+        let wgsURL = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: wgsRow))
+        let wgsQuery = try XCTUnwrap(URLComponents(url: wgsURL, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(wgsURL.host, "uri.amap.com")
+        XCTAssertEqual(wgsQuery.first { $0.name == "coordinate" }?.value, "wgs84")
+        XCTAssertEqual(wgsQuery.first { $0.name == "position" }?.value, "121.47,31.23")
+        XCTAssertFalse(wgsQuery.contains { ["lat", "lng", "poiid"].contains($0.name) })
+        let handoff = try XCTUnwrap(SaveInkMapPolicy.amapMarkerURL(for: wgsRow, opensApp: true))
+        let handoffQuery = try XCTUnwrap(URLComponents(url: handoff, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(handoffQuery.first { $0.name == "poiid" }?.value, "B000TEST")
+
+        let store = livePlaceStore(places: [row])
+        store.openPlace(row.id)
+        XCTAssertEqual(store.totalVisits(), 0)
+    }
+
+    func testAmapURLsKeepCoordinateSystemsAndOnlyDestinationFields() throws {
+        var place = inkRow(id: "url", name: "Cafe & tea? name=other", street: "Shanghai")
+        place.shopLatitude = 31.23
+        place.shopLongitude = 121.47
+        place.detailNote = "PRIVATE NOTE MUST NOT LEAVE"
+        let wgs = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: place))
+        let wgsQuery = try XCTUnwrap(URLComponents(url: wgs, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(wgs.host, "uri.amap.com")
+        XCTAssertEqual(wgsQuery.first { $0.name == "coordinate" }?.value, "wgs84")
+        XCTAssertEqual(wgsQuery.first { $0.name == "name" }?.value, place.name)
+        XCTAssertEqual(wgsQuery.first { $0.name == "callnative" }?.value, "0")
+        XCTAssertFalse(wgs.absoluteString.contains("PRIVATE"))
+
+        place.mapReference = SaveInkMapReference(latitude: 31.231, longitude: 121.471,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        let gcj = try XCTUnwrap(SaveInkMapPolicy.amapEmbedURL(for: place))
+        let gcjQuery = try XCTUnwrap(URLComponents(url: gcj, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(gcj.path, "/ssr/embed/place")
+        XCTAssertEqual(gcjQuery.first { $0.name == "lng" }?.value, "121.471")
+        XCTAssertEqual(gcjQuery.first { $0.name == "platform" }?.value, "pc")
+        XCTAssertNil(gcjQuery.first { $0.name == "coordinate" }, "Embed coordinates are already GCJ-02")
+        place.mapReference?.coordinateSystem = .bd09
+        XCTAssertNil(SaveInkMapPolicy.amapEmbedURL(for: place))
+        place.mapReference?.coordinateSystem = .gcj02
+        place.mapReference?.provider = .appleMaps
+        XCTAssertNil(SaveInkMapPolicy.amapEmbedURL(for: place))
+        place.mapReference?.latitude = .nan
+        XCTAssertNil(SaveInkMapPolicy.amapMarkerURL(for: place, opensApp: true))
+    }
+
+    func testMapTargetsFeaturedDestinationAndRejectsUnsafeWebNavigation() {
+        let first = inkRow(id: "first", name: "First", street: "A")
+        let second = inkRow(id: "second", name: "Second", street: "B")
+        XCTAssertEqual(SaveInkMapPolicy.target(in: [first, second], focusedID: nil)?.id, "first")
+        XCTAssertEqual(SaveInkMapPolicy.target(in: [first, second], focusedID: "second")?.id, "second")
+        XCTAssertNil(SaveInkMapPolicy.target(in: [first, second], focusedID: "gone"))
+        XCTAssertNil(SaveInkMapPolicy.target(in: [], focusedID: nil))
+        for raw in ["https://www.amap.com/ssr/embed/place?id=B1", "https://m.amap.com/", "https://uri.amap.com/marker"] {
+            XCTAssertTrue(SaveInkMapPolicy.permitsWebNavigation(URL(string: raw), userInitiated: false))
+            XCTAssertFalse(SaveInkMapPolicy.permitsWebNavigation(URL(string: raw), userInitiated: true))
+        }
+        for raw in ["http://www.amap.com/", "https://www.amap.com.attacker.example/", "https://user:secret@www.amap.com/",
+                    "https://www.amap.com:444/", "javascript:alert(1)", "file:///private/file", "https://example.com/"] {
+            XCTAssertFalse(SaveInkMapPolicy.permitsWebNavigation(URL(string: raw), userInitiated: false))
+        }
+    }
+
+    func testCountryAddressMatchMustStayNearItsTypedProviderReference() {
+        let reference = SaveInkMapReference(latitude: 31.23, longitude: 121.47,
+            coordinateSystem: .gcj02, provider: .amap, providerPlaceID: nil)
+        XCTAssertTrue(SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: 31.232, longitude: 121.475))
+        XCTAssertFalse(SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: 25.03, longitude: 121.53))
+        XCTAssertFalse(SaveInkMapPolicy.countryMatchIsNearby(reference, latitude: .nan, longitude: 121.47))
+    }
+
+    func testLateCountryLookupCannotReplaceNewDestinationAndMissingInputClearsIt() async {
+        let state = SaveInkMapDestinationState()
+        let pending = SaveInkSuspendedCountryLookup()
+        var place = inkRow(id: "old", name: "Old", street: "Shanghai")
+        place.shopLatitude = 31.23
+        place.shopLongitude = 121.47
+        let oldPlace = place
+        let oldTask = Task { await state.refresh(place: oldPlace) { _ in await pending.load() } }
+        await pending.waitUntilStarted()
+        place.id = "new"
+        await state.refresh(place: place) { _ in "TW" }
+        pending.finish("CN")
+        await oldTask.value
+        XCTAssertEqual(state.display, .apple)
+        XCTAssertEqual(state.targetToken, SaveInkMapPolicy.token(for: place))
+        await state.refresh(place: nil) { _ in XCTFail("No target must not geocode"); return "CN" }
+        XCTAssertEqual(state.display, .unavailable)
+    }
+
+    func testCancelledCountryLookupCannotPublishALateProvider() async {
+        let state = SaveInkMapDestinationState()
+        let pending = SaveInkSuspendedCountryLookup()
+        var place = inkRow(id: "cancel", name: "Cancel", street: "Shanghai")
+        place.shopLatitude = 31.23
+        place.shopLongitude = 121.47
+        let target = place
+        let task = Task { await state.refresh(place: target) { _ in await pending.load() } }
+        await pending.waitUntilStarted()
+        task.cancel()
+        pending.finish("CN")
+        await task.value
+        XCTAssertEqual(state.display, .loading)
+    }
+
     func testLateWalkingRouteCannotReplaceANewerRoute() async {
         let state = SaveInkMapRouteState()
         let pending = SaveInkSuspendedRouteLookup()
@@ -1567,12 +2649,14 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertTrue(chrome.contains("head.fill(SaveInkPalette.ink)"))
         XCTAssertTrue(chrome.contains("PaperTexture"))
         XCTAssertTrue(chrome.contains("openInMaps"))
-        XCTAssertTrue(chrome.contains("ink.home.map"))
+        XCTAssertFalse(chrome.contains("ink.home.map"))
         XCTAssertTrue(chrome.contains("ink.place.map"))
         XCTAssertTrue(screens.contains("showsLiveMap"))
+        let homeEnd = try XCTUnwrap(screens.range(of: "struct SaveInkSaveSheet"))
+        XCTAssertFalse(screens[..<homeEnd.lowerBound].contains("SaveInkLiveMap("), "Home is the list, not a map")
         XCTAssertTrue(screens.contains("SaveInkWalkMap(label:"))
-        XCTAssertTrue(screens.contains("ink.place.openMaps"))
-        XCTAssertTrue(screens.contains("用 Apple 地圖打開"))
+        XCTAssertTrue(chrome.contains("ink.place.openMaps"))
+        XCTAssertTrue(chrome.contains("用 Apple 地圖打開"))
         let plist = try source("SAV-E/Info.plist")
         XCTAssertTrue(plist.contains("NSLocationWhenInUseUsageDescription"))
         XCTAssertFalse(plist.contains("NSLocationAlwaysAndWhenInUseUsageDescription"))
@@ -3847,6 +4931,193 @@ final class SaveInkNotebookTests: XCTestCase {
 
     private func md5(_ data: Data) -> String {
         Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+@MainActor
+private final class SaveInkAmapNavigationStub: WKWebView {
+    private(set) var navigation: WKNavigation?
+    func makeNavigation() -> WKNavigation? {
+        // WebKit initializes WKNavigation's private storage. Direct init can
+        // crash in dealloc on the CI runtime; this loads only local HTML.
+        super.loadHTMLString("<html><body>Navigation fixture</body></html>", baseURL: nil)
+    }
+    override func load(_ request: URLRequest) -> WKNavigation? {
+        navigation = makeNavigation()
+        return navigation
+    }
+}
+
+/// Loopback-only, deterministic HTTP fixture. It never forwards requests outside
+/// the test process and closes all accepted sockets during teardown.
+private final class SaveInkHTTP200MapFixture: @unchecked Sendable {
+    static let bodySentinel = "Successful HTTP 200 shell without a map"
+    private let listener: NWListener
+    private let queue = DispatchQueue(label: "savvy.map.http200-fixture")
+    private let lock = NSLock()
+    private var connections: [NWConnection] = []
+    private var stopped = false
+    private var successfulSends = 0
+    private var boundPort: UInt16?
+    private var stateDescription = "not started"
+    var port: UInt16? {
+        lock.lock()
+        defer { lock.unlock() }
+        return boundPort
+    }
+    var listenerState: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return stateDescription
+    }
+    var responseSentCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return successfulSends
+    }
+
+    init(tileImage: Data? = nil) throws {
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        listener = try NWListener(using: parameters)
+        listener.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
+            // NWListener.port may expose .any (0) before the socket is bound.
+            // Publish an actual listening port only after the ready callback.
+            let actualPort = self.listener.port?.rawValue
+            self.lock.lock()
+            self.stateDescription = String(describing: state)
+            if case .ready = state, let actualPort, actualPort > 0, !self.stopped {
+                self.boundPort = actualPort
+            } else {
+                self.boundPort = nil
+            }
+            self.lock.unlock()
+        }
+        let body = Data("<html><body>\(Self.bodySentinel)</body></html>".utf8)
+        let response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        listener.newConnectionHandler = { [weak self] connection in
+            guard let self else { connection.cancel(); return }
+            self.lock.lock()
+            guard !self.stopped else { self.lock.unlock(); connection.cancel(); return }
+            self.connections.append(connection)
+            self.lock.unlock()
+            connection.start(queue: self.queue)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { request, _, _, error in
+                guard error == nil else { connection.cancel(); return }
+                let line = request.flatMap { String(data: $0, encoding: .utf8) }?.components(separatedBy: "\r\n").first ?? ""
+                var selectedResponse = response
+                if tileImage != nil, line.contains(" /tiles/redirect ") {
+                    selectedResponse = Data("HTTP/1.1 302 Found\r\nLocation: /login\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".utf8)
+                } else if let tileImage {
+                    let denied = line.contains(" /tiles/403 ")
+                    let isImage = line.contains(" /tiles/image ") || line.contains(" /avatar ")
+                    let payload = isImage ? tileImage : body
+                    selectedResponse = Data("HTTP/1.1 \(denied ? "403 Forbidden" : "200 OK")\r\nContent-Type: \(isImage ? "image/png" : "text/html")\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: \(payload.count)\r\nConnection: close\r\n\r\n".utf8) + payload
+                }
+                connection.send(content: selectedResponse, completion: .contentProcessed { [weak self] error in
+                    if error == nil, let self {
+                        self.lock.lock()
+                        self.successfulSends += 1
+                        self.lock.unlock()
+                    }
+                    connection.cancel()
+                })
+            }
+        }
+        listener.start(queue: queue)
+    }
+
+    func stop() {
+        listener.cancel()
+        lock.lock()
+        stopped = true
+        let pending = connections
+        connections = []
+        lock.unlock()
+        pending.forEach { $0.cancel() }
+    }
+}
+
+@MainActor
+private final class SaveInkHTTP200MapObserver: NSObject, WKNavigationDelegate {
+    var statusCode: Int?
+    var finished = false
+    var error: Error?
+    private(set) var trace: [String] = []
+    private let expectedURL: URL?
+    private let onFinish: @MainActor (WKWebView, WKNavigation?) -> Void
+    init(expectedURL: URL? = nil, onFinish: @escaping @MainActor (WKWebView, WKNavigation?) -> Void) {
+        self.expectedURL = expectedURL
+        self.onFinish = onFinish
+    }
+    private func matchesExpected(_ url: URL?) -> Bool {
+        guard let expectedURL, let url else { return false }
+        return url == expectedURL
+    }
+    private func location(_ url: URL?) -> String {
+        guard let url else { return "nil" }
+        // Public loopback fixture only; never retain query values/credentials.
+        return "\(url.scheme ?? "nil")://\(url.host ?? "nil"):\(url.port.map(String.init) ?? "default")\(url.path.prefix(100))"
+    }
+    private func record(_ message: String) {
+        if trace.count < 16 { trace.append(String(message.prefix(400))) }
+    }
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
+        let response = navigationResponse.response
+        let code = (response as? HTTPURLResponse)?.statusCode
+        let expected = matchesExpected(response.url)
+        record("response class=\(String(reflecting: type(of: response))) status=\(code.map(String.init) ?? "nil") main=\(navigationResponse.isForMainFrame) expected=\(expected) url=\(location(response.url))")
+        if navigationResponse.isForMainFrame, expected { statusCode = code }
+        decisionHandler(.allow)
+    }
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        record("commit expected=\(matchesExpected(webView.url)) url=\(location(webView.url))")
+    }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        record("WebContent terminated")
+        error = WKError(.webContentProcessTerminated)
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        let expected = matchesExpected(webView.url)
+        record("finish expected=\(expected) url=\(location(webView.url))")
+        guard expected else { return }
+        finished = true
+        onFinish(webView, navigation)
+    }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        record("provisionalFailure domain=\((error as NSError).domain) code=\((error as NSError).code) url=\(location(webView.url))")
+        self.error = error
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        record("failure domain=\((error as NSError).domain) code=\((error as NSError).code) url=\(location(webView.url))")
+        self.error = error
+    }
+}
+
+@MainActor
+private final class SaveInkSuspendedCountryLookup {
+    private var result: CheckedContinuation<String?, Never>?
+    private var started: CheckedContinuation<Void, Never>?
+
+    func load() async -> String? {
+        await withCheckedContinuation { continuation in
+            result = continuation
+            started?.resume()
+            started = nil
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard result == nil else { return }
+        await withCheckedContinuation { started = $0 }
+    }
+
+    func finish(_ country: String?) {
+        let continuation = result
+        result = nil
+        continuation?.resume(returning: country)
     }
 }
 

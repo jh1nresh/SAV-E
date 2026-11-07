@@ -103,12 +103,17 @@ struct SaveInkNotebookRoot: View {
     var launch: SaveInkLaunchMode = .interactive
 
     var body: some View {
-        switch launch {
-        case .interactive:
-            SaveInkOwnedNotebook()
-        case .preview(let screen):
-            SaveInkScreenPreview(screen: screen)
+        Group {
+            switch launch {
+            case .interactive:
+                SaveInkOwnedNotebook()
+            case .preview(let screen):
+                SaveInkScreenPreview(screen: screen)
+                    .ignoresSafeArea()
+                    .statusBarHidden(true)
+            }
         }
+        .foregroundStyle(SaveInkPalette.ink)
     }
 }
 

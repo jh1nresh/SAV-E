@@ -26,6 +26,11 @@ on:
         required: false
         default: ""
         type: string
+      capture_live_maps:
+        description: "Also verify public Amap routes and export real WebKit screenshots (external network required)."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -42,6 +47,8 @@ concurrency:
   group: ios-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Use the standard Intel pool while hosted arm64 capacity is constrained.
+# Build and test consumers must stay on the same architecture.
 jobs:
   # Cheap ubuntu gate so drafts without ready-for-merge fail before the
   # duplicate macOS ios-build. The required `ios` job still always runs
@@ -78,7 +85,7 @@ jobs:
   # are reused by ios via test-without-building.
   ios-build:
     needs: [ios-gate]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
 
     steps:
@@ -94,17 +101,17 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache DerivedData
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/Build
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          key: deriveddata-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
           restore-keys: |
-            deriveddata-${{ runner.os }}-
+            deriveddata-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build app, Share Extension, and tests without booting a simulator
         run: |
@@ -145,15 +152,14 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped: still runs
-  # when ios-build fails. !cancelled() (not always()) lets the existing
-  # concurrency group cancel a superseded run.
-  ios:
+  # Start core tests alongside supplemental evidence as soon as products exist.
+  # The final `ios` job below retains the required check and joins both lanes.
+  ios-tests:
     if: ${{ !cancelled() }}
-    needs: [ios-build, ios-supplemental]
-    runs-on: macos-26
+    needs: [ios-build]
+    runs-on: macos-26-intel
     # Keep all coverage, with Home evidence and width captures on isolated
-    # runners. This final ios gate also requires every supplemental lane.
+    # runners. Neither lane waits for the other before starting its tests.
     timeout-minutes: 160
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
@@ -213,9 +219,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Restore this-run test products
         id: products_cache
@@ -637,7 +643,7 @@ jobs:
             --output-path "$RUNNER_TEMP/SAVE-Trip-Sheets"
 
       - name: Reset focused simulator before T3 screenshot rail
-        if: always() && steps.scope.outputs.ui == 'true'
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink' }}
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
@@ -646,7 +652,7 @@ jobs:
       - name: Capture T3 coral-token screens
         id: t3_screens
         timeout-minutes: 15
-        if: always() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink'
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.scope.outputs.profile != 'ink' }}
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-T3-screens-tests.log
         run: |
@@ -720,6 +726,86 @@ jobs:
             echo "::warning title=Flaky UI test::$line"
           done <<< "$retried"
 
+      - name: Verify live destination maps
+        id: live_maps
+        # Collect the requested external evidence even if an independent test
+        # failed. Run after the normal UI suite so both results are preserved.
+        if: "!cancelled() && github.event_name == 'workflow_dispatch' && inputs.capture_live_maps && steps.products.outcome == 'success' && steps.simulator.outcome == 'success'"
+        timeout-minutes: 10
+        env:
+          SOURCE_XCTESTRUN: ${{ steps.products.outputs.xctestrun }}
+          SIM_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          # Keep the normal unit/UI products and environment unchanged. Only
+          # this explicit proof run admits external public map requests.
+          export AMAP_XCTESTRUN="$(dirname "$SOURCE_XCTESTRUN")/SAVE-Amap-Proof.xctestrun"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import plistlib
+
+          source = pathlib.Path(os.environ["SOURCE_XCTESTRUN"])
+          data = plistlib.loads(source.read_bytes())
+          injected = []
+          def inject(node):
+              if isinstance(node, dict):
+                  if "TestBundlePath" in node:
+                      injected.append(node["TestBundlePath"])
+                      for key in ("EnvironmentVariables", "TestingEnvironmentVariables"):
+                          node.setdefault(key, {})["SAVE_AMAP_CAPTURE"] = "1"
+                  for value in node.values():
+                      inject(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      inject(value)
+          inject(data)
+          assert any("SAVETests" in str(path) for path in injected), "No unit-test host received the live capture environment"
+          pathlib.Path(os.environ["AMAP_XCTESTRUN"]).write_bytes(plistlib.dumps(data))
+          PY
+          scripts/xcodebuild-clean.sh \
+            -xctestrun "$AMAP_XCTESTRUN" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 90 \
+            -maximum-test-execution-time-allowance 90 \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapDestinationCountryLookupForOptionalNetworkCapture \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapOfficialEmbedRendersForOptionalNetworkCapture \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapRawGCJEmbedRendersForOptionalNetworkCapture \
+            -only-testing:SAVETests/SaveInkNotebookTests/testAmapWGS84MarkerRendersForOptionalNetworkCapture \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult" \
+            CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO \
+            test-without-building
+          xcrun xcresulttool get test-results summary \
+            --path "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult" > "$RUNNER_TEMP/SAVE-Amap-Proof-Summary.json"
+          python3 - "$RUNNER_TEMP/SAVE-Amap-Proof-Summary.json" <<'PY'
+          import json
+          import sys
+          result = json.load(open(sys.argv[1]))
+          assert result.get("passedTests") == 4 and result.get("failedTests") == 0 and result.get("skippedTests") == 0, result
+          PY
+
+      - name: Export live map proof
+        if: "!cancelled() && (steps.live_maps.outcome == 'success' || steps.live_maps.outcome == 'failure')"
+        run: |
+          if [[ -f "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult/Info.plist" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-Amap-Proof.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-Amap-Proof-Attachments"
+          fi
+
+      - name: Upload live map proof
+        if: "!cancelled() && (steps.live_maps.outcome == 'success' || steps.live_maps.outcome == 'failure')"
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-live-map-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/SAVE-Amap-Proof.xcresult
+            ${{ runner.temp }}/SAVE-Amap-Proof-Attachments
+            ${{ runner.temp }}/SAVE-Amap-Proof-Summary.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''
         run: |
@@ -764,12 +850,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Require every supplemental lane
-        if: always()
-        env:
-          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
-        run: '[[ "$SUPPLEMENTAL_RESULT" == success ]]'
-
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'
         run: |
@@ -793,7 +873,7 @@ jobs:
 
   ios-supplemental:
     needs: [ios-build]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 65
     strategy:
       fail-fast: false
@@ -851,54 +931,28 @@ jobs:
       # Real device types are selected by run-ios-width-device-test.sh:
       # iPhone-SE-3rd-generation, iPhone-14, and iPhone-15-Pro-Max.
       # Do not substitute iPhone-16-Pro-Max (440pt); assert real widths.
-      # Hosted first-boot migration can consume ten minutes before XCTest.
-      # Allow 25 minutes for boot + tests + export. Test waits and the
-      # 65-minute lane cap stay fixed; retain raw logs on interruption.
-      - name: Capture Map width evidence
-        timeout-minutes: 25
+      # One genuine device and XCTest session per width avoid repeating
+      # first-boot migration. All three selectors and named rasters gate success.
+      # Keep the existing 65-minute lane budget, with room for teardown.
+      - name: Capture Map, Friends, and Passport width evidence
+        timeout-minutes: 60
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
         env:
           WIDTH: ${{ matrix.width }}
-          TEST: ${{ matrix.map_test }}
+          MAP_TEST: ${{ matrix.map_test }}
+          FRIENDS_TEST: ${{ matrix.friends_test }}
+          PASSPORT_TEST: ${{ matrix.passport_test }}
           XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
         run: |
           scripts/run-ios-width-device-test.sh \
             --width "$WIDTH" \
-            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$MAP_TEST" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$FRIENDS_TEST" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$PASSPORT_TEST" \
             --xctestrun "$XCTESTRUN_PATH" \
             --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Map-$WIDTH.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Map-$WIDTH-tests.log"
-      - name: Capture Friends width evidence
-        timeout-minutes: 25
-        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
-        env:
-          WIDTH: ${{ matrix.width }}
-          TEST: ${{ matrix.friends_test }}
-          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width "$WIDTH" \
-            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
-            --xctestrun "$XCTESTRUN_PATH" \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Friends-$WIDTH.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Friends-$WIDTH-tests.log"
-      - name: Capture Passport width evidence
-        timeout-minutes: 25
-        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
-        env:
-          WIDTH: ${{ matrix.width }}
-          TEST: ${{ matrix.passport_test }}
-          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width "$WIDTH" \
-            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
-            --xctestrun "$XCTESTRUN_PATH" \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Passport-$WIDTH.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Passport-$WIDTH-tests.log"
+            --result-bundle "$RUNNER_TEMP/SAVE-Width-$WIDTH.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Width-$WIDTH-tests.log"
       - name: Require every width raster
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && startsWith(matrix.lane, 'width-') }}
         env:
@@ -978,6 +1032,27 @@ jobs:
             ${{ runner.temp }}/ios-ui-*-args.txt
           if-no-files-found: error
           retention-days: 14
+
+  # Required check name `ios` (ruleset 19331432). Dependency failure or a
+  # skipped/cancelled lane must fail this check rather than silently pass.
+  ios:
+    if: ${{ !cancelled() }}
+    needs: [ios-build, ios-tests, ios-supplemental]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require build, core tests, and every supplemental lane
+        env:
+          BUILD_RESULT: ${{ needs.ios-build.result }}
+          TEST_RESULT: ${{ needs.ios-tests.result }}
+          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
+        run: |
+          for result in "$BUILD_RESULT" "$TEST_RESULT" "$SUPPLEMENTAL_RESULT"; do
+            if [[ "$result" != success ]]; then
+              echo "::error::Required iOS lane did not succeed: build=$BUILD_RESULT tests=$TEST_RESULT supplemental=$SUPPLEMENTAL_RESULT"
+              exit 1
+            fi
+          done
 
   release-readiness:
     if: github.event_name == 'push'

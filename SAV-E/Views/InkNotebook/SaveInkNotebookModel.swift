@@ -168,6 +168,9 @@ struct SaveInkPlace: Identifiable, Equatable {
     /// even when their text happens to equal a generated fallback label.
     var blurbIsUserContent = false
     var detailNoteIsUserContent = false
+    /// Display-only provenance; never substitutes provider coordinates for a
+    /// WGS84 one-shot arrival fix or writes them onto a visit.
+    var mapReference: SaveInkMapReference? = nil
 
     var meta: String {
         let streetText = street
