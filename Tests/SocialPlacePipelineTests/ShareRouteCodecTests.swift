@@ -10,17 +10,27 @@ final class ShareRouteCodecTests: XCTestCase {
         ]
         let expectedReceiptID = "embedded:fafc194c67fcbe46ca2d550ecd127c97572605925e236fe16e89db985e177f39"
         var ownerAIDs = Set<UUID>()
+        var shareURLs = Set<URL>()
         for input in inputs {
             let payload = try JSONDecoder().decode(SharedPlaceData.self, from: Data(input.utf8))
+            let oldToken = Data(input.utf8).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+            let oldURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/\(oldToken)"))
+            XCTAssertEqual(SharedPlaceData.from(url: oldURL)?.embeddedReceiptID, expectedReceiptID,
+                           "Existing unsorted links must still decode")
             let receipt = SharedPlaceReceipt.embedded(payload)
             for _ in 0..<32 {
                 XCTAssertEqual(receipt.id, expectedReceiptID)
+                shareURLs.insert(try XCTUnwrap(payload.toURL()))
                 let ownerA = receipt.privatePlace(ownerSubject: "account-a").id
                 ownerAIDs.insert(ownerA)
                 XCTAssertNotEqual(ownerA, receipt.privatePlace(ownerSubject: "account-b").id)
             }
         }
         XCTAssertEqual(ownerAIDs.count, 1, "Repeated receipt saves must retain one recipient-owned identity")
+        XCTAssertEqual(shareURLs.count, 1, "Repeated encodes and incoming key order must not change the share URL")
     }
 
     @MainActor
