@@ -30,6 +30,7 @@ concurrency:
 
 # Use the standard Intel pool while hosted arm64 capacity is constrained.
 # Build and test consumers must stay on the same architecture.
+# ios.yml batches width checks; its required final gate still joins every lane.
 jobs:
   # Compile-only gate so an iOS compile error fails in ~10 min instead of
   # waiting on the 75-minute unit+UI job. No tests and no simulator boot.
