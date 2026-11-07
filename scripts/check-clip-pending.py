@@ -34,7 +34,7 @@ planner = (ROOT / 'SAV-EClip/ClipListSavePlanner.swift').read_text()
 clip_routes = (ROOT / 'SAV-EClip/SharedTripData.swift').read_text()
 codec = section(clip_routes, 'enum ShareRouteCodec {', 'private struct SharedPlaceLinkResponse:')
 suite = 'save.clip.host.' + str(uuid.uuid4())
-source = 'import Foundation\nimport CoreLocation\nimport Observation\n' + pending + app_store + outcome + draft + planner
+source = 'import Foundation\nimport CoreLocation\nimport CryptoKit\nimport Observation\n' + pending + app_store + outcome + draft + planner
 source += codec + '''
 enum SAVEProductionConfig {
     static func supportsCustomURLScheme(_ url: URL) -> Bool { url.scheme == "savvy" || url.scheme == "wanderly" }
@@ -48,7 +48,17 @@ enum SaveSharedListPayload {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "c" }?.value
     }
 }
-typealias SaveListItem = ClipListSaveItem
+// The app's platform projection has an ID; the Clip's wire snapshot has none.
+struct SaveListItem: Equatable {
+    var id = UUID()
+    var value: ClipListSaveItem
+    var name: String { value.name }
+    init(name: String, address: String, latitude: Double, longitude: Double,
+         category: String, rating: Double?, note: String?, sourceURL: String?, placeId: String?) {
+        value = ClipListSaveItem(name: name, address: address, latitude: latitude, longitude: longitude,
+            category: category, rating: rating, note: note, sourceURL: sourceURL, placeId: placeId)
+    }
+}
 struct SaveCollaborativeList: Equatable { var id = UUID(); var items: [SaveListItem] }
 extension PendingSharePayload {
 ''' + methods + '\n}\n' + '''
@@ -104,12 +114,34 @@ struct Failure: Error {}
             shareCode: "selected", handoffURL: listURL, sender: nil, isInstalled: false)
         precondition(listOutcome == .pending(1))
         let listJournal = AppPendingShareStore.load()!
-        let extra = ClipListSaveItem(name: "Unselected live extra", address: "Osaka", latitude: 34, longitude: 135,
+        let extra = SaveListItem(name: "Unselected live extra", address: "Osaka", latitude: 34, longitude: 135,
             category: "cafe", rating: nil, note: nil, sourceURL: nil, placeId: "extra")
         let selected = ClipListHandoff.itemsToStamp(pending: listJournal, incomingURL: listURL, liveItems: [extra])
         precondition(selected.count == 1 && selected.first?.name == draft.name)
         precondition(ClipListHandoff.itemsToStamp(pending: listJournal,
             incomingURL: URL(string: "https://sav-e-app.vercel.app/list?c=unrelated")!, liveItems: [extra]).isEmpty)
+
+        // Execute the real Clip writer twice, as pending retry/continue does.
+        let selectionID = UUID()
+        _ = await ClipSaveService.saveList(drafts: [draft], listId: nil, shareCode: "selected",
+            handoffURL: listURL, sender: nil, selectionID: selectionID, isInstalled: false)
+        let beforeRetry = AppPendingShareStore.load()!
+        let pendingIDs = ClipListHandoff.itemsToStamp(pending: beforeRetry, incomingURL: listURL, liveItems: []).map(\.id)
+        _ = await ClipSaveService.saveList(drafts: [draft], listId: nil, shareCode: "selected",
+            handoffURL: listURL, sender: nil, selectionID: selectionID, isInstalled: false)
+        let afterRetry = AppPendingShareStore.load()!
+        precondition(beforeRetry.selectionID == afterRetry.selectionID)
+        precondition(beforeRetry.invocationID != afterRetry.invocationID)
+        precondition(pendingIDs == ClipListHandoff.itemsToStamp(pending: afterRetry, incomingURL: listURL, liveItems: []).map(\.id))
+        precondition(!AppPendingShareStore.clear(ifUnchanged: beforeRetry))
+        precondition(AppPendingShareStore.load() == afterRetry)
+        _ = await ClipSaveService.saveList(drafts: [draft], listId: nil, shareCode: "selected",
+            handoffURL: listURL, sender: nil, isInstalled: false)
+        let independent = AppPendingShareStore.load()!
+        precondition(independent.selectionID != selectionID)
+        precondition(pendingIDs != ClipListHandoff.itemsToStamp(pending: independent, incomingURL: listURL, liveItems: []).map(\.id))
+        // Restore the journal used by the unrelated confirmation-coordination cases.
+        precondition(PendingShareStore.write(listJournal))
 
         let a = SaveCollaborativeList(items: selected)
         let b = SaveCollaborativeList(items: [extra])
@@ -154,5 +186,6 @@ with tempfile.TemporaryDirectory(prefix='save-clip-pending-') as directory:
     output = Path(directory)
     swift = output / 'Check.swift'
     swift.write_text(source)
-    subprocess.run(['swiftc', '-swift-version', '6', '-parse-as-library', str(swift), '-o', str(output / 'check')], check=True)
+    subprocess.run(['swiftc', '-swift-version', '6', '-module-cache-path', str(output / 'ModuleCache'),
+                    '-parse-as-library', str(swift), '-o', str(output / 'check')], check=True)
     subprocess.run([str(output / 'check')], check=True)

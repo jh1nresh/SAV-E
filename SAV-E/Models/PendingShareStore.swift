@@ -55,6 +55,8 @@ struct PendingSharePayload: Codable, Equatable {
 
     /// Distinguishes a newer tap on the same link from an older completion.
     var invocationID: UUID? = UUID()
+    /// Recipient-local identity of one frozen Clip list selection across retries.
+    var selectionID: UUID? = nil
     var kind: Kind
     var shareCode: String?
     var placeId: String?
@@ -375,12 +377,14 @@ enum ClipListHandoff {
         else { return [] }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        guard let journal = try? encoder.encode(pending) else { return [] }
+        var identityJournal = pending
+        if identityJournal.selectionID != nil { identityJournal.invocationID = nil }
+        guard let journal = try? encoder.encode(identityJournal) else { return [] }
         return places.enumerated().map { index, snapshot in
             var item = snapshot.asListItem()
             // Recipient-local pending identity, never a sender/provider stamp ID.
-            // The immutable journal includes invocation and full selection; a
-            // legacy journal without invocation uses its exact encoded content.
+            // Modern retries retain the selection, excluding the fresh ack nonce.
+            // Older journals retain their original full-content identity.
             var key = Data("savvy.clip.pending-item.v1\n".utf8)
             key.append(journal)
             key.append(Data("\nitem:\(index)".utf8))
