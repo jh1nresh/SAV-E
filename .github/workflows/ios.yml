@@ -5,26 +5,26 @@ name: PR339 live-map proof
       source_run_id:
         type: string
         required: true
-        default: '42330744080'
+        default: '42331788833'
         description: Existing iOS build run for frozen PR339 head
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: pr339-live-map-proof-bbddeed
+  group: pr339-live-map-proof-b46d6a48
   cancel-in-progress: true
 jobs:
   live-map-proof:
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
     steps:
     - name: Validate compiled source identity
       env:
         GH_TOKEN: ${{ github.token }}
         SOURCE_RUN: ${{ inputs.source_run_id }}
-        EXPECTED_SHA: bbddeed5170bcf9a5c01169c4fee8aa10f03339e
-        EXPECTED_CHECKOUT_SHA: fc5b386ff7150b4b0ff2f2dca121bba28a264a34
-        EXPECTED_TREE: 80603904f73c2754aa8a94ee47be91c4217b2866
+        EXPECTED_SHA: b46d6a48c2cd7d5dd6edea94460b2ed77a73bb83
+        EXPECTED_CHECKOUT_SHA: 4a7fe6e70d9c730ba12198d6540650b1ae2db912
+        EXPECTED_TREE: a38ec0e7b603c1dc3d8f75e6b683b1245b9dc370
       run: "gh api \"repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN\" > \"$RUNNER_TEMP/source-run.json\"\ngh\
         \ api \"repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs\" > \"$RUNNER_TEMP/source-jobs.json\"\ngh\
         \ api \"repos/$GITHUB_REPOSITORY/git/commits/$EXPECTED_CHECKOUT_SHA\" > \"$RUNNER_TEMP/checkout-commit.json\"\
@@ -36,7 +36,7 @@ jobs:
         \ optional live-map tests using existing compiled PR339 products'},indent=2))\nPYCODE\n"
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: bbddeed5170bcf9a5c01169c4fee8aa10f03339e
+        ref: b46d6a48c2cd7d5dd6edea94460b2ed77a73bb83
     - name: Select Xcode 26.6
       run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
     - name: Verify toolchain
@@ -114,7 +114,7 @@ jobs:
       if: '!cancelled() && (steps.live_maps.outcome == ''success'' || steps.live_maps.outcome == ''failure'')'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
-        name: pr339-live-map-proof-bbddeed-${{ github.run_id }}
+        name: pr339-live-map-proof-b46d6a48-${{ github.run_id }}
         path: '${{ runner.temp }}/SAVE-Amap-Proof.xcresult
 
           ${{ runner.temp }}/SAVE-Amap-Proof-Attachments
