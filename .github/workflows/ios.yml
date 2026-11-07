@@ -145,15 +145,14 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped: still runs
-  # when ios-build fails. !cancelled() (not always()) lets the existing
-  # concurrency group cancel a superseded run.
-  ios:
+  # Start core tests alongside supplemental evidence as soon as products exist.
+  # The final `ios` job below retains the required check and joins both lanes.
+  ios-tests:
     if: ${{ !cancelled() }}
-    needs: [ios-build, ios-supplemental]
+    needs: [ios-build]
     runs-on: macos-26
     # Keep all coverage, with Home evidence and width captures on isolated
-    # runners. This final ios gate also requires every supplemental lane.
+    # runners. Neither lane waits for the other before starting its tests.
     timeout-minutes: 160
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
@@ -764,12 +763,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Require every supplemental lane
-        if: always()
-        env:
-          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
-        run: '[[ "$SUPPLEMENTAL_RESULT" == success ]]'
-
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'
         run: |
@@ -978,6 +971,27 @@ jobs:
             ${{ runner.temp }}/ios-ui-*-args.txt
           if-no-files-found: error
           retention-days: 14
+
+  # Required check name `ios` (ruleset 19331432). Dependency failure or a
+  # skipped/cancelled lane must fail this check rather than silently pass.
+  ios:
+    if: ${{ !cancelled() }}
+    needs: [ios-build, ios-tests, ios-supplemental]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require build, core tests, and every supplemental lane
+        env:
+          BUILD_RESULT: ${{ needs.ios-build.result }}
+          TEST_RESULT: ${{ needs.ios-tests.result }}
+          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
+        run: |
+          for result in "$BUILD_RESULT" "$TEST_RESULT" "$SUPPLEMENTAL_RESULT"; do
+            if [[ "$result" != success ]]; then
+              echo "::error::Required iOS lane did not succeed: build=$BUILD_RESULT tests=$TEST_RESULT supplemental=$SUPPLEMENTAL_RESULT"
+              exit 1
+            fi
+          done
 
   release-readiness:
     if: github.event_name == 'push'
