@@ -7885,7 +7885,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
                 coordinateSystem: item.coordinateSystem?.rawValue, locationProvider: item.locationProvider?.rawValue,
                 providerMapUrl: item.providerMapUrl)
         }
-        let journal = PendingSharePayload(kind: .list, shareCode: "retry-identities", placeId: nil,
+        let journal = PendingSharePayload(selectionID: UUID(), kind: .list, shareCode: "retry-identities", placeId: nil,
             listId: nil, sender: nil, url: incomingURL.absoluteString, confirmedPlaces: snapshots)
         let serializedJournal = try JSONEncoder().encode(journal)
         let initialList = try XCTUnwrap(ClipListHandoff.stampList(pending: journal, incomingURL: incomingURL, joined: nil))
@@ -7898,10 +7898,12 @@ final class MapReviewLocationRepairTests: XCTestCase {
         }
         for owner in ["overflow-owner-a", "overflow-owner-b"] {
             auth.authState = .authenticated(userId: owner)
+            var capturedAt: [UUID: Date] = [:]
             for _ in 0..<2 {
                 // Reopening the link reconstructs both the journal projection
                 // and persistence owner instead of reusing in-memory item IDs.
-                let restored = try JSONDecoder().decode(PendingSharePayload.self, from: serializedJournal)
+                var restored = try JSONDecoder().decode(PendingSharePayload.self, from: serializedJournal)
+                restored.invocationID = UUID() // A real Clip retry rewrites the journal with a fresh acknowledgement.
                 let list = try XCTUnwrap(ClipListHandoff.stampList(pending: restored, incomingURL: incomingURL, joined: nil))
                 XCTAssertEqual(Set(list.items.map(\.id)), expectedIDs)
                 XCTAssertTrue(ClipListHandoff.matchesPendingSelection(list, pending: restored))
@@ -7918,6 +7920,13 @@ final class MapReviewLocationRepairTests: XCTestCase {
                 XCTAssertEqual(Set(map.reviewCandidates.map(\.id)), expectedIDs)
                 XCTAssertTrue(pending.allSatisfy { $0.ownerSubject == owner && $0.isUnplacedInbox })
                 XCTAssertTrue(pending.allSatisfy { $0.providerLocation?.coordinateSystem == .gcj02 })
+                for candidate in pending {
+                    if let original = capturedAt[candidate.id] {
+                        XCTAssertEqual(candidate.createdAt, original, "Retry retains the original durable capture time")
+                    } else {
+                        capturedAt[candidate.id] = candidate.createdAt
+                    }
+                }
                 XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
             }
         }

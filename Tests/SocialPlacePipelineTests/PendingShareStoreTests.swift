@@ -95,6 +95,33 @@ final class PendingShareStoreTests: XCTestCase {
         }
     }
 
+    func testClipSelectionRetryKeepsPendingIDsButRefreshesAcknowledgement() throws {
+        let url = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=retry-selection"))
+        let snapshot = PendingConfirmedPlace(placeId: "source", name: "Same shop", address: "Taipei",
+            latitude: 25.03, longitude: 121.56, category: "cafe", sourceURL: nil)
+        let first = PendingSharePayload(selectionID: UUID(), kind: .list, shareCode: "retry-selection",
+            placeId: nil, listId: nil, sender: nil, url: url.absoluteString,
+            confirmedPlaces: [snapshot, snapshot])
+        var retry = first
+        retry.invocationID = UUID()
+        let firstIDs = ClipListHandoff.itemsToStamp(pending: first, incomingURL: url, liveItems: []).map(\.id)
+        XCTAssertEqual(Set(firstIDs).count, 2)
+        XCTAssertEqual(firstIDs, ClipListHandoff.itemsToStamp(pending: retry, incomingURL: url, liveItems: []).map(\.id))
+        XCTAssertTrue(PendingShareStore.write(first, to: store))
+        XCTAssertTrue(PendingShareStore.write(retry, to: store))
+        XCTAssertFalse(PendingShareStore.clear(ifUnchanged: first, from: store))
+        XCTAssertEqual(PendingShareStore.load(from: store), retry)
+
+        var independent = retry
+        independent.selectionID = UUID()
+        XCTAssertNotEqual(firstIDs, ClipListHandoff.itemsToStamp(pending: independent, incomingURL: url, liveItems: []).map(\.id),
+                          "An independently initiated identical selection must remain distinct")
+        var changed = retry
+        changed.confirmedPlaces?[0].placeId = "different-source"
+        XCTAssertNotEqual(firstIDs, ClipListHandoff.itemsToStamp(pending: changed, incomingURL: url, liveItems: []).map(\.id))
+        XCTAssertTrue(PendingShareStore.clear(ifUnchanged: retry, from: store))
+    }
+
     func testConfirmationCannotAcknowledgeAnotherPendingSelection() throws {
         let a = PendingConfirmedPlace(placeId: "a", name: "A", address: "Tokyo", latitude: 35.6,
                                       longitude: 139.7, category: "Cafe", sourceURL: nil)
