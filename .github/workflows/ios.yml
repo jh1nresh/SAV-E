@@ -42,6 +42,8 @@ concurrency:
   group: ios-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.head_ref || github.ref_name }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Use the standard Intel pool while hosted arm64 capacity is constrained.
+# Build and test consumers must stay on the same architecture.
 jobs:
   # Cheap ubuntu gate so drafts without ready-for-merge fail before the
   # duplicate macOS ios-build. The required `ios` job still always runs
@@ -78,7 +80,7 @@ jobs:
   # are reused by ios via test-without-building.
   ios-build:
     needs: [ios-gate]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
 
     steps:
@@ -94,17 +96,17 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Cache DerivedData
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/Build
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          key: deriveddata-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
           restore-keys: |
-            deriveddata-${{ runner.os }}-
+            deriveddata-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Build app, Share Extension, and tests without booting a simulator
         run: |
@@ -150,7 +152,7 @@ jobs:
   ios-tests:
     if: ${{ !cancelled() }}
     needs: [ios-build]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     # Keep all coverage, with Home evidence and width captures on isolated
     # runners. Neither lane waits for the other before starting its tests.
     timeout-minutes: 160
@@ -212,9 +214,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
-            spm-${{ runner.os }}-
+            spm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Restore this-run test products
         id: products_cache
@@ -786,7 +788,7 @@ jobs:
 
   ios-supplemental:
     needs: [ios-build]
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 65
     strategy:
       fail-fast: false
