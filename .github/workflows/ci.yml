@@ -189,7 +189,7 @@ jobs:
           retention-days: 14
 
       - name: Capture E4 free-cap screenshots
-        if: always() && steps.simulator.outputs.udid != ''
+        if: ${{ !cancelled() && steps.simulator.outputs.udid != '' }}
         timeout-minutes: 25
         run: |
           scripts/xcodebuild-clean.sh \
