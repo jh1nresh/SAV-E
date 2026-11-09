@@ -3,7 +3,11 @@ import Foundation
 enum SAVEProductionConfig {
     // Existing App Store identifiers stay on com.wanderly until a separate app migration is planned.
     static let legacyProductionBundleID = "com.wanderly.app"
+#if SAVVY_CITY_MVP
+    nonisolated static let appGroupSuiteName = "group.local.savvy.city-mvp"
+#else
     nonisolated static let appGroupSuiteName = "group.com.wanderly.app"
+#endif
     nonisolated static let currentCustomURLScheme = "savvy"
     nonisolated static let legacyCustomURLScheme = "wanderly"
     static let pendingPlacesFileName = "pending-places.json"
@@ -12,7 +16,11 @@ enum SAVEProductionConfig {
     static let defaultPlaceShareBaseURL = "https://sav-e-app.vercel.app/p"
     static let defaultTripShareBaseURL = "https://sav-e-app.vercel.app/trip"
     static let defaultListShareBaseURL = "https://sav-e-app.vercel.app/list"
+#if SAVVY_CITY_MVP
+    static let defaultAPIBaseURL = "http://127.0.0.1:9"
+#else
     static let defaultAPIBaseURL = "https://wanderly-api-production.up.railway.app"
+#endif
     // Strongest current flash-class model first; transport falls back to the
     // next entry on 404 (model unavailable) or 429 (rate limited).
     static let defaultGeminiModelFallbacks = ["gemini-3.5-flash", "gemini-2.5-flash"]
@@ -36,6 +44,10 @@ enum SAVEProductionConfig {
     }
 
     static func configValue(for keys: [String], bundle: Bundle = .main) -> String? {
+#if SAVVY_CITY_MVP
+        // This separately built local app never imports production secrets or env overrides.
+        return nil
+#else
         for key in keys {
             if let value = normalizedConfigValue(ProcessInfo.processInfo.environment[key]) {
                 return value
@@ -45,6 +57,7 @@ enum SAVEProductionConfig {
             }
         }
         return nil
+#endif
     }
 
     static func URLConfigValue(for keys: [String], bundle: Bundle = .main) -> String? {

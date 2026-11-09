@@ -1,4 +1,7 @@
 import SwiftUI
+#if SAVVY_CITY_MVP
+import MapKit
+#endif
 
 /// Primary navigation: Home | Map | + | Friends | Passport.
 /// Capture opens a cover without changing the selected destination.
@@ -152,7 +155,11 @@ enum ContentStorageScope: Equatable {
         case .production:
             return MapViewModel()
         case .reviewerDemo:
+#if SAVVY_CITY_MVP
+            return CityMVPStorage.makeMapViewModel()
+#else
             return ReviewDemoStorage.makeMapViewModel()
+#endif
         }
     }
 
@@ -218,7 +225,11 @@ struct ContentView: View {
         _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
         _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
+#if SAVVY_CITY_MVP
+        _selectedRootTab = State(initialValue: .map)
+#else
         _selectedRootTab = State(initialValue: .home)
+#endif
         _rootPath = State(initialValue: [])
         let onboardingClue = pendingOnboardingClue.wrappedValue
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -231,7 +242,11 @@ struct ContentView: View {
     private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
+#if SAVVY_CITY_MVP
+            if isMapPanelExpanded { mapDrawerPanel }
+#else
             if selectedRootTab == .map || isMapPanelExpanded { mapDrawerPanel }
+#endif
         }
         .onChange(of: selectedRootTab) { _, tab in
             if tab != .map {
@@ -326,6 +341,9 @@ struct ContentView: View {
         }
         .onChange(of: mapVM.selectedMapCandidate) { _, candidate in
             guard let candidate else { return }
+#if SAVVY_CITY_MVP
+            if selectedRootTab == .map && rootPath.isEmpty && !isMapPanelExpanded { return }
+#endif
             openMapDetail(.unsavedCandidate(candidate))
         }
         .onChange(of: mapVM.selectedSocialPlace) { _, place in
@@ -363,9 +381,11 @@ struct ContentView: View {
         }
         await mapVM.loadPlaces()
         await tripStore.load()
+#if !SAVVY_CITY_MVP
         if storageScope == .reviewerDemo {
             await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
         }
+#endif
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitest-origin-food") {
             mapVM.socialPlaces = Place.socialPreviewSeeds(
@@ -459,6 +479,17 @@ struct ContentView: View {
         .environment(\.appLanguageSettings, languageSettings)
     }
 
+#if SAVVY_CITY_MVP
+    private func openCityMVPSavedPlace(_ place: Place) {
+        selectRootTab(.map)
+        if place.isMapKitMappable {
+            mapVM.cameraPosition = .camera(MapCamera(centerCoordinate: place.coordinate,
+                                                     distance: 900, heading: 0, pitch: 30))
+        }
+        mapVM.selectPlace(place, enrichPhoto: false)
+    }
+#endif
+
     /// Tab bar selection. `.capture` is a control, not a destination: it opens
     /// the capture cover and leaves the current tab selected, so tapping it and
     /// cancelling returns the user exactly where they were.
@@ -467,6 +498,12 @@ struct ContentView: View {
             openDrawer(.addLink, tripID: nil)
             return
         }
+#if SAVVY_CITY_MVP
+        if selectedRootTab == .map, tab != .map,
+           mapVM.selectedMapCandidate?.id.hasPrefix("city-mvp:") == true {
+            mapVM.clearSelectedMapObject()
+        }
+#endif
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
         // children, so changing only the selection leaves the child visible.
@@ -502,6 +539,12 @@ struct ContentView: View {
                     Group {
                         switch selectedRootTab {
                         case .home:
+#if SAVVY_CITY_MVP
+                            CityMVPSavedPage(
+                                places: mapVM.places, onOpen: openCityMVPSavedPlace,
+                                onReview: { rootPath = [.saves] }, reviewCount: mapVM.reviewCandidates.count
+                            )
+#else
                             SaveHomeView(
                                 store: tripStore,
                                 mapViewModel: mapVM,
@@ -532,7 +575,11 @@ struct ContentView: View {
                                 },
                                 onOpenPassport: openPassport
                             )
+#endif
                         case .map:
+#if SAVVY_CITY_MVP
+                            MapView(viewModel: mapVM, shouldFocusOnUserLocationOnLaunch: false)
+#else
                             SaveMapRootView(
                                 mapViewModel: mapVM,
                                 shouldFocusOnUserLocation: true,
@@ -544,10 +591,17 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
+#endif
                         case .friends:
                             SaveFriendsView()
                         case .profile:
+#if SAVVY_CITY_MVP
+                            CityMVPMePage(savedCount: mapVM.places.count,
+                                          onFriends: { selectRootTab(.friends) },
+                                          onTrips: { rootPath = [.trips] })
+#else
                             passportView(isRootTab: true)
+#endif
                         case .capture:
                             // Unreachable: `.capture` is a control, and
                             // `selectRootTab` opens the cover instead of
@@ -556,6 +610,12 @@ struct ContentView: View {
                         }
                     }
 
+#if SAVVY_CITY_MVP
+                    CityMVPBottomBar(selection: selectedRootTab, onSelect: selectRootTab,
+                                     onSearch: { selectRootTab(.map); openMapSearch() },
+                                     onCapture: { openDrawer(.addLink, tripID: nil) })
+                        .placed(x: 24, y: AtlasTabBarMetrics.mapY, width: 345, height: 62)
+#else
                     AtlasTabBar(
                         items: SaveRootTab.allCases,
                         selection: selectedRootTab,
@@ -574,6 +634,7 @@ struct ContentView: View {
                         width: AtlasTabBarMetrics.width,
                         height: AtlasTabBarMetrics.height
                     )
+#endif
                 }
             }
             .tint(SaveAtlasPalette.forest)

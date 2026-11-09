@@ -51,12 +51,16 @@ final class GoogleTripRouteService: TripRouteServiceProtocol {
         session: URLSession? = nil,
         bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) {
+#if SAVVY_CITY_MVP
+        self.apiKey = nil
+#else
         self.apiKey = Self.normalizedAPIKey(
             apiKey
                 ?? ProcessInfo.processInfo.environment["GOOGLE_DIRECTIONS_API_KEY"]
                 ?? ProcessInfo.processInfo.environment["GOOGLE_PLACES_API_KEY"]
                 ?? SAVEProductionConfig.keyFromPlist("GOOGLE_PLACES_API_KEY")
         )
+#endif
         self.bundleIdentifier = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let session {
             self.session = session

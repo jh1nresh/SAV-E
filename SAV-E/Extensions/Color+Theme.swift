@@ -715,7 +715,7 @@ struct SavePostcardPostmark: View {
     }
 }
 
-struct SavePostcardScallopedRectangle: Shape {
+nonisolated struct SavePostcardScallopedRectangle: Shape {
     var depth: CGFloat = 4
     var pitch: CGFloat = 11
 
@@ -768,7 +768,7 @@ struct SavePostcardScallopedRectangle: Shape {
     }
 }
 
-struct SavePostcardSealShape: Shape {
+nonisolated struct SavePostcardSealShape: Shape {
     func path(in rect: CGRect) -> Path {
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let baseRadius = min(rect.width, rect.height) / 2 - 2

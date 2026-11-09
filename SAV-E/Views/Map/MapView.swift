@@ -9,6 +9,12 @@ struct MapView: View {
     let showsAuxiliaryPins: Bool
     let numberedPlacePositions: [UUID: Int]
     let contextBadgeText: String?
+#if SAVVY_CITY_MVP
+    @State private var cityMVPFrame: CityDistrictCamera?
+    @State private var cityMVPRegistration: CityDistrictRegistration?
+    @State private var cityMVPUsesGlobeImagery = true
+    @State private var cityMVPRegionUpdate: Task<Void, Never>?
+#endif
 
     init(
         viewModel: MapViewModel,
@@ -27,6 +33,75 @@ struct MapView: View {
     }
 
     var body: some View {
+#if SAVVY_CITY_MVP
+        if displayedPlaces == nil {
+            let frame = cityMVPFrame
+            let registration = cityMVPRegistration
+            MapReader { proxy in
+                CityMVPMapSurface(viewModel: viewModel, frame: frame, proxy: proxy, registration: registration) {
+                    standardMap(proxy: proxy)
+                }
+            }
+            .task {
+                if cityMVPRegistration == nil {
+                    cityMVPRegistration = await CityDistrictRegistration.resolve()
+                }
+            }
+        } else {
+            standardMap()
+        }
+#else
+        standardMap()
+#endif
+    }
+
+#if SAVVY_CITY_MVP
+    private var cityMVPMapStyle: MapStyle {
+        guard displayedPlaces == nil else { return .standard(elevation: .flat) }
+        return cityMVPUsesGlobeImagery ? .imagery(elevation: .realistic) : .standard(elevation: .realistic)
+    }
+#endif
+
+    private func rootMapBottomInset(safeArea: CGFloat) -> CGFloat {
+#if SAVVY_CITY_MVP
+        // The place panel may open during a pinch. Keep the native camera's
+        // viewport fixed so that choosing a pin cannot move the map.
+        return 96
+#else
+        return max(safeArea + (viewModel.selectedPlace == nil ? 148 : 240),
+                   viewModel.selectedPlace == nil ? 160 : 252)
+#endif
+    }
+
+    private func showsNativeSavedPin(_ place: Place) -> Bool {
+#if SAVVY_CITY_MVP
+        if displayedPlaces == nil {
+            if viewModel.selectedPlace?.id == place.id { return false }
+            if cityMVPRegistration != nil, let frame = cityMVPFrame,
+               CityMVPPlaceBridge.projectsSavedPin(place, in: frame) { return false }
+        }
+#endif
+        return place.isMapKitMappable
+    }
+
+    private func showsNativeCandidatePin(_ candidate: SaveMapCandidate) -> Bool {
+#if SAVVY_CITY_MVP
+        if displayedPlaces == nil && viewModel.selectedMapCandidate?.id == candidate.id { return false }
+#endif
+        return true
+    }
+
+    private func nativePinCoordinate(_ place: Place) -> CLLocationCoordinate2D {
+#if SAVVY_CITY_MVP
+        if displayedPlaces == nil, let registration = cityMVPRegistration,
+           CityMVPPlaceBridge.hasBundledCoordinate(place) {
+            return registration.mapCoordinate(place.coordinate)
+        }
+#endif
+        return place.coordinate
+    }
+
+    private func standardMap(proxy: MapProxy? = nil) -> some View {
         GeometryReader { geo in
             let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
             // Root Map parks a 64pt search panel above the tab bar.
@@ -36,17 +111,14 @@ struct MapView: View {
             let isEmbeddedCrop = displayedPlaces != nil
             let bottomChromeInset = isEmbeddedCrop
                 ? max(geo.safeAreaInsets.bottom + 18, 28)
-                : max(
-                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 148 : 240),
-                    viewModel.selectedPlace == nil ? 160 : 252
-                )
+                : rootMapBottomInset(safeArea: geo.safeAreaInsets.bottom)
 
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
                     UserAnnotation()
 
-                    ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(\.isMapKitMappable)) { place in
-                        Annotation("", coordinate: place.coordinate) {
+                    ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(showsNativeSavedPin)) { place in
+                        Annotation("", coordinate: nativePinCoordinate(place)) {
                             PlaceMapPin(
                                 place: place,
                                 isSelected: viewModel.selectedPlace?.id == place.id,
@@ -71,7 +143,7 @@ struct MapView: View {
                             }
                         }
 
-                        ForEach(viewModel.visibleMapCandidates) { candidate in
+                        ForEach(viewModel.visibleMapCandidates.filter(showsNativeCandidatePin)) { candidate in
                             Annotation("", coordinate: candidate.coordinate) {
                                 UnsavedMapCandidatePin(
                                     candidate: candidate,
@@ -107,6 +179,9 @@ struct MapView: View {
                             )
                     }
                 }
+#if SAVVY_CITY_MVP
+                .mapStyle(cityMVPMapStyle)
+#else
                 .mapStyle(
                     .standard(
                         elevation: .flat,
@@ -125,24 +200,51 @@ struct MapView: View {
                         showsTraffic: false
                     )
                 )
+#endif
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     Color.clear
                         .frame(height: bottomChromeInset)
                         .allowsHitTesting(false)
                 }
                 .mapFeatureSelectionDisabled { feature in
+#if SAVVY_CITY_MVP
+                    feature.kind != .pointOfInterest || (displayedPlaces == nil && (cityMVPFrame?.opacity ?? 0) > 0.5)
+#else
                     feature.kind != .pointOfInterest
+#endif
                 }
                 .mapControls {
+#if SAVVY_CITY_MVP
+                    if displayedPlaces != nil { MapCompass() }
+#else
                     MapCompass()
+#endif
                 }
                 .onChange(of: viewModel.selectedMapFeature) { _, feature in
                     viewModel.selectMapFeature(feature)
                 }
-                .onMapCameraChange(frequency: .onEnd) { context in
+                .onMapCameraChange(frequency: proxy == nil ? .onEnd : .continuous) { context in
                     guard displayedPlaces == nil else { return }
+#if SAVVY_CITY_MVP
+                    if let proxy {
+                        cityMVPFrame = CityDistrictCamera(camera: context.camera, registration: cityMVPRegistration) {
+                            proxy.convert($0, to: .named(CityDistrictCamera.space))
+                        }
+                        cityMVPRegionUpdate?.cancel()
+                        cityMVPRegionUpdate = Task { @MainActor in
+                            do { try await Task.sleep(for: .milliseconds(200)) }
+                            catch { return }
+                            cityMVPUsesGlobeImagery = context.camera.distance > 3_000_000
+                            viewModel.updateVisibleMapRegion(context.region)
+                        }
+                        return
+                    }
+#endif
                     viewModel.updateVisibleMapRegion(context.region)
                 }
+#if SAVVY_CITY_MVP
+                .onDisappear { cityMVPRegionUpdate?.cancel() }
+#endif
                 .accessibilityIdentifier("map.liveSurface")
                 .overlay(alignment: .bottomTrailing) {
                     CurrentLocationButton(
@@ -156,7 +258,11 @@ struct MapView: View {
                     .padding(.trailing, 16)
                     // Apple Maps / DESIGN.md: one-handed bottom-trailing locate,
                     // cleared above the floating search pill or place peek.
+#if SAVVY_CITY_MVP
+                    .padding(.bottom, bottomChromeInset + (isEmbeddedCrop ? 0 : 32))
+#else
                     .padding(.bottom, bottomChromeInset)
+#endif
                 }
                 .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 

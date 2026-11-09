@@ -1,0 +1,13 @@
+taipei101-pin.jpg: "Tower of Taipei 101" by AnthonySantiago101.
+Source: https://commons.wikimedia.org/wiki/File:Tower_of_Taipei_101.jpg
+License: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+This thumbnail was resized and cropped from the original. The thumbnail is
+distributed under the same license. No affiliation or endorsement is implied.
+
+att4fun-pin.jpg: "ATT 4 Fun Exterior view 201911" by Wikipedia user – Wpcpey.
+Source: https://commons.wikimedia.org/wiki/File:ATT_4_Fun_Exterior_view_201911.jpg
+License listed on the file page: Creative Commons Attribution 4.0 International.
+https://creativecommons.org/licenses/by/4.0/
+The thumbnail was cropped and resized from the original. No affiliation or
+endorsement is implied.

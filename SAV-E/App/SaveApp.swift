@@ -11,7 +11,9 @@ private struct DeferredAccountScopedLink: Equatable {
     var ownerGeneration: Int?
 }
 
+#if !SAVVY_CITY_MVP
 @main
+#endif
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings()

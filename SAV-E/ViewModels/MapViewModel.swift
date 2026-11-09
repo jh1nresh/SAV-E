@@ -2736,13 +2736,17 @@ final class MapViewModel: ObservableObject {
     }
 
     func selectPlace(_ place: Place) {
+        selectPlace(place, enrichPhoto: true)
+    }
+
+    func selectPlace(_ place: Place, enrichPhoto: Bool) {
         selectionIsCameraOnly = false
         selectedPlace = place
         selectedReviewCandidate = nil
         selectedMapCandidate = nil
         selectedSocialPlace = nil
         selectedMapFeature = nil
-        guard PlaceBusinessEnricher.needsEnrichment(place) else { return }
+        guard enrichPhoto, PlaceBusinessEnricher.needsEnrichment(place) else { return }
         Task {
             await enrichSelectedPlacePhoto(place)
         }
