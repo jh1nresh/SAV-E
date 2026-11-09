@@ -66,9 +66,9 @@ final class CityMVPVisualTests: XCTestCase {
         app.buttons["cityMVP.tab.map"].tap()
         XCTAssertTrue(mode.waitForExistence(timeout: 8))
         if !isSaved { XCTAssertFalse(panel.exists) }
-        app.buttons["cityMVP.tab.me"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["cityMVP.mePage"].firstMatch.waitForExistence(timeout: 5))
-        capture(app, "08-me")
+        app.buttons["cityMVP.tab.passport"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["cityMVP.passportPage"].firstMatch.waitForExistence(timeout: 5))
+        capture(app, "08-passport")
     }
 
     @MainActor

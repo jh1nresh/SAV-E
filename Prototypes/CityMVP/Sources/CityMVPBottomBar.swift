@@ -14,8 +14,8 @@ struct CityMVPBottomBar: View {
             action("magnifyingglass", title: "搜尋 Search", action: onSearch)
             HStack(spacing: 0) {
                 destination(.home, icon: "tray.fill", english: "Saved", chinese: "收藏")
-                destination(.map, icon: "scope", english: "Map", chinese: "地圖")
-                destination(.profile, icon: "person.crop.circle.fill", english: "Me", chinese: "個人")
+                destination(.map, icon: "globe", english: "Map", chinese: "地圖")
+                destination(.profile, icon: "person.crop.circle.fill", english: "Passport", chinese: "護照")
             }
             .padding(4)
             .cityMVPGlass(in: Capsule())

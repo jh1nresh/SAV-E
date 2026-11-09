@@ -53,7 +53,7 @@ struct CityMVPMePage: View {
     @Environment(\.appLanguageSettings) private var language
 
     var body: some View {
-        CityMVPPage(title: label("Me", "個人"), subtitle: label("Your Savvy map", "你的 Savvy 地圖")) {
+        CityMVPPage(title: label("Passport", "護照"), subtitle: label("Your Savvy map", "你的 Savvy 地圖")) {
             CityMVPPageRow(symbol: "person.crop.circle.fill", title: label("Local preview", "本地測試版"),
                            subtitle: label("\(savedCount) saved places", "\(savedCount) 個收藏"),
                            tint: CityMVPStyle.blue, showsChevron: false)
@@ -66,7 +66,7 @@ struct CityMVPMePage: View {
                                subtitle: label("Your trip plans", "你的旅行計畫"), tint: CityMVPStyle.blue)
             }.buttonStyle(.plain)
         }
-        .accessibilityIdentifier("cityMVP.mePage")
+        .accessibilityIdentifier("cityMVP.passportPage")
     }
 
     private func label(_ english: String, _ chinese: String) -> String {
