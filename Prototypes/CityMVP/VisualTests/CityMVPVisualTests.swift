@@ -72,6 +72,41 @@ final class CityMVPVisualTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalFriendsAndTypedMapSearch() {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+
+        let passport = app.buttons["cityMVP.tab.passport"]
+        XCTAssertTrue(passport.waitForExistence(timeout: 15))
+        passport.tap()
+        let friends = app.buttons["cityMVP.passport.friends"]
+        XCTAssertTrue(friends.waitForExistence(timeout: 5))
+        friends.tap()
+        let offlineStatus = app.staticTexts["cityMVP.friends.offline"]
+        XCTAssertTrue(offlineStatus.waitForExistence(timeout: 5))
+        app.buttons["cityMVP.friends.done"].tap()
+        XCTAssertTrue(offlineStatus.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(friends.isHittable)
+
+        app.buttons["cityMVP.passport.trips"].tap()
+        let tripPassport = app.buttons["root.passport"]
+        XCTAssertTrue(tripPassport.waitForExistence(timeout: 5))
+        tripPassport.tap()
+        XCTAssertTrue(friends.waitForExistence(timeout: 5))
+
+        app.buttons["搜尋 Search"].tap()
+        XCTAssertTrue(app.textFields["map.search.input"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Talk to Savvy"].exists)
+        app.buttons["map.search.close"].tap()
+
+        let mapFriends = app.buttons["cityMVP.friends"]
+        XCTAssertTrue(mapFriends.waitForExistence(timeout: 8))
+        mapFriends.tap()
+        XCTAssertTrue(offlineStatus.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testNativePinchKeepsLandmarkSelectedAcrossDistrict() {
         continueAfterFailure = false
         let app = XCUIApplication()

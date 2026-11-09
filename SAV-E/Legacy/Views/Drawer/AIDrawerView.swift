@@ -491,6 +491,7 @@ struct AIDrawerView: View {
             .accessibilityLabel(languageSettings.localized(english: "Ask Savvy", traditionalChinese: "詢問 Savvy"))
             .accessibilityIdentifier("drawer.submitCommand")
         } else {
+#if !SAVVY_CITY_MVP
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
                     .font(.subheadline.weight(.bold))
@@ -508,6 +509,7 @@ struct AIDrawerView: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(voiceQuery.isListening ? "Stop talking to Savvy" : "Talk to Savvy")
+#endif
 
             PassportDrawerButton(
                 fill: commandIconFill,

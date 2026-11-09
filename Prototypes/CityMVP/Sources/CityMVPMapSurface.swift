@@ -257,22 +257,7 @@ struct CityMVPMapSurface<AppleMap: View>: View {
                 .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showsFriends) {
-            NavigationStack {
-                VStack(spacing: 18) {
-                    Image(systemName: "person.2.circle.fill")
-                        .font(.system(size: 56)).foregroundStyle(CityMVPStyle.ink)
-                    Text("還沒有朋友推薦").font(.system(size: 25, weight: .bold))
-                    Text("朋友分享地點後，可以從頭像查看他的推薦。\n你確認收藏後，才會放進自己的清單。")
-                        .multilineTextAlignment(.center).foregroundStyle(CityMVPStyle.muted)
-                    Text("本地測試版尚未連接朋友資料")
-                        .font(.footnote).foregroundStyle(CityMVPStyle.muted)
-                }
-                .padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(CityMVPStyle.canvas)
-                .navigationTitle("朋友推薦")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showsFriends = false } } }
-            }.presentationDetents([.medium])
+            CityMVPFriendsSheet()
         }
         .sheet(isPresented: $showsPlaces) {
             NavigationStack {

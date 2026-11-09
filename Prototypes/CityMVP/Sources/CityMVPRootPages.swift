@@ -48,29 +48,73 @@ struct CityMVPSavedPage: View {
 
 struct CityMVPMePage: View {
     let savedCount: Int
-    let onFriends: () -> Void
     let onTrips: () -> Void
     @Environment(\.appLanguageSettings) private var language
+    @State private var showsFriends = false
 
     var body: some View {
         CityMVPPage(title: label("Passport", "護照"), subtitle: label("Your Savvy map", "你的 Savvy 地圖")) {
             CityMVPPageRow(symbol: "person.crop.circle.fill", title: label("Local preview", "本地測試版"),
                            subtitle: label("\(savedCount) saved places", "\(savedCount) 個收藏"),
                            tint: CityMVPStyle.blue, showsChevron: false)
-            Button(action: onFriends) {
+            Button { showsFriends = true } label: {
                 CityMVPPageRow(symbol: "person.2", title: label("Friends", "朋友"),
                                subtitle: label("Shared recommendations", "朋友分享的推薦"), tint: CityMVPStyle.blue)
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("cityMVP.passport.friends")
             Button(action: onTrips) {
                 CityMVPPageRow(symbol: "suitcase", title: label("Trips", "行程"),
                                subtitle: label("Your trip plans", "你的旅行計畫"), tint: CityMVPStyle.blue)
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("cityMVP.passport.trips")
         }
         .accessibilityIdentifier("cityMVP.passportPage")
+        .sheet(isPresented: $showsFriends) { CityMVPFriendsSheet() }
     }
 
     private func label(_ english: String, _ chinese: String) -> String {
         language.localized(english: english, traditionalChinese: chinese)
+    }
+}
+
+struct CityMVPFriendsSheet: View {
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 18) {
+                Image(systemName: "person.2.circle.fill")
+                    .font(.system(size: 56)).foregroundStyle(CityMVPStyle.ink)
+                    .accessibilityHidden(true)
+                Text(language.localized(english: "No friend recommendations yet", traditionalChinese: "還沒有朋友推薦"))
+                    .font(.system(size: 25, weight: .bold))
+                Text(language.localized(
+                    english: "When friends share places, tap their avatar to see what they recommend. Places join your list after you save them.",
+                    traditionalChinese: "朋友分享地點後，可以從頭像查看他的推薦。你確認收藏後，才會放進自己的清單。"
+                ))
+                .multilineTextAlignment(.center).foregroundStyle(CityMVPStyle.muted)
+                Text(language.localized(
+                    english: "Friends are offline in this preview",
+                    traditionalChinese: "本地測試版尚未連接朋友資料"
+                ))
+                .font(.footnote).foregroundStyle(CityMVPStyle.muted)
+                .accessibilityIdentifier("cityMVP.friends.offline")
+            }
+            .padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(CityMVPStyle.canvas)
+            .navigationTitle(language.localized(english: "Friend recommendations", traditionalChinese: "朋友推薦"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(language.localized(english: "Done", traditionalChinese: "完成")) { dismiss() }
+                        .accessibilityIdentifier("cityMVP.friends.done")
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

@@ -708,19 +708,8 @@ struct ContentView: View {
                             )
                         case .map:
                             MapView(viewModel: mapVM, shouldFocusOnUserLocationOnLaunch: false)
-                        case .friends:
-                            SaveFriendsView(
-                                currentUserID: PrivyAuthService.shared.currentUserId,
-                                onSaved: { await mapVM.loadPlaces(force: true) },
-                                onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
-                                onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
-                                // Invite / 邀請: ProfileView.requestsConnections
-                                // presents PassportConnectionsView (Friends section).
-                                onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
-                            )
-                        case .profile:
+                        case .profile, .friends:
                             CityMVPMePage(savedCount: mapVM.places.count,
-                                          onFriends: { selectRootTab(.friends) },
                                           onTrips: { rootPath = [.trips] })
                         case .capture:
                             // Unreachable: `.capture` is a control, and
@@ -1468,7 +1457,11 @@ struct ContentView: View {
         case .rootSheet:
             isRootSheetPresented = true
         case .passport:
+#if SAVVY_CITY_MVP
+            selectRootTab(.profile)
+#else
             isPassportPresented = true
+#endif
         case .savedPlaceLimitPaywall:
             showSavedPlaceLimitPaywall = true
         case .cover(let route):
