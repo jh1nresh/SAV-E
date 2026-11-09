@@ -16,7 +16,7 @@ Keep SAV-E's two Google import paths separate so saved-list link work does not b
 ### Google Takeout Bulk Import
 
 - Trigger: native file picker for `.zip`, `.json`, `.geojson`, or `.kml` Google Takeout exports.
-- Primary code: `SAV-E/Views/Import/GoogleTakeoutImportView.swift`, `SAV-E/Services/GoogleTakeoutImportService.swift`, and `SAV-E/Models/GoogleTakeoutImport.swift`.
+- Primary code: `SAV-E/Legacy/Views/Import/GoogleTakeoutImportView.swift`, `SAV-E/Services/GoogleTakeoutImportService.swift`, and `SAV-E/Models/GoogleTakeoutImport.swift`.
 - Output: ready-to-save imported drafts plus review drafts.
 - Rule: only drafts with reliable coordinates become saved map places.
 

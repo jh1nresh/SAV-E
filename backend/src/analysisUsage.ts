@@ -69,12 +69,13 @@ export class AnalysisUsageStore {
     catch (error) { await client.query("rollback"); throw error; }
     finally { client.release(); }
   }
-  async start(userId: string, id: string, clientEventsExpected = true): Promise<string> {
+  async start(userId: string, id: string, clientEventsExpected = true, mustCreate = false): Promise<string> {
     id = analysisID(id);
     return this.transaction(async client => {
       const existing = await client.query("select user_id, finished_at from analysis_sessions where id=$1", [id]);
       if (existing.rows[0]) {
         if (existing.rows[0].user_id !== userId) throw new AnalysisControlError(404,"analysis_not_found","Analysis not found");
+        if (mustCreate) throw new AnalysisControlError(409,"analysis_conflict","Analysis identifier is already in use");
         if (existing.rows[0].finished_at) throw new AnalysisControlError(409,"analysis_closed","Analysis is already complete");
         return id;
       }

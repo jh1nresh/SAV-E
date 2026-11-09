@@ -51,6 +51,7 @@ create table public.places (
     google_rating double precision,
     google_price_level integer,
     opening_hours text,
+    memory_meta jsonb,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -58,6 +59,10 @@ create table public.places (
 alter table public.places enable row level security;
 
 alter table public.places add column if not exists business_photo_urls text[] default '{}';
+alter table public.places add column if not exists memory_meta jsonb;
+alter table public.places drop constraint if exists places_memory_meta_object;
+alter table public.places add constraint places_memory_meta_object
+    check (memory_meta is null or jsonb_typeof(memory_meta) = 'object');
 
 create index idx_places_user_id on public.places(user_id);
 create index idx_places_category on public.places(category);

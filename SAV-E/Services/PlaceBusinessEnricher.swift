@@ -8,6 +8,7 @@ import CoreLocation
 enum PlaceBusinessEnricher {
     struct Update {
         let photoURLs: [URL]
+        let photoRecords: [GooglePlacePhotoRecord]
         let rating: Double?
         let priceRange: String?
         let openingHours: String?
@@ -33,12 +34,17 @@ enum PlaceBusinessEnricher {
     static func enrich(
         _ place: Place,
         service: GooglePlacesServiceProtocol = GooglePlacesService.shared,
-        refreshPhotos: Bool = false
+        refreshPhotos: Bool = false,
+        mapsPlatformAllowed: Bool = GoogleMapsPlatformAvailability.isAllowed()
     ) async -> Place? {
+        guard mapsPlatformAllowed else { return nil }
         guard refreshPhotos || needsEnrichment(place) else { return nil }
         guard let update = await businessDetails(for: place, service: service) else { return nil }
 
         var updated = place
+        if !update.photoRecords.isEmpty {
+            GooglePlacePhotoSessionStore.remember(update.photoRecords)
+        }
         if !update.photoURLs.isEmpty {
             let urls = update.photoURLs.map(\.absoluteString)
             if refreshPhotos || update.replacedProviderMatch {
@@ -67,9 +73,14 @@ enum PlaceBusinessEnricher {
     /// new photos were found. Never throws — safe for fire-and-forget `.task`.
     static func candidatePhotoURLs(
         for candidate: SaveMapCandidate,
-        service: GooglePlacesServiceProtocol = GooglePlacesService.shared
+        service: GooglePlacesServiceProtocol = GooglePlacesService.shared,
+        mapsPlatformAllowed: Bool = GoogleMapsPlatformAvailability.isAllowed()
     ) async -> [String]? {
-        let urls = await enrichedCandidate(candidate, service: service)?.businessPhotoURLs
+        let urls = await enrichedCandidate(
+            candidate,
+            service: service,
+            mapsPlatformAllowed: mapsPlatformAllowed
+        )?.businessPhotoURLs
         return urls?.isEmpty == false ? urls : nil
     }
 
@@ -81,8 +92,10 @@ enum PlaceBusinessEnricher {
     /// full-screen detail) can enrich without depending on map selection state.
     static func enrichedCandidate(
         _ candidate: SaveMapCandidate,
-        service: GooglePlacesServiceProtocol = GooglePlacesService.shared
+        service: GooglePlacesServiceProtocol = GooglePlacesService.shared,
+        mapsPlatformAllowed: Bool = GoogleMapsPlatformAvailability.isAllowed()
     ) async -> SaveMapCandidate? {
+        guard mapsPlatformAllowed else { return nil }
         let coordinate = CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude)
         guard let match = await bestGoogleMatch(
             name: candidate.title,
@@ -92,13 +105,20 @@ enum PlaceBusinessEnricher {
         ) else { return nil }
 
         let details = try? await service.getPlaceDetails(placeId: match.id)
-        let photoReferences = details?.photoReferences?.isEmpty == false
-            ? details?.photoReferences ?? []
-            : [match.photoReference].compactMap { $0 }
-        let photoURLs = photoReferences
-            .prefix(6)
-            .compactMap { service.photoURL(reference: $0, maxWidth: 900) }
-            .map(\.absoluteString)
+        let mapsURI = GooglePlacesHTMLAttribution.mapsURL(
+            placeId: details?.placeId ?? match.id,
+            explicit: details?.googleMapsUri
+        )
+        let photoRecords = sessionPhotoRecords(
+            details: details,
+            fallbackReference: match.photoReference,
+            mapsURI: mapsURI,
+            service: service
+        )
+        if !photoRecords.isEmpty {
+            GooglePlacePhotoSessionStore.remember(photoRecords)
+        }
+        let photoURLs = photoRecords.map(\.url.absoluteString)
         let rating = details?.rating ?? match.rating
         let priceLevel = details?.priceLevel ?? match.priceLevel
         let openingHours = details?.openingHours?.first
@@ -175,12 +195,21 @@ enum PlaceBusinessEnricher {
             fallbackMatch = match
         }
 
-        let photoReferences = details?.photoReferences?.isEmpty == false
-            ? details?.photoReferences ?? []
-            : [fallbackMatch?.photoReference].compactMap { $0 }
-        let photoURLs = photoReferences
-            .prefix(6)
-            .compactMap { service.photoURL(reference: $0, maxWidth: 900) }
+        let resolvedGooglePlaceId = details.flatMap { value -> String? in
+            let trimmed = value.placeId.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        } ?? fallbackMatch?.id
+        let mapsURI = GooglePlacesHTMLAttribution.mapsURL(
+            placeId: resolvedGooglePlaceId,
+            explicit: details?.googleMapsUri
+        )
+        let photoRecords = sessionPhotoRecords(
+            details: details,
+            fallbackReference: fallbackMatch?.photoReference,
+            mapsURI: mapsURI,
+            service: service
+        )
+        let photoURLs = photoRecords.map(\.url)
         let priceLevel = details?.priceLevel ?? fallbackMatch?.priceLevel
         let hasDetails = !photoURLs.isEmpty ||
             details?.rating != nil ||
@@ -189,21 +218,47 @@ enum PlaceBusinessEnricher {
             details?.openingHours?.isEmpty == false
         guard hasDetails else { return nil }
 
-        let resolvedGooglePlaceId = details.flatMap { value -> String? in
-            let trimmed = value.placeId.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
-        } ?? fallbackMatch?.id
         let replacedProviderMatch = place.googlePlaceId != nil
             && resolvedGooglePlaceId != place.googlePlaceId
 
         return Update(
             photoURLs: photoURLs,
+            photoRecords: photoRecords,
             rating: details?.rating ?? fallbackMatch?.rating,
             priceRange: priceLevel.map { String(repeating: "$", count: max(1, $0)) },
             openingHours: details?.openingHours?.first,
             resolvedGooglePlaceId: resolvedGooglePlaceId,
             replacedProviderMatch: replacedProviderMatch
         )
+    }
+
+    private static func sessionPhotoRecords(
+        details: GooglePlaceDetails?,
+        fallbackReference: String?,
+        mapsURI: URL?,
+        service: GooglePlacesServiceProtocol
+    ) -> [GooglePlacePhotoRecord] {
+        let photos: [GooglePlacePhoto]
+        if let detailed = details?.photos, !detailed.isEmpty {
+            photos = Array(detailed.prefix(6))
+        } else if let references = details?.photoReferences, !references.isEmpty {
+            photos = references.prefix(6).map { GooglePlacePhoto(photoReference: $0) }
+        } else if let fallbackReference {
+            photos = [GooglePlacePhoto(photoReference: fallbackReference)]
+        } else {
+            photos = []
+        }
+
+        return photos.compactMap { photo in
+            guard let url = service.photoURL(reference: photo.photoReference, maxWidth: 900) else {
+                return nil
+            }
+            return GooglePlacePhotoRecord(
+                url: url,
+                authors: GooglePlacesHTMLAttribution.authors(from: photo.htmlAttributions),
+                googleMapsURI: mapsURI
+            )
+        }
     }
 
     private static func bestGoogleMatch(

@@ -17,7 +17,8 @@ Examples (from backend/):
 
 SSL: drops only sslmode= from DATABASE_URL (pooler URLs often carry
 sslmode=no-verify, which modern libpq rejects) and invokes
-  PGSSLMODE=require psql <rewritten-url> -v ON_ERROR_STOP=1 -1 -f sql/<file>
+  PGSSLMODE=require psql <rewritten-url> -v ON_ERROR_STOP=1 -1 \
+    -c "set search_path to public" -f sql/<file>
 from backend/. Other query params (options, target_session_attrs, …) are kept.
 --apply uses this script's absolute sql path, so cwd does not matter.
 
@@ -171,7 +172,7 @@ case "$sslmode" in
     ;;
 esac
 
-echo "psql: (from backend/) PGSSLMODE=${sslmode} psql <url, sslmode query dropped> -v ON_ERROR_STOP=1 -1 -f sql/${base}"
+echo "psql: (from backend/) PGSSLMODE=${sslmode} psql <url, sslmode query dropped> -v ON_ERROR_STOP=1 -1 -c \"set search_path to public\" -f sql/${base}"
 
 if [[ "$apply" -eq 0 ]]; then
   echo "dry-read only; pass --apply to execute (requires DATABASE_URL)"
@@ -190,4 +191,4 @@ fi
 
 url="$(psql_url "$DATABASE_URL")"
 echo "applying (URL redacted)…"
-PGSSLMODE="$sslmode" psql "$url" -v ON_ERROR_STOP=1 -1 -f "$sql_file"
+PGSSLMODE="$sslmode" psql "$url" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f "$sql_file"

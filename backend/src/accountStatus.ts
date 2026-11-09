@@ -99,8 +99,8 @@ export async function evaluateAccountStatusRequest(
   let subject: string;
   try {
     subject = await dependencies.verifySubject(token);
-  } catch {
-    return { statusCode: 401, body: { error: "Unauthorized" } };
+  } catch (error) {
+    return subjectVerificationFailure(error);
   }
 
   const secret = dependencies.accountRefSecret?.trim();
@@ -136,8 +136,8 @@ export async function evaluateAccountConfirmationRequest(
   let subject: string;
   try {
     subject = await dependencies.verifySubject(token);
-  } catch {
-    return { statusCode: 401, body: { error: "Unauthorized" } };
+  } catch (error) {
+    return subjectVerificationFailure(error);
   }
 
   const expectedAccountRef = dependencies.expectedAccountRef;
@@ -356,6 +356,17 @@ export async function resolveProfileSubject(
       && rawBinding !== subject
     ),
   };
+}
+
+function subjectVerificationFailure(error: unknown): AccountStatusHttpResult {
+  const status = error && typeof error === "object" && "status" in error
+    && typeof (error as { status: unknown }).status === "number"
+    ? (error as { status: number }).status
+    : 401;
+  if (status === 503) {
+    return { statusCode: 503, body: { error: "Account verification unavailable" } };
+  }
+  return { statusCode: 401, body: { error: "Unauthorized" } };
 }
 
 function bearerToken(header: string | string[] | undefined): string | undefined {

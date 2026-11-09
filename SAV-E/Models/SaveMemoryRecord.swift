@@ -35,10 +35,18 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var status: PlaceStatus?
     var rating: Double?
     var createdAt: Date
+    var semanticSource: SemanticSourceIdentity?
     var googlePlaceId: String?
+    var coordinateSystem: PlaceCoordinateSystem?
+    var locationProvider: PlaceMatchProvider?
+    var providerPlaceId: String?
+    var providerMapUrl: String?
     var sourceImageUrl: String?
     var businessPhotoUrls: [String]?
     var mergedPlaceIDs: [UUID]?
+    var ownerSubject: String?
+    // Parked candidates and explicit local review decisions retain their full context.
+    var parkedReviewCandidate: PlaceReviewCandidate? = nil
 
     init(
         id: UUID = UUID(),
@@ -62,9 +70,15 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         rating: Double? = nil,
         createdAt: Date = Date(),
         googlePlaceId: String? = nil,
+        coordinateSystem: PlaceCoordinateSystem? = nil,
+        locationProvider: PlaceMatchProvider? = nil,
+        providerPlaceId: String? = nil,
+        providerMapUrl: String? = nil,
         sourceImageUrl: String? = nil,
         businessPhotoUrls: [String]? = nil,
-        mergedPlaceIDs: [UUID]? = nil
+        mergedPlaceIDs: [UUID]? = nil,
+        semanticSource: SemanticSourceIdentity? = nil,
+        ownerSubject: String? = nil
     ) {
         self.id = id
         self.state = state
@@ -80,17 +94,23 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
-        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
+        self.sourceHandle = SaveSourceHandle.stored(sourceHandle) ?? extracted.sourceHandle
         self.latitude = latitude
         self.longitude = longitude
         self.category = category
         self.status = status
         self.rating = rating
         self.createdAt = createdAt
+        self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
+        self.coordinateSystem = coordinateSystem
+        self.locationProvider = locationProvider
+        self.providerPlaceId = providerPlaceId
+        self.providerMapUrl = providerMapUrl
         self.sourceImageUrl = GooglePlacesPhotoURL.persistableString(sourceImageUrl)
         self.businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls)
         self.mergedPlaceIDs = mergedPlaceIDs
+        self.ownerSubject = ownerSubject
     }
 
     nonisolated var displayTitle: String {
@@ -120,10 +140,17 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case status
         case rating
         case createdAt
+        case semanticSource
         case googlePlaceId
+        case coordinateSystem
+        case locationProvider
+        case providerPlaceId
+        case providerMapUrl
         case sourceImageUrl
         case businessPhotoUrls
         case mergedPlaceIDs
+        case ownerSubject
+        case parkedReviewCandidate
     }
 
     init(from decoder: Decoder) throws {
@@ -143,19 +170,28 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
+        ) ?? extracted.sourceHandle
         latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
         category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
         status = try container.decodeIfPresent(PlaceStatus.self, forKey: .status)
         rating = try container.decodeIfPresent(Double.self, forKey: .rating)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
+        coordinateSystem = try container.decodeIfPresent(PlaceCoordinateSystem.self, forKey: .coordinateSystem)
+        locationProvider = try container.decodeIfPresent(PlaceMatchProvider.self, forKey: .locationProvider)
+        providerPlaceId = try container.decodeIfPresent(String.self, forKey: .providerPlaceId)
+        providerMapUrl = try container.decodeIfPresent(String.self, forKey: .providerMapUrl)
         sourceImageUrl = GooglePlacesPhotoURL.persistableString(
             try container.decodeIfPresent(String.self, forKey: .sourceImageUrl)
         )
         businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(
             try container.decodeIfPresent([String].self, forKey: .businessPhotoUrls)
         )
+        ownerSubject = try container.decodeIfPresent(String.self, forKey: .ownerSubject)
+        parkedReviewCandidate = try container.decodeIfPresent(PlaceReviewCandidate.self, forKey: .parkedReviewCandidate)
     }
 }

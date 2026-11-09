@@ -1,3 +1,5 @@
+// Historical parser fixtures exercise the retained non-social/legacy helper.
+// socialSemanticRecovery.test.ts covers the production social routing contract.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AnalysisControlError, withAnalysisUsage, type AnalysisUsageStore } from "./analysisUsage.js";
@@ -11,7 +13,7 @@ import {
   parseDuckDuckGoResults,
   parsePersistedSourceResolution,
   resolveSourceDocument,
-  runSourceSearchRecovery,
+  runLegacySourceSearchRecovery as runSourceSearchRecovery,
   sourceResolutionResponseBody,
   searchPublicWebResults,
 } from "./sourceSearchWorker.js";
@@ -72,7 +74,7 @@ test("defaultFetchMetadataHTML reads social metadata without failing on large pa
 test("defaultFetchMetadataHTML follows safe social short-link redirects", async () => {
   const html = `<!doctype html><html><head>
     <meta name="description" content="【京都 先斗町】 先斗町しゃぶしゃぶすき焼き きらく 位于京都先斗町的人气和牛寿喜烧名店。地址：京都府京都市中京区先斗町通四条上る柏屋町169-2">
-  </head><body>${"x".repeat(1_000_000)}</body></html>`;
+  </head><body><script>{"caption":{"text":"完整原文店名與地址"}}</script></body></html>`;
   const seen: string[] = [];
   const fetcher = async (url: string | URL | Request) => {
     const value = url.toString();
@@ -94,7 +96,7 @@ test("defaultFetchMetadataHTML follows safe social short-link redirects", async 
     "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00",
   ]);
   assert.match(head, /先斗町しゃぶしゃぶすき焼き きらく/);
-  assert.doesNotMatch(head, /x{1000}/);
+  assert.match(head, /完整原文店名與地址/);
 });
 
 test("defaultFetchMetadataHTML blocks redirects to private hosts", async () => {
@@ -163,6 +165,63 @@ test("source resolution caches successful short-link documents", async () => {
   assert.equal(first.resolution.status, "resolved");
   assert.deepEqual(second, first);
   assert.equal(fetchCount, 1);
+});
+
+test("Instagram retry refetches a resolved empty shell instead of retaining it for 24 hours", async () => {
+  const sourceURL = "https://www.instagram.com/reel/EmptyRetryFixture/";
+  let calls = 0;
+  const fetcher = async () => new Response(++calls === 1
+    ? '<html><head><title>Instagram</title></head></html>'
+    : '<html><head><meta property="og:description" content="Fixture Cafe at 12 Main Street"></head></html>');
+  const first = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+  assert.equal(first.resolution.caption, undefined);
+  const retry = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+  assert.equal(retry.resolution.caption, "Fixture Cafe at 12 Main Street");
+  assert.equal(calls, 2, "a second attempt must reach the source after an empty shell");
+  assert.deepEqual(await resolveSourceDocument(sourceURL, 512_000, fetcher), retry);
+  assert.equal(calls, 2, "the recovered caption should still use the successful cache");
+});
+
+test("social platform retries refetch empty shells and cache only recovered captions", async () => {
+  for (const sourceURL of [
+    "https://xhslink.com/EmptyRetryFixture",
+    "https://v.douyin.com/EmptyRetryFixture/",
+    "https://www.tiktok.com/@fixture/video/123456789",
+    "https://www.threads.net/@fixture/post/EmptyRetryFixture",
+    "https://www.dianping.com/shop/EmptyRetryFixture",
+  ]) {
+    let calls = 0;
+    const fetcher = async () => new Response(++calls === 1
+      ? '<html><head><title>Public platform</title></head></html>'
+      : '<html><head><meta property="og:description" content="Fixture Cafe at 12 Main Street"></head></html>');
+    const first = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+    assert.equal(first.resolution.caption, undefined);
+    const retry = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+    assert.equal(retry.resolution.caption, "Fixture Cafe at 12 Main Street", sourceURL);
+    assert.equal(calls, 2, "empty public shell must not be cached for 24 hours");
+    assert.deepEqual(await resolveSourceDocument(sourceURL, 512_000, fetcher), retry);
+    assert.equal(calls, 2, "successful caption still reuses the bounded cache");
+  }
+});
+
+test("Instagram title-only and thumbnail-only responses cannot suppress a later source fetch", async () => {
+  const shells = [
+    '<title>Fixture creator on Instagram</title>',
+    '<meta property="og:image" content="https://example.com/fixture.jpg">',
+    '<meta property="og:description" content="Log in to Instagram">',
+  ];
+  for (const [index, shell] of shells.entries()) {
+    const sourceURL = `https://www.instagram.com/reel/ThinRetryFixture${index}/?stkn=redacted`;
+    let calls = 0;
+    const fetcher = async () => {
+      calls++;
+      if (calls === 1) return new Response(`<html><head>${shell}</head></html>`);
+      throw new AnalysisControlError(429, "analysis_limit_exceeded", "fixture limit");
+    };
+    await resolveSourceDocument(sourceURL, 512_000, fetcher);
+    await assert.rejects(resolveSourceDocument(sourceURL, 512_000, fetcher), AnalysisControlError);
+    assert.equal(calls, 2, "retry must retain admission failures instead of reusing an empty shell");
+  }
 });
 
 test("source resolution cache keeps fragment merchant ids isolated", async () => {
@@ -1436,4 +1495,108 @@ test("retry of a persisted Reel recovers caption even when the old title was cre
   );
   assert.equal(output.queries[0], '"日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃" place');
   assert.deepEqual(output.candidates, []);
+});
+
+test("video fallback upgrades the reported source-only Reel from its late storefront frame", async () => {
+  const sourceUrl = "https://www.instagram.com/reel/DcTZXFrjfJG/";
+  let videoCalls = 0;
+  const output = await runSourceSearchRecovery({ sourceUrl },
+    async url => url.includes("instagram.com") ? reportedReelMetadata : "", async () => [], {
+      videoVenueRecovery: async url => {
+        assert.equal(url, sourceUrl); videoCalls += 1;
+        return [{ name: "江牛樓", quote: "江牛樓", timestampSeconds: 24 }];
+      },
+      placesCorroborator: async candidate => {
+        assert.equal(candidate.name, "江牛樓");
+        return { name: "江牛樓", address: "臺北市大同區民樂街6號", latitude: 25.054, longitude: 121.51 };
+      },
+      rubricEvaluator: () => ({ confidenceReason: "Test fixture corroboration", evidenceTier: "corroborated", missingInfo: ["User confirmation"] }),
+    });
+  assert.equal(videoCalls, 1);
+  assert.equal(output.candidates[0]?.name, "江牛樓");
+  assert.ok(output.candidates[0]?.evidence.includes("Video frame at 24s: 江牛樓"));
+  assert.ok(output.candidates[0]?.missingInfo.some(item => /User confirmation/.test(item)));
+  assert.equal(output.receipt.output, "review_candidate");
+  assert.equal(output.mediaEvidence[0]?.textSource, "vision");
+});
+
+test("video fallback uses the resolved Reel URL when the stored source is a share route", async () => {
+  const shareUrl = "https://www.instagram.com/share/reel/ShareCode/";
+  const resolvedUrl = "https://www.instagram.com/reel/DcTZXFrjfJG/";
+  let videoCalls = 0;
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: shareUrl },
+    async () => "",
+    async () => [],
+    {
+      persistedSourceResolution: {
+        original_url: shareUrl,
+        resolved_url: resolvedUrl,
+        redirect_chain: [shareUrl, resolvedUrl],
+        status: "resolved",
+        title: "Wendy三分熟 (@wendyismediumrare) • Instagram reel",
+        caption: '177 likes, 2 comments - wendyismediumrare on August 21, 2026: "日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃 #台北牛肉麵推薦".',
+      },
+      videoVenueRecovery: async url => {
+        assert.equal(url, resolvedUrl);
+        videoCalls += 1;
+        return [{ name: "江牛樓", quote: "江牛樓", timestampSeconds: 24 }];
+      },
+      placesCorroborator: async candidate => {
+        assert.equal(candidate.name, "江牛樓");
+        return { name: "江牛樓", address: "臺北市大同區民樂街6號", latitude: 25.054, longitude: 121.51 };
+      },
+      rubricEvaluator: () => ({ confidenceReason: "Test fixture corroboration", evidenceTier: "corroborated", missingInfo: ["User confirmation"] }),
+    },
+  );
+  assert.equal(videoCalls, 1);
+  assert.equal(output.candidates[0]?.name, "江牛樓");
+  assert.ok(output.candidates[0]?.evidence.includes(`Source video: ${resolvedUrl}`));
+  assert.ok(!output.candidates[0]?.evidence.some(item => item.includes("/share/reel/")));
+  assert.equal(output.mediaEvidence[0]?.url, resolvedUrl);
+  assert.equal(output.mediaEvidence[0]?.kind, "video_keyframe");
+  assert.equal(output.mediaEvidence[0]?.textSource, "vision");
+  assert.equal(output.receipt.output, "review_candidate");
+});
+
+test("video fallback does no work when media is disabled or metadata already names a venue", async () => {
+  for (const includeMediaEvidence of [false, true]) {
+    let calls = 0;
+    await runSourceSearchRecovery({sourceUrl: "https://www.instagram.com/reel/AlreadyNamed/"},
+      async url => url.includes("instagram.com")
+        ? '<meta property="og:description" content="店名：江牛樓 地址：台北市大同區民樂街6號">' : "",
+      async () => [], {
+        includeMediaEvidence,
+        videoVenueRecovery: async () => { calls += 1; return []; },
+        placesCorroborator: async () => undefined,
+        rubricEvaluator: () => ({ confidenceReason: "Source", evidenceTier: "weak", missingInfo: ["User confirmation"] }),
+      });
+    assert.equal(calls, 0);
+  }
+});
+
+test("video provider failure preserves clue and does not swallow quota denial", async () => {
+  const input = {sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/"};
+  const options = {videoVenueRecovery: async (): Promise<never> => { throw new Error("private upstream detail"); }};
+  const output = await runSourceSearchRecovery(input, async () => "", async () => [], options);
+  assert.equal(output.receipt.output, "source_only_clue");
+  assert.deepEqual(output.receipt.failureReason, {kind:"provider_failure",stage:"media"});
+  assert.ok(!JSON.stringify(output).includes("private upstream detail"));
+  const denied = new AnalysisControlError(429,"analysis_budget_exceeded","Budget exceeded");
+  await assert.rejects(runSourceSearchRecovery(input, async () => "", async () => [], {
+    videoVenueRecovery: async () => { throw denied; },
+  }), error => error === denied);
+});
+
+test("source-only media opt-out never invokes video recovery", async () => {
+  let calls = 0;
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/" },
+    async () => "", async () => [], {
+      includeMediaEvidence: false,
+      videoVenueRecovery: async () => { calls += 1; return []; },
+    },
+  );
+  assert.equal(output.receipt.output, "source_only_clue");
+  assert.equal(calls, 0);
 });

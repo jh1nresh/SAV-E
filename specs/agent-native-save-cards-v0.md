@@ -22,7 +22,7 @@ The repo already has most raw pieces:
   - `SAV-E/Services/SaveLocalVaultService.swift`
   - `SAV-E/Intents/SavePlaceFromURLIntent.swift`
   - `SAV-E/Intents/AskSaveMemoryIntent.swift`
-  - `SAV-E/Views/Profile/SaveMemoryDebugView.swift`
+  - `SAV-E/Legacy/Views/Profile/SaveMemoryDebugView.swift`
 - Social/link candidate parser:
   - `SAV-E/Services/SocialLinkReviewCandidateService.swift`
   - `SAV-E/Services/PendingPlaceImportService.swift`

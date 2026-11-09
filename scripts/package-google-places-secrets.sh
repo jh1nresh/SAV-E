@@ -35,6 +35,9 @@ esac
 plutil -lint "$source_path" >/dev/null 2>&1 || fail "The selected secrets file is not a valid plist."
 
 if [[ "$CONFIGURATION" == "Release" ]]; then
+  [[ -n "${SAVE_EXPECTED_API_URL:-}" ]] || fail "Release requires SAVE_EXPECTED_API_URL from the verified deployment target."
+  python3 "$(dirname "$0")/verify-release-api.py" \
+    --plist "$source_path" --expected "$SAVE_EXPECTED_API_URL"
   key_type="$(plutil -type GOOGLE_PLACES_API_KEY "$source_path" 2>/dev/null || true)"
   [[ "$key_type" == "string" ]] || fail "Release secrets must contain GOOGLE_PLACES_API_KEY as a string."
 

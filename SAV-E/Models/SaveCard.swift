@@ -98,7 +98,9 @@ extension SaveCardPlace {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
+        ) ?? extracted.sourceHandle
     }
 }
 

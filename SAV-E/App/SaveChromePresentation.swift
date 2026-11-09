@@ -13,6 +13,7 @@ enum SaveChromeExclusive: Equatable {
     case passport
     case cover
     case tripComposer
+    case savedPlaceLimitPaywall
 }
 
 enum SaveChromeTransition: Equatable {
@@ -25,12 +26,14 @@ enum SaveChromeNavigation {
         hasCover: Bool,
         isTripComposerPresented: Bool,
         isPassportPresented: Bool,
-        isRootSheetPresented: Bool
+        isRootSheetPresented: Bool,
+        isSavedPlaceLimitPaywallPresented: Bool = false
     ) -> SaveChromeExclusive {
         if hasCover { return .cover }
         if isTripComposerPresented { return .tripComposer }
         if isPassportPresented { return .passport }
         if isRootSheetPresented { return .rootSheet }
+        if isSavedPlaceLimitPaywallPresented { return .savedPlaceLimitPaywall }
         return .none
     }
 
@@ -57,7 +60,8 @@ enum SaveChromeNavigation {
         []
     }
 
-    /// Opening Saves or Trips replaces a stale child instead of stacking.
+    /// Opening Saves replaces a stale child. Opening Trips from Saves keeps
+    /// Saves as the back destination; opening Trips from Home replaces.
     static func pathByOpening(
         _ route: SaveRootRoute,
         currently path: [SaveRootRoute]
@@ -68,7 +72,7 @@ enum SaveChromeNavigation {
         case .captureResults:
             return [route]
         case .trips:
-            return [.trips]
+            return path.contains(.saves) ? [.saves, .trips] : [.trips]
         case .plan:
             return path.contains(.trips) ? [.trips, .plan] : [.plan]
         case .trip(let tripID):

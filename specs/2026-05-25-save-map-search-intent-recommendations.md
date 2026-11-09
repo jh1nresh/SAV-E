@@ -150,9 +150,9 @@ Build V0 as local-first and saved-memory-first.
 Relevant files inspected:
 
 ```text
-SAV-E/Views/Map/MapView.swift
+SAV-E/Legacy/Views/Map/MapView.swift
 SAV-E/ViewModels/MapViewModel.swift
-SAV-E/Views/Drawer/AIDrawerView.swift
+SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
 SAV-E/ViewModels/AIDrawerViewModel.swift
 SAV-E/Services/SaveAIService.swift
 ```
@@ -317,7 +317,7 @@ Files likely touched:
 SAV-E/Services/SaveIntentRecommendationService.swift
 SAV-E/ViewModels/AIDrawerViewModel.swift
 SAV-E/Services/SaveAIService.swift
-SAV-E/Views/Drawer/AIDrawerView.swift
+SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
 SAVETests/SaveIntentRecommendationServiceTests.swift
 ```
 
@@ -335,8 +335,8 @@ Files likely touched:
 
 ```text
 SAV-E/Models/SaveAIResponse.swift
-SAV-E/Views/Drawer/AIDrawerView.swift
-SAV-E/Views/Map/MapView.swift
+SAV-E/Legacy/Views/Drawer/AIDrawerView.swift
+SAV-E/Legacy/Views/Map/MapView.swift
 ```
 
 Acceptance:
@@ -355,7 +355,7 @@ Files likely touched:
 ```text
 SAV-E/Services/MapPlaceSearchService.swift
 SAV-E/ViewModels/MapViewModel.swift
-SAV-E/Views/Map/MapView.swift
+SAV-E/Legacy/Views/Map/MapView.swift
 ```
 
 Acceptance:

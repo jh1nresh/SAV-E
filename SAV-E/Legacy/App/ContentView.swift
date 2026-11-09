@@ -1,0 +1,2561 @@
+import SwiftUI
+#if SAVVY_CITY_MVP
+import MapKit
+#endif
+
+/// Primary navigation: Home | Map | + | Friends | Passport.
+/// Capture opens a cover without changing the selected destination.
+/// Saves, Trips and Plan remain child routes; their state stays owned here.
+enum SaveRootTab: Hashable, CaseIterable, Identifiable {
+    case home
+    case map
+    case capture
+    case friends
+    case profile
+
+    var id: Self { self }
+
+    /// `capture` is a control, not a destination. Anything that switches on the
+    /// *displayed* surface should use this instead of `allCases`.
+    static var destinations: [SaveRootTab] {
+        allCases.filter { !$0.isCaptureControl }
+    }
+
+    var isCaptureControl: Bool { self == .capture }
+
+    var atlasTitle: String {
+        switch self {
+        case .home: "Home"
+        case .map: "Map"
+        case .capture: "Save"
+        case .friends: "Friends"
+        case .profile: "Passport"
+        }
+    }
+
+    /// Tab bar glyphs. This is the only icon set — the parallel `systemImage`
+    /// property was dead code (nothing read it) and was deleted rather than
+    /// left to drift.
+    ///
+    /// Quiet line icons (2026-10-14 tab-bar bible): Home house, Map folded
+    /// map, coral + capture, Friends people, Passport booklet. Coral is the
+    /// selected-tab color, not a filled-glyph swap.
+    var atlasIcon: String {
+        switch self {
+        case .home: "house"
+        case .map: "map"
+        case .capture: "plus"
+        case .friends: "person.2"
+        case .profile: "book.closed"
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .home:
+            return language.localized(english: "Home", traditionalChinese: "首頁")
+        case .map:
+            return language.localized(english: "Map", traditionalChinese: "地圖")
+        case .capture:
+            return language.localized(english: "Save", traditionalChinese: "收藏")
+        case .friends:
+            return language.localized(english: "Friends", traditionalChinese: "朋友")
+        case .profile:
+            return language.localized(english: "Passport", traditionalChinese: "護照")
+        }
+    }
+}
+
+enum SaveRootRoute: Hashable {
+    case plan
+    case captureResults([UUID])
+    case trip(UUID)
+    /// The old Saves tab, now a child screen.
+    ///
+    /// W2 removed the Saves *slot* from the root bar but did not merge its
+    /// content into Home — that is still open work. Leaving Home's "Review
+    /// clues" control pointing at nothing would have been a silent regression,
+    /// so the same `SaveLibraryView` is pushed instead. When Home genuinely
+    /// absorbs the pocket, this route and `SaveLibraryView` go away together.
+    case saves
+    /// The old Trips tab, now a child screen for the same reason.
+    ///
+    /// Trips is low-frequency and lost its permanent slot, but the surface
+    /// still exists and is still reachable — from Home's "plan from stamps"
+    /// priority and from a place. Demoting a tab must not delete a feature.
+    case trips
+}
+
+private enum SaveFullScreenRoute: Identifiable {
+    case capture
+    case placeDetail(MapDetailDrawerItem)
+
+    var id: String {
+        switch self {
+        case .capture:
+            return "capture"
+        case .placeDetail(let item):
+            switch item {
+            case .savedPlace(let place):
+                return "saved-\(place.id.uuidString)"
+            case .reviewCandidate(let candidate):
+                return "review-\(candidate.id.uuidString)"
+            case .unsavedCandidate(let candidate):
+                return "map-\(candidate.id)"
+            case .socialPlace(let place):
+                return "social-\(place.id.uuidString)"
+            }
+        }
+    }
+}
+
+private enum PendingChromePresentation {
+    case rootSheet
+    case passport
+    case savedPlaceLimitPaywall
+    case cover(SaveFullScreenRoute)
+    case mapDrawer(DrawerLaunchRequest)
+    case plan
+
+    var exclusiveChrome: SaveChromeExclusive {
+        switch self {
+        case .rootSheet:
+            return .rootSheet
+        case .passport:
+            return .passport
+        case .savedPlaceLimitPaywall:
+            return .savedPlaceLimitPaywall
+        case .cover:
+            return .cover
+        case .mapDrawer, .plan:
+            return .none
+        }
+    }
+}
+
+#if DEBUG
+private struct DebugQARefreshToken: Equatable {
+    let rootTab: String
+    let fullScreenKind: String?
+    let isRootSheetPresented: Bool
+    let isMapPanelExpanded: Bool
+    let rootPathDepth: Int
+    let savedPlaceCount: Int
+    let reviewCandidateCount: Int
+    let mapCandidateCount: Int
+    let hasIncomingReceipt: Bool
+}
+#endif
+
+enum ContentStorageScope: Equatable {
+    case production
+    case reviewerDemo
+
+    @MainActor
+    func makeMapViewModel() -> MapViewModel {
+        switch self {
+        case .production:
+            return MapViewModel()
+        case .reviewerDemo:
+#if SAVVY_CITY_MVP
+            return CityMVPStorage.makeMapViewModel()
+#else
+            return ReviewDemoStorage.makeMapViewModel()
+#endif
+        }
+    }
+
+    @MainActor
+    func makeTripPackStore() -> TripPackStore {
+        switch self {
+        case .production:
+            return TripPackStore(
+                userID: PrivyAuthService.shared.currentUserId ?? "unavailable",
+                persistence: SupabaseService.shared
+            )
+        case .reviewerDemo:
+            return .reviewerDemo()
+        }
+    }
+}
+
+struct ContentView: View {
+    @StateObject private var mapVM: MapViewModel
+    @StateObject private var tripStore: TripPackStore
+    @StateObject private var drawerVM = AIDrawerViewModel()
+    @StateObject private var planConversation = SavePlanConversation()
+    @StateObject private var doodleSession = SaveDoodleSession()
+    @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding private var requiresShareConfirmation: Bool
+    @Binding private var requiresListConfirmation: Bool
+    @Binding private var pendingClipListSave: SaveCollaborativeList?
+    @Binding private var pendingOnboardingClue: String
+    private let storageScope: ContentStorageScope
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isRootSheetPresented: Bool
+    @State private var isPassportPresented = false
+    @State private var passportCollectionMode: SavePassportCollectionMode = .collection
+    @State private var drawerDetent: PresentationDetent
+    @State private var mapDetailDrawerItem: MapDetailDrawerItem?
+    @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
+    @State private var pendingCaptureTripID: UUID?
+    @State private var activeTripID: UUID?
+    @State private var drawerLaunchRequest: DrawerLaunchRequest
+    @State private var selectedRootTab: SaveRootTab
+    @State private var requestsSocialConnections = false
+    @State private var rootPath: [SaveRootRoute]
+    @State private var fullScreenRoute: SaveFullScreenRoute?
+    @State private var fullScreenCandidateActionID: UUID?
+    @State private var fullScreenMapCandidateActionID: String?
+    @State private var fullScreenActionError: String?
+    @State private var fullScreenSourceAlreadyReviewed = false
+    @State private var isMapPanelExpanded = false
+    @State private var suppressPendingOnboardingCaptureResume = false
+    @State private var exactSearchRequestID: UUID?
+    @State private var isExactSearchSessionActive = false
+    /// Survives a search-panel reopen that would otherwise drop
+    /// `exactSearchResolution` before the saved-stamp tap.
+    @State private var exactSearchClueID: UUID?
+    @State private var exactSearchPresentationID = UUID()
+    @State private var pendingOriginPlanCandidateID: UUID?
+    /// True while chrome is swapping one exclusive presentation for another.
+    /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
+    @State private var suppressChromeDismissSideEffects = false
+    @State private var pendingChromePresentation: PendingChromePresentation? = nil
+    @State private var handoffToastText: String?
+    @State private var listHandoffAttempt = ClipListHandoffAttempt()
+    @State private var showSavedPlaceLimitPaywall = false
+#if DEBUG
+    @State private var showAIQuotaNotice = false
+    @State private var didApplyUnplacedCandidateFixture = false
+#endif
+    @State private var presentsClipListConfirmation = false
+
+    init(
+        incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
+        requiresShareConfirmation: Binding<Bool> = .constant(false),
+        requiresListConfirmation: Binding<Bool> = .constant(false),
+        pendingClipListSave: Binding<SaveCollaborativeList?> = .constant(nil),
+        pendingOnboardingClue: Binding<String> = .constant(""),
+        storageScope: ContentStorageScope = .production
+    ) {
+        _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
+        _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
+        _incomingPlaceReceipt = incomingPlaceReceipt
+        _requiresShareConfirmation = requiresShareConfirmation
+        _requiresListConfirmation = requiresListConfirmation
+        _pendingClipListSave = pendingClipListSave
+        _pendingOnboardingClue = pendingOnboardingClue
+        self.storageScope = storageScope
+        let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
+        _isRootSheetPresented = State(initialValue: hasInitialReceipt)
+        _drawerDetent = State(initialValue: .large)
+        _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
+#if SAVVY_CITY_MVP
+        _selectedRootTab = State(initialValue: .map)
+#else
+        _selectedRootTab = State(initialValue: .home)
+#endif
+        _rootPath = State(initialValue: [])
+        let onboardingClue = pendingOnboardingClue.wrappedValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        _fullScreenRoute = State(initialValue: onboardingClue.isEmpty || hasInitialReceipt ? nil : .capture)
+        _fullScreenCandidateActionID = State(initialValue: nil)
+        _fullScreenMapCandidateActionID = State(initialValue: nil)
+        _fullScreenActionError = State(initialValue: nil)
+    }
+
+    private var rootScaffold: some View {
+        ZStack(alignment: .bottom) {
+            rootTabs
+#if SAVVY_CITY_MVP
+            if isMapPanelExpanded { mapDrawerPanel.zIndex(1) }
+#else
+            if selectedRootTab == .map || isMapPanelExpanded {
+                // Keep the editor above the native navigation/map layer when
+                // returning from a full-screen Review candidate with a keyboard.
+                mapDrawerPanel.zIndex(1)
+            }
+#endif
+            if requiresListConfirmation, let pendingList = pendingClipListSave, handoffToastText == nil {
+                Button(languageSettings.localized(
+                    english: "Review \(pendingList.items.count) pending places",
+                    traditionalChinese: "確認 \(pendingList.items.count) 個待收藏地點"
+                )) { presentsClipListConfirmation = true }
+                .buttonStyle(.borderedProminent)
+                .padding(.bottom, 88)
+                .accessibilityIdentifier("app.handoff.reviewList")
+                .zIndex(2)
+            }
+            if let handoffToastText {
+                VStack(spacing: 4) {
+                    Text(handoffToastText)
+                    if listHandoffAttempt.canRetry, requiresListConfirmation, pendingClipListSave != nil {
+                        Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
+                            presentsClipListConfirmation = true
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier("app.handoff.retry")
+                    }
+                }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: 320)
+                    .background(SaveAtlasPalette.paper, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1)
+                    }
+                    .padding(.bottom, 88)
+                    .accessibilityIdentifier("app.handoff.saved")
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2)
+            }
+        }
+        .onChange(of: selectedRootTab) { _, tab in
+            if tab != .map {
+                invalidateExactSearchRequest()
+            }
+            if tab != .map, isMapPanelExpanded {
+                collapseMapPanel()
+            }
+        }
+        .onChange(of: fullScreenRoute?.id) { _, routeID in
+            if routeID != nil {
+                invalidateExactSearchRequest()
+            }
+        }
+#if DEBUG
+        .onAppear { syncDebugQAState() }
+        .onChange(of: debugQARefreshToken) { _, _ in syncDebugQAState() }
+#endif
+        .environment(\.appLanguageSettings, languageSettings)
+#if DEBUG
+        .alert(
+            languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+            isPresented: $showAIQuotaNotice
+        ) {
+            Button(languageSettings.text(.ok)) { showAIQuotaNotice = false }
+        } message: {
+            Text(ShareAnalysisError.usageLimit.errorDescription ?? "")
+        }
+        .task {
+            if DebugLegacyMigrator.isRequested {
+                await DebugLegacyMigrator.run()
+            }
+            await applyFreeCapE4UITestFixturesWhenSignedIn()
+        }
+#endif
+    }
+
+    var body: some View {
+        // Split from the alert/sheet chain: one flat modifier expression here
+        // pushes the type checker past its time budget.
+        rootScaffold
+        .alert(
+            languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
+            isPresented: Binding(
+                get: { mapVM.syncFailedPlaceName != nil },
+                set: { if !$0 { mapVM.syncFailedPlaceName = nil } }
+            )
+        ) {
+            Button(languageSettings.text(.ok)) { mapVM.syncFailedPlaceName = nil }
+        } message: {
+            Text(languageSettings.localized(
+                english: "\"\(mapVM.syncFailedPlaceName ?? "")\" couldn't sync to your account — check your connection. It stays saved locally.",
+                traditionalChinese: "「\(mapVM.syncFailedPlaceName ?? "")」沒能同步到你的帳號——請檢查網路。它仍保存在本機。"
+            ))
+        }
+        .sheet(isPresented: $isRootSheetPresented, onDismiss: handleRootSheetDismiss) {
+            rootSheetContent
+        }
+        .sheet(item: capturePresentation, onDismiss: handleFullScreenDismiss) { route in
+            fullScreenContent(for: route)
+                .presentationDetents([.height(430), .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SaveAtlasPalette.canvas)
+        }
+        .fullScreenCover(item: detailPresentation, onDismiss: handleFullScreenDismiss) { route in
+            fullScreenContent(for: route)
+        }
+        .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
+            passportView(isRootTab: false, collectionMode: passportCollectionMode)
+        }
+        .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
+            mapVM.acknowledgeSavedPlaceLimitPaywall()
+            handleExclusiveChromeDismiss()
+        }) {
+            SaveProPaywallView(trigger: .savedPlaceLimit)
+        }
+        .onChange(of: drawerVM.mapAction) { _, action in
+            if let action { mapVM.apply(action) }
+        }
+        .sheet(isPresented: $presentsClipListConfirmation) {
+            clipListConfirmation
+        }
+        .onAppear {
+            if incomingPlaceReceipt != nil { presentExclusiveRootSheet() }
+            if requiresListConfirmation, pendingClipListSave != nil {
+                presentsClipListConfirmation = true
+            }
+        }
+        .onChange(of: pendingClipListSave?.id) { _, listID in
+            guard listID != nil, requiresListConfirmation else { return }
+            presentsClipListConfirmation = true
+        }
+        .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
+            guard receiptID != nil else { return }
+            invalidateExactSearchRequest()
+            fullScreenRoute = nil
+            pendingReceiptMapDetail = nil
+            mapDetailDrawerItem = nil
+            mapVM.clearSelectedMapObject()
+            drawerVM.returnToCommands()
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .large
+            }
+            presentExclusiveRootSheet()
+        }
+        .onChange(of: mapVM.selectedPlace) { _, place in
+            guard let place else { return }
+            // A save/import only aims the camera; opening the detail again
+            // would stack a drawer on top of a flow the user just finished.
+            guard !mapVM.consumeCameraOnlySelection() else { return }
+            guard selectedRootTab != .map else { return }
+            openMapDetail(.savedPlace(place))
+        }
+        .onChange(of: mapVM.selectedReviewCandidate) { _, candidate in
+            guard let candidate else { return }
+            openMapDetail(.reviewCandidate(candidate))
+        }
+        .onChange(of: mapVM.selectedMapCandidate) { _, candidate in
+            guard let candidate else { return }
+#if SAVVY_CITY_MVP
+            if selectedRootTab == .map && rootPath.isEmpty && !isMapPanelExpanded { return }
+#endif
+            openMapDetail(.unsavedCandidate(candidate))
+        }
+        .onChange(of: mapVM.selectedSocialPlace) { _, place in
+            guard let place else { return }
+            openMapDetail(.socialPlace(place))
+        }
+        .onChange(of: mapVM.places) { _, places in
+            drawerVM.places = places
+            refreshSelectedMapDetailPlace(from: places)
+        }
+        .onChange(of: mapVM.mapCandidates) { _, candidates in
+            drawerVM.mapCandidates = candidates
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SaveCollaborativeListNotification.didJoin)) { _ in
+            mapVM.reloadCollaborativeLists()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .saveMemoryPreferencesDidChange)) { _ in
+            Task { await drawerVM.loadMemoryPreferences() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SavePlaceLimitHandoff.paywallRequestedNotification)) { _ in
+            presentSavedPlaceLimitPaywall()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            presentSavedPlaceLimitPaywallIfNeeded()
+            Task { await mapVM.handleSceneDidBecomeActive() }
+        }
+        .onChange(of: mapVM.shouldPresentSavedPlaceLimitPaywall) { _, shouldPresent in
+            guard shouldPresent else { return }
+            presentSavedPlaceLimitPaywall()
+        }
+        .task {
+            await loadInitialContent()
+            presentSavedPlaceLimitPaywallIfNeeded()
+        }
+#if DEBUG
+        // Same outermost fullScreenCover as production Passport. A cover on
+        // `rootScaffold` leaves AtlasTabBar in the tree (`root.tab.home`).
+        .fullScreenCover(isPresented: .constant(
+            ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+                || ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+        )) {
+            SaveProPaywallView(
+                trigger: ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+                    ? .savedPlacesCap
+                    : .settings
+            )
+                .environment(\.appLanguageSettings, languageSettings)
+        }
+#endif
+    }
+
+    @MainActor
+    private func loadInitialContent() async {
+        drawerVM.places = mapVM.places
+        drawerVM.mapCandidates = mapVM.mapCandidates
+        if storageScope == .production || !ReviewDemo.isOfflineUITestMode {
+            await drawerVM.loadMemoryPreferences()
+        }
+        await mapVM.loadPlaces()
+        await tripStore.load()
+#if !SAVVY_CITY_MVP
+        if storageScope == .reviewerDemo {
+            await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
+        }
+#endif
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-origin-food") {
+            mapVM.socialPlaces = Place.socialPreviewSeeds(
+                referrerDisplayName: "Savvy Food Club",
+                referralCode: "origin-ui-test"
+            )
+        }
+#endif
+        openPostcardDrawerUITestFixtureIfNeeded()
+        runRapidChromeTransitionUITestFixtureIfNeeded()
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-show-saved-place-limit-paywall") {
+            presentSavedPlaceLimitPaywall()
+        }
+#endif
+    }
+
+    private func presentSavedPlaceLimitPaywall() {
+        guard !showSavedPlaceLimitPaywall else { return }
+        presentAfterClearingExclusiveChrome(.savedPlaceLimitPaywall)
+    }
+
+    private func presentSavedPlaceLimitPaywallIfNeeded() {
+        if mapVM.consumePendingSavedPlaceLimitPaywall() {
+            presentSavedPlaceLimitPaywall()
+        }
+    }
+
+    /// Passport. Reachable two ways since the five-tab restructure: as the
+    /// Profile root tab, and as the sheet the older surfaces still push. One
+    /// definition so the two entry points cannot drift apart.
+    @ViewBuilder
+    private func passportView(isRootTab: Bool, collectionMode: SavePassportCollectionMode = .collection) -> some View {
+        ProfileView(
+            savedPlaces: mapVM.places,
+            waitingClues: mapVM.reviewCandidates.count,
+            collaborativeLists: mapVM.collaborativeLists,
+            followedFriends: mapVM.followedFriends,
+            isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
+            hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
+            onUpdatePlaceVisibility: { place, visibility in
+                try await mapVM.updatePlaceVisibility(place, visibility: visibility)
+            },
+            onCreateList: { title, note in
+                _ = mapVM.createCollaborativeList(title: title, note: note)
+            },
+            onShareListURL: { list, role in
+                mapVM.shareURL(for: list, role: role)
+            },
+            onShareListLink: { list, role in
+                await mapVM.shareLink(for: list, role: role)
+            },
+            onLoadMyReferralURL: {
+                await mapVM.myReferralURL()
+            },
+            onOpenListOnMap: openCollaborativeListOnMap,
+            currentUserID: PrivyAuthService.shared.currentUserId,
+            onRefreshLists: {
+                // Sync entry point that spawns its own server refresh —
+                // an async wrapper keeps the poll-on-open contract simple.
+                mapVM.reloadCollaborativeLists()
+            },
+            onLoadListMembers: { list in
+                await mapVM.listMembers(for: list)
+            },
+            onRemoveListMember: { member, list in
+                try await mapVM.removeListMember(member, from: list)
+            },
+            onLoadListShareCodes: { list in
+                await mapVM.listShareCodes(for: list)
+            },
+            onRevokeListShareCode: { code, list in
+                try await mapVM.revokeListShareCode(code.code, for: list)
+            },
+            onFollowReferral: { value in
+                try await mapVM.followReferral(value)
+            },
+            onRefreshFollowedFriends: {
+                await mapVM.refreshFollowedFriends(force: true)
+            },
+            onSearchFollowedFriends: { query in
+                await mapVM.refreshFollowedFriends(query: query, force: true)
+            },
+            onLoadMoreFollowedFriends: {
+                await mapVM.loadMoreFollowedFriends()
+            },
+            onUnfollowFriend: { friend in
+                try await mapVM.unfollowFriend(friend)
+            },
+            onReviewAll: {
+                // Same destination Home's review CTA uses: the Saves child
+                // with the review pocket. Sheet Passport dismisses first so
+                // the push lands on the root stack.
+                if isPassportPresented {
+                    isPassportPresented = false
+                }
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .saves,
+                    currently: rootPath
+                )
+            },
+            onUpdatePlace: { place in
+                try await mapVM.updatePlace(place)
+            },
+            onOpenPlace: { openMapDetail(.savedPlace($0)) },
+            isRootTab: isRootTab,
+            collectionMode: collectionMode,
+            requestsConnections: $requestsSocialConnections
+        )
+        .environment(\.appLanguageSettings, languageSettings)
+        .environmentObject(doodleSession)
+    }
+
+#if SAVVY_CITY_MVP
+    private func openCityMVPSavedPlace(_ place: Place) {
+        selectRootTab(.map)
+        if place.isMapKitMappable {
+            mapVM.cameraPosition = .camera(MapCamera(centerCoordinate: place.coordinate,
+                                                     distance: 900, heading: 0, pitch: 30))
+        }
+        mapVM.selectPlace(place, enrichPhoto: false)
+    }
+#endif
+
+    /// Tab bar selection. `.capture` is a control, not a destination: it opens
+    /// the capture cover and leaves the current tab selected, so tapping it and
+    /// cancelling returns the user exactly where they were.
+    private func selectRootTab(_ tab: SaveRootTab) {
+        guard !tab.isCaptureControl else {
+            openDrawer(.addLink, tripID: nil)
+            return
+        }
+#if SAVVY_CITY_MVP
+        if selectedRootTab == .map, tab != .map,
+           mapVM.selectedMapCandidate?.id.hasPrefix("city-mvp:") == true {
+            mapVM.clearSelectedMapObject()
+        }
+#endif
+        // Root destinations must leave any pushed Saves, Trips, or Trip route.
+        // The tab bar can remain in the accessibility tree behind those
+        // children, so changing only the selection leaves the child visible.
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        selectedRootTab = SaveChromeNavigation.destination(
+            afterSelecting: tab,
+            current: selectedRootTab
+        )
+    }
+
+    /// Search, show-on-map, and list handoffs open Map without a Home filter.
+    /// Review correction keeps the exact-search session.
+    private func showMapTab() {
+        selectedRootTab = .map
+    }
+
+    private var capturePresentation: Binding<SaveFullScreenRoute?> {
+        Binding(
+            get: { if case .capture = fullScreenRoute { return fullScreenRoute }; return nil },
+            set: { value in
+                if case .capture = fullScreenRoute { fullScreenRoute = value }
+            }
+        )
+    }
+
+    private var detailPresentation: Binding<SaveFullScreenRoute?> {
+        Binding(
+            get: { if case .placeDetail = fullScreenRoute { return fullScreenRoute }; return nil },
+            set: { value in
+                if case .placeDetail = fullScreenRoute { fullScreenRoute = value }
+            }
+        )
+    }
+
+
+    private var showsRootTabBar: Bool {
+#if DEBUG
+        // AtlasTabBar is a sibling of the tab pages. A fullScreenCover still
+        // leaves `root.tab.home` in the XCTest tree unless the bar is omitted.
+        !hidesRootTabBarForPaywallUITest
+#else
+        true
+#endif
+    }
+
+#if DEBUG
+    private var hidesRootTabBarForPaywallUITest: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitest-show-paywall")
+            || arguments.contains("--uitest-show-paywall-cap")
+    }
+#endif
+
+    private var rootTabs: some View {
+        NavigationStack(path: $rootPath) {
+            Group {
+#if SAVVY_CITY_MVP
+            ReferenceViewport {
+                ZStack(alignment: .topLeading) {
+                    Group {
+                        switch selectedRootTab {
+                        case .home:
+                            CityMVPSavedPage(
+                                places: mapVM.places, onOpen: openCityMVPSavedPlace,
+                                onReview: { rootPath = [.saves] }, reviewCount: mapVM.reviewCandidates.count
+                            )
+                        case .map:
+                            MapView(viewModel: mapVM, shouldFocusOnUserLocationOnLaunch: false)
+                        case .friends:
+                            SaveFriendsView(
+                                currentUserID: PrivyAuthService.shared.currentUserId,
+                                onSaved: { await mapVM.loadPlaces(force: true) },
+                                onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
+                                onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
+                                // Invite / 邀請: ProfileView.requestsConnections
+                                // presents PassportConnectionsView (Friends section).
+                                onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
+                            )
+                        case .profile:
+                            CityMVPMePage(savedCount: mapVM.places.count,
+                                          onFriends: { selectRootTab(.friends) },
+                                          onTrips: { rootPath = [.trips] })
+                        case .capture:
+                            // Unreachable: `.capture` is a control, and
+                            // `selectRootTab` opens the cover instead of
+                            // committing the selection.
+                            Color.clear
+                        }
+                    }
+
+                    CityMVPBottomBar(selection: selectedRootTab, onSelect: selectRootTab,
+                                     onSearch: { selectRootTab(.map); openMapSearch() },
+                                     onCapture: { openDrawer(.addLink, tripID: nil) })
+                        .placed(x: 24, y: AtlasTabBarMetrics.mapY, width: 345, height: 62)
+                }
+            }
+#else
+            GeometryReader { safeArea in
+                // Root pages reflow in device points. Fitting the 402x874
+                // reference to a short screen shrank a 375pt canvas to 307pt.
+                // Read safe-area insets before the inner canvas ignores them.
+                GeometryReader { canvas in
+                    ZStack(alignment: .topLeading) {
+                        Group {
+                            switch selectedRootTab {
+                            case .home:
+                                SaveHomeView(
+                                    store: tripStore,
+                                    mapViewModel: mapVM,
+                                    headerTopPadding: safeArea.safeAreaInsets.top + SaveSpace.xs,
+                                    onCapture: { openDrawer(.addLink, tripID: nil) },
+                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
+                                    // Trips left the root bar; both it and Saves
+                                    // are pushed children now, so neither surface
+                                    // is lost by the restructure.
+                                    onOpenSaves: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .saves,
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenTrips: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .trips,
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenTrip: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .trip($0),
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenPassport: openPassport,
+                                    onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) }
+                                )
+                            case .map:
+                                SaveMapRootView(
+                                    mapViewModel: mapVM,
+                                    shouldFocusOnUserLocation: true,
+                                    // The single drawer panel owns the shelf now;
+                                    // the canvas never draws its own copy.
+                                    hidesCommandShelf: true,
+                                    onOpenSearch: { openMapSearch() },
+                                    onOpenSavedPlace: { openSavedPlaceFromMapSearch($0) },
+                                    onPlanAroundPlace: openPlanAround,
+                                    onOpenPassport: openPassport
+                                )
+                            case .friends:
+                                SaveFriendsView(
+                                    currentUserID: PrivyAuthService.shared.currentUserId,
+                                    onSaved: { await mapVM.loadPlaces(force: true) },
+                                    onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
+                                    onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
+                                    // Invite / 邀請: ProfileView.requestsConnections
+                                    // presents PassportConnectionsView (Friends section).
+                                    onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
+                                )
+                            case .profile:
+                                passportView(isRootTab: true)
+                            case .capture:
+                                // Unreachable: `.capture` is a control, and
+                                // `selectRootTab` opens the cover instead of
+                                // committing the selection.
+                                Color.clear
+                            }
+                        }
+
+                        if showsRootTabBar {
+                            AtlasTabBar(
+                            items: SaveRootTab.allCases,
+                            selection: selectedRootTab,
+                            title: \.atlasTitle,
+                            icon: \.atlasIcon,
+                            accessibilityPrefix: "root.tab",
+                            availableWidth: canvas.size.width,
+                            displayTitle: { $0.title(language: languageSettings.language) },
+                            isRaisedControl: { $0.isCaptureControl },
+                            hidesTitle: { $0.isCaptureControl },
+                            iconView: { item in
+                                AnyView(
+                                    SaveDoodleTabIcon(
+                                        kind: .tab(iconName: item.atlasIcon),
+                                        pointSize: 24
+                                    )
+                                )
+                            },
+                            raisedBackground: {
+                                AnyView(SaveDoodleInkOval().fill(SaveAtlasPalette.coral))
+                            },
+                            onSelect: { selectRootTab($0) }
+                        )
+                            .placed(
+                                x: AtlasTabBarMetrics.leadingInset,
+                                y: canvas.size.height - AtlasTabBarMetrics.height,
+                                width: canvas.size.width,
+                                height: AtlasTabBarMetrics.height
+                            )
+                        }
+                    }
+                    .frame(width: canvas.size.width, height: canvas.size.height, alignment: .topLeading)
+                    .background(AtlasPalette.canvas)
+                }
+                .ignoresSafeArea()
+            }
+#endif
+            }
+            .tint(SaveAtlasPalette.forest)
+            .environmentObject(doodleSession)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: SaveRootRoute.self) { route in
+                switch route {
+                case .plan:
+                    ReferenceViewport { planView }
+                        .navigationTitle(languageSettings.localized(
+                            english: "Plan", traditionalChinese: "規劃"
+                        ))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar(.visible, for: .navigationBar)
+                case .trip(let tripID):
+                    TripWorkspaceView(
+                        tripID: tripID,
+                        store: tripStore,
+                        mapViewModel: mapVM,
+                        storageScope: storageScope,
+                        onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                        onActiveTripChange: { activeTripID = $0 }
+                    )
+                case .saves:
+                    saveLibrary(captureResultIDs: nil)
+                case .captureResults(let ids):
+                    saveLibrary(captureResultIDs: ids)
+                case .trips:
+                    TripsHomeView(
+                        store: tripStore,
+                        savedPlaces: mapVM.places,
+                        onOpenAssistant: { openPlanConversation() },
+                        onAskSubmit: { openPlanConversation(submittedQuery: $0) },
+                        onOpenTrip: {
+                            rootPath = SaveChromeNavigation.pathByOpening(
+                                .trip($0),
+                                currently: rootPath
+                            )
+                        },
+                        onOpenPassport: openPassport
+                    )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                presentAfterClearingExclusiveChrome(.plan)
+                            } label: {
+                                Label(languageSettings.localized(
+                                    english: "Resume planning", traditionalChinese: "規劃草稿"
+                                ), systemImage: "text.bubble")
+                            }
+                            .accessibilityIdentifier("trips.plan")
+                        }
+                    }
+                    .navigationTitle(languageSettings.localized(
+                        english: "Trips",
+                        traditionalChinese: "行程"
+                    ))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar(.visible, for: .navigationBar)
+                }
+            }
+        }
+        // Home sizes its physical world against the keyboard frame. Keep the
+        // fixed Atlas viewport anchored so the system does not also pan it.
+        .ignoresSafeArea(.keyboard, edges: rootPath.last == .plan || (rootPath.isEmpty && selectedRootTab == .home) ? .bottom : [])
+    }
+
+    private var planView: some View {
+        SavePlanView(
+            savedPlaces: mapVM.places,
+            mapCandidates: mapVM.mapCandidates,
+            tripStore: tripStore,
+            conversation: planConversation,
+            onOpenTrip: {
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .trip($0),
+                    currently: rootPath
+                )
+            },
+            onOpenPassport: openPassport,
+            onConfirmCandidate: { candidate in
+                if let existing = mapVM.places.first(where: {
+                    $0.name.localizedCaseInsensitiveCompare(candidate.title) == .orderedSame
+                        && abs($0.latitude - candidate.latitude) < 0.0008
+                        && abs($0.longitude - candidate.longitude) < 0.0008
+                }) { return existing }
+                return try await mapVM.saveMapCandidateAsPlace(candidate)
+            }
+        )
+    }
+
+    /// The Map tab's single drawer surface (spec P2): the resting shelf and
+    /// the expanded ask/search drawer are one morphing container, replacing
+    /// the old shelf-in-canvas + presented-sheet pair that stacked two
+    /// drawers on screen.
+    @ViewBuilder
+    private var mapDrawerPanel: some View {
+        if isMapPanelExpanded || (selectedRootTab == .map && rootPath.isEmpty) {
+            SaveMapDrawerPanel(
+                isExpanded: $isMapPanelExpanded,
+                detent: $drawerDetent,
+                mapStampCount: mapVM.places.count,
+                showsCollapsedShelf: mapVM.selectedPlace == nil
+                    && selectedRootTab == .map
+                    && rootPath.isEmpty
+                    && incomingPlaceReceipt == nil,
+                onExpand: { focusesSearch in
+                    openMapSearch(focusesSearch: focusesSearch)
+                },
+                onCollapse: closeMapSearch,
+                onOpenPassport: openPassport
+            ) {
+                if mapDetailDrawerItem != nil {
+                    drawerView
+                        .clipShape(UnevenRoundedRectangle(
+                            bottomLeadingRadius: 32,
+                            bottomTrailingRadius: 32,
+                            style: .continuous
+                        ))
+                } else {
+                    SaveMapSearchContent(
+                        mapViewModel: mapVM,
+                        initialQuery: drawerLaunchRequest.initialQuery ?? "",
+                        focusesSearch: drawerLaunchRequest.focusesSearch,
+                        preservesExactSearchClue: isExactSearchSessionActive
+                            || exactSearchClueID != nil,
+                        onClose: closeMapSearch,
+                        onOpenPlace: { openSavedPlaceFromMapSearch($0) },
+                        onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
+                    )
+                }
+            }
+            .modifier(MapDrawerActionErrorAlert(
+                title: languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+                okTitle: languageSettings.text(.ok),
+                isEnabled: fullScreenRoute == nil,
+                message: Binding(
+                    get: { mapDrawerPresentedActionError },
+                    set: { if $0 == nil { clearMapDrawerActionError() } }
+                )
+            ))
+        }
+    }
+
+    private var mapDrawerPresentedActionError: String? {
+        fullScreenActionError ?? mapVM.correctionDrawerError
+    }
+
+    private func clearMapDrawerActionError() {
+        fullScreenActionError = nil
+        mapVM.correctionDrawerError = nil
+    }
+
+    private func collapseMapPanel() {
+        isMapPanelExpanded = false
+        handleRootSheetDismiss()
+    }
+
+    private func closeMapSearch() {
+        endCanceledExactSearchCorrection()
+        invalidateExactSearchRequest()
+        collapseMapPanel()
+    }
+
+    /// `map.search.close` cancels Review correction. Collapse/reopen still
+    /// keeps the session so a refine remount can finish; this explicit close
+    /// drops it so a later pin or peek cannot silently confirm the canceled
+    /// clue.
+    private func endCanceledExactSearchCorrection() {
+        invalidateExactSearchRequest()
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
+    }
+
+    @ViewBuilder
+    private var rootSheetContent: some View {
+        if let destination = incomingPlaceReceipt {
+            let displayedGeneration = mapVM.sessionGeneration
+            FriendShareReceiptView(destination: destination) { receipt in
+                guard mapVM.sessionGeneration == displayedGeneration,
+                      incomingPlaceReceipt?.id == destination.id else { throw CancellationError() }
+                let journal = ClipPlaceHandoff.journalForConfirmation(
+                    pending: PendingShareStore.load(), destination: destination
+                )
+                let generation = mapVM.sessionGeneration
+                let outcome = try await mapVM.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: requiresShareConfirmation,
+                                                                    confirmedJournal: journal)
+                guard mapVM.sessionGeneration == generation,
+                      incomingPlaceReceipt?.id == destination.id else { throw CancellationError() }
+                if requiresShareConfirmation, PendingShareStore.clear(ifUnchanged: journal) {
+                    requiresShareConfirmation = false
+                }
+                pendingReceiptMapDetail = .savedPlace(outcome.place)
+                return outcome
+            }
+            .id(destination.id)
+            .environment(\.appLanguageSettings, languageSettings)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        } else {
+            presentedDrawerView
+        }
+    }
+
+    @ViewBuilder
+    private func fullScreenContent(for route: SaveFullScreenRoute) -> some View {
+        switch route {
+        case .capture:
+            SaveCaptureFlowView(
+                tripName: captureTripName,
+                initialText: pendingOnboardingClue,
+                existingPlaces: mapVM.places,
+                onDraftChange: { pendingOnboardingClue = $0 },
+                onImport: { sharedText in
+                    try await mapVM.importSharedTextAsReviewCandidates(sharedText)
+                },
+                onSaveGoogleTakeoutImport: { drafts in
+                    try await mapVM.saveImportedPlaces(drafts)
+                },
+                onComplete: { candidateIDs in
+                    pendingOnboardingClue = ""
+                    selectedRootTab = .home
+                    rootPath = [.captureResults(candidateIDs)]
+                    if candidateIDs.count == 1,
+                       let candidate = mapVM.reviewCandidates.first(where: { $0.id == candidateIDs[0] }) {
+                        // Let the existing chrome coordinator dismiss capture
+                        // before presenting its one result.
+                        openReviewCandidate(candidate, tripID: pendingCaptureTripID)
+                    } else {
+                        fullScreenRoute = nil
+                    }
+                },
+                onCancel: {
+                    // Closing is not consent to discard a private clue. Keep it
+                    // for the next Add Link tap or app launch without trapping
+                    // the user in an immediately re-presented cover.
+                    suppressPendingOnboardingCaptureResume = true
+                    fullScreenRoute = nil
+                },
+                onSearchNearby: {
+                    suppressPendingOnboardingCaptureResume = true
+                    openMapSearch()
+                }
+            )
+            .environment(\.appLanguageSettings, languageSettings)
+
+        case .placeDetail(let item):
+            MapDetailDrawerView(
+                item: item,
+                detent: .constant(.large),
+                captureTripName: captureTripName,
+                editableLists: mapVM.collaborativeLists.filter(\.canEdit),
+                isWorkingReviewCandidateID: fullScreenCandidateActionID,
+                isWorkingMapCandidateID: fullScreenMapCandidateActionID,
+                onClose: { fullScreenRoute = nil },
+                onDeletePlace: { place in
+                    try await mapVM.deletePlace(place)
+                    fullScreenRoute = nil
+                },
+                onRecommendOrder: openFoodAnalysis,
+                onPlanAroundPlace: openPlanAround,
+                onFindExactPlaceCandidate: openExactSearch,
+                onAddReviewClue: addClueToReviewCandidate,
+                onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
+                onShowPlaceOnMap: showSavedPlaceOnMap,
+                onSaveCandidate: saveFullScreenCandidate,
+                onRejectCandidate: rejectFullScreenCandidate,
+                onSaveCandidateAsSourceOnly: keepFullScreenCandidateSourceOnly,
+                onInvestigateCandidateMore: investigateFullScreenCandidate,
+                onSaveMapCandidate: saveFullScreenMapCandidate,
+                onSaveSocialPlace: saveFullScreenSocialPlace,
+                onUpdatePlace: { place in
+                    try await mapVM.updatePlace(place)
+                },
+                onFindRelatedSources: { place, forceRefresh in
+                    try await mapVM.discoverRelatedSources(for: place, forceRefresh: forceRefresh)
+                },
+                onAddPlaceToTrip: requestTripAssignment,
+                onCreateList: {
+                    mapVM.createCollaborativeList(
+                        title: languageSettings.localized(english: "New list", traditionalChinese: "新清單"),
+                        note: nil
+                    )
+                },
+                onAddPlaceToList: { place, listID in
+                    try mapVM.addPlace(place, toListID: listID)
+                }
+            )
+            .environment(\.appLanguageSettings, languageSettings)
+            .background(SaveDottedBackground().ignoresSafeArea())
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if case .reviewCandidate(let candidate) = item,
+                   case .captureResults(let ids) = rootPath.last,
+                   ids.contains(candidate.id) {
+                    SaveCaptureResultNotice(count: ids.count)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(SaveAtlasPalette.canvas)
+                }
+            }
+            .alert(
+                fullScreenSourceAlreadyReviewed
+                    ? languageSettings.localized(english: "Source already reviewed", traditionalChinese: "來源已處理")
+                    : languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+                isPresented: Binding(
+                    get: { fullScreenActionError != nil },
+                    set: { if !$0 { fullScreenActionError = nil } }
+                )
+            ) {
+                Button(languageSettings.text(.ok)) {
+                    fullScreenActionError = nil
+                    if fullScreenSourceAlreadyReviewed {
+                        fullScreenRoute = nil
+                        fullScreenSourceAlreadyReviewed = false
+                    }
+                }
+            } message: {
+                Text(fullScreenActionError ?? "")
+            }
+
+        }
+    }
+
+    /// Sheet-only presentation modifiers. The Map tab embeds `drawerView`
+    /// in `SaveMapDrawerPanel`; putting detents on that in-tree copy has
+    /// aborted SwiftUI presentation on device.
+    @ViewBuilder
+    private var presentedDrawerView: some View {
+        drawerView
+        .presentationDetents([.height(132), .medium, .large], selection: $drawerDetent)
+        .presentationDragIndicator(.visible)
+        .presentationContentInteraction(.resizes)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .presentationBackground(.clear)
+        .presentationCornerRadius(32)
+    }
+
+    private var drawerView: some View {
+        AIDrawerView(
+            viewModel: drawerVM,
+            drawerDetent: $drawerDetent,
+            mapDetailDrawerItem: $mapDetailDrawerItem,
+            launchRequest: drawerLaunchRequest,
+            captureTripName: captureTripName,
+            reviewCandidates: mapVM.reviewCandidates,
+            onSaveGoogleTakeoutImport: { drafts in
+                try await mapVM.saveImportedPlaces(drafts)
+            },
+            onDeletePlace: { place in
+                try await mapVM.deletePlace(place)
+            },
+            onSaveCandidate: { candidate, nameOverride in
+                _ = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+            },
+            onRejectCandidate: { candidate in
+                try await mapVM.rejectReviewCandidate(candidate)
+            },
+            onSaveCandidateAsSourceOnly: { candidate in
+                try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
+            },
+            onInvestigateCandidateMore: { candidate in
+                try await mapVM.investigateReviewCandidateMore(candidate)
+            },
+            onSaveMapCandidate: { candidate in
+                let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
+                    mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
+                } ?? false
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
+                if resolvesOriginPlan {
+                    pendingOriginPlanCandidateID = nil
+                    requestTripAssignment(for: place)
+                }
+            },
+            onUpdatePlace: { place in
+                try await mapVM.updatePlace(place)
+            },
+            onFindRelatedSources: { place, forceRefresh in
+                try await mapVM.discoverRelatedSources(for: place, forceRefresh: forceRefresh)
+            },
+            onImportSharedTextAsReviewCandidates: { sharedText in
+                try await mapVM.importSharedTextAsReviewCandidates(sharedText)
+            },
+            onOpenReview: {
+                isRootSheetPresented = false
+                selectedRootTab = .home
+                rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
+            },
+            onAddPlaceToTrip: requestTripAssignment,
+            onPlanAroundPlace: openPlanAround,
+            onSaveTripPlan: { name, city, stops in
+                await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
+            },
+            onPrepareMapSearch: { query in
+                await mapVM.prepareMapCandidatesForDrawerQuery(
+                    query,
+                    preservesExactSearchClue: isExactSearchSessionActive
+                        || exactSearchClueID != nil
+                        || mapVM.hasActiveExactSearchResolution
+                )
+            },
+            onBeginExactSearchResolution: { candidate in
+                activateExactSearchSession(for: candidate)
+            },
+            onClearMapSearchResults: { endsExactSearch in
+                if endsExactSearch {
+                    exactSearchPresentationID = UUID()
+                    isExactSearchSessionActive = false
+                    exactSearchClueID = nil
+                }
+                guard exactSearchRequestID == nil else { return }
+                // Launch/refine remounts wipe pins. Keep the live Review
+                // correction so a saved-stamp tap still retires the clue.
+                mapVM.clearMapSearchResults(
+                    preservesExactSearchClue: !endsExactSearch
+                        && (isExactSearchSessionActive
+                            || exactSearchClueID != nil
+                            || mapVM.hasActiveExactSearchResolution)
+                )
+            },
+            collaborativeLists: mapVM.collaborativeLists,
+            onCreateList: { title, note in
+                mapVM.createCollaborativeList(title: title, note: note)
+            },
+            onAddPlaceToList: { place, listID in
+                try mapVM.addPlace(place, toListID: listID)
+            },
+            onSaveSocialPlace: { place in
+                _ = try await mapVM.saveSocialPlaceToMySave(place)
+            },
+            selectedCategories: mapVM.selectedCategories,
+            onToggleCategory: { category in
+                mapVM.toggleCategory(category)
+            },
+            selectedIntentFilters: mapVM.selectedIntentFilters,
+            onToggleIntentFilter: { intent in
+                mapVM.toggleIntentFilter(intent)
+            },
+            filteredPlaces: mapVM.filteredPlaces,
+            isRefreshingNearbyFilter: mapVM.isRefreshingNearbyFilter,
+            nearbyFilterNeedsLocation: mapVM.selectedIntentFilters.contains(.nearby)
+                && mapVM.nearbyFilterAnchor == nil
+                && !mapVM.isRefreshingNearbyFilter,
+            onOpenPassport: openPassport,
+            onDismissMapDetailSheet: {
+                isRootSheetPresented = false
+                // Closing a place detail on the Map tab returns straight to
+                // the map: leaving the panel expanded stranded the user on an
+                // empty ask/search drawer as an extra step.
+                if isMapPanelExpanded {
+                    collapseMapPanel()
+                }
+            },
+            onDismissMapDetail: {
+                mapVM.clearSelectedMapObject()
+            },
+            onShowMapCandidatesOnMap: showMapCandidatesOnMap,
+            onAddReviewClue: addClueToReviewCandidate,
+            onFindReviewPlace: openExactSearch,
+            onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
+            onShowPlaceOnMap: showSavedPlaceOnMap
+        )
+        .environment(\.appLanguageSettings, languageSettings)
+    }
+
+    private func openMapDetail(_ item: MapDetailDrawerItem) {
+        guard incomingPlaceReceipt == nil else { return }
+        if pendingCaptureTripID == nil {
+            pendingCaptureTripID = activeTripID
+        }
+
+        guard selectedRootTab == .map || !rootPath.isEmpty else {
+            presentExclusiveCover(.placeDetail(item))
+            return
+        }
+
+        drawerVM.returnToCommands()
+        // One place, one surface: the detail panel replaces the Atlas place
+        // card. Leaving the card selected kept both visible at once.
+        mapVM.clearSelectedMapObject()
+        mapDetailDrawerItem = item
+        if selectedRootTab == .map, rootPath.isEmpty {
+            // Root Map owns the single morphing drawer surface.
+            drawerDetent = .large
+            isMapPanelExpanded = true
+        } else {
+            // Trip surfaces keep the presented sheet: their close/return
+            // semantics (and the UI tests encoding them) expect a modal.
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+            presentExclusiveRootSheet()
+        }
+    }
+
+    private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
+        guard incomingPlaceReceipt == nil else { return }
+        // Expanding or focusing the Map drawer must not drop an in-flight
+        // Review correction. The previous invalidate made saved-stamp taps
+        // open the stamp without retiring the clue.
+        let preserveExactSearchClue = isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        if !preserveExactSearchClue {
+            invalidateExactSearchRequest()
+        }
+        mapDetailDrawerItem = nil
+        mapVM.clearSelectedMapObject()
+        drawerVM.returnToCommands()
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        showMapTab()
+        presentAfterClearingExclusiveChrome(.mapDrawer(
+            DrawerLaunchRequest(
+                target: .ask,
+                initialQuery: initialQuery,
+                focusesSearch: focusesSearch,
+                preservesExactSearchClue: preserveExactSearchClue
+            )
+        ))
+    }
+
+    private func openDrawer(
+        _ target: DrawerLaunchTarget,
+        tripID: UUID?,
+        initialQuery: String? = nil,
+        focusesSearch: Bool = true
+    ) {
+        guard incomingPlaceReceipt == nil else { return }
+        invalidateExactSearchRequest()
+        pendingCaptureTripID = tripID
+        mapDetailDrawerItem = nil
+        mapVM.clearSelectedMapObject()
+        drawerVM.returnToCommands()
+
+        switch target {
+        case .addLink:
+            suppressPendingOnboardingCaptureResume = false
+            presentExclusiveCover(.capture)
+            return
+        case .review, .saved:
+            // Review and saved clues are the Saves pocket, now a child of Home.
+            selectedRootTab = .home
+            rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
+            return
+        case .ask:
+            rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
+        }
+
+        drawerLaunchRequest = DrawerLaunchRequest(target: target, initialQuery: initialQuery, focusesSearch: focusesSearch)
+        presentExclusiveRootSheet()
+    }
+
+    private func openPassport() {
+        openPassport(collectionMode: .collection)
+    }
+
+    private func openPassport(collectionMode: SavePassportCollectionMode) {
+        guard !isPassportPresented else { return }
+        passportCollectionMode = collectionMode
+        SaveHaptics.tap()
+
+        if isMapPanelExpanded {
+            // Collapse the overlay only. handleRootSheetDismiss can queue
+            // capture resume, which would present a cover over this sheet.
+            isMapPanelExpanded = false
+        }
+        presentAfterClearingExclusiveChrome(.passport)
+    }
+
+    private var occupyingExclusiveChrome: SaveChromeExclusive {
+        SaveChromeNavigation.occupyingExclusive(
+            hasCover: fullScreenRoute != nil,
+            isTripComposerPresented: false,
+            isPassportPresented: isPassportPresented,
+            isRootSheetPresented: isRootSheetPresented,
+            isSavedPlaceLimitPaywallPresented: showSavedPlaceLimitPaywall
+        )
+    }
+
+    private func presentExclusiveCover(_ route: SaveFullScreenRoute) {
+        if fullScreenRoute?.id == route.id { return }
+        presentAfterClearingExclusiveChrome(.cover(route))
+    }
+
+    private func presentExclusiveRootSheet() {
+        if isRootSheetPresented { return }
+        presentAfterClearingExclusiveChrome(.rootSheet)
+    }
+
+    /// UIKit aborts when a second sheet or cover is presented over one that
+    /// is still up. Queue the replacement until SwiftUI confirms dismissal.
+    private func presentAfterClearingExclusiveChrome(_ presentation: PendingChromePresentation) {
+        if suppressChromeDismissSideEffects {
+            pendingChromePresentation = presentation
+            return
+        }
+
+        switch SaveChromeNavigation.transition(
+            from: occupyingExclusiveChrome,
+            to: presentation.exclusiveChrome
+        ) {
+        case .presentNow:
+            activateChromePresentation(presentation)
+        case .dismissThenPresent:
+            pendingChromePresentation = presentation
+            suppressChromeDismissSideEffects = true
+            isRootSheetPresented = false
+            isPassportPresented = false
+            showSavedPlaceLimitPaywall = false
+            fullScreenRoute = nil
+        }
+    }
+
+    private func activateChromePresentation(_ presentation: PendingChromePresentation) {
+        switch presentation {
+        case .rootSheet:
+            isRootSheetPresented = true
+        case .passport:
+            isPassportPresented = true
+        case .savedPlaceLimitPaywall:
+            showSavedPlaceLimitPaywall = true
+        case .cover(let route):
+            fullScreenRoute = route
+        case .plan:
+            rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
+        case .mapDrawer(let request):
+            drawerLaunchRequest = request
+            drawerDetent = request.focusesSearch ? .large : .medium
+            isMapPanelExpanded = true
+        }
+    }
+
+    private func handleExclusiveChromeDismiss() {
+        guard suppressChromeDismissSideEffects,
+              occupyingExclusiveChrome == .none,
+              let pendingChromePresentation
+        else { return }
+
+        self.pendingChromePresentation = nil
+        Task { @MainActor in
+            await Task.yield()
+            suppressChromeDismissSideEffects = false
+            activateChromePresentation(pendingChromePresentation)
+        }
+    }
+
+    private func openCollaborativeListOnMap(_ list: SaveCollaborativeList) {
+        isPassportPresented = false
+        showMapTab()
+        rootPath.removeAll()
+        Task {
+            await mapVM.planCollaborativeList(list)
+        }
+    }
+
+    private func saveLibrary(captureResultIDs: [UUID]?) -> some View {
+        SaveLibraryView(
+            places: mapVM.places,
+            reviewCandidates: mapVM.reviewCandidates.filter { candidate in
+                captureResultIDs?.contains(candidate.id) ?? true
+            },
+            onOpenCapture: { openDrawer(.addLink, tripID: nil) },
+            onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
+            onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+            onOpenPassport: openPassport,
+            onOpenTrips: {
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .trips,
+                    currently: rootPath
+                )
+            },
+            captureResultCount: captureResultIDs?.count,
+            onLoadDuplicateAudit: { try await mapVM.reviewDuplicateAudit() }
+        )
+        .navigationTitle(languageSettings.localized(
+            english: captureResultIDs == nil ? "Saves" : "This capture",
+            traditionalChinese: captureResultIDs == nil ? "收藏" : "本次找到的線索"
+        ))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+    }
+
+    private func openReviewCandidate(
+        _ candidate: PlaceReviewCandidate,
+        tripID: UUID?,
+        offerTripAfterConfirmation: Bool = false
+    ) {
+        pendingCaptureTripID = tripID
+        pendingOriginPlanCandidateID = offerTripAfterConfirmation ? candidate.id : nil
+        presentExclusiveCover(.placeDetail(.reviewCandidate(candidate)))
+    }
+
+    private func saveFullScreenCandidate(_ candidate: PlaceReviewCandidate, nameOverride: String?) {
+        fullScreenCandidateActionID = candidate.id
+        Task {
+            defer { fullScreenCandidateActionID = nil }
+            do {
+                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                if pendingOriginPlanCandidateID == candidate.id {
+                    pendingOriginPlanCandidateID = nil
+                    requestTripAssignment(for: place)
+                } else {
+                    fullScreenRoute = nil
+                }
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func rejectFullScreenCandidate(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            try await mapVM.rejectReviewCandidate(candidate)
+            fullScreenRoute = nil
+        }
+    }
+
+    private func keepFullScreenCandidateSourceOnly(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
+            fullScreenRoute = nil
+        }
+    }
+
+    private func investigateFullScreenCandidate(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            if candidate.captureId != nil {
+                let ids = try await mapVM.reanalyzeReviewSource(candidate)
+                guard !ids.isEmpty else { throw ReviewCandidateError.sourceStillUnresolved }
+                fullScreenRoute = nil
+                rootPath = [.captureResults(ids)]
+            } else {
+                try await mapVM.investigateReviewCandidateMore(candidate)
+                openExactSearch(candidate)
+            }
+        }
+    }
+
+    private func performFullScreenCandidateAction(
+        _ candidate: PlaceReviewCandidate,
+        action: @escaping () async throws -> Void
+    ) {
+        fullScreenCandidateActionID = candidate.id
+        fullScreenSourceAlreadyReviewed = false
+        Task {
+            defer { fullScreenCandidateActionID = nil }
+            do {
+                try await action()
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                fullScreenSourceAlreadyReviewed = true
+                fullScreenActionError = languageSettings.localized(
+                    english: "This source was already saved or reviewed. No new review was added.",
+                    traditionalChinese: "這個來源已收藏或處理過，沒有新增待確認項目。"
+                )
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func saveFullScreenMapCandidate(_ candidate: SaveMapCandidate) {
+        fullScreenMapCandidateActionID = candidate.id
+        Task {
+            defer { fullScreenMapCandidateActionID = nil }
+            do {
+                let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
+                    mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
+                } ?? false
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
+                if resolvesOriginPlan {
+                    pendingOriginPlanCandidateID = nil
+                    requestTripAssignment(for: place)
+                } else {
+                    fullScreenRoute = nil
+                }
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func saveFullScreenSocialPlace(_ place: Place) {
+        Task {
+            do {
+                _ = try await mapVM.saveSocialPlaceToMySave(place)
+                fullScreenRoute = nil
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Home / saved-place detail "View on map". Focuses that stamp on Map
+    /// and shows Home's current Eat/Go + city. Not a mini-map handoff.
+    private func showSavedPlaceOnMap(_ place: Place) {
+        fullScreenRoute = nil
+        isRootSheetPresented = false
+        mapDetailDrawerItem = nil
+        rootPath.removeAll()
+        isMapPanelExpanded = false
+        doodleSession.pendingShowOnMapPlaceID = place.id
+        mapVM.showSavedPlaceOnMap(place)
+        showMapTab()
+    }
+
+    /// "Find exact place" lands the user on the map with the candidate pins
+    /// focused, instead of stranding them in a drawer list that covers the
+    /// map. Any open drawer surface closes; tapping a pin opens its receipt.
+    private func showMapCandidatesOnMap() {
+        isRootSheetPresented = false
+        isMapPanelExpanded = false
+        rootPath.removeAll()
+        showMapTab()
+        drawerVM.returnToCommands()
+    }
+
+    /// A reliable Review map tap focuses that candidate. It does not search or save.
+    private func focusReviewCandidateOnMap(_ candidate: PlaceReviewCandidate) {
+        if mapVM.focusReviewCandidateOnMap(candidate) {
+            fullScreenRoute = nil
+            rootPath.removeAll()
+            showMapCandidatesOnMap()
+            return
+        }
+        openExactSearch(candidate)
+    }
+
+    /// Map-search refinement for an unresolved candidate. This does not
+    /// persist a new caption, address, or map link onto the clue.
+    private func addClueToReviewCandidate(_ candidate: PlaceReviewCandidate) {
+        guard incomingPlaceReceipt == nil else { return }
+        exactSearchRequestID = nil
+        rootPath.removeAll()
+        activateExactSearchSession(for: candidate)
+        showMapTab()
+        openExactSearchRefine(query: candidate.refinementQuery)
+    }
+
+    private func openExactSearch(_ candidate: PlaceReviewCandidate) {
+        let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            fullScreenActionError = languageSettings.localized(
+                english: "Add a city, address, or map link before searching for the exact place.",
+                traditionalChinese: "請先補上城市、地址或地圖連結，再搜尋精確地點。"
+            )
+            return
+        }
+        fullScreenRoute = nil
+        rootPath.removeAll()
+        activateExactSearchSession(for: candidate)
+        showMapTab()
+        // The tile-town canvas shows saved stamps, not unconfirmed search pins.
+        // Let the existing search panel perform one query and keep its results
+        // actionable while retaining the original clue-resolution session.
+        openExactSearchRefine(query: query)
+    }
+
+    /// Open the map search panel without ending the clue-resolution session.
+    private func openExactSearchRefine(query: String) {
+        guard incomingPlaceReceipt == nil else { return }
+        mapDetailDrawerItem = nil
+        presentAfterClearingExclusiveChrome(.mapDrawer(
+            DrawerLaunchRequest(target: .ask, initialQuery: query, focusesSearch: true, preservesExactSearchClue: true)
+        ))
+    }
+
+    /// Saved-row taps in ordinary map search just open the stamp. During
+    /// Review correction they must also resolve the active clue onto it.
+    /// Peek-card taps use this same path so a selected 64pt sticker cannot
+    /// open the stamp while leaving the correction session unresolved.
+    private func activateExactSearchSession(for candidate: PlaceReviewCandidate) {
+        exactSearchPresentationID = UUID()
+        exactSearchClueID = candidate.id
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
+    }
+
+    private func restoreExactSearchResolutionIfNeeded() {
+        guard !mapVM.hasActiveExactSearchResolution,
+              let id = exactSearchClueID,
+              let clue = mapVM.reviewCandidates.first(where: { $0.id == id })
+        else { return }
+        mapVM.beginExactSearchResolution(for: clue)
+    }
+
+    private func openSavedPlaceFromMapSearch(_ place: Place) {
+        let presentationID = exactSearchPresentationID
+        Task {
+            // Stay on the Map search/correction surface. The embedded drawer
+            // binds `mapVM.correctionDrawerError` so a failed decision does
+            // not open the stamp as if it were already corrected.
+            let outcome = await SaveDoodleMapPeekOpen.perform(
+                place: place,
+                mapViewModel: mapVM,
+                isExactSearchSessionActive: isExactSearchSessionActive,
+                exactSearchClueID: exactSearchClueID,
+                restoreResolution: restoreExactSearchResolutionIfNeeded,
+                isCurrentRequest: { exactSearchPresentationID == presentationID }
+            )
+            switch outcome {
+            case .openStamp(let id):
+                let opened = mapVM.places.first(where: { $0.id == id }) ?? place
+                openMapDetail(.savedPlace(opened))
+            case .resolvedStamp(let id):
+                clearResolvedExactSearchSession()
+                let opened = mapVM.places.first(where: { $0.id == id }) ?? place
+                openMapDetail(.savedPlace(opened))
+            case .stayOnSearch:
+                break
+            }
+        }
+    }
+
+    /// Saving an unsaved exact-search result retires the clue in MapViewModel
+    /// but used to leave this session live, so a later pin tap hit
+    /// `noActiveCorrectionSession` instead of opening the new stamp.
+    private func saveMapCandidateAndEndExactSearchIfNeeded(
+        _ candidate: SaveMapCandidate
+    ) async throws -> Place {
+        restoreExactSearchResolutionIfNeeded()
+        let endsExactSearch = isExactSearchSessionActive
+            && exactSearchClueID.map { mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0) } == true
+        let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+        if endsExactSearch {
+            clearResolvedExactSearchSession()
+        }
+        endExactSearchSessionAfterCandidateSave()
+        return place
+    }
+
+    private func clearResolvedExactSearchSession() {
+        exactSearchPresentationID = UUID()
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
+    }
+
+    /// Saving a new map candidate resolves the clue in MapViewModel but
+    /// must also drop the ContentView session so the next saved-row tap
+    /// opens the stamp instead of `chooseSavedStampFromExactSearch`.
+    private func endExactSearchSessionAfterCandidateSave() {
+        exactSearchPresentationID = UUID()
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+    }
+
+    private func invalidateExactSearchRequest() {
+        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil || mapVM.hasActiveExactSearchResolution else { return }
+        exactSearchPresentationID = UUID()
+        exactSearchRequestID = nil
+        isExactSearchSessionActive = false
+        exactSearchClueID = nil
+        mapVM.clearMapSearchResults()
+    }
+
+#if DEBUG
+    private var debugQARefreshToken: DebugQARefreshToken {
+        let fullScreenKind: String? = switch fullScreenRoute {
+        case .capture: "capture"
+        case .placeDetail: "placeDetail"
+        case nil: nil
+        }
+        return DebugQARefreshToken(
+            rootTab: selectedRootTab.atlasTitle.lowercased(),
+            fullScreenKind: fullScreenKind,
+            isRootSheetPresented: isRootSheetPresented,
+            isMapPanelExpanded: isMapPanelExpanded,
+            rootPathDepth: rootPath.count,
+            savedPlaceCount: mapVM.places.count,
+            reviewCandidateCount: mapVM.reviewCandidates.count,
+            mapCandidateCount: mapVM.mapCandidates.count,
+            hasIncomingReceipt: incomingPlaceReceipt != nil
+        )
+    }
+
+    private func syncDebugQAState() {
+        let snapshot = debugQARefreshToken
+        let state = DebugQAState.shared
+        state.qaRootTab = snapshot.rootTab
+        state.qaFullScreenKind = snapshot.fullScreenKind
+        state.qaIsRootSheetPresented = snapshot.isRootSheetPresented
+        state.qaIsMapPanelExpanded = snapshot.isMapPanelExpanded
+        state.qaRootPathDepth = snapshot.rootPathDepth
+        state.qaSavedPlaceCount = snapshot.savedPlaceCount
+        state.qaReviewCandidateCount = snapshot.reviewCandidateCount
+        state.qaMapCandidateCount = snapshot.mapCandidateCount
+        state.qaHasIncomingReceipt = snapshot.hasIncomingReceipt
+    }
+
+    /// E4 fixtures. Park and present only after a signed-in account exists so
+    /// Unplaced is owned by that session and the quota alert is not the
+    /// sign-in card.
+    private func applyFreeCapE4UITestFixturesWhenSignedIn() async {
+        let arguments = ProcessInfo.processInfo.arguments
+        let wantsUnplaced = arguments.contains("--uitest-show-unplaced-candidate")
+        let wantsQuotaNotice = arguments.contains("--uitest-show-ai-quota-notice")
+        guard wantsUnplaced || wantsQuotaNotice else { return }
+
+        for _ in 0..<480 {
+            if PrivyAuthService.shared.currentUserId != nil { break }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        guard PrivyAuthService.shared.currentUserId != nil else { return }
+
+        if wantsUnplaced {
+            applyUnplacedCandidateUITestFixtureIfNeeded()
+        }
+        if wantsQuotaNotice {
+            showAIQuotaNotice = true
+        }
+    }
+
+    private func applyUnplacedCandidateUITestFixtureIfNeeded() {
+        guard !didApplyUnplacedCandidateFixture else { return }
+        let name = "Unplaced Harbor Cafe"
+        if mapVM.reviewCandidates.contains(where: { $0.name == name }) {
+            didApplyUnplacedCandidateFixture = true
+            return
+        }
+        let place = Place(
+            id: UUID(uuidString: "e4000000-0000-4000-8000-000000000051")!,
+            name: name,
+            address: "Harbor Street",
+            latitude: 25.1500,
+            longitude: 121.7800,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        _ = try? mapVM.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        // A leftover App Group handoff from the 51st-save launch, or from
+        // park-with-paywall, would cover Home and swallow Saves taps.
+        _ = mapVM.consumePendingSavedPlaceLimitPaywall()
+        didApplyUnplacedCandidateFixture = true
+    }
+#endif
+
+    private func openFoodAnalysis(_ place: Place) {
+        transitionToPlanningDrawer {
+            drawerVM.showFoodPlaceAnalysis(
+                for: place,
+                outputLanguage: languageSettings.language
+            )
+            drawerDetent = .large
+        }
+    }
+
+    private func openPlanAround(_ place: Place) {
+        stagePlaceInPlan(place, addingToTrip: false)
+    }
+
+    private func openPlanConversation(submittedQuery: String? = nil) {
+        if !planConversation.assignmentInProgress {
+            if let submittedQuery {
+                planConversation.assignmentPlace = nil
+                planConversation.anchorPlaceID = nil
+                planConversation.agentRequest?.anchorPlaceID = nil
+                planConversation.submittedQuery = submittedQuery
+            } else {
+                planConversation.requestsNewPlan = true
+            }
+        }
+        presentAfterClearingExclusiveChrome(.plan)
+    }
+
+    private var clipListConfirmation: some View {
+        let displayedList = pendingClipListSave
+        let displayedJournal = PendingShareStore.load()
+        let displayedGeneration = mapVM.sessionGeneration
+        return NavigationStack {
+            List {
+                Section {
+                    Text(languageSettings.localized(
+                        english: "These places are pending. Confirm to save them to the account you signed in to. Existing places count once; any over the free limit stay pending.",
+                        traditionalChinese: "這些地點尚未收藏。確認後才會存入目前登入的帳號；已存地點不重複計算，超過免費上限的地點仍保留待辦。"
+                    ))
+                    ForEach(displayedList?.items ?? []) { item in
+                        VStack(alignment: .leading) {
+                            Text(item.title)
+                            Text(item.subtitle).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if let handoffToastText {
+                    Text(handoffToastText).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("app.handoff.confirmationMessage")
+                }
+                Button(languageSettings.localized(english: "Confirm save", traditionalChinese: "確認收藏")) {
+                    guard let displayedList else { return }
+                    Task { await performPendingListStampImport(confirmed: displayedList, journal: displayedJournal, generation: displayedGeneration) }
+                }
+                .disabled(listHandoffAttempt.isSaving)
+                .accessibilityIdentifier("app.handoff.confirmList")
+            }
+            .navigationTitle(languageSettings.localized(english: "Pending places", traditionalChinese: "待收藏地點"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(languageSettings.localized(english: "Later", traditionalChinese: "稍後")) {
+                        presentsClipListConfirmation = false
+                    }.disabled(listHandoffAttempt.isSaving)
+                }
+            }
+            .interactiveDismissDisabled(listHandoffAttempt.isSaving)
+        }
+    }
+
+    private func performPendingListStampImport(
+        confirmed: SaveCollaborativeList, journal: PendingSharePayload?, generation: Int
+    ) async {
+        guard mapVM.sessionGeneration == generation,
+              requiresListConfirmation, pendingClipListSave == confirmed,
+              PendingShareStore.load() == journal,
+              ClipListHandoff.matchesPendingSelection(confirmed, pending: journal) else { return }
+        await listHandoffAttempt.runConfirmed(
+            pending: {
+                requiresListConfirmation && pendingClipListSave == confirmed && PendingShareStore.load() == journal
+                    ? confirmed : nil
+            },
+            save: { try await mapVM.saveClipListHandoff($0, requiringAuthenticatedSession: true) },
+            succeeded: { list, counts in
+                guard mapVM.sessionGeneration == generation,
+                      PendingShareStore.load() == journal else { return }
+                if counts.overCap == 0 {
+                    PendingShareStore.clear(ifUnchanged: journal)
+                    pendingClipListSave = nil
+                    requiresListConfirmation = false
+                }
+                presentsClipListConfirmation = false
+                handoffToastText = languageSettings.localized(
+                    english: ClipListHandoff.toastEnglish(counts: counts, confirmedCount: list.items.count),
+                    traditionalChinese: ClipListHandoff.toastTraditionalChinese(counts: counts, confirmedCount: list.items.count)
+                )
+            },
+            failed: { error in
+                guard !(error is CancellationError) else { return }
+                if error is SavePlaceLimitError { return }
+                handoffToastText = languageSettings.localized(
+                    english: "Couldn't save the list. Try again.",
+                    traditionalChinese: "清單沒存好，請再試一次。"
+                )
+            }
+        )
+        try? await Task.sleep(for: .seconds(3))
+        if !listHandoffAttempt.isSaving, !listHandoffAttempt.canRetry, handoffToastText != nil {
+            handoffToastText = nil
+        }
+    }
+
+    private func stagePlaceInPlan(_ place: Place, addingToTrip: Bool) {
+        planConversation.stage(place: place, addingToTrip: addingToTrip, language: languageSettings.language)
+        pendingReceiptMapDetail = nil
+        incomingPlaceReceipt = nil
+        mapDetailDrawerItem = nil
+        isMapPanelExpanded = false
+        pendingCaptureTripID = nil
+        pendingOriginPlanCandidateID = nil
+        // Reuse the exclusive-chrome dismissal gate; don't open another sheet
+        // or resume pending capture while the place detail is closing.
+        presentAfterClearingExclusiveChrome(.plan)
+    }
+
+    private func transitionToPlanningDrawer(
+        action: @escaping () async -> Void
+    ) {
+        fullScreenRoute = nil
+        rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            openDrawer(.ask, tripID: nil)
+            await Task.yield()
+            await action()
+        }
+    }
+
+    private func openPostcardDrawerUITestFixtureIfNeeded() {
+#if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+
+        if arguments.contains("--uitest-postcard-unsaved") {
+            openMapDetail(.unsavedCandidate(SaveMapCandidate(
+                id: "postcard-unsaved-fixture",
+                title: "Tsukiji Outer Market",
+                subtitle: "4 Chome-16-2 Tsukiji, Chuo City, Tokyo",
+                latitude: 35.6655,
+                longitude: 139.7707,
+                category: .food,
+                rating: 4.5,
+                reviewCount: 18_420,
+                sourceURL: "https://maps.apple.com/?q=Tsukiji+Outer+Market",
+                sourcePlatform: .appleMaps,
+                distanceMeters: 820,
+                evidence: [
+                    "Apple Maps POI",
+                    "Search: Tokyo seafood market",
+                    "Hours: 5:00 AM–2:00 PM",
+                ]
+            )))
+            return
+        }
+
+        if arguments.contains("--uitest-postcard-social") {
+            openMapDetail(.socialPlace(Place(
+                id: UUID(uuidString: "7C4BFB3D-BA7C-4D62-B502-78222AD12E14")!,
+                name: "Stereoscope Coffee",
+                address: "4542 Beach Blvd, Buena Park, CA",
+                latitude: 33.8937,
+                longitude: -117.9992,
+                category: .cafe,
+                status: .wantToGo,
+                rating: 4.7,
+                note: "A calm coffee stop saved by people you follow.",
+                sourcePlatform: .other,
+                recommender: "Jerry's coffee list",
+                googleRating: 4.6,
+                createdAt: Date(timeIntervalSince1970: 1_721_865_600),
+                visibility: .publicGuide,
+                socialSignal: PlaceSocialSignal(
+                    kind: .friendSaved,
+                    lens: .friends,
+                    friendNames: ["Jerry", "Mina"],
+                    friendCount: 2,
+                    saveCount: 42,
+                    trendingRank: nil,
+                    categoryRank: 3,
+                    sourceLabel: "Jerry's team",
+                    referrerId: "postcard-social-fixture",
+                    referralCode: nil
+                )
+            )))
+        }
+#endif
+    }
+
+    private func runRapidChromeTransitionUITestFixtureIfNeeded() {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-rapid-chrome-transitions") else {
+            return
+        }
+
+        presentExclusiveRootSheet()
+        Task { @MainActor in
+            // Give the first sheet one frame to begin presentation, then model
+            // the rapid Passport -> Save taps that previously overlapped it.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            openPassport()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            presentExclusiveCover(.capture)
+        }
+#endif
+    }
+
+    private func handleRootSheetDismiss() {
+        if suppressChromeDismissSideEffects {
+            handleExclusiveChromeDismiss()
+            return
+        }
+        let pendingDetail = pendingReceiptMapDetail
+        pendingReceiptMapDetail = nil
+        incomingPlaceReceipt = nil
+        pendingCaptureTripID = nil
+        drawerVM.returnToCommands()
+        guard let pendingDetail else {
+            mapVM.clearSelectedMapObject()
+            resumePendingOnboardingCaptureIfNeeded()
+            return
+        }
+
+        guard selectedRootTab == .map, rootPath.isEmpty else {
+            fullScreenRoute = .placeDetail(pendingDetail)
+            return
+        }
+
+        mapDetailDrawerItem = pendingDetail
+
+        Task { @MainActor in
+            await Task.yield()
+            drawerDetent = .medium
+            isRootSheetPresented = true
+        }
+    }
+
+    private func handleFullScreenDismiss() {
+        if suppressChromeDismissSideEffects {
+            handleExclusiveChromeDismiss()
+            return
+        }
+        resumePendingOnboardingCaptureIfNeeded()
+    }
+
+    private func resumePendingOnboardingCaptureIfNeeded() {
+        guard !suppressPendingOnboardingCaptureResume,
+              !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              incomingPlaceReceipt == nil,
+              fullScreenRoute == nil,
+              !isRootSheetPresented,
+              planConversation.assignmentPlace == nil
+        else { return }
+
+        Task { @MainActor in
+            await Task.yield()
+            guard !suppressPendingOnboardingCaptureResume,
+                  !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  incomingPlaceReceipt == nil,
+                  fullScreenRoute == nil,
+                  !isRootSheetPresented,
+                  planConversation.assignmentPlace == nil
+            else { return }
+            fullScreenRoute = .capture
+        }
+    }
+
+    private var captureTripName: String? {
+        guard let pendingCaptureTripID else { return nil }
+        return tripStore.trips.first(where: { $0.id == pendingCaptureTripID })?.name
+    }
+
+    private func requestTripAssignment(for place: Place) {
+        stagePlaceInPlan(place, addingToTrip: true)
+    }
+
+    private func refreshSelectedMapDetailPlace(from places: [Place]) {
+        if case .savedPlace(let selectedPlace) = mapDetailDrawerItem,
+           let updatedPlace = places.first(where: { $0.id == selectedPlace.id }),
+           updatedPlace != selectedPlace {
+            mapDetailDrawerItem = .savedPlace(updatedPlace)
+        }
+
+        if case .placeDetail(.savedPlace(let fullScreenPlace)) = fullScreenRoute,
+           let updatedFullScreenPlace = places.first(where: { $0.id == fullScreenPlace.id }),
+           updatedFullScreenPlace != fullScreenPlace {
+            fullScreenRoute = .placeDetail(.savedPlace(updatedFullScreenPlace))
+        }
+    }
+}
+
+private struct FriendShareReceiptView: View {
+    private enum LoadState {
+        case loading
+        case loaded(SharedPlaceReceipt)
+        case failed(SharedPlaceReceiptError)
+    }
+
+    private enum SaveState {
+        case idle
+        case saving
+        case saved
+        case alreadySaved
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let destination: SharedPlaceReceiptDestination
+    let onSave: (SharedPlaceReceipt) async throws -> SharedPlaceSaveOutcome
+    @State private var loadState: LoadState = .loading
+    @State private var saveState: SaveState = .idle
+    @State private var saveErrorMessage: String?
+    @State private var retryCount = 0
+    @State private var activeLoadID: UUID?
+    @State private var activeSaveID: UUID?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch loadState {
+                case .loading:
+                    loadingView
+                case .loaded(let receipt):
+                    receiptView(receipt)
+                case .failed(let error):
+                    errorView(error)
+                }
+            }
+            .navigationTitle(localized("Shared place", "好友分享"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(localized("Done", "完成")) { dismiss() }
+                        .disabled(saveState == .saving)
+                }
+            }
+        }
+        .task(id: "\(destination.id):\(retryCount)") {
+            await loadReceipt()
+        }
+        .onDisappear {
+            activeLoadID = nil
+            activeSaveID = nil
+        }
+        .interactiveDismissDisabled(saveState == .saving)
+    }
+
+    private var loadingView: some View {
+        ZStack {
+            SaveDottedBackground().ignoresSafeArea()
+            SaveAtlasLoadingCard(
+                eyebrow: localized("Shared place", "好友分享"),
+                title: localized("Checking this Savvy link", "正在檢查這個 Savvy 連結"),
+                detail: localized(
+                    "Verifying the sender and place before showing a save action.",
+                    "正在確認分享者與地點，再顯示儲存動作。"
+                ),
+                systemImage: "link"
+            )
+            .padding(.horizontal, 24)
+            .accessibilityIdentifier("friendShareReceipt.loading")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func errorView(_ error: SharedPlaceReceiptError) -> some View {
+        ContentUnavailableView {
+            Label(localized("Could not open this place", "無法打開這個地點"), systemImage: "link.badge.plus")
+        } description: {
+            Text(localized(error.errorDescription ?? "The link is unavailable.", errorMessage(error)))
+        } actions: {
+            if case .shortLink = destination {
+                Button(localized("Try Again", "再試一次")) {
+                    retryCount += 1
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func receiptView(_ receipt: SharedPlaceReceipt) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let sender = receipt.verifiedSenderLabel {
+                        Label(localized("Shared by \(sender)", "由 \(sender) 分享"), systemImage: "person.crop.circle")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.saveCoral)
+                            .accessibilityIdentifier("friendShareReceipt.sender")
+                    } else {
+                        Label(localized("Shared place", "分享的地點"), systemImage: "square.and.arrow.down")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(receipt.payload.name)
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Color.saveInk)
+
+                    if !receipt.payload.address.isEmpty {
+                        Text(receipt.payload.address)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(receipt.payload.category)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.saveHoney.opacity(0.35), in: Capsule())
+                }
+
+                if let note = receipt.payload.note, !note.isEmpty {
+                    receiptSection(
+                        title: friendShareNoteTitle(receipt),
+                        value: note,
+                        icon: "quote.bubble"
+                    )
+                    .accessibilityIdentifier("friendShareReceipt.note")
+                }
+
+                receiptSection(
+                    title: localized("Original source", "原始來源"),
+                    value: receipt.payload.sourceLabel,
+                    icon: "link"
+                )
+
+                if let sourceURL = receipt.payload.safeSourceURL {
+                    Link(destination: sourceURL) {
+                        Label(localized("Open original source", "打開原始來源"), systemImage: "arrow.up.right.square")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                }
+
+                if receipt.verifiedSenderLabel != nil {
+                    Label(
+                        localized("Share record verified by Savvy. Saving stays private.", "分享紀錄已由 Savvy 驗證；儲存後仍是私人記憶。"),
+                        systemImage: "checkmark.shield"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 12) {
+                    Button {
+                        Task { await save(receipt) }
+                    } label: {
+                        Label(saveButtonTitle, systemImage: saveButtonIcon)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.saveCoral)
+                    .controlSize(.large)
+                    .disabled(saveState != .idle)
+                    .accessibilityIdentifier("friendShareReceipt.save")
+
+                    if let saveErrorMessage {
+                        Text(saveErrorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("friendShareReceipt.saveError")
+                    }
+
+                    if let mapsURL = receipt.payload.appleMapsURL {
+                        Button {
+                            openURL(mapsURL)
+                        } label: {
+                            Label(localized("Open in Maps", "在地圖中打開"), systemImage: "map")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+                        .accessibilityIdentifier("friendShareReceipt.openMaps")
+                    }
+                }
+            }
+            .padding(24)
+        }
+        .background(Color.saveCream.ignoresSafeArea())
+    }
+
+    private func receiptSection(title: String, value: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.body)
+                .foregroundStyle(Color.saveInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var saveButtonTitle: String {
+        switch saveState {
+        case .idle: return localized("Save to my Savvy", "存到我的 Savvy")
+        case .saving: return localized("Saving…", "儲存中…")
+        case .saved: return localized("Saved privately", "已私人儲存")
+        case .alreadySaved: return localized("Already saved", "已經存過")
+        }
+    }
+
+    private var saveButtonIcon: String {
+        switch saveState {
+        case .idle: return "bookmark"
+        case .saving: return "hourglass"
+        case .saved: return "checkmark.circle.fill"
+        case .alreadySaved: return "checkmark.circle"
+        }
+    }
+
+    @MainActor
+    private func loadReceipt() async {
+        let loadID = UUID()
+        let expectedDestination = destination
+        activeLoadID = loadID
+        activeSaveID = nil
+        saveState = .idle
+        saveErrorMessage = nil
+        switch expectedDestination {
+        case .embedded(let payload):
+            guard activeLoadID == loadID else { return }
+            loadState = .loaded(.embedded(payload))
+        case .malformed:
+            guard activeLoadID == loadID else { return }
+            loadState = .failed(.malformedLink)
+        case .shortLink(let url):
+            loadState = .loading
+            do {
+                let receipt = try await SharedPlaceReceipt.resolve(from: url)
+                guard !Task.isCancelled, activeLoadID == loadID else { return }
+                loadState = .loaded(receipt)
+                if let code = receipt.code {
+                    guard !Task.isCancelled, activeLoadID == loadID else { return }
+                    try? await SupabaseService.shared.recordFriendShareEvent(
+                        code: code,
+                        event: .receiptOpened,
+                        failureReason: nil
+                    )
+                }
+            } catch is CancellationError {
+                return
+            } catch let error as SharedPlaceReceiptError {
+                guard !Task.isCancelled, activeLoadID == loadID else { return }
+                loadState = .failed(error)
+                if let code = SharedPlaceData.shortCode(from: url) {
+                    guard !Task.isCancelled, activeLoadID == loadID else { return }
+                    try? await SupabaseService.shared.recordFriendShareEvent(
+                        code: code,
+                        event: .openFailed,
+                        failureReason: error.eventFailureReason
+                    )
+                }
+            } catch {
+                guard !Task.isCancelled, activeLoadID == loadID else { return }
+                loadState = .failed(.invalidResponse)
+                if let code = SharedPlaceData.shortCode(from: url) {
+                    guard !Task.isCancelled, activeLoadID == loadID else { return }
+                    try? await SupabaseService.shared.recordFriendShareEvent(
+                        code: code,
+                        event: .openFailed,
+                        failureReason: .unknown
+                    )
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func save(_ receipt: SharedPlaceReceipt) async {
+        guard saveState == .idle,
+              case .loaded(let currentReceipt) = loadState,
+              currentReceipt.id == receipt.id
+        else { return }
+        let saveID = UUID()
+        activeSaveID = saveID
+        saveState = .saving
+        saveErrorMessage = nil
+        do {
+            let outcome = try await onSave(receipt)
+            guard !Task.isCancelled,
+                  activeSaveID == saveID,
+                  case .loaded(let currentReceipt) = loadState,
+                  currentReceipt.id == receipt.id
+            else { return }
+            saveState = outcome.isDuplicate ? .alreadySaved : .saved
+        } catch is SavePlaceLimitError {
+            guard !Task.isCancelled,
+                  activeSaveID == saveID,
+                  case .loaded(let currentReceipt) = loadState,
+                  currentReceipt.id == receipt.id
+            else { return }
+            saveState = .idle
+            saveErrorMessage = nil
+        } catch {
+            guard !Task.isCancelled,
+                  activeSaveID == saveID,
+                  case .loaded(let currentReceipt) = loadState,
+                  currentReceipt.id == receipt.id
+            else { return }
+            saveState = .idle
+            saveErrorMessage = localized(
+                "Couldn't save this verified share. It may have expired; refresh the receipt and try again.",
+                "無法儲存這張已驗證的分享。連結可能已過期；請重新載入收據後再試。"
+            )
+        }
+    }
+
+    private func friendShareNoteTitle(_ receipt: SharedPlaceReceipt) -> String {
+        let copy = FriendShareNoteCopy.title(sender: receipt.verifiedSenderLabel)
+        return localized(copy.english, copy.traditionalChinese)
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+
+    private func errorMessage(_ error: SharedPlaceReceiptError) -> String {
+        switch error {
+        case .malformedLink: return "這個分享連結格式不正確。"
+        case .missingAPIConfiguration: return "Savvy 尚未設定好這個分享服務。"
+        case .networkUnavailable: return "請檢查網路後再試一次。"
+        case .missingOrExpired: return "這個分享連結不存在或已過期。"
+        case .serverUnavailable: return "分享收據暫時無法使用。"
+        case .invalidResponse: return "Savvy 無法驗證這張分享收據。"
+        }
+    }
+}
+
+/// Map-search correction failures surface here instead of opening the stamp.
+struct MapDrawerActionErrorAlert: ViewModifier {
+    let title: String
+    let okTitle: String
+    let isEnabled: Bool
+    @Binding var message: String?
+
+    func body(content: Content) -> some View {
+        content.alert(title, isPresented: Binding(
+            get: { isEnabled && message != nil },
+            set: { if !$0 { message = nil } }
+        )) {
+            Button(okTitle) { message = nil }
+        } message: {
+            Text(message ?? "")
+                .accessibilityIdentifier("map.drawer.actionError")
+        }
+    }
+}
+
+#Preview {
+    ContentView()
+        .environment(\.appLanguageSettings, AppLanguageSettings())
+}

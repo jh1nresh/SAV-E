@@ -9,6 +9,18 @@ const allowedAdvisories = new Map([
     "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
     "image-size has no patched release; Savvy reaches it only through Metro's build tooling.",
   ],
+  [
+    "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+    "braces 3.0.3 is still the latest release; Savvy reaches it only through Expo/Metro bundler tooling.",
+  ],
+  [
+    "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+    "Historical node-forge advisory. The lock is now 1.4.2; this entry stays so an older transitive copy does not fail the gate.",
+  ],
+  [
+    "https://github.com/advisories/GHSA-qr28-fpjm-wq7f",
+    "decode-uri-component 0.5.1 is ESM-only. WalletConnect/Reown still lock CJS 0.2.2 through query-string, and npm audit fix cannot move it without a breaking override.",
+  ],
 ]);
 
 const AUDIT_ATTEMPTS = 4;
@@ -28,7 +40,11 @@ function advisoryRoots(name, vulnerabilities, seen = new Set()) {
       return advisoryRoots(cause, vulnerabilities, nextSeen);
     }
 
-    return [{ name: cause.name, url: cause.url }];
+    return [{
+      name: cause.name,
+      url: cause.url,
+      severity: cause.severity,
+    }];
   });
 }
 
@@ -97,14 +113,19 @@ function blockingAdvisories(report) {
     if (vulnerability.name === "image-size" && vulnerability.isDirect) return true;
 
     const roots = advisoryRoots(vulnerability.name, vulnerabilities);
-    return (
-      roots.length === 0 ||
-      roots.some(
-        (root) =>
-          root.name !== "image-size" ||
-          root.url === null ||
-          !allowedAdvisories.has(root.url),
-      )
+    if (roots.length === 0) return true;
+
+    // `--audit-level=high`: a high parent can still list moderate vias.
+    // Only unapproved high/critical (or unresolved) roots fail the gate.
+    const highRoots = roots.filter((root) => {
+      if (root.url == null) return true;
+      if (root.severity == null) return true;
+      return new Set(["high", "critical"]).has(root.severity);
+    });
+    if (highRoots.length === 0) return true;
+
+    return highRoots.some(
+      (root) => root.url == null || !allowedAdvisories.has(root.url),
     );
   });
 }

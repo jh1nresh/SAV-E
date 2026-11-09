@@ -1,11 +1,22 @@
 # Savvy Little Atlas + Postcard Pocket
 
-Status: locked production direction
+Status: Atlas parity-fixture / One-Face reference
 Reference: [`Reference/approved-ab-hybrid.png`](Reference/approved-ab-hybrid.png)
 
-This file is the canonical Savvy visual specification for Home, Saves, Trips,
-Trip Plan, and Root Map. Where an older production spec conflicts with the fixed
-composition, assets, type scale, or one-viewport rule below, this file wins.
+**2026-10-14 founder lock:** production Home peek and Map base are full-pixel
+tile-town (`DESIGN.md`, `SaveTileTownCanvas`). This file remains the
+`--uitest-atlas-parity-fixture` and illustrated-atlas reference. It does not
+win over `DESIGN.md` for the shipped product Map base.
+
+**Home parity TARGET (2026-10-24):** `Reference/ProductionTargets/home.png`
+is still the old baseline (md5 `79ae24aaf02002cd10f429c2869dcfc0`), not
+DESIGN v2. Do not treat v2 `home-light.png` as the 0.90 target until the
+founder approves a replacement. Dark Home does not enter parity.
+
+This file is the canonical Atlas fixture specification for Home, Saves, Trips,
+Trip Plan, and the illustrated Root Map. Where an older production spec
+conflicts with the fixed fixture composition, assets, type scale, or
+one-viewport rule below, this file wins for the fixture.
 Product behavior, persistence, authentication, and confirmation remain
 governed by their existing contracts. Place detail uses one canonical
 Postcard renderer: focused full-screen detail outside Map and a drawer on Map.
@@ -136,8 +147,12 @@ Opening    = Postcard Pocket transition
 
 ### Root Map
 
-- Live MapKit fills the viewport below the Savvy header. Owned landmark, Memo,
-  pin, and route accents may sit above it without obscuring geographic truth.
+- Fixture Map may keep the illustrated atlas / MapKit crop. Production product
+  Map is tile-town (`DESIGN.md` 2026-10-14); do not treat this fixture MapKit
+  sentence as the shipped map base.
+- Live MapKit fills the fixture viewport below the Savvy header. Owned
+  landmark, Memo, pin, and route accents may sit above it without obscuring
+  geographic truth.
 - One cream Map command shelf sits above the fixed Root tabs. Its default state
   contains a grabber, `Search places or ask Savvy`, and the confirmed Map Stamp
   count.
@@ -175,16 +190,18 @@ Light hexes match the production `SaveAtlasPalette` light column in
 production wins.
 
 ```text
-canvas      #FDF8F3
-paper       #FFFDF7
+canvas      #FFF9EB
+paper       #FFF9EB
 forest      #0E4A33
-ink         #2E2117
+ink         #2F2E23
 muted       #62594F
 coral       #F26B4A
 mint        #D6E8C4
 sky         #B5E3F5
 lavender    #E3D6F7
-kraft       #F0CFA1
+kraft       #EADDC6
+kraft light #F0E3CA
+stroke      #C9AF8B
 route ink   #403B33
 ```
 
@@ -201,7 +218,8 @@ geography, never competing primary actions.
 - Envelope uses a different silhouette from cards.
 - Ticket overlap is deliberate: adjacent tickets overlap by 4–8 pt and the
   envelope mouth overlaps the final ticket. Flat separated rows fail fidelity.
-- Tab active state is one pale mint lozenge.
+- Tab active state is coral on the destination icon and label. The bar is a
+  flat cream slab with a 2px kraft stroke, not a mint lozenge or glass pill.
 - Shadows stay under 8% opacity.
 
 ## Anti-slop gate
@@ -232,9 +250,12 @@ Reject the prototype if three or more are true:
   scalloped ticket silhouette, overlap, contextual Memo, and postal detail
   disappear, the implementation has left Postcard Pocket.
 - Every review run exports `reference/`, `output/`, `diff/`, and `results/`.
-  `Scripts/VisualParity.swift` ignores only the system-owned top 48 rows and
-  combines tolerant edge overlap (35%) with per-pixel appearance similarity
-  (65%). The four raster-approved pages must score at least 0.90. Trips uses
+  `Scripts/VisualParity.swift` ignores the system-owned top 48 rows. Home
+  grades unmasked against `ProductionTargets/home.png` (position, size,
+  color, and font style). Other pages keep tolerant edge overlap (35%) with
+
+  per-pixel appearance similarity (65%). The four raster-approved pages
+  must score at least 0.90. Trips uses
   the same production component and structural UI gate until its own approved
   raster is locked.
 

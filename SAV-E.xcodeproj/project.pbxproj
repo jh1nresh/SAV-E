@@ -7,7 +7,48 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+
+
+		C1A000000000000000000041 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000040 /* PendingShareStore.swift */; };
+		C1A000000000000000000043 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000042 /* PendingShareStore.swift */; };
+		C1A000000000000000000047 /* ClipSaveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000046 /* ClipSaveService.swift */; };
+		C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000044 /* Iansui-ClipTitles.ttf */; };
+		C1A000000000000000000049 /* PendingShareStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000048 /* PendingShareStoreTests.swift */; };
+		C8A100000000000000000002 /* ClipAppleAccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000001 /* ClipAppleAccountStore.swift */; };
+		C8A100000000000000000004 /* ClipSignInCarryOver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000003 /* ClipSignInCarryOver.swift */; };
+		C8A100000000000000000006 /* ClipSignInCarryOverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */; };
+		C8A100000000000000000008 /* ClipListSavePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000007 /* ClipListSavePlanner.swift */; };
+		C8A100000000000000000009 /* ClipListSavePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000007 /* ClipListSavePlanner.swift */; };
+		C8A10000000000000000000B /* ClipListSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A10000000000000000000A /* ClipListSaveTests.swift */; };
+		C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000001 /* ClipDoodleTheme.swift */; };
+		C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000020 /* ClipPreviewFixtures.swift */; };
+		C1A000000000000000000023 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000022 /* Localizable.xcstrings */; };
+		C1A000000000000000000025 /* Caveat-SemiBold.ttf in SAVEClip Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000024 /* Caveat-SemiBold.ttf */; };
+		C1A000000000000000000006 /* ClipAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000005 /* Assets.xcassets */; };
+		C1A00000000000000000000B /* SAVEClipScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00000000000000000000A /* SAVEClipScreenshotTests.swift */; };
+		C1A000000000000000000015 /* SaveClipJournalLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000016 /* SaveClipJournalLockTests.swift */; };
+		C4P100000000000000000001 /* SaveCaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4P100000000000000000002 /* SaveCaptureFlowView.swift */; };
+		C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */; };
+		D2E200000000000000000001 /* SaveDoodlePassportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000002 /* SaveDoodlePassportView.swift */; };
+		D2E200000000000000000003 /* SaveDoodlePassportCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000004 /* SaveDoodlePassportCatalog.swift */; };
+		D2E200000000000000000005 /* SaveDoodlePassportStickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000006 /* SaveDoodlePassportStickers.swift */; };
+		D2E200000000000000000007 /* SaveDoodlePassportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000008 /* SaveDoodlePassportTests.swift */; };
 		F815A0000000000000000001 /* SaveFriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F815A0000000000000000002 /* SaveFriendsView.swift */; };
+		T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000002 /* SaveTileTownMap.swift */; };
+		T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000004 /* SaveKraftStamp.swift */; };
+		D2E100000000000000000001 /* SaveDoodleHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000002 /* SaveDoodleHomeView.swift */; };
+		D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */; };
+		D2E100000000000000000007 /* SaveAddressLocality.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000008 /* SaveAddressLocality.swift */; };
+		D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000006 /* SaveDoodleHomeTests.swift */; };
+		F815A0000000000000000003 /* SaveDoodleFriendsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F815A0000000000000000004 /* SaveDoodleFriendsTests.swift */; };
+		D3E100000000000000000001 /* SaveDoodleMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000002 /* SaveDoodleMapView.swift */; };
+		D3E100000000000000000003 /* SaveDoodleCheckInStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */; };
+		D3E100000000000000000005 /* SaveDoodleMapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000006 /* SaveDoodleMapTests.swift */; };
+		P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000002 /* SavvyMapPhotoPins.swift */; };
+		P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */; };
+		P13A10000000000000000005 /* SavvyMapPhotoPinsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */; };
+		T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A10000000000000000000A /* SaveTileTownLockTests.swift */; };
+		C91900000000000000000001 /* DisplayFont in Resources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000002 /* DisplayFont */; };
 		A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000004 /* SavePlanAgentTests.swift */; };
 		A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000002 /* SavePlanAgent.swift */; };
 		07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EE79719B259620EE6212C7 /* Place.swift */; };
@@ -73,7 +114,6 @@
 		9D0E1F2A3B4C5D6E7F8091A2 /* SavePlanDraftBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */; };
 		B1C2D3E4F5061728394A5B6C /* SaveDayRhythmSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5061728394A5B /* SaveDayRhythmSchedulerTests.swift */; };
 		67B0D4C02A1500F6B8D902CF /* PlaceListComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A1053C8B2E3E25288C2A6C /* PlaceListComponent.swift */; };
-		67B23BF4F68B65D050156E0F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8EBE852DE7618089938F9421 /* Assets.xcassets */; };
 		67F4455E1D94BD5A3556586A /* SAVEShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6834F63ABDFBD48BAB5825EA /* CategoryPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5009253F9320E70D431D935 /* CategoryPill.swift */; };
 		6BA6AA3BA685D1C25A0E9816 /* SaveMemoryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */; };
@@ -96,6 +136,8 @@
 		80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */; };
 		8111929D20C39DD9E9E4F1A3 /* TripPlanSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */; };
 		82B81EF68AE9F7C892CC0BDC /* SaveSmokeHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85A66D5F0A1827A64467BAF /* SaveSmokeHarnessView.swift */; };
+		A306E01D0000000000000002 /* GooglePlacesPhotoAttributionEvidenceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A306E01D0000000000000001 /* GooglePlacesPhotoAttributionEvidenceView.swift */; };
+		A306E01D0000000000000004 /* SAVEGooglePhotoAttributionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A306E01D0000000000000003 /* SAVEGooglePhotoAttributionTests.swift */; };
 		8746C09CA17512D2446230C3 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = D22D539942802E3845E8D2CE /* Secrets.plist */; };
 		885D0A9AE9CBA0CD485ACBF5 /* Screens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059853D65770FEA0F3E4A6FD /* Screens.swift */; };
 		887601CFE6BC639CDD2B859A /* PlaceBusinessEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF9765EC478AD233D709637A /* PlaceBusinessEnricher.swift */; };
@@ -106,6 +148,7 @@
 		8F19E2D31087563F35CA0A16 /* SaveLLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC9BC0C7A83CBF9C8941D35 /* SaveLLMClient.swift */; };
 		8F831A3D5B6DDC849A75F123 /* GoogleTakeoutImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */; };
 		8F948E6B162F7A83125B0421 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */; };
+		A3060001C0FFEE0000000002 /* GooglePlacesPhotoSourceMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3060001C0FFEE0000000001 /* GooglePlacesPhotoSourceMark.swift */; };
 		8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146D4B13678DF31140133614 /* SaveCard.swift */; };
 		9214690FCE4C303443620FFE /* SavePlaceCorrectionEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */; };
 		92D7423DD70EA7DDFFD61450 /* SaveLocationIntentRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */; };
@@ -135,7 +178,7 @@
 		B118D409C44CFAEC868DE8C2 /* TripPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE1A3AEC5BB812BBC6D7E14 /* TripPackStore.swift */; };
 		B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */; };
 		B45133218BC50C705B223B87 /* DebugVaultExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */; };
-		B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */; };
+		B4DAEDB0A245CE1D4707844F /* SavvyBrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */; };
 		B4E71FBC15953C17578E4241 /* DebugOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AC60F7F1A412AC73D3FE11 /* DebugOverlay.swift */; };
 		B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */; };
@@ -145,6 +188,7 @@
 		B9C3611B77E9CFF24690C115 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = FBBF8A5C536A8CDC47B3B30A /* ZIPFoundation */; };
 		BC55C57A6C88072A588A5531 /* SaveSearchIntentEvalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */; };
 		BCB68390F26FDDB75ADF5ED1 /* SaveSearchControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314BD93E28C21731D98997C0 /* SaveSearchControllerTests.swift */; };
+		5A752D7E448E0AEF86ADF774 /* SaveHomeSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6607DC6BDBA9CD7B44A83B5A /* SaveHomeSearchTests.swift */; };
 		C0C01F4DA92E366AEBDD9004 /* SaveEntitlementWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857A694A16CBDB5622A5AD11 /* SaveEntitlementWiringTests.swift */; };
 		C0E9F65DE2C65F3F28DE1A6A /* PrivyAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF327EE5BF2F3299F2DAD7E1 /* PrivyAuthService.swift */; };
 		C3F9723CC4B97DD1915AFFC3 /* MaatAnalysisCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2165B79CDD65BE4B0A3392B1 /* MaatAnalysisCache.swift */; };
@@ -175,6 +219,7 @@
 		E962B07677F83EC27DB285FB /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1974222FBD914DA6249A96E /* LocationService.swift */; };
 		EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		EB679DE7583581C363424CE1 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
+		C4E8A91B7D2F4E10A6B3C5D8 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
 		F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8165C7FCD4C17E50EFFC6532 /* ContentView.swift */; };
 		F4575AD325C5CEC013D2DFA8 /* StateServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D44203E2121A511CC30F877 /* StateServer.swift */; };
 		F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */; };
@@ -185,6 +230,7 @@
 		F9C08228C620B32B7E4BD547 /* AppLanguageSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB8F950F5A31B6EAD614F31 /* AppLanguageSettingsTests.swift */; };
 		FBC3CB8617EB8D79B7DE203D /* SocialPlaceEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */; };
 		FD27CCBFEDABF6FCDAF3AB57 /* SaveSearchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */; };
+		890602547752D3E816FF3B0F /* SaveHomeSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FE70B14C3D236AC32C87909 /* SaveHomeSearch.swift */; };
 		FD6208D015EEAD7A1B6BEA66 /* SocialLinkReviewCandidateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFA0C8D8324DF32424B5147A /* SocialLinkReviewCandidateService.swift */; };
 		FE9576767070B9ABC8214BB8 /* PendingPlaceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78E2B528C610D14058FBFF5 /* PendingPlaceImportService.swift */; };
 		FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */; };
@@ -198,9 +244,28 @@
 		2E9E04D1E05884323D7D7CB0 /* ProfileAvatarStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64498D790D52838FAEDFDD87 /* ProfileAvatarStoreTests.swift */; };
 		3E10C3F5A752111C4DEC2C8C /* PlaceVisibilityPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD02E7815D5890EC1455CEE /* PlaceVisibilityPersistenceTests.swift */; };
 		1AE4DC4AD22B334B0138E9E1 /* RelatedPlaceSourcesPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E393C7E632BDC8FB412669B /* RelatedPlaceSourcesPanelTests.swift */; };
+		A10100000000000000000011 /* SharedPlacePost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000001 /* SharedPlacePost.swift */; };
+		A10100000000000000000012 /* SharedPostsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000002 /* SharedPostsStore.swift */; };
+		A10100000000000000000013 /* SharedPostViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* SharedPostViews.swift */; };
+		AA5100000000000000000001 /* ShareAnalysisClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5100000000000000000003 /* ShareAnalysisClient.swift */; };
+		AA5100000000000000000002 /* ShareAnalysisClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5100000000000000000003 /* ShareAnalysisClient.swift */; };
+		INK1A000000000000000002 /* SaveInkNotebookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000001 /* SaveInkNotebookModel.swift */; };
+		INK1A00000000000000000D /* SaveInkPlaceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000C /* SaveInkPlaceCatalog.swift */; };
+		INK1A000000000000000004 /* SaveInkNotebookChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000003 /* SaveInkNotebookChrome.swift */; };
+		INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000005 /* SaveInkNotebookScreens.swift */; };
+		INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000007 /* SaveInkNotebookRoot.swift */; };
+		INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000A /* SaveInkNotebookTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+
+		C1A000000000000000000011 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BCD0A8DE7E85AFADB1C8514C;
+			remoteInfo = SAVEClip;
+		};
 		05E4C3760FDCA961F77E0A3E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
@@ -292,11 +357,53 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+
+		C1A000000000000000000001 /* ClipDoodleTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDoodleTheme.swift; sourceTree = "<group>"; };
+		C1A000000000000000000040 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000046 /* ClipSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSaveService.swift; sourceTree = "<group>"; };
+		C1A000000000000000000042 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000044 /* Iansui-ClipTitles.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Iansui-ClipTitles.ttf"; path = "SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf"; sourceTree = SOURCE_ROOT; };
+		C1A000000000000000000048 /* PendingShareStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStoreTests.swift; sourceTree = "<group>"; };
+		C8A100000000000000000001 /* ClipAppleAccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipAppleAccountStore.swift; sourceTree = "<group>"; };
+		C8A100000000000000000003 /* ClipSignInCarryOver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSignInCarryOver.swift; sourceTree = "<group>"; };
+		C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSignInCarryOverTests.swift; sourceTree = "<group>"; };
+		C8A100000000000000000007 /* ClipListSavePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipListSavePlanner.swift; sourceTree = "<group>"; };
+		C8A10000000000000000000A /* ClipListSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipListSaveTests.swift; sourceTree = "<group>"; };
+		C1A000000000000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C1A000000000000000000020 /* ClipPreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPreviewFixtures.swift; sourceTree = "<group>"; };
+		C1A000000000000000000022 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		C1A000000000000000000024 /* Caveat-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Caveat-SemiBold.ttf"; path = "SAV-E/Resources/DisplayFont/Caveat-SemiBold.ttf"; sourceTree = SOURCE_ROOT; };
+		C1A000000000000000000008 /* SAVEClipUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SAVEClipUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A00000000000000000000A /* SAVEClipScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEClipScreenshotTests.swift; sourceTree = "<group>"; };
+		C1A000000000000000000016 /* SaveClipJournalLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveClipJournalLockTests.swift; sourceTree = "<group>"; };
+		C4P100000000000000000002 /* SaveCaptureFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCaptureFlowView.swift; sourceTree = "<group>"; };
+		C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleCapturePaywallTests.swift; sourceTree = "<group>"; };
+		D2E200000000000000000002 /* SaveDoodlePassportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportView.swift; sourceTree = "<group>"; };
+		D2E200000000000000000004 /* SaveDoodlePassportCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportCatalog.swift; sourceTree = "<group>"; };
+		D2E200000000000000000006 /* SaveDoodlePassportStickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportStickers.swift; sourceTree = "<group>"; };
+		D2E200000000000000000008 /* SaveDoodlePassportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportTests.swift; sourceTree = "<group>"; };
 		F815A0000000000000000002 /* SaveFriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveFriendsView.swift; sourceTree = "<group>"; };
+		T7A100000000000000000002 /* SaveTileTownMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownMap.swift; sourceTree = "<group>"; };
+		T7A100000000000000000004 /* SaveKraftStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveKraftStamp.swift; sourceTree = "<group>"; };
+		D2E100000000000000000002 /* SaveDoodleHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeView.swift; sourceTree = "<group>"; };
+		D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeCatalog.swift; sourceTree = "<group>"; };
+		D2E100000000000000000008 /* SaveAddressLocality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAddressLocality.swift; sourceTree = "<group>"; };
+		D2E100000000000000000006 /* SaveDoodleHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeTests.swift; sourceTree = "<group>"; };
+		F815A0000000000000000004 /* SaveDoodleFriendsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleFriendsTests.swift; sourceTree = "<group>"; };
+		D3E100000000000000000002 /* SaveDoodleMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleMapView.swift; sourceTree = "<group>"; };
+		D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleCheckInStore.swift; sourceTree = "<group>"; };
+		D3E100000000000000000006 /* SaveDoodleMapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleMapTests.swift; sourceTree = "<group>"; };
+		P13A10000000000000000002 /* SavvyMapPhotoPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyMapPhotoPins.swift; sourceTree = "<group>"; };
+		P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapPhotoPinsRoot.swift; sourceTree = "<group>"; };
+		P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyMapPhotoPinsTests.swift; sourceTree = "<group>"; };
+		T7A10000000000000000000A /* SaveTileTownLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownLockTests.swift; sourceTree = "<group>"; };
+		C91900000000000000000002 /* DisplayFont */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DisplayFont; sourceTree = "<group>"; };
 		A117DCD202609100000000004 /* SavePlanAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgentTests.swift; sourceTree = "<group>"; };
 		A117DCD202609100000000002 /* SavePlanAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgent.swift; sourceTree = "<group>"; };
 		059853D65770FEA0F3E4A6FD /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens.swift; sourceTree = "<group>"; };
 		087079BA81CF1E30FDEDEA1D /* SAVEUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEUITestCase.swift; sourceTree = "<group>"; };
+		A306E01D0000000000000001 /* GooglePlacesPhotoAttributionEvidenceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesPhotoAttributionEvidenceView.swift; sourceTree = "<group>"; };
+		A306E01D0000000000000003 /* SAVEGooglePhotoAttributionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEGooglePhotoAttributionTests.swift; sourceTree = "<group>"; };
 		088DFD7077650B834811C66B /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
 		0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceCorrectionEventTests.swift; sourceTree = "<group>"; };
 		0B1F7AA648D0752919A33C09 /* DebugLegacyMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugLegacyMigrator.swift; sourceTree = "<group>"; };
@@ -313,6 +420,7 @@
 		1EB51FCB4905E86D751E570C /* SaveRootViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveRootViews.swift; sourceTree = "<group>"; };
 		1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripGapLocalOptionsServiceTests.swift; sourceTree = "<group>"; };
 		20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
+		A3060001C0FFEE0000000001 /* GooglePlacesPhotoSourceMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesPhotoSourceMark.swift; sourceTree = "<group>"; };
 		20C3E36D76FC12C5F397674A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2165B79CDD65BE4B0A3392B1 /* MaatAnalysisCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaatAnalysisCache.swift; sourceTree = "<group>"; };
 		24848A1006E5A3FFBB38324D /* AccountSessionGateLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionGateLogic.swift; sourceTree = "<group>"; };
@@ -325,6 +433,7 @@
 		2D5A7F09B9AE3F2129C605FE /* SaveLocalVaultService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocalVaultService.swift; sourceTree = "<group>"; };
 		30859A9A0FE5EB6FD7DD53AF /* TripGapLocalOptionsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripGapLocalOptionsService.swift; sourceTree = "<group>"; };
 		314BD93E28C21731D98997C0 /* SaveSearchControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchControllerTests.swift; sourceTree = "<group>"; };
+		6607DC6BDBA9CD7B44A83B5A /* SaveHomeSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveHomeSearchTests.swift; sourceTree = "<group>"; };
 		33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEUISmokeHarnessTests.swift; sourceTree = "<group>"; };
 		3583981E50146631D488BF56 /* TripPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPersistence.swift; sourceTree = "<group>"; };
 		367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryBadge.swift; sourceTree = "<group>"; };
@@ -354,6 +463,7 @@
 		54876D21CED56B8E43591F6E /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanSaveTests.swift; sourceTree = "<group>"; };
 		5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchController.swift; sourceTree = "<group>"; };
+		5FE70B14C3D236AC32C87909 /* SaveHomeSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveHomeSearch.swift; sourceTree = "<group>"; };
 		576B2C6882D03B869EA156FF /* SaveStoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveStoreKitService.swift; sourceTree = "<group>"; };
 		5A198B6BD4C58B1A684E5B8B /* DebugBridgeTouch.framework */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.framework; path = DebugBridgeTouch.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasHomeHeroPresentationTests.swift; sourceTree = "<group>"; };
@@ -425,7 +535,7 @@
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEProAccessPolicy.swift; sourceTree = "<group>"; };
-		B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoMascotMark.swift; sourceTree = "<group>"; };
+		B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyBrandMark.swift; sourceTree = "<group>"; };
 		B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripHoursAnnotatorTests.swift; sourceTree = "<group>"; };
 		B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapDrawerPanel.swift; sourceTree = "<group>"; };
 		B83DDE4E3ACC60AF68724EAB /* SavePlaceFromURLIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceFromURLIntent.swift; sourceTree = "<group>"; };
@@ -486,6 +596,16 @@
 		64498D790D52838FAEDFDD87 /* ProfileAvatarStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarStoreTests.swift; sourceTree = "<group>"; };
 		ACD02E7815D5890EC1455CEE /* PlaceVisibilityPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceVisibilityPersistenceTests.swift; sourceTree = "<group>"; };
 		5E393C7E632BDC8FB412669B /* RelatedPlaceSourcesPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelatedPlaceSourcesPanelTests.swift; sourceTree = "<group>"; };
+		A10100000000000000000001 /* SharedPlacePost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPlacePost.swift; sourceTree = "<group>"; };
+		A10100000000000000000002 /* SharedPostsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostsStore.swift; sourceTree = "<group>"; };
+		A10100000000000000000003 /* SharedPostViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostViews.swift; sourceTree = "<group>"; };
+		AA5100000000000000000003 /* ShareAnalysisClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAnalysisClient.swift; sourceTree = "<group>"; };
+		INK1A000000000000000001 /* SaveInkNotebookModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookModel.swift; sourceTree = "<group>"; };
+		INK1A00000000000000000C /* SaveInkPlaceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkPlaceCatalog.swift; sourceTree = "<group>"; };
+		INK1A000000000000000003 /* SaveInkNotebookChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookChrome.swift; sourceTree = "<group>"; };
+		INK1A000000000000000005 /* SaveInkNotebookScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookScreens.swift; sourceTree = "<group>"; };
+		INK1A000000000000000007 /* SaveInkNotebookRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookRoot.swift; sourceTree = "<group>"; };
+		INK1A00000000000000000A /* SaveInkNotebookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -523,7 +643,16 @@
 		0A32D4ADB26D43F114C08A4A /* SAV-EClip */ = {
 			isa = PBXGroup;
 			children = (
+				C1A000000000000000000005 /* Assets.xcassets */,
+				C1A000000000000000000024 /* Caveat-SemiBold.ttf */,
+				C1A000000000000000000044 /* Iansui-ClipTitles.ttf */,
 				C2F29BED31958E2047FAE72E /* ClipContentView.swift */,
+				C1A000000000000000000040 /* PendingShareStore.swift */,
+				C1A000000000000000000046 /* ClipSaveService.swift */,
+				C8A100000000000000000007 /* ClipListSavePlanner.swift */,
+				C1A000000000000000000001 /* ClipDoodleTheme.swift */,
+				C1A000000000000000000020 /* ClipPreviewFixtures.swift */,
+				C1A000000000000000000022 /* Localizable.xcstrings */,
 				482E0F42191576E75DFAA558 /* SAV-EClip.entitlements */,
 				738ABD2C0F107820DE7B6E16 /* SAV-EClipApp.swift */,
 				088DFD7077650B834811C66B /* SharedTripData.swift */,
@@ -545,6 +674,7 @@
 			children = (
 				8EBE852DE7618089938F9421 /* Assets.xcassets */,
 				6361F6E836FD533A68A17D61 /* PrivacyInfo.xcprivacy */,
+				C91900000000000000000002 /* DisplayFont */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -589,6 +719,7 @@
 				DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */,
 				BE34326AB142B818431A5A1F /* SAVETests.xctest */,
 				75980C64772B9E80FBEA8DF6 /* SAVEUITests.xctest */,
+				C1A000000000000000000008 /* SAVEClipUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -602,10 +733,19 @@
 			path = "SAV-E/DebugBridge/Sources/DebugBridgeTouch/include";
 			sourceTree = "<group>";
 		};
+		C4P100000000000000000005 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				C4P100000000000000000002 /* SaveCaptureFlowView.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
 		1C3D7D3EC0790BB3B200433A /* Home */ = {
 			isa = PBXGroup;
 			children = (
 				1EB51FCB4905E86D751E570C /* SaveRootViews.swift */,
+				D2E100000000000000000002 /* SaveDoodleHomeView.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -613,7 +753,6 @@
 		4320D2B25C0E7653731FFABF /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
-				F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */,
 				F2A0F64C102747295852D0AA /* OnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -662,6 +801,7 @@
 				6C2DCF9FEA8961AD3AC2D8C2 /* Testing */,
 				D1C086CA678A70A2B9FC7D15 /* ViewModels */,
 				7588A6BDD6EE6C407B45B9C2 /* Views */,
+				8855FBE399562C25FA2B49A3 /* Legacy */,
 			);
 			path = "SAV-E";
 			sourceTree = "<group>";
@@ -681,6 +821,7 @@
 				A7713D4B597C4062FFE2C08C /* AccountReferenceStore.swift */,
 				736FAD76F2C8F9181B521ED7 /* AccountSessionGate.swift */,
 				24848A1006E5A3FFBB38324D /* AccountSessionGateLogic.swift */,
+				C8A100000000000000000003 /* ClipSignInCarryOver.swift */,
 				53130D5A88AAB65EF3312276 /* AIParsingService.swift */,
 				0B1F7AA648D0752919A33C09 /* DebugLegacyMigrator.swift */,
 				5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */,
@@ -706,6 +847,10 @@
 				A117DCD202609100000000002 /* SavePlanAgent.swift */,
 				8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */,
 				5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */,
+				5FE70B14C3D236AC32C87909 /* SaveHomeSearch.swift */,
+				D2E100000000000000000008 /* SaveAddressLocality.swift */,
+				D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */,
+				D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */,
 				6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */,
 				576B2C6882D03B869EA156FF /* SaveStoreKitService.swift */,
 				D874F1D0FD76DECBCE8398FF /* SocialCaptionVenueExtractor.swift */,
@@ -733,6 +878,7 @@
 		6C2DCF9FEA8961AD3AC2D8C2 /* Testing */ = {
 			isa = PBXGroup;
 			children = (
+				A306E01D0000000000000001 /* GooglePlacesPhotoAttributionEvidenceView.swift */,
 				E85A66D5F0A1827A64467BAF /* SaveSmokeHarnessView.swift */,
 			);
 			path = Testing;
@@ -741,14 +887,7 @@
 		7474D3EF06276FBAA7A7CE02 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				A5009253F9320E70D431D935 /* CategoryPill.swift */,
-				AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */,
-				688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */,
-				B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */,
-				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
-				898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */,
-				D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */,
-				367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */,
+				B214436BA38A3A1BEDDD8761 /* SavvyBrandMark.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -766,19 +905,10 @@
 		7588A6BDD6EE6C407B45B9C2 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				68F2C25133736DAABDAA1B57 /* Atlas */,
+				INK1A000000000000000009 /* InkNotebook */,
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
-				9139D454B1CF7369056FEAD9 /* Drawer */,
-				1C3D7D3EC0790BB3B200433A /* Home */,
-				0DEF737A97EB8D779D03246B /* Import */,
-				BE956518D9B2C4F8D91A4B28 /* Map */,
 				4320D2B25C0E7653731FFABF /* Onboarding */,
-				FC233FF308BCA01DD137B953 /* Origin */,
-				C2D3E4F5061728394A5B6C7D /* Plan */,
-				0CF873FD5E2B5B611179A1D6 /* Previews */,
-				DE053ABF257FAF333E4A2425 /* Profile */,
 				7474D3EF06276FBAA7A7CE02 /* Shared */,
-				E608936EEC1E44C0B807AA6A /* Trips */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -800,6 +930,7 @@
 			isa = PBXGroup;
 			children = (
 				20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */,
+				A3060001C0FFEE0000000001 /* GooglePlacesPhotoSourceMark.swift */,
 				E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */,
 			);
 			path = Components;
@@ -818,6 +949,7 @@
 				A2E50A68C45C77F93AD3F626 /* SAV-EShared */,
 				051C942F7137E365C09B7E40 /* SAV-EShareExtension */,
 				ABC8567013403AA25EA4E4F0 /* SAVEUITests */,
+				C1A000000000000000000009 /* SAVEClipUITests */,
 				B93FB6B6B4E89556609BBBEE /* SocialPlacePipelineTests */,
 				95BF84D9EC38221803F5C639 /* Sources */,
 				11C717FAE02813E9F58CF778 /* Products */,
@@ -842,7 +974,7 @@
 				6C84069DBCF7887D8E65D10D /* Theme.swift */,
 			);
 			name = Sources;
-			path = Prototypes/AtlasPostcard/Sources;
+			path = Prototypes/AtlasPostcard/Legacy/Sources;
 			sourceTree = "<group>";
 		};
 		A2E50A68C45C77F93AD3F626 /* SAV-EShared */ = {
@@ -852,6 +984,7 @@
 				6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */,
 				B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */,
 				82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */,
+				AA5100000000000000000003 /* ShareAnalysisClient.swift */,
 				14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */,
 				5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */,
 				3B1CB9442676082D76FDEC15 /* SocialPlaceParser.swift */,
@@ -859,9 +992,20 @@
 			path = "SAV-EShared";
 			sourceTree = "<group>";
 		};
+
+		C1A000000000000000000009 /* SAVEClipUITests */ = {
+			isa = PBXGroup;
+			children = (
+				C1A00000000000000000000A /* SAVEClipScreenshotTests.swift */,
+			);
+			name = SAVEClipUITests;
+			path = Tests/SAVEClipUITests;
+			sourceTree = "<group>";
+		};
 		ABC8567013403AA25EA4E4F0 /* SAVEUITests */ = {
 			isa = PBXGroup;
 			children = (
+				A306E01D0000000000000003 /* SAVEGooglePhotoAttributionTests.swift */,
 				7966C389379C2C27D0974740 /* SAVEOnboardingCarouselTests.swift */,
 				2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */,
 				33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */,
@@ -874,7 +1018,6 @@
 		AE8E497E569CD63092A35D8B /* App */ = {
 			isa = PBXGroup;
 			children = (
-				8165C7FCD4C17E50EFFC6532 /* ContentView.swift */,
 				6791E7A348909E816148107C /* SaveApp.swift */,
 				8C1A0B0D0E0F1A2B3C4D5E60 /* SaveChromePresentation.swift */,
 			);
@@ -889,6 +1032,18 @@
 				C82C14E54DC79D7FD0402D51 /* AtlasFiveTabBarTests.swift */,
 				5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */,
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
+				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
+				C1A000000000000000000016 /* SaveClipJournalLockTests.swift */,
+				C1A000000000000000000048 /* PendingShareStoreTests.swift */,
+				C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */,
+				C8A10000000000000000000A /* ClipListSaveTests.swift */,
+				C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */,
+				D2E100000000000000000006 /* SaveDoodleHomeTests.swift */,
+				INK1A00000000000000000A /* SaveInkNotebookTests.swift */,
+				D2E200000000000000000008 /* SaveDoodlePassportTests.swift */,
+				F815A0000000000000000004 /* SaveDoodleFriendsTests.swift */,
+				D3E100000000000000000006 /* SaveDoodleMapTests.swift */,
+				P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */,
 				A5629446727F6C92D09FD7BE /* AtlasOneJobPerTabUITests.swift */,
 				396D972F2C07BCC409ADBEC7 /* DebugLegacyMigratorTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
@@ -908,6 +1063,7 @@
 				A652DE25FB690D2F6153F07B /* SAVEProductionConfigTests.swift */,
 				E2508263DAF48B7132659DB4 /* SaveMapIntentFilterTests.swift */,
 				314BD93E28C21731D98997C0 /* SaveSearchControllerTests.swift */,
+				6607DC6BDBA9CD7B44A83B5A /* SaveHomeSearchTests.swift */,
 				F3619374EB059C824376AEC5 /* SaveVisitIntentTests.swift */,
 				2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */,
 				24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */,
@@ -930,12 +1086,24 @@
 			path = Tests/SocialPlacePipelineTests;
 			sourceTree = "<group>";
 		};
+		T7A10000000000000000000B /* TileTown */ = {
+			isa = PBXGroup;
+			children = (
+				T7A100000000000000000004 /* SaveKraftStamp.swift */,
+				T7A100000000000000000002 /* SaveTileTownMap.swift */,
+			);
+			path = TileTown;
+			sourceTree = "<group>";
+		};
 		BE956518D9B2C4F8D91A4B28 /* Map */ = {
 			isa = PBXGroup;
 			children = (
 				1A55AC71904B498274561F2D /* MapView.swift */,
+				P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */,
+				P13A10000000000000000002 /* SavvyMapPhotoPins.swift */,
 				61781274A9C071CEF671ADD7 /* PlaceBottomSheet.swift */,
 				B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */,
+				D3E100000000000000000002 /* SaveDoodleMapView.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -946,6 +1114,7 @@
 				EC9FCFE1797E4DF4630338E4 /* AIDrawerViewModel.swift */,
 				74DCE926696754031AE2C514 /* MapViewModel.swift */,
 				FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */,
+				A10100000000000000000002 /* SharedPostsStore.swift */,
 				8FE1A3AEC5BB812BBC6D7E14 /* TripPackStore.swift */,
 			);
 			path = ViewModels;
@@ -955,6 +1124,9 @@
 			isa = PBXGroup;
 			children = (
 				5E1CAB36A11288E7007AEBF7 /* ProfileView.swift */,
+				D2E200000000000000000002 /* SaveDoodlePassportView.swift */,
+				D2E200000000000000000004 /* SaveDoodlePassportCatalog.swift */,
+				D2E200000000000000000006 /* SaveDoodlePassportStickers.swift */,
 				E6BCBA8DC934BBB3AEEACF81 /* SaveMemoryDebugView.swift */,
 				FF357924A8D4048E256F214E /* SaveProPaywallView.swift */,
 				54876D21CED56B8E43591F6E /* StatsView.swift */,
@@ -995,8 +1167,11 @@
 				4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */,
 				4029203B816A870C920B8924 /* SavePlanAroundModels.swift */,
 				DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */,
+				C1A000000000000000000042 /* PendingShareStore.swift */,
+				C8A100000000000000000001 /* ClipAppleAccountStore.swift */,
 				85338A305203F41DF18FAE27 /* SharedTripData.swift */,
 				87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */,
+				A10100000000000000000001 /* SharedPlacePost.swift */,
 				F50ABA09CC51700F3AB8F9A9 /* Trip.swift */,
 				F32313D7425E554355EEDF42 /* UserProfile.swift */,
 			);
@@ -1008,6 +1183,7 @@
 			children = (
 				528E2A03828D35E2952E7422 /* SaveOriginView.swift */,
 				F815A0000000000000000002 /* SaveFriendsView.swift */,
+				A10100000000000000000003 /* SharedPostViews.swift */,
 			);
 			path = Origin;
 			sourceTree = "<group>";
@@ -1018,6 +1194,78 @@
 				7C91E2A04B5D638F1A2C9E04 /* SavePlanView.swift */,
 			);
 			path = Plan;
+			sourceTree = "<group>";
+		};
+		INK1A000000000000000009 /* InkNotebook */ = {
+			isa = PBXGroup;
+			children = (
+				INK1A000000000000000001 /* SaveInkNotebookModel.swift */,
+				INK1A00000000000000000C /* SaveInkPlaceCatalog.swift */,
+				INK1A000000000000000003 /* SaveInkNotebookChrome.swift */,
+				INK1A000000000000000005 /* SaveInkNotebookScreens.swift */,
+				INK1A000000000000000007 /* SaveInkNotebookRoot.swift */,
+			);
+			path = InkNotebook;
+			sourceTree = "<group>";
+		};
+		8855FBE399562C25FA2B49A3 /* Legacy */ = {
+			isa = PBXGroup;
+			children = (
+				54754CC09A801F3C5100FFFB /* App */,
+				3D8531B4AB76D34F2FEB8186 /* Views */,
+			);
+			path = Legacy;
+			sourceTree = "<group>";
+		};
+		54754CC09A801F3C5100FFFB /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8165C7FCD4C17E50EFFC6532 /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		3D8531B4AB76D34F2FEB8186 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				68F2C25133736DAABDAA1B57 /* Atlas */,
+				9139D454B1CF7369056FEAD9 /* Drawer */,
+				C4P100000000000000000005 /* Capture */,
+				1C3D7D3EC0790BB3B200433A /* Home */,
+				T7A10000000000000000000B /* TileTown */,
+				0DEF737A97EB8D779D03246B /* Import */,
+				BE956518D9B2C4F8D91A4B28 /* Map */,
+				FC233FF308BCA01DD137B953 /* Origin */,
+				C2D3E4F5061728394A5B6C7D /* Plan */,
+				0CF873FD5E2B5B611179A1D6 /* Previews */,
+				DE053ABF257FAF333E4A2425 /* Profile */,
+				E608936EEC1E44C0B807AA6A /* Trips */,
+				D4D29451B50EE8D74158B71F /* Onboarding */,
+				D8FADAE9D22395016416996E /* Shared */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		D8FADAE9D22395016416996E /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A5009253F9320E70D431D935 /* CategoryPill.swift */,
+				AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */,
+				688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */,
+				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
+				898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */,
+				D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */,
+				367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		D4D29451B50EE8D74158B71F /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */,
+			);
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1034,6 +1282,25 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
+
+		C1A00000000000000000000C /* SAVEClipUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1A000000000000000000014 /* Build configuration list for PBXNativeTarget "SAVEClipUITests" */;
+			buildPhases = (
+				C1A00000000000000000000D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1A000000000000000000010 /* PBXTargetDependency */,
+			);
+			name = SAVEClipUITests;
+			packageProductDependencies = (
+			);
+			productName = SAVEClipUITests;
+			productReference = C1A000000000000000000008 /* SAVEClipUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		0B5351F22114512D2367DDDD /* SAVEUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B163A4556135703D2EE45CC2 /* Build configuration list for PBXNativeTarget "SAVEUITests" */;
@@ -1160,6 +1427,7 @@
 			buildPhases = (
 				DB1F01A934E70753F0FDD4CC /* Sources */,
 				6633DCB42E9B78BEEDC31E68 /* Resources */,
+				C9F14A72E8B3056D1A0E47B3 /* Package App Secrets.plist */,
 			);
 			buildRules = (
 			);
@@ -1247,6 +1515,10 @@
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
 					};
+					C1A00000000000000000000C = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
 					E8D7959A4EAEA853A7737203 = {
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
@@ -1283,6 +1555,7 @@
 				2C46EB502B5B4F5C95F36907 /* SAVEShareExtension */,
 				F150541C6B87E28EBACEF1CB /* SAVETests */,
 				0B5351F22114512D2367DDDD /* SAVEUITests */,
+				C1A00000000000000000000C /* SAVEClipUITests */,
 				43550FDD34C39407C1B8C2DC /* SAVEiMessageExtension */,
 			);
 		};
@@ -1301,7 +1574,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				67B23BF4F68B65D050156E0F /* Assets.xcassets in Resources */,
+				C1A000000000000000000006 /* ClipAssets.xcassets in Resources */,
+				C1A000000000000000000023 /* Localizable.xcstrings in Resources */,
+				C1A000000000000000000025 /* Caveat-SemiBold.ttf in SAVEClip Resources */,
+				C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1311,6 +1587,7 @@
 			files = (
 				78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */,
 				DD2947EE2F000476CB869B83 /* PrivacyInfo.xcprivacy in Resources */,
+				C91900000000000000000001 /* DisplayFont in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1318,6 +1595,27 @@
 
 /* Begin PBXShellScriptBuildPhase section */
 		1C05DC3D4BB69D3CD871D981 /* Package App Secrets.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Package App Secrets.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Secrets.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/package-google-places-secrets.sh\"";
+			showEnvVarsInLog = 0;
+		};
+		C9F14A72E8B3056D1A0E47B3 /* Package App Secrets.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1398,6 +1696,19 @@
 				3D477A002A189FE30CCD528C /* AtlasFiveTabBarTests.swift in Sources */,
 				1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */,
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
+				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
+				C1A000000000000000000015 /* SaveClipJournalLockTests.swift in Sources */,
+				C1A000000000000000000049 /* PendingShareStoreTests.swift in Sources */,
+				C8A100000000000000000006 /* ClipSignInCarryOverTests.swift in Sources */,
+				C8A100000000000000000009 /* ClipListSavePlanner.swift in Sources */,
+				C8A10000000000000000000B /* ClipListSaveTests.swift in Sources */,
+				C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */,
+				D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */,
+				INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */,
+				D2E200000000000000000007 /* SaveDoodlePassportTests.swift in Sources */,
+				F815A0000000000000000003 /* SaveDoodleFriendsTests.swift in Sources */,
+				D3E100000000000000000005 /* SaveDoodleMapTests.swift in Sources */,
+				P13A10000000000000000005 /* SavvyMapPhotoPinsTests.swift in Sources */,
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
@@ -1407,6 +1718,7 @@
 				8C5B4D4B69560B6FF869E33D /* RelatedPlaceSourcesClientTests.swift in Sources */,
 				36589FF0D1AC553DE90E6457 /* ReviewDemoTests.swift in Sources */,
 				2E13EB2E4D0C170AF6B107F5 /* SAVEProductionConfigTests.swift in Sources */,
+				C4E8A91B7D2F4E10A6B3C5D8 /* MessagesVaultReader.swift in Sources */,
 				60EF7529D992954D48573948 /* SaveCollaborativeListTests.swift in Sources */,
 				C0C01F4DA92E366AEBDD9004 /* SaveEntitlementWiringTests.swift in Sources */,
 				66F4520897870F795E6E3FD7 /* SaveGuideCustomizationControllerTests.swift in Sources */,
@@ -1416,6 +1728,7 @@
 				20EE991C2D2D42E045F23CA5 /* SavePlanAroundControllerTests.swift in Sources */,
 				E2508263DAF48B7132659DB5 /* SaveMapIntentFilterTests.swift in Sources */,
 				BCB68390F26FDDB75ADF5ED1 /* SaveSearchControllerTests.swift in Sources */,
+				5A752D7E448E0AEF86ADF774 /* SaveHomeSearchTests.swift in Sources */,
 				F3619374EB059C824376AEC6 /* SaveVisitIntentTests.swift in Sources */,
 				BC55C57A6C88072A588A5531 /* SaveSearchIntentEvalTests.swift in Sources */,
 				D2CF1497F4FD4CC89C23E69A /* SavedPlaceTripRecommenderTests.swift in Sources */,
@@ -1444,6 +1757,7 @@
 				4082CE633C9619E79F2C0AD3 /* GoogleMapsListPlaceExtractor.swift in Sources */,
 				70578CBC1911C1C35349AF47 /* SAVEProAccessPolicy.swift in Sources */,
 				45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */,
+				AA5100000000000000000001 /* ShareAnalysisClient.swift in Sources */,
 				EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */,
 				A5269FE0607830F038B6AD35 /* ShareViewController.swift in Sources */,
 				9F3813BB934F44CF302ACC48 /* SocialOCRCandidateHeuristics.swift in Sources */,
@@ -1465,6 +1779,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				3F861CFCBB89E535C6F88B20 /* ClipContentView.swift in Sources */,
+				C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */,
+				C1A000000000000000000041 /* PendingShareStore.swift in Sources */,
+				C1A000000000000000000047 /* ClipSaveService.swift in Sources */,
+				C8A100000000000000000008 /* ClipListSavePlanner.swift in Sources */,
+				C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */,
 				430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */,
 				6F9A7F7D67162AAFC701986F /* SAVEProductionConfig.swift in Sources */,
 				991602CD0733FC27340D71D1 /* SharedTripData.swift in Sources */,
@@ -1482,9 +1801,11 @@
 				667EBE401889BD9FF4AC9837 /* AccountReferenceStore.swift in Sources */,
 				A06CCC19D0A1DA3530BCEDD4 /* AccountSessionGate.swift in Sources */,
 				D3AA331E90FFFA7BCC1B47E1 /* AccountSessionGateLogic.swift in Sources */,
+				C8A100000000000000000004 /* ClipSignInCarryOver.swift in Sources */,
 				1F79DA008704EED14416137B /* AppLanguageSettings.swift in Sources */,
 				DEFD9661422D70531B103B4B /* AskSaveMemoryIntent.swift in Sources */,
 				8F948E6B162F7A83125B0421 /* CachedAsyncImage.swift in Sources */,
+				A3060001C0FFEE0000000002 /* GooglePlacesPhotoSourceMark.swift in Sources */,
 				6834F63ABDFBD48BAB5825EA /* CategoryPill.swift in Sources */,
 				CDC6527B4176C047D3886751 /* ClipContentPreview.swift in Sources */,
 				47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */,
@@ -1505,8 +1826,10 @@
 				C3F9723CC4B97DD1915AFFC3 /* MaatAnalysisCache.swift in Sources */,
 				7D221A99C9D47E9AA8E5D3C8 /* MapCoachmarkTour.swift in Sources */,
 				AEDD117BBD3A0FD842D535BF /* MapView.swift in Sources */,
+				P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */,
+				P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */,
 				97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */,
-				B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */,
+				B4DAEDB0A245CE1D4707844F /* SavvyBrandMark.swift in Sources */,
 				973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */,
 				8D622D0CF6A3524A97914E46 /* NavigationService.swift in Sources */,
 				F53F17B082DBB81DCC487486 /* OnboardingView.swift in Sources */,
@@ -1523,13 +1846,18 @@
 				3886D3525DDF070971BCFFC4 /* Presentation.swift in Sources */,
 				C0E9F65DE2C65F3F28DE1A6A /* PrivyAuthService.swift in Sources */,
 				283787AE9627CB588A26B5A1 /* ProfileView.swift in Sources */,
+				D2E200000000000000000001 /* SaveDoodlePassportView.swift in Sources */,
+				D2E200000000000000000003 /* SaveDoodlePassportCatalog.swift in Sources */,
+				D2E200000000000000000005 /* SaveDoodlePassportStickers.swift in Sources */,
 				CCA908BE75D42562E30A5CE9 /* ProfileViewModel.swift in Sources */,
+				A10100000000000000000012 /* SharedPostsStore.swift in Sources */,
 				8CD63C6946186279A955FAF5 /* RelatedPlaceSources.swift in Sources */,
 				C89917420BEA87BFA892B556 /* RelatedPlaceSourcesPanel.swift in Sources */,
 				E0A5663B068E5D2C3AD4D762 /* ReviewDemoService.swift in Sources */,
 				A2F1E48BF387C064B3B4F4E6 /* SAVEAppShortcuts.swift in Sources */,
 				5391C822BB6EB26048D13148 /* SAVEProAccessPolicy.swift in Sources */,
 				A3A281B054D6E430627F8352 /* SAVEProductionConfig.swift in Sources */,
+				AA5100000000000000000002 /* ShareAnalysisClient.swift in Sources */,
 				38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */,
 				3E9B1B6E38A02AACF2C022D0 /* SaveApp.swift in Sources */,
 				8C1A0B0D0E0F1A2B3C4D5E61 /* SaveChromePresentation.swift in Sources */,
@@ -1549,6 +1877,19 @@
 				B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */,
 				6755C99242C0B500485AFAC9 /* SaveOriginView.swift in Sources */,
 				F815A0000000000000000001 /* SaveFriendsView.swift in Sources */,
+				T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */,
+				T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */,
+				D2E100000000000000000001 /* SaveDoodleHomeView.swift in Sources */,
+				INK1A000000000000000002 /* SaveInkNotebookModel.swift in Sources */,
+				INK1A00000000000000000D /* SaveInkPlaceCatalog.swift in Sources */,
+				INK1A000000000000000004 /* SaveInkNotebookChrome.swift in Sources */,
+				INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */,
+				INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */,
+				D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */,
+				D2E100000000000000000007 /* SaveAddressLocality.swift in Sources */,
+				D3E100000000000000000001 /* SaveDoodleMapView.swift in Sources */,
+				D3E100000000000000000003 /* SaveDoodleCheckInStore.swift in Sources */,
+				A10100000000000000000013 /* SharedPostViews.swift in Sources */,
 				3F8A1B2C4D5E6F708192A3B4 /* SavePlanView.swift in Sources */,
 				6B7C8D9E0F1A2B3C4D5E6F70 /* SaveDayRhythmScheduler.swift in Sources */,
 				A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */,
@@ -1558,20 +1899,26 @@
 				4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */,
 				11765646BAB7447D0F52747F /* SavePlanAroundController.swift in Sources */,
 				4EF9CBE70CD4A87789905A9B /* SavePlanAroundModels.swift in Sources */,
+				C4P100000000000000000001 /* SaveCaptureFlowView.swift in Sources */,
 				1D6E5C96BBB9574AE9A78211 /* SaveProPaywallView.swift in Sources */,
 				1FD4E4A282E15C3348A91111 /* SaveRootViews.swift in Sources */,
 				FD27CCBFEDABF6FCDAF3AB57 /* SaveSearchController.swift in Sources */,
+				890602547752D3E816FF3B0F /* SaveHomeSearch.swift in Sources */,
 				2CB40725EFEDED4A9B1275C9 /* SaveSearchIntentParser.swift in Sources */,
 				362D688B8CC9DEA7219CBC87 /* SaveSearchModels.swift in Sources */,
 				6515494E8A967D44A7D2DA63 /* SaveSearchResultsComponent.swift in Sources */,
+				A306E01D0000000000000002 /* GooglePlacesPhotoAttributionEvidenceView.swift in Sources */,
 				82B81EF68AE9F7C892CC0BDC /* SaveSmokeHarnessView.swift in Sources */,
 				620EFD4BCF446FCB18A843DA /* SaveStoreKitService.swift in Sources */,
 				D84C166D8B51EAB41CCD7F23 /* SavedPlaceTripRecommender.swift in Sources */,
 				885D0A9AE9CBA0CD485ACBF5 /* Screens.swift in Sources */,
+				C1A000000000000000000043 /* PendingShareStore.swift in Sources */,
+				C8A100000000000000000002 /* ClipAppleAccountStore.swift in Sources */,
 				6BC478C8D4778B2BE248D315 /* SharedTripData.swift in Sources */,
 				57E8DF73087D818758660998 /* SocialCaptionVenueExtractor.swift in Sources */,
 				FD6208D015EEAD7A1B6BEA66 /* SocialLinkReviewCandidateService.swift in Sources */,
 				FFFB2F9105F65B9FC37DD8B6 /* SocialMapSignals.swift in Sources */,
+				A10100000000000000000011 /* SharedPlacePost.swift in Sources */,
 				F7BD41AE9368769E22D71E33 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				9BBD5A95B6C4D533DE2AA0A6 /* SocialPlaceEvidence.swift in Sources */,
 				5EE4A497DC36DECB61368061 /* SocialPlaceParser.swift in Sources */,
@@ -1598,10 +1945,20 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A306E01D0000000000000004 /* SAVEGooglePhotoAttributionTests.swift in Sources */,
 				733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */,
 				243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */,
 				B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */,
 				4F0D78F6B793A1B0F5B3F4CC /* SAVEUITestCase.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		C1A00000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1A00000000000000000000B /* SAVEClipScreenshotTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1653,9 +2010,56 @@
 			target = 0CE8DEFDD69CB655D29FBDC8 /* DebugBridgeUI */;
 			targetProxy = A0E2C394154CEC5CAD22F112 /* PBXContainerItemProxy */;
 		};
+
+		C1A000000000000000000010 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BCD0A8DE7E85AFADB1C8514C /* SAVEClip */;
+			targetProxy = C1A000000000000000000011 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+
+		C1A000000000000000000012 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SAVEClipUITests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.clip.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SAVEClip;
+			};
+			name = Debug;
+		};
+		C1A000000000000000000013 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SAVEClipUITests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.clip.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SAVEClip;
+			};
+			name = Release;
+		};
 		0C123CD07FB25ECEB12839AF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1669,7 +2073,16 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = Savvy;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
+					savvy,
+				);
 				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_UIAppFonts = (
+					"Caveat-SemiBold.ttf",
+					"Iansui-ClipTitles.ttf",
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1684,7 +2097,6 @@
 					UIInterfaceOrientationLandscapeLeft,
 					UIInterfaceOrientationLandscapeRight,
 				);
-				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1975,7 +2387,16 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = Savvy;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
+					savvy,
+				);
 				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_UIAppFonts = (
+					"Caveat-SemiBold.ttf",
+					"Iansui-ClipTitles.ttf",
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1990,7 +2411,6 @@
 					UIInterfaceOrientationLandscapeLeft,
 					UIInterfaceOrientationLandscapeRight,
 				);
-				INFOPLIST_KEY_UIUserInterfaceStyle = Light;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -2221,6 +2641,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+
+		C1A000000000000000000014 /* Build configuration list for PBXNativeTarget "SAVEClipUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A000000000000000000012 /* Debug */,
+				C1A000000000000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		33D14ED917168C81B926DE67 /* Build configuration list for PBXNativeTarget "DebugBridgeTouch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

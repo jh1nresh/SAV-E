@@ -105,6 +105,65 @@ final class PlaceDeduplicationTests: XCTestCase {
                        "Different venues must never be treated as duplicates")
     }
 
+    /// Punctuation placement is a word boundary. Backend savedPlaceLimit.normalized
+    /// must stay in lockstep so a 51st distinct venue is not counted as a duplicate.
+    @MainActor
+    func testPunctuationPlacementKeepsNearbyVenuesDistinct() {
+        let first = makePlace(
+            name: "AB-C",
+            address: "1 Example Road",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        let second = makePlace(
+            name: "A-BC",
+            address: "1 Example Road",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        XCTAssertFalse(first.matches(second))
+        XCTAssertEqual(Place.consolidated([first, second]).count, 2)
+        let folded = makePlace(
+            name: "Ｃａｆé!",
+            address: "1 Main St",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        let ascii = makePlace(
+            name: "cafe",
+            address: "1 Main St",
+            latitude: 25.0005,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        XCTAssertTrue(folded.matches(ascii))
+    }
+
+    /// Mid-word and word-final Latin diacritics fold away. Must stay in
+    /// lockstep with backend savedPlaceLimit.normalized so a 51st venue
+    /// that only differs by an accent is not counted as new.
+    @MainActor
+    func testLatinDiacriticsFoldForVenueIdentityIncludingMidWord() {
+        let sao = makePlace(name: "São Cafe", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let saoAscii = makePlace(name: "Sao Cafe", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        XCTAssertTrue(sao.matches(saoAscii))
+        let zurich = makePlace(name: "Zürich Bar", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let zurichAscii = makePlace(name: "Zurich Bar", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        XCTAssertTrue(zurich.matches(zurichAscii))
+        let cafe = makePlace(name: "Café", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let cafeAscii = makePlace(name: "Cafe", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let cafeDecomposed = makePlace(name: "Cafe\u{0301}", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        XCTAssertTrue(cafe.matches(cafeAscii))
+        XCTAssertTrue(cafeDecomposed.matches(cafeAscii))
+    }
+
     @MainActor
     func testOnePostCanRecommendDifferentVenuesAtTheSameCoordinate() {
         let first = makePlace(name: "Cafe", address: "Mall floor 1", googlePlaceId: nil, sourceUrl: "https://instagram.com/p/list")
@@ -143,6 +202,157 @@ final class PlaceDeduplicationTests: XCTestCase {
         let map = MapViewModel(usesRemotePersistence: false)
         map.places = result
         XCTAssertEqual(map.placesForRoute(placeIDs: [second.id]).map(\.id), [first.id])
+    }
+
+    @MainActor
+    func testSourceReplacementSupportsLegacySingleAndAllNewSuccessors() {
+        var source = review(date: 1, located: false)
+        let first = UUID(), second = UUID()
+        source.supersededByCandidateID = first
+        XCTAssertEqual(source.replacementCandidateIDs, [first])
+        source.supersededByCandidateIDs = [first, second]
+        XCTAssertEqual(source.replacementCandidateIDs, [first, second])
+    }
+
+    @MainActor
+    func testRepeatedTerminalImportsNeverAnnounceNewClues() throws {
+        let savedID = UUID(), rejectedID = UUID()
+        let pending = review(date: 2, located: true)
+        for id in [savedID, rejectedID] {
+            XCTAssertThrowsError(try MapViewModel.reviewImportResultIDs([id], visibleCandidates: [])) { error in
+                guard case ReviewCandidateError.sourceAlreadyReviewed = error else {
+                    return XCTFail("Expected an already-reviewed acknowledgement")
+                }
+            }
+        }
+        XCTAssertEqual(try MapViewModel.reviewImportResultIDs([savedID, pending.id, rejectedID, pending.id], visibleCandidates: [pending]), [pending.id])
+        XCTAssertEqual(try MapViewModel.reviewImportResultIDs([], visibleCandidates: [pending]), [])
+    }
+
+    @MainActor
+    func testNewestReviewComesFirstEvenWhenItHasNoLocation() {
+        let ready = review(date: 1, located: true)
+        let clue = review(date: 2, located: false)
+        XCTAssertEqual([ready, clue].sorted(by: PlaceReviewCandidate.newestFirst).map(\.id), [clue.id, ready.id])
+        var tie = clue
+        tie.id = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        XCTAssertEqual([clue, tie].sorted(by: PlaceReviewCandidate.newestFirst).first?.id, tie.id)
+    }
+
+    @MainActor
+    func testConfirmingReviewPreservesOriginalCollectionDate() {
+        let candidate = review(date: 100, located: true)
+        let place = Place.from(candidate)
+        XCTAssertEqual(place.createdAt, candidate.createdAt)
+    }
+
+    @MainActor
+    func testRekeyToServerIDKeepsRecipientMemory() {
+        var local = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        let localID = local.id
+        let serverID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        local.status = .visited
+        local.note = "Ask for the window"
+        local.category = .food
+        let rekeyed = local.rekeyed(to: serverID)
+        XCTAssertEqual(rekeyed.id, serverID)
+        XCTAssertEqual(rekeyed.status, .visited)
+        XCTAssertEqual(rekeyed.note, "Ask for the window")
+        XCTAssertEqual(rekeyed.category, .food)
+        XCTAssertTrue(rekeyed.savedIDs.contains(localID))
+        XCTAssertEqual(local.rekeyed(to: localID).id, localID)
+    }
+
+    @MainActor
+    func testSameVenueSupplementPreservesFirstCollectionDate() {
+        var first = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        first.createdAt = Date(timeIntervalSince1970: 1)
+        var second = first
+        second.createdAt = Date(timeIntervalSince1970: 2)
+        XCTAssertEqual(second.mergingSources(from: first).createdAt, first.createdAt)
+    }
+
+    @MainActor
+    func testSameIDRemoteLocalMergeKeepsLocalHighlightsAndEvidence() {
+        var remote = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        remote.note = "Must try the bun"
+        remote.placeHighlights = nil
+        remote.additionalSourceEvidence = nil
+        remote.createdAt = Date(timeIntervalSince1970: 1)
+        var local = remote
+        local.placeHighlights = ["Window seats"]
+        local.vibeTags = ["quiet"]
+        local.accessNotes = ["Walk-up"]
+        local.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
+        local.additionalSourceEvidence = ["Original source note"]
+        let merged = Place.consolidated([remote, local]).first
+        XCTAssertEqual(merged?.note, "Must try the bun")
+        XCTAssertEqual(merged?.placeHighlights, ["Window seats"])
+        XCTAssertEqual(merged?.vibeTags, ["quiet"])
+        XCTAssertEqual(merged?.accessNotes, ["Walk-up"])
+        XCTAssertEqual(merged?.recommendedItems, [RecommendedItem(name: "Cortado", price: "$6")])
+        XCTAssertTrue(merged?.sourceEvidence.contains("Original source note") == true)
+    }
+
+    @MainActor
+    func testSameIDRemoteLocalMergeDoesNotRestoreClearedStructuredMemory() {
+        var remote = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        remote.note = "Must try the bun"
+        remote.placeHighlights = []
+        remote.vibeTags = []
+        remote.accessNotes = []
+        remote.recommendedItems = []
+        remote.additionalSourceEvidence = []
+        remote.createdAt = Date(timeIntervalSince1970: 1)
+        var local = remote
+        local.placeHighlights = ["Window seats"]
+        local.vibeTags = ["quiet"]
+        local.accessNotes = ["Walk-up"]
+        local.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
+        local.additionalSourceEvidence = ["Original source note"]
+        let merged = Place.consolidated([remote, local]).first
+        XCTAssertEqual(merged?.note, "Must try the bun")
+        XCTAssertEqual(merged?.placeHighlights, [])
+        XCTAssertEqual(merged?.vibeTags, [])
+        XCTAssertEqual(merged?.accessNotes, [])
+        XCTAssertEqual(merged?.recommendedItems, [])
+        XCTAssertEqual(merged?.additionalSourceEvidence, [])
+        XCTAssertFalse(merged?.sourceEvidence.contains("Original source note") == true)
+    }
+
+    @MainActor
+    func testImportIdentityKeepsBranchesAndSourceOnlySeparate() {
+        let existing = review(date: 1, located: true)
+        var pending = PendingReviewCandidate(
+            candidateName: "  CAFE  ", address: "1 Test Way", category: "cafe",
+            latitude: existing.latitude, longitude: existing.longitude,
+            sourceURL: "https://example.com/post", sourceText: nil,
+            evidence: [], confidence: 1, missingInfo: [], savedAt: Date()
+        )
+        XCTAssertTrue(existing.matchesImport(pending))
+        pending.latitude = 26
+        XCTAssertFalse(existing.matchesImport(pending))
+        pending.latitude = existing.latitude
+        pending.candidateName = "Other Cafe"
+        XCTAssertFalse(existing.matchesImport(pending))
+        pending.isSourceOnly = true
+        XCTAssertFalse(existing.matchesImport(pending))
+    }
+
+    @MainActor
+    func testSourceIdentityRetainsContentQueriesAndRejectsCredentials() {
+        XCTAssertEqual(SaveSourceIdentity.url("https://example.com/post?id=1&utm_source=ig"), SaveSourceIdentity.url("https://example.com/post?id=1"))
+        XCTAssertNotEqual(SaveSourceIdentity.url("https://example.com/post?id=1"), SaveSourceIdentity.url("https://example.com/post?id=2"))
+        XCTAssertNil(SaveSourceIdentity.url("https://user:secret@example.com/post"))
+        XCTAssertNil(SaveSourceIdentity.url("not a link"))
+    }
+
+    @MainActor
+    private func review(date: Double, located: Bool) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Cafe", address: located ? "1 Test Way" : "",
+            city: nil, latitude: located ? 25.03 : nil, longitude: located ? 121.55 : nil,
+            evidence: [], confidence: nil, missingInfo: [], status: located ? "review" : "source_only",
+            createdAt: Date(timeIntervalSince1970: date))
     }
 
     // MARK: - Helper

@@ -50,7 +50,24 @@ final class PrivyAuthService: ObservableObject {
     private let appId: String
     private let clientId: String
     private var authStateTask: Task<Void, Never>?
+    private var shareSessionTask: Task<Void, Never>?
+    private var shareSessionOwner: String?
+    private var shareSessionAttempt: UUID?
     private var interactiveAuthAttempts: Set<UUID> = []
+    private var isPerformingInitialRestore = true
+    private var signingOutOwners = Set<String>()
+    private var signOutWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+#if DEBUG
+    var signOutSuspension: (() async -> Void)?
+    var signOutSDKUserIDProvider: (() async -> String?)?
+
+    /// Test-only: apply the same restore transition as `restoreSession()`.
+    /// From `.unknown`, `currentUserId` is nil so generation advances.
+    func applyRestoredAuthenticationForTests(userId: String) {
+        sessionOrigin = .restored
+        transitionToAuthenticated(userId: userId)
+    }
+#endif
 
     // MARK: App Review Demo
 
@@ -70,6 +87,31 @@ final class PrivyAuthService: ObservableObject {
     var currentUserId: String? {
         if case .authenticated(let userId) = authState { return userId }
         return nil
+    }
+
+    /// Resolve the owner before a vault read or new write. Uses the cached
+    /// owner while auth is still `.unknown`; waits for restore only when
+    /// that cache is empty. Never treats unresolved auth as signed-out.
+    func resolvedActiveOwner() async throws -> SaveActiveOwnerSnapshot {
+        if authState == .unknown, SavePlaceLimitHandoff.cachedActiveOwner() == nil {
+            await restoreSession()
+        }
+        return try SaveActiveOwnerResolver.resolve(
+            liveOwner: currentUserId,
+            cachedOwner: SavePlaceLimitHandoff.cachedActiveOwner(),
+            generation: authState == .unknown ? nil : sessionGeneration,
+            authIsUnresolved: authState == .unknown
+        )
+    }
+
+    func revalidateActiveOwner(_ snapshot: SaveActiveOwnerSnapshot) throws {
+        let currentOwner: String?
+        if authState == .unknown {
+            currentOwner = SavePlaceLimitHandoff.cachedActiveOwner()
+        } else {
+            currentOwner = currentUserId
+        }
+        try snapshot.revalidate(currentOwner: currentOwner, currentGeneration: sessionGeneration)
     }
 
     private init() {
@@ -99,18 +141,24 @@ final class PrivyAuthService: ObservableObject {
 
     deinit {
         authStateTask?.cancel()
+        shareSessionTask?.cancel()
     }
 
     // MARK: - Session Restore
 
     func restoreSession() async {
         sessionOrigin = .restored
-        guard let privy else {
-            transitionToUnauthenticated()
+        defer { isPerformingInitialRestore = false }
+        if let privy {
+            let state = await privy.getAuthState()
+            if case .unauthenticated = state {
+                transitionToUnauthenticated()
+                return
+            }
+            applyPrivyState(state)
             return
         }
-        let state = await privy.getAuthState()
-        applyPrivyState(state)
+        transitionToUnauthenticated()
     }
 
     private func observeAuthState() {
@@ -189,6 +237,7 @@ final class PrivyAuthService: ObservableObject {
     /// Never throws — if the network call fails we still enter local-only demo so
     /// the reviewer is never blocked at the door.
     func enterReviewerDemo() async {
+        invalidateShareAnalysisSession()
         let guestToken: String?
         if ReviewDemo.isOfflineUITestMode {
             guestToken = nil
@@ -227,7 +276,9 @@ final class PrivyAuthService: ObservableObject {
         }
     }
 
-    /// Seeds the isolated review-demo vault once. A DEBUG-only UI-test flag may
+    /// Seeds the isolated review-demo vault once. Ownerless fixtures from an
+    /// earlier build are claimed by `ReviewDemo.userId` so App Review still
+    /// sees Map Stamps and the Harbor Oven clue. A DEBUG-only UI-test flag may
     /// repair missing simulator seeds without changing or clearing existing data.
     /// Best-effort: a seed failure must not block demo entry.
     private func seedReviewerDemoVaultIfNeeded() {
@@ -237,36 +288,53 @@ final class PrivyAuthService: ObservableObject {
 #else
         let shouldRepairForUITests = false
 #endif
-        let vault = ReviewDemoStorage.localVaultService
-        let existingPlaces = (try? vault.confirmedPlaces(limit: 500)) ?? []
-        let existingReviewCandidates = (try? vault.reviewCandidates(limit: 500)) ?? []
-        let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
-        if ReviewDemoSeed.shouldSeedVault(
-            existingPlaces: existingPlaces,
-            wasSeeded: wasSeeded,
-            repairForUITests: shouldRepairForUITests
-        ) {
-            for place in ReviewDemoSeed.missingPlaces(from: existingPlaces) {
-                _ = try? vault.saveConfirmedPlace(place)
-            }
-        }
-        // Isolated demo vault only. Harbor Oven is the Review fixture, but
-        // offline capture UI tests need an empty queue unless they ask to
-        // repair the Review face.
-        if ReviewDemoSeed.shouldSeedReviewFace(
+        ReviewDemoSeed.seedIsolatedVaultIfNeeded(
+            vault: ReviewDemoStorage.localVaultService,
+            defaults: defaults,
             repairForUITests: shouldRepairForUITests,
             isolatedOfflineUITest: ReviewDemo.isOfflineUITestMode
-        ) {
-            for candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
-                _ = try? vault.saveReviewCandidate(candidate)
-            }
-        }
-        defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+        )
     }
 
     // MARK: - Sign Out
 
     func signOut() async {
+        ClipAppleAccountStore.clear()
+        let owner = currentUserId
+        let generation = sessionGeneration
+        if let owner, signingOutOwners.contains(owner) {
+            await withCheckedContinuation { signOutWaiters[owner, default: []].append($0) }
+            return
+        }
+        if let owner { signingOutOwners.insert(owner) }
+        defer {
+            if let owner {
+                signingOutOwners.remove(owner)
+                let waiters = signOutWaiters.removeValue(forKey: owner) ?? []
+                for waiter in waiters { waiter.resume() }
+            }
+        }
+        // Keep A's Share Analysis credential until logout is confirmed.
+        // An SDK-owner mismatch aborts with A still signed in.
+#if DEBUG
+        if signOutSDKUserIDProvider != nil || signOutSuspension != nil {
+            let sdkUserID: String?
+            if let signOutSDKUserIDProvider { sdkUserID = await signOutSDKUserIDProvider() }
+            else { sdkUserID = owner }
+            guard canLogOutSDKUser(sdkUserID, startedBy: owner, generation: generation) else { return }
+            // Writers are on this MainActor. Clear only after logout is
+            // confirmed, and before SDK suspension, so Share cannot append as
+            // A during a real logout or see a signed-out snapshot if this aborts.
+            invalidateShareAnalysisSession()
+            invalidateShareOwnerCacheIfCurrent(owner)
+            if let signOutSuspension { await signOutSuspension() }
+            guard currentUserId == owner, sessionGeneration == generation else { return }
+            sessionOrigin = .restored
+            transitionToUnauthenticated()
+            return
+        }
+#endif
+        guard currentUserId == owner, sessionGeneration == generation else { return }
         if isReviewerDemo {
             clearReviewerDemoState()
             sessionOrigin = .restored
@@ -279,9 +347,24 @@ final class PrivyAuthService: ObservableObject {
             return
         }
         let user = await privy.getUser()
+        guard canLogOutSDKUser(user?.id, startedBy: owner, generation: generation) else { return }
+        invalidateShareAnalysisSession()
+        invalidateShareOwnerCacheIfCurrent(owner)
         await user?.logout()
+        guard currentUserId == owner, sessionGeneration == generation else { return }
         sessionOrigin = .restored
         transitionToUnauthenticated()
+    }
+
+    private func canLogOutSDKUser(_ sdkUserID: String?, startedBy owner: String?, generation: Int) -> Bool {
+        currentUserId == owner && sessionGeneration == generation &&
+            (sdkUserID == nil || sdkUserID == owner)
+    }
+
+    private func invalidateShareOwnerCacheIfCurrent(_ owner: String?) {
+        if SavePlaceLimitHandoff.cachedActiveOwner() == owner {
+            SavePlaceLimitHandoff.syncActiveOwner(nil)
+        }
     }
 
     func accessToken() async throws -> String {
@@ -309,6 +392,7 @@ final class PrivyAuthService: ObservableObject {
             }
             transitionToAuthenticated(userId: user.id)
         case .unauthenticated:
+            if isPerformingInitialRestore { return }
             if !hasInteractiveAuthenticationInFlight {
                 sessionOrigin = .restored
             }
@@ -342,17 +426,79 @@ final class PrivyAuthService: ObservableObject {
     }
 
     private func transitionToAuthenticated(userId: String) {
+        // Ignore a stale SDK replay for the account whose logout is suspended.
+        // A different account is still allowed to establish its own session.
+        guard !signingOutOwners.contains(userId) else { return }
         if currentUserId != userId {
             sessionGeneration &+= 1
+            SaveStoreKitService.shared.resetForSessionChange()
+            SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .authenticated(userId: userId)
+        SavePlaceLimitHandoff.syncActiveOwner(userId)
+        synchronizeShareAnalysisSession(userId: userId)
+        Task { await SaveEntitlementStore.shared.refresh() }
+    }
+
+    private func synchronizeShareAnalysisSession(userId: String) {
+        guard !isReviewerDemo else { invalidateShareAnalysisSession(); return }
+        let base = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]) ?? SAVEProductionConfig.defaultAPIBaseURL
+        if let credential = ShareAnalysisKeychain.read(), credential.ownerSubject == userId,
+           credential.apiBaseURL == base, credential.isUsable(at: Date().addingTimeInterval(7 * 86400)) { return }
+        if shareSessionOwner == userId { return }
+        invalidateShareAnalysisSession()
+        shareSessionOwner = userId
+        let attempt = UUID()
+        shareSessionAttempt = attempt
+        let generation = sessionGeneration
+        let installationKey = "save.share-analysis.installation-id"
+        let installationID = UserDefaults.standard.string(forKey: installationKey) ?? UUID().uuidString
+        UserDefaults.standard.set(installationID, forKey: installationKey)
+        shareSessionTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.shareSessionAttempt == attempt {
+                    self.shareSessionTask = nil
+                    self.shareSessionOwner = nil
+                    self.shareSessionAttempt = nil
+                }
+            }
+            do {
+                let bearer = try await self.accessToken()
+                guard !Task.isCancelled, self.sessionGeneration == generation, self.currentUserId == userId else { return }
+                let credential = try await ShareAnalysisClient().issue(bearer: bearer, ownerSubject: userId,
+                    installationID: installationID, apiBaseURL: base)
+                guard !Task.isCancelled, self.sessionGeneration == generation, self.currentUserId == userId else {
+                    await ShareAnalysisClient().revoke(credential)
+                    return
+                }
+                try ShareAnalysisKeychain.write(credential)
+            } catch {
+                // Sign-in remains available if the analysis service is offline.
+                // The extension gives a retry/sign-in message, never a false result.
+            }
+        }
+    }
+
+    private func invalidateShareAnalysisSession() {
+        shareSessionTask?.cancel()
+        shareSessionTask = nil
+        shareSessionOwner = nil
+        shareSessionAttempt = nil
+        let previous = ShareAnalysisKeychain.read()
+        ShareAnalysisKeychain.clear()
+        if let previous { Task { await ShareAnalysisClient().revoke(previous) } }
     }
 
     private func transitionToUnauthenticated() {
+        invalidateShareAnalysisSession()
         if authState != .unauthenticated {
             sessionGeneration &+= 1
+            SaveStoreKitService.shared.resetForSessionChange()
+            SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .unauthenticated
+        SavePlaceLimitHandoff.syncActiveOwner(nil)
     }
 
     private func validateConfig() throws {

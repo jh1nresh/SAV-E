@@ -3,6 +3,27 @@ import XCTest
 
 final class ShareRouteCodecTests: XCTestCase {
     @MainActor
+    func testEmbeddedReceiptIdentityIsStableAcrossEncodingAndInputKeyOrder() throws {
+        let inputs = [
+            #"{"address":"7 Cap Road","category":"Cafe","id":"","lat":25.2,"lng":121.61,"name":"Offline Receipt","photoURLs":[],"sourceLabel":"Savvy"}"#,
+            #"{"sourceLabel":"Savvy","photoURLs":[],"name":"Offline Receipt","lng":121.61,"lat":25.2,"id":"","category":"Cafe","address":"7 Cap Road"}"#
+        ]
+        let expectedReceiptID = "embedded:fafc194c67fcbe46ca2d550ecd127c97572605925e236fe16e89db985e177f39"
+        var ownerAIDs = Set<UUID>()
+        for input in inputs {
+            let payload = try JSONDecoder().decode(SharedPlaceData.self, from: Data(input.utf8))
+            let receipt = SharedPlaceReceipt.embedded(payload)
+            for _ in 0..<32 {
+                XCTAssertEqual(receipt.id, expectedReceiptID)
+                let ownerA = receipt.privatePlace(ownerSubject: "account-a").id
+                ownerAIDs.insert(ownerA)
+                XCTAssertNotEqual(ownerA, receipt.privatePlace(ownerSubject: "account-b").id)
+            }
+        }
+        XCTAssertEqual(ownerAIDs.count, 1, "Repeated receipt saves must retain one recipient-owned identity")
+    }
+
+    @MainActor
     func testSharedPlaceShortCodeKeepsPRouteWithoutDecodingAsPayload() throws {
         let url = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))
 
@@ -35,7 +56,7 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(decoded.priceRange, "$$")
         XCTAssertEqual(decoded.hours, "Wed-Sun dinner")
         XCTAssertEqual(decoded.sourceLabel, "Google")
-        XCTAssertEqual(decoded.sourceURL, "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club")
+        XCTAssertNil(decoded.sourceURL)
         XCTAssertEqual(decoded.note, "Save this for a slow dinner night")
     }
 
@@ -126,7 +147,28 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(sanitized.sourceURL)
         XCTAssertTrue(sanitized.photoURLs.isEmpty)
         XCTAssertLessThanOrEqual(sanitized.note?.utf16.count ?? 0, 180)
+        var gcj = validCoordinate
+        gcj.coordinateSystem = "GCJ-02"
+        gcj.locationProvider = "amap"
+        gcj.providerMapUrl = "https://uri.amap.com/marker?position=139.699,35.644"
+        let gcjDecoded = try XCTUnwrap(SharedPlaceData.from(url: try XCTUnwrap(gcj.toURL())))
+        XCTAssertEqual(gcjDecoded.coordinateSystem, "GCJ-02")
+        XCTAssertEqual(gcjDecoded.locationProvider, "amap")
+        XCTAssertEqual(gcjDecoded.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
+        let receipt = SharedPlaceReceipt.embedded(gcjDecoded)
+        XCTAssertEqual(receipt.recipientOwnedPlace().coordinateSystem, .gcj02)
+        XCTAssertFalse(receipt.recipientOwnedPlace().isMapKitMappable)
+        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote(SavvyGeneratedLine.marking("Debug: private pipeline state")))
         XCTAssertNil(ShareRoutePayloadSanitizer.publicNote("Debug: private pipeline state"))
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Highlight: the bun was amazing"), "Highlight: the bun was amazing")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Vibe: casual counter seats"), "Vibe: casual counter seats")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Evidence: keep this as my memory"), "Evidence: keep this as my memory")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Access: walk up and wait"), "Access: walk up and wait")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Creator handle: @me.and.the.bun"), "Creator handle: @me.and.the.bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Recommender: Alice suggested the curry"), "Recommender: Alice suggested the curry")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Analysis method: I asked the barista"), "Analysis method: I asked the barista")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Source handle: @me.and.the.bun"), "Source handle: @me.and.the.bun")
+        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote("SavvyMemory/1\n{\"v\":1,\"note\":\"secret\"}"))
         XCTAssertLessThanOrEqual(
             ShareRoutePayloadSanitizer.publicNote(String(repeating: "🍜", count: 180))?.utf16.count ?? 0,
             180
@@ -152,6 +194,140 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(safeOutgoing.sourceURL, "https://example.com/place")
         XCTAssertEqual(safeOutgoing.photoURLs, ["https://example.com/photo.jpg"])
         XCTAssertNil(safeOutgoing.note)
+    }
+
+    @MainActor
+    func testEmbeddedPlaceDropsGooglePhotoURLsFromSharePayloads() throws {
+        let attributed = SharedPlaceData(
+            id: "place_photo",
+            name: "Harbor Oven",
+            address: "Los Angeles",
+            lat: 34.052,
+            lng: -118.243,
+            category: "Food",
+            rating: nil,
+            reviewCount: nil,
+            priceRange: nil,
+            hours: nil,
+            sourceLabel: "Google",
+            sourceURL: "https://maps.google.com/?cid=1",
+            photoURLs: [
+                "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc",
+                "places/ChIJ123/photos/ABC",
+                "https://example.com/own.jpg",
+            ],
+            note: nil
+        )
+
+        let shareURL = try XCTUnwrap(attributed.toURL())
+        let decoded = try XCTUnwrap(SharedPlaceData.from(url: shareURL))
+        XCTAssertEqual(decoded.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertNil(decoded.sourceURL)
+        assertNoGoogleDomainURLs(in: shareURL)
+        assertNoGoogleDomainURLs(in: decoded)
+    }
+
+    @MainActor
+    func testSharedPublicPayloadsContainNoGoogleDomainURLs() throws {
+        let place = SharedPlaceData(
+            id: "g-d-place",
+            name: "Harbor Oven",
+            address: "Los Angeles",
+            lat: 34.052,
+            lng: -118.243,
+            category: "Food",
+            rating: 4.5,
+            reviewCount: 10,
+            priceRange: "$$",
+            hours: "Open",
+            sourceLabel: "Google",
+            sourceURL: "https://www.google.com/maps/place/Harbor+Oven",
+            photoURLs: [
+                "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc",
+                "https://lh3.googleusercontent.com/p/owned-looking",
+                "https://places.googleapis.com/v1/places/ChIJ/photos/ABC/media",
+                "https://example.com/own.jpg",
+            ],
+            note: "Keep the bun"
+        )
+        let placeURL = try XCTUnwrap(place.toURL())
+        let decodedPlace = try XCTUnwrap(SharedPlaceData.from(url: placeURL))
+        XCTAssertEqual(decodedPlace.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertNil(decodedPlace.sourceURL)
+        assertNoGoogleDomainURLs(in: placeURL)
+        assertNoGoogleDomainURLs(in: decodedPlace)
+
+        var list = SaveCollaborativeList(title: "G-d list")
+        list.add(
+            SaveListItem(
+                id: UUID(),
+                source: .savedPlace,
+                sourceID: "owned",
+                title: "Owned Cafe",
+                subtitle: "LA",
+                latitude: 34.05,
+                longitude: -118.24,
+                category: .cafe,
+                rating: nil,
+                reviewCount: nil,
+                sourceURL: "https://maps.google.com/?q=Owned+Cafe",
+                photoURLs: ["https://example.com/own.jpg"],
+                note: nil,
+                addedByDisplayName: "You",
+                addedAt: Date()
+            )
+        )
+        list.add(
+            SaveListItem(
+                id: UUID(),
+                source: .savedPlace,
+                sourceID: "google",
+                title: "Google Cafe",
+                subtitle: "LA",
+                latitude: 34.06,
+                longitude: -118.25,
+                category: .cafe,
+                rating: nil,
+                reviewCount: nil,
+                sourceURL: "https://www.google.com/maps/place/Google+Cafe",
+                photoURLs: [
+                    "https://lh3.googleusercontent.com/p/secret",
+                    "https://maps.googleapis.com/maps/api/place/photo?photo_reference=abc",
+                ],
+                note: nil,
+                addedByDisplayName: "You",
+                addedAt: Date()
+            )
+        )
+        let listURL = try XCTUnwrap(list.shareURL())
+        let listPayload = try XCTUnwrap(SaveSharedListPayload.from(url: listURL))
+        XCTAssertEqual(listPayload.list.items.first?.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertNil(listPayload.list.items.first?.sourceURL)
+        XCTAssertEqual(listPayload.list.items.last?.photoURLs, [])
+        XCTAssertNil(listPayload.list.items.last?.sourceURL)
+        assertNoGoogleDomainURLs(in: listURL)
+        for item in listPayload.list.items {
+            if let source = item.sourceURL {
+                XCTAssertFalse(containsGoogleDomain(source), source)
+            }
+            for photo in item.photoURLs {
+                XCTAssertFalse(containsGoogleDomain(photo), photo)
+            }
+        }
+
+        XCTAssertTrue(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://maps.google.com/?q=x")!))
+        XCTAssertTrue(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://lh3.googleusercontent.com/p/x")!))
+        XCTAssertTrue(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://www.google.co.uk/maps")!))
+        XCTAssertFalse(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://example.com/own.jpg")!))
+        XCTAssertFalse(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://maps.apple.com/?q=x")!))
+    }
+
+    @MainActor
+    func testLegacyEmbeddedPlaceStillDecodesWithoutPhotos() throws {
+        let url = try XCTUnwrap(URL(string: Self.saveClipLocalInvokeURL))
+        let decoded = try XCTUnwrap(SharedPlaceData.from(url: url))
+        XCTAssertEqual(decoded.name, "Quarter Sheets Pizza Club")
+        XCTAssertTrue(decoded.photoURLs.isEmpty)
     }
 
     @MainActor
@@ -310,6 +486,9 @@ final class ShareRouteCodecTests: XCTestCase {
 
         let receipt = try SharedPlaceReceipt.decode(data: data, code: "AbC123_x")
         let savedPlace = receipt.privatePlace()
+        XCTAssertEqual(receipt.privatePlace(ownerSubject: "a").id, receipt.privatePlace(ownerSubject: "a").id)
+        XCTAssertNotEqual(receipt.privatePlace(ownerSubject: "a").id, receipt.privatePlace(ownerSubject: "b").id)
+        XCTAssertNotEqual(receipt.privatePlace(ownerSubject: "a").id.uuidString.lowercased(), receipt.sourcePlaceID?.lowercased())
 
         XCTAssertEqual(receipt.verifiedSenderLabel, "Mina")
         XCTAssertEqual(receipt.sourcePlaceID, "11111111-2222-3333-4444-555555555555")
@@ -318,6 +497,11 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(savedPlace.status, .wantToGo)
         XCTAssertEqual(savedPlace.visibility, .privateMemory)
         XCTAssertEqual(savedPlace.note, "Order the tasting menu")
+        let recipientStamp = receipt.recipientOwnedPlace()
+        XCTAssertNil(recipientStamp.note)
+        XCTAssertNil(recipientStamp.rating)
+        XCTAssertNil(recipientStamp.googleRating)
+        XCTAssertEqual(recipientStamp.recommender, "Mina")
 
         var placeWithCredentialedSource = savedPlace
         placeWithCredentialedSource.sourceUrl = "https://user:secret@example.com/private"
@@ -350,6 +534,47 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
+    func testRecipientHandoffStripsSenderNoteAndRating() throws {
+        let payload = SharedPlaceData(
+            id: "place-1",
+            name: "Kato",
+            address: "Los Angeles",
+            lat: 34.035,
+            lng: -118.238,
+            category: "Food",
+            rating: 4.8,
+            reviewCount: 120,
+            priceRange: "$$$",
+            hours: nil,
+            sourceLabel: "Savvy",
+            sourceURL: "https://www.instagram.com/p/example/",
+            photoURLs: [],
+            note: "Order the tasting menu"
+        )
+        let stripped = payload.strippingSenderMemory()
+        XCTAssertNil(stripped.note)
+        XCTAssertNil(stripped.rating)
+        let url = try XCTUnwrap(stripped.toURL())
+        let decoded = try XCTUnwrap(SharedPlaceData.from(url: url))
+        XCTAssertNil(decoded.note)
+        XCTAssertNil(decoded.rating)
+        let recipient = SharedPlaceReceipt.embedded(payload).recipientOwnedPlace()
+        XCTAssertNil(recipient.note)
+        XCTAssertNil(recipient.rating)
+        XCTAssertNil(recipient.googleRating)
+        XCTAssertEqual(payload.note, "Order the tasting menu")
+        XCTAssertEqual(
+            SharedPlaceReceipt.embedded(payload).payload.note,
+            "Order the tasting menu",
+            "Preview keeps the sender publicNote; only the saved stamp strips it"
+        )
+        let labeled = FriendShareNoteCopy.title(sender: "Mina")
+        XCTAssertEqual(labeled.english, "Mina's note")
+        XCTAssertEqual(labeled.traditionalChinese, "Mina的手寫便條")
+        XCTAssertEqual(FriendShareNoteCopy.title(sender: "  ").english, "Shared note")
+    }
+
+    @MainActor
     func testEmbeddedPayloadCannotForgeVerifiedSender() throws {
         let data = try XCTUnwrap(Self.payloadForgedSenderJSON.data(using: .utf8))
 
@@ -358,6 +583,31 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(receipt.sender)
         XCTAssertNil(receipt.verifiedSenderLabel)
         XCTAssertNil(receipt.privatePlace().recommender)
+    }
+
+    private func assertNoGoogleDomainURLs(in url: URL, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(containsGoogleDomain(url.absoluteString), url.absoluteString, file: file, line: line)
+        if let decoded = url.absoluteString.removingPercentEncoding {
+            XCTAssertFalse(containsGoogleDomain(decoded), decoded, file: file, line: line)
+        }
+    }
+
+    @MainActor
+    private func assertNoGoogleDomainURLs(in place: SharedPlaceData, file: StaticString = #filePath, line: UInt = #line) {
+        if let source = place.sourceURL {
+            XCTAssertFalse(containsGoogleDomain(source), source, file: file, line: line)
+        }
+        for photo in place.photoURLs {
+            XCTAssertFalse(containsGoogleDomain(photo), photo, file: file, line: line)
+        }
+    }
+
+    private func containsGoogleDomain(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        return [
+            "google.com", "googleapis.com", "googleusercontent.com",
+            "gstatic.com", "goo.gl", "g.co",
+        ].contains { lower.contains($0) }
     }
 
     private static let saveClipLocalInvokeURL =

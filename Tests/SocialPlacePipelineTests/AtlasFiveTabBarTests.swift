@@ -52,14 +52,14 @@ final class AtlasFiveTabBarTests: XCTestCase {
 
     @MainActor
     func testBarFloatsInsideCanvasWithAccessibleTargets() {
-        XCTAssertLessThan(AtlasTabBarMetrics.width, AtlasMetrics.width)
-        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.leadingInset, 16)
-        XCTAssertEqual(
-            AtlasTabBarMetrics.leadingInset,
-            (AtlasMetrics.width - AtlasTabBarMetrics.width) / 2
-        )
+        XCTAssertEqual(AtlasTabBarMetrics.width, AtlasMetrics.width)
+        XCTAssertEqual(AtlasTabBarMetrics.leadingInset, 0)
+        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.horizontalPadding, 16)
         XCTAssertLessThan(AtlasTabBarMetrics.height, 76)
         XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.itemHeight, 44)
+        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.itemHeight, AtlasTabBarMetrics.minimumHitTarget)
+        XCTAssertEqual(AtlasPalette.strokeWidth, 1)
+        XCTAssertEqual(AtlasTabBarMetrics.raisedControlStrokeWidth, 0)
     }
 
     @MainActor
@@ -124,7 +124,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
 
     @MainActor
     func testAtlasVisualSystemUsesRoundedTypeAndOrderedSpacing() throws {
-        let theme = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
+        let theme = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Theme.swift")
         let productionTheme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
 
         XCTAssertTrue(theme.contains("design: .rounded"))
@@ -168,6 +168,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
         // city-scale map.
         XCTAssertFalse(icons.contains("briefcase"))
         XCTAssertFalse(icons.contains("globe"))
+        XCTAssertEqual(icons, ["house", "map", "plus", "person.2", "book.closed"])
     }
 
     @MainActor
@@ -208,7 +209,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
 
     @MainActor
     func testPlanChildComposesFromSavedStampsAndKeepsUnsavedLabeled() throws {
-        let plan = try source(at: "SAV-E/Views/Plan/SavePlanView.swift")
+        let plan = try source(at: "SAV-E/Legacy/Views/Plan/SavePlanView.swift")
         let content = try contentViewSource()
 
         XCTAssertTrue(plan.contains("plan.root"))
@@ -223,7 +224,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
         XCTAssertTrue(content.contains("case .plan") || content.contains("case plan"))
         XCTAssertFalse(content.contains("case origin"))
         XCTAssertFalse(content.contains("SaveOriginView("))
-        let itinerary = try source(at: "SAV-E/Views/Drawer/Components/TripItineraryComponent.swift")
+        let itinerary = try source(at: "SAV-E/Legacy/Views/Drawer/Components/TripItineraryComponent.swift")
         XCTAssertTrue(itinerary.contains("Travel window"))
         XCTAssertTrue(itinerary.contains("plan.window."))
     }
@@ -463,7 +464,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
     // MARK: - Helpers
 
     private func contentViewSource() throws -> String {
-        try source(at: "SAV-E/App/ContentView.swift")
+        try source(at: "SAV-E/Legacy/App/ContentView.swift")
     }
 
     private func enumBody(_ name: String, in source: String) throws -> String {

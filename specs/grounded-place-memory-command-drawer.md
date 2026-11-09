@@ -520,7 +520,7 @@ Acceptance:
 
 Files likely touched:
 
-- `SAV-E/Views/Drawer/AIDrawerView.swift`
+- `SAV-E/Legacy/Views/Drawer/AIDrawerView.swift`
 - new drawer result components if needed
 - `AIDrawerViewModel.swift`
 

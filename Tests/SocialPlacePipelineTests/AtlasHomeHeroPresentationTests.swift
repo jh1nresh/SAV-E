@@ -3,6 +3,15 @@ import XCTest
 
 final class AtlasHomeHeroPresentationTests: XCTestCase {
     @MainActor
+    func testReferenceTokyoKeepsMapFallbackSeparateFromUserLocation() {
+        let reference = AtlasHomeHeroPresentation.referenceTokyo
+        XCTAssertEqual(reference.source, .referenceTokyo)
+        XCTAssertEqual(reference.storyCity, "Tokyo")
+        XCTAssertEqual(reference.latitude ?? 0, 35.6762, accuracy: 0.0001)
+        XCTAssertEqual(reference.longitude ?? 0, 139.6503, accuracy: 0.0001)
+    }
+
+    @MainActor
     func testMainlandChinaCityNamesSelectOwnedScenes() {
         let fixtures: [(String, Double, Double, AtlasHomeHeroPresentation.Scene)] = [
             ("北京市", 0, 0, .beijing),

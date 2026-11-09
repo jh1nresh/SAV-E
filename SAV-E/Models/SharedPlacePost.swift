@@ -1,0 +1,124 @@
+import Foundation
+
+/// A live, revocable projection. Never persist an author's content in Place.
+struct SharedPlacePost: Decodable, Identifiable, Equatable {
+    let id: UUID
+    let name: String
+    let address: String
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+    var google_place_id: String? = nil
+    var coordinate_system: PlaceCoordinateSystem? = nil
+    var location_provider: PlaceMatchProvider? = nil
+    var provider_place_id: String? = nil
+    var provider_map_url: String? = nil
+    let category: String
+    let status: PlaceStatus
+    let stars: Double?
+    let caption: String?
+    let shared_at: String
+    let author_id: String
+    let author_name: String
+    let author_handle: String?
+    let author_avatar_url: String?
+    let visible_to_followers: Bool
+
+    var photo_count: Int? = nil
+    var photo_version: String? = nil
+
+    var icon: String { PlaceCategory(rawValue: category)?.iconName ?? "mappin.and.ellipse" }
+
+    /// Review/Unplaced stand-in when the free cap blocks a confirmed Map Stamp.
+    /// Venue identity only — the same projection as a server shared-post save.
+    /// Caption, rating, and author stay off the device after withdraw/unfollow.
+    /// Mint a recipient-owned ID; the author's `places.id` would 409 on confirm.
+    func asUnplacedPlace(ownerSubject: String? = nil) -> Place {
+        return Place(
+            id: SaveRecipientPlaceIdentity.id(source: "post:\(id)", ownerSubject: ownerSubject),
+            name: name,
+            address: address,
+            latitude: latitude ?? 0,
+            longitude: longitude ?? 0,
+            googlePlaceId: google_place_id,
+            category: PlaceCategory(rawValue: category) ?? .attraction,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            coordinateSystem: coordinate_system,
+            locationProvider: location_provider,
+            providerPlaceId: provider_place_id,
+            providerMapUrl: provider_map_url,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+    }
+}
+
+struct SharedPlacePostsPage: Decodable {
+    let items: [SharedPlacePost]
+    let nextCursor: String?
+}
+
+struct SocialProfileCounts: Decodable {
+    let postCount: Int
+    let followingCount: Int
+    let followerCount: Int
+}
+
+struct SharedPassportPage: Decodable {
+    struct Profile: Decodable {
+        let id: String
+        let displayName: String
+        let handle: String?
+        let avatarUrl: String?
+        let postCount: Int
+    }
+    let profile: Profile
+    let items: [SharedPlacePost]
+    let nextCursor: String?
+}
+
+enum SharedPostFilter: String, CaseIterable, Identifiable {
+    case all, wantToGo, visited
+    var id: Self { self }
+    func title(_ language: AppLanguage) -> String {
+        switch self {
+        case .all: language.localized(english: "All", traditionalChinese: "全部")
+        case .wantToGo: language.localized(english: "Want to go", traditionalChinese: "想去")
+        case .visited: language.localized(english: "Visited", traditionalChinese: "去過")
+        }
+    }
+}
+
+struct SharedPostDraft: Encodable {
+    var status: PlaceStatus
+    var stars: Double?
+    var caption: String
+    // nil preserves photos for callers that only edit text. The composer sends
+    // the complete explicitly selected set; [] removes every attachment.
+    var photos: [Data]? = nil
+    static let maxPhotos = 3
+    static let maxPhotoBytes = 262_144
+    private enum CodingKeys: String, CodingKey { case status, stars, caption, photos }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        if let stars { try container.encode(stars, forKey: .stars) }
+        else { try container.encodeNil(forKey: .stars) }
+        try container.encode(caption, forKey: .caption)
+        try container.encodeIfPresent(photos, forKey: .photos)
+    }
+    var isValid: Bool {
+        (photos == nil || (photos!.count <= Self.maxPhotos && photos!.allSatisfy { !$0.isEmpty && $0.count <= Self.maxPhotoBytes })) &&
+        caption.unicodeScalars.count <= 500 &&
+        (stars == nil || (status == .visited && stars!.isFinite && (1...5).contains(stars!)))
+    }
+}

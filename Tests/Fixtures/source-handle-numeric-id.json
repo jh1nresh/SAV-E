@@ -1,0 +1,17 @@
+{
+  "name": "Harbor Oven Pizza",
+  "address": "Berth 73, San Pedro, Los Angeles, CA 90731",
+  "geo": {
+    "latitude": 33.7405,
+    "longitude": -118.2807
+  },
+  "status": "review_candidate",
+  "confidence": 0.84,
+  "proofLevel": "source_link",
+  "evidence": [
+    "Source URL: https://www.xiaohongshu.com/user/profile/12345",
+    "Creator handle: @12345"
+  ],
+  "missingInfo": ["User confirmation required"],
+  "sourceHandle": "12345"
+}

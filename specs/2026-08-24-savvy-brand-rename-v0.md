@@ -20,3 +20,20 @@
 Apple allows the localized App Store name to be edited while the app/version status permits it. The product name is limited to 30 characters and can be used by one app per localization. `Savvy: Save Places` is the safe first submission title; the installed binary remains `Savvy`.
 
 The existing App Store record and bundle ID must remain the same so this ships as an update instead of a new app. App Clip, Share Extension, App Group, StoreKit product IDs, receipt validation, and legacy links continue using their existing technical identifiers.
+
+## Subsequent StoreKit migration — PR #292
+
+The August brand-only baseline above preserved `com.wanderly.app.pro.annual`
+and `com.wanderly.app.pro.monthly`. PR #292 separately changes the reserved
+identifiers to `savvy.pro.annual` and `savvy.pro.monthly`, respectively. This is
+an explicit product-ID migration, outside the original brand-only scope; it
+does not retroactively change that baseline or its failure fixture.
+
+Purchasing remains disabled (`purchasingIsAvailable = false`). This source
+change does not establish that the new products exist in App Store Connect,
+activate purchases, or prove legacy subscription/receipt compatibility. Before
+activating or releasing purchases, verify the App Store Connect product setup
+and whether any legacy products have transactions. If legacy entitlements
+exist, preserve and test their restore and server-receipt recognition before
+activation; renaming source constants alone is not a migration of subscribers.
+Bundle IDs, App Groups, account identities and legacy deep links remain intact.

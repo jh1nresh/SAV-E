@@ -45,7 +45,9 @@ Never: launch / onboarding wall, pre-Stamp wall, day-1 tab banners
 
 ## Out of scope
 
-- Choosing dollar prices or trial length
+- Choosing dollar prices or trial length (founder later locked local
+  StoreKit monthly **$6.99** / annual **$39.99**; ASC IAP prices remain a
+  founder Apple action — see `docs/app-store-upload-blockers.md`)
 - Enabling enforcement
 - Restoring Ask / trip generation UI
 - Paywall weekly-anchor layout

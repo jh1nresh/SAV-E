@@ -117,3 +117,70 @@ final class GeminiCaptionVenueExtractor: SocialCaptionVenueExtractor {
         return text
     }
 }
+
+// The production social path uses one server-owned prompt and map verifier.
+// The legacy extractor above remains only for non-social compatibility helpers.
+struct SocialSemanticField: Codable, Equatable {
+    var value: String
+    var quote: String
+    var source: String
+}
+
+struct SocialSemanticMapPlace: Codable, Equatable {
+    var id: String
+    var name: String
+    var address: String
+    var latitude: Double
+    var longitude: Double
+    var types: [String]? = nil
+}
+
+struct SocialSemanticVenue: Codable, Equatable {
+    var name: SocialSemanticField
+    var branch: SocialSemanticField?
+    var address: SocialSemanticField?
+    var transport: SocialSemanticField?
+    var mapStatus: String
+    var matches: [SocialSemanticMapPlace]
+}
+
+struct SocialSemanticResult: Codable, Equatable {
+    var status: String
+    var venues: [SocialSemanticVenue]
+    var reason: String?
+
+    static let pending = SocialSemanticResult(status: "analysis_pending", venues: [], reason: nil)
+
+    func supplemented(by next: SocialSemanticResult) -> SocialSemanticResult {
+        if next.status == "cancelled" || status != "ready" { return next }
+        guard next.status == "ready" else { return self }
+        func normalized(_ value: String) -> String {
+            value.precomposedStringWithCompatibilityMapping.lowercased().replacingOccurrences(of: "臺", with: "台").filter { !$0.isWhitespace }
+        }
+        let rank = ["matched": 3, "ambiguous": 2, "unverified": 1, "conflict": 1]
+        let retains = venues.allSatisfy { old in next.venues.contains { updated in
+            let fields: [(SocialSemanticField?, SocialSemanticField?)] = [(old.name, updated.name), (old.branch, updated.branch), (old.address, updated.address), (old.transport, updated.transport)]
+            return fields.allSatisfy { before, after in before == nil || (after != nil && normalized(before!.value) == normalized(after!.value)) }
+                && (rank[updated.mapStatus] ?? 0) >= (rank[old.mapStatus] ?? 0)
+                && (old.matches.isEmpty || !updated.matches.isEmpty)
+        } }
+        return retains ? next : self
+    }
+}
+
+protocol SocialSemanticAnalyzing {
+    func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult
+}
+
+struct BackendSocialSemanticAnalyzer: SocialSemanticAnalyzing {
+    func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult {
+        do {
+            return try await SupabaseService.shared.analyzeSocialCaption(caption: caption, ocrText: ocrText)
+        } catch is CancellationError {
+            return SocialSemanticResult(status: "cancelled", venues: [], reason: nil)
+        } catch {
+            await SAVEAnalysisScope.current?.markProviderFailure()
+            return .pending
+        }
+    }
+}

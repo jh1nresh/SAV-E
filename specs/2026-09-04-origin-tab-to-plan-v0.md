@@ -65,8 +65,8 @@ Plan / Trips faces.
 
 ## Files and systems in scope
 
-- `SAV-E/App/ContentView.swift` (`SaveRootTab`, Plan destination)
-- `SAV-E/Views/Plan/SavePlanView.swift`
+- `SAV-E/Legacy/App/ContentView.swift` (`SaveRootTab`, Plan destination)
+- `SAV-E/Legacy/Views/Plan/SavePlanView.swift`
 - `SAV-E/Services/SaveDayRhythmScheduler.swift`
 - `SAV-E/Services/SavePlanDraftBuilder.swift`
 - `SAV-E/Models/AIResponse.swift` (day window note, lodging gap)

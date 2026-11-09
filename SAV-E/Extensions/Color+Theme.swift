@@ -1,5 +1,35 @@
+import CoreText
 import SwiftUI
 import UIKit
+
+/// 8pt spacing scale for the doodle journal. Allowed values: 4 / 8 / 12 / 16 / 24 / 32 / 48.
+enum SaveSpace {
+    static let tight: CGFloat = 4
+    static let xs: CGFloat = 8
+    static let sm: CGFloat = 12
+    static let md: CGFloat = 16
+    static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+    static let xxl: CGFloat = 48
+}
+
+enum SaveLayout {
+    static let screenMargin: CGFloat = 24
+    static let rowMinHeight: CGFloat = 68
+    static let rowVerticalPadding: CGFloat = 12
+    static let stickerBox: CGFloat = 48
+    static let stickerArt: CGFloat = 40
+    static let passportSlot: CGFloat = 64
+    static let stickerToText: CGFloat = 12
+    static let numberBadge: CGFloat = 24
+    static let titleToMeta: CGFloat = 4
+    static let sectionGap: CGFloat = 24
+    static let cardPadding: CGFloat = 16
+    static let cardGap: CGFloat = 16
+    static let minTap: CGFloat = 44
+    static let buttonHeight: CGFloat = 48
+    static let chipHeight: CGFloat = 32
+}
 
 enum SaveTheme {
     enum Colors {
@@ -9,19 +39,14 @@ enum SaveTheme {
         static let amber = Color(hex: "FFD66B")
     }
 
-    /// Shared spacing scale per DESIGN.md "Shape, Stroke, Spacing".
-    /// Compact rows 8-10, cards 12-18, sheet sections 14-16.
+    /// Compatibility aliases for the 8pt `SaveSpace` scale.
+    /// `xl` was the off-grid 22; it now maps to `SaveSpace.lg` (24).
     enum Spacing {
-        /// Tight icon/text gaps inside chips and badges.
-        static let xs: CGFloat = 4
-        /// Compact row internal spacing.
-        static let sm: CGFloat = 8
-        /// Default card padding.
-        static let md: CGFloat = 12
-        /// Comfortable card / sheet section padding.
-        static let lg: CGFloat = 16
-        /// Large notebook or Passport panel padding.
-        static let xl: CGFloat = 22
+        static let xs = SaveSpace.tight
+        static let sm = SaveSpace.xs
+        static let md = SaveSpace.sm
+        static let lg = SaveSpace.md
+        static let xl = SaveSpace.lg
     }
 
     enum Elevation {
@@ -112,7 +137,7 @@ struct SaveBrandPrimaryButtonStyle: ButtonStyle {
 }
 
 extension Color {
-    // MARK: - Savvy Memo Scrapbook Theme
+    // MARK: - Savvy Scrapbook Theme
     static let saveCream = Color(light: "FFF5E7", dark: "15191F")
     static let saveMint = Color(light: "C8EBCF", dark: "4F7D5D")
     static let saveCocoa = Color(light: "3A2415", dark: "F7EFE5")
@@ -172,18 +197,66 @@ extension Color {
 }
 
 enum SaveAtlasPalette {
-    static let canvas = Color(light: "FDF8F3", dark: "11161C")
-    static let paper = Color(light: "FFFDF7", dark: "1B2027")
+    /// Doodle journal lock 2026-10-19. Warm paper, warm charcoal dark.
+    /// Landing / Atlas cream. Canvas and paper light columns use this hex.
+    nonisolated static let creamHex = "FFF9EB"
+    static let cream = Color(hex: creamHex)
+    /// Non-adaptive #F26B4A. Icon, wordmark, and the tile-town pin. Do not recolor assets.
+    nonisolated static let brandCoralHex = "F26B4A"
+    static let brandCoral = Color(hex: brandCoralHex)
+    /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
+    nonisolated static let coralLightHex = brandCoralHex
+    nonisolated static let coralDarkHex = "D97861"
+    /// Home hint `Review ›` only. Founder 2026-10-24: light #C8442A, dark #F26B4A.
+    /// Do not reuse this pair for other coral.
+    nonisolated static let homeReviewActionLightHex = "C8442A"
+    nonisolated static let homeReviewActionDarkHex = brandCoralHex
+    static let homeReviewAction = Color(light: homeReviewActionLightHex, dark: homeReviewActionDarkHex)
+
+    static let canvas = Color(light: creamHex, dark: "1E1C19")
+    static let paper = Color(light: creamHex, dark: "1E1C19")
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
-    static let ink = Color(light: "2E2117", dark: "FFF8ED")
+    static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
-    static let coral = Color(light: "F26B4A", dark: "D97861")
+    static let coral = Color(light: coralLightHex, dark: coralDarkHex)
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
-    static let kraft = Color(light: "F0CFA1", dark: "71543C")
+    static let kraft = Color(light: "EADDC6", dark: "4A3F32")
+    static let kraftLight = Color(light: "F0E3CA", dark: "3A332A")
     static let honey = Color(light: "FFCC4F", dark: "A87328")
-    static let line = Color(light: "A68F78", dark: "807365")
+    /// 1pt hairline. Alias of `line`.
+    static let stroke = Color(light: "DCCFB9", dark: "4A443B")
+    static let line = stroke
+    static let cardRadius: CGFloat = 12
+    static let strokeWidth: CGFloat = 1
+}
+
+/// Hand-drawn extras. Coral stays the only CTA / pin / + color.
+/// Do not add muted-map or overlay tokens; Map stays native Apple Maps.
+enum SaveDoodle {
+    static let pencil = Color(light: "A39C8E", dark: "8A8478")
+    static let washGreen = Color(light: "D3E4C1", dark: "3E5236")
+    static let washBlue = Color(light: "D2E6EC", dark: "33505A")
+    static let stampRed = Color(light: "C8372D", dark: "E0675C")
+    static let stampGold = Color(light: "B8902F", dark: "D9B45A")
+}
+
+/// Full-pixel tile-town materials (founder lock 2026-10-14).
+/// These paint the product Map base and Home/Friends peeks. Soft Pixel remains
+/// the pin / seal / brand accent language on top of this town, not the map itself.
+enum SaveTileTownPalette {
+    static let grass = Color(light: "8FBF6A", dark: "3D5A32")
+    static let grassDeep = Color(light: "6FA04E", dark: "2E4526")
+    static let water = Color(light: "7EC8E3", dark: "2F5A6E")
+    static let waterDeep = Color(light: "4FA8C8", dark: "24485A")
+    static let road = Color(light: "F4E6C8", dark: "4A3F32")
+    static let roofCoral = Color(light: "E07A5F", dark: "8A4A3A")
+    static let roofHoney = Color(light: "E8B86D", dark: "7A5A28")
+    static let roofSky = Color(light: "7EB6D4", dark: "3A5A6A")
+    static let housePaper = Color(light: "FFF8E8", dark: "2A2620")
+    static let tree = Color(light: "4F8A3A", dark: "2E5A28")
+    static let treeDeep = Color(light: "3A6B2C", dark: "24451C")
 }
 
 enum SaveAtlasType {
@@ -231,6 +304,69 @@ enum SaveAtlasType {
         let scaledFont = UIFontMetrics(forTextStyle: style.uiTextStyle)
             .scaledFont(for: roundedFont)
         return Font(scaledFont)
+    }
+}
+
+/// Caveat (Latin) + Iansui (CJK subset) for the logo and page titles.
+/// Stamp names stay `SaveAtlasType` until the shared stamp PR. Body copy
+/// stays San Francisco via `SaveAtlasType`.
+enum SaveDisplayType {
+    static let latinName = "Caveat-SemiBold"
+    static let cjkName = "Iansui-Regular"
+
+    private static let register: Void = {
+        let files: [(String, String)] = [
+            ("Caveat-SemiBold", "ttf"),
+            ("Iansui-SavvySubset", "ttf"),
+        ]
+        for (name, ext) in files {
+            let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "DisplayFont")
+                ?? Bundle.main.url(forResource: name, withExtension: ext)
+            if let url {
+                CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            }
+        }
+    }()
+
+    static func display(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .title
+    ) -> Font {
+        Font(scaledFont(size: size, name: latinName, relativeTo: style))
+    }
+
+    /// Spec-locked wordmark and city sizes. Dynamic Type must not shrink
+    /// Caveat 34 / 20 down to the visual 22 / 12 the Home mock measured.
+    static func fixed(_ size: CGFloat) -> Font {
+        Font(cascadeFont(size: size, name: latinName))
+    }
+
+    private static func scaledFont(
+        size: CGFloat,
+        name: String,
+        relativeTo style: Font.TextStyle
+    ) -> UIFont {
+        UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(
+            for: cascadeFont(size: size, name: name)
+        )
+    }
+
+    private static func cascadeFont(size: CGFloat, name: String) -> UIFont {
+        _ = register
+        let latin = UIFont(name: name, size: size)
+            ?? UIFont.systemFont(ofSize: size, weight: .semibold)
+        var cascade: [UIFontDescriptor] = []
+        if let cjk = UIFont(name: cjkName, size: size) {
+            cascade.append(cjk.fontDescriptor)
+        }
+        if let pingFang = UIFont(name: "PingFangTC-Regular", size: size) {
+            cascade.append(pingFang.fontDescriptor)
+        }
+        guard !cascade.isEmpty else { return latin }
+        let descriptor = latin.fontDescriptor.addingAttributes([
+            UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
+        ])
+        return UIFont(descriptor: descriptor, size: size)
     }
 }
 
@@ -283,14 +419,14 @@ private extension UIColor {
 }
 
 extension View {
-    func saveAtlasPaper(radius: CGFloat, shadow: Bool = false) -> some View {
+    func saveAtlasPaper(radius: CGFloat = SaveAtlasPalette.cardRadius, shadow: Bool = false) -> some View {
         background(
             SaveAtlasPalette.paper,
             in: RoundedRectangle(cornerRadius: radius, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+                .stroke(SaveAtlasPalette.stroke, lineWidth: SaveAtlasPalette.strokeWidth)
         }
         .shadow(
             color: shadow ? SaveAtlasPalette.ink.opacity(SaveTheme.Elevation.cardOpacity) : .clear,
@@ -382,45 +518,18 @@ struct SaveIconTile: View {
     }
 }
 
+/// Canvas plus a tiled `PaperGrain` / `PaperGrainDark` asset.
+/// The checked-in tiles are placeholders from `scripts/generate-paper-grain.py`
+/// until DESIGN ships the official 256pt grain.
 struct SaveDottedBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        Color.saveNotebookBackground
+        SaveAtlasPalette.canvas
             .overlay {
-                LinearGradient(
-                    colors: [
-                        Color.saveBlush.opacity(0.38),
-                        Color.clear,
-                        Color.saveSky.opacity(0.18),
-                        Color.saveLeaf.opacity(0.20)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .allowsHitTesting(false)
-            }
-            .overlay {
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.26),
-                        Color.clear,
-                        Color.saveNotebookSpine.opacity(0.10)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
-            }
-            .overlay {
-                Canvas { context, size in
-                    let spacing: CGFloat = 18
-                    for x in stride(from: CGFloat(8), through: size.width, by: spacing) {
-                        for y in stride(from: CGFloat(8), through: size.height, by: spacing) {
-                            let rect = CGRect(x: x, y: y, width: 2, height: 2)
-                            context.fill(Path(ellipseIn: rect), with: .color(Color.saveNotebookLine.opacity(0.055)))
-                        }
-                    }
-                }
-                .allowsHitTesting(false)
+                Image(colorScheme == .dark ? "PaperGrainDark" : "PaperGrain")
+                    .resizable(resizingMode: .tile)
+                    .allowsHitTesting(false)
             }
     }
 }
@@ -599,18 +708,6 @@ struct SavePostcardPocketFooter: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(title), \(count) \(countLabel)")
-    }
-}
-
-struct SavePostcardMemoPeek: View {
-    var width: CGFloat = 88
-
-    var body: some View {
-        Image("SavesMemoSorting")
-            .resizable()
-            .scaledToFit()
-            .frame(width: width)
-            .accessibilityHidden(true)
     }
 }
 

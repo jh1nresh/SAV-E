@@ -249,6 +249,85 @@ final class SocialPlacePipelineTests: XCTestCase {
         var expected: Expected
     }
 
+    private func publicGoogleListPayload(count: Int, reportedCount: Int? = nil) throws -> Data {
+        let null = NSNull()
+        var rows: [Any] = []
+        rows.reserveCapacity(count)
+        for index in 0..<count {
+            let latitude = 25.0 + Double(index) / 1_000
+            let longitude = 121.0 + Double(index) / 1_000
+            let coordinates: [Any] = [null, null, latitude, longitude]
+            let provider: [Any] = ["provider", "\(index)"]
+            let address = "\(index + 1) Test Street"
+            let place: [Any] = [null, null, "", null, address, coordinates, provider]
+            let row: [Any] = [null, place, "Same name cafe", "Private note"]
+            rows.append(row)
+        }
+        let listID: [Any] = ["fixture-list-123"]
+        let owner: [Any] = ["Private owner"]
+        let total = reportedCount ?? count
+        let list: [Any] = [
+            listID, 4, null, owner, "Test list", "",
+            null, null, rows, null, null, null, total
+        ]
+        let envelope: [Any] = [list, ""]
+        var payload = Data(")]}'\n".utf8)
+        payload.append(try JSONSerialization.data(withJSONObject: envelope))
+        return payload
+    }
+
+    @MainActor
+    func testPublicGoogleListLoadsMoreThanThirtyDistinctBranchesIntoReview() async throws {
+        let source = "https://www.google.com/maps/@/data=!3m1!4b1!4m2!11m1!2sfixture-list-123"
+        let responseData = try publicGoogleListPayload(count: 32)
+        let result = await GoogleMapsPublicListLoader.load(sourceURL: source) { url in
+            XCTAssertEqual(url.host, "www.google.com")
+            XCTAssertEqual(url.path, "/maps/preview/entitylist/getlist")
+            return responseData
+        }
+        let list = try XCTUnwrap(result)
+        XCTAssertNil(list.notice)
+        let reviews = SocialLinkReviewCandidateService.shared.googleMapsListReviewCandidates(list, sourceURL: source)
+        XCTAssertEqual(reviews.count, 32)
+        XCTAssertTrue(reviews.allSatisfy { !$0.isSourceOnly && $0.reviewState == "map_match_ready" })
+        XCTAssertEqual(reviews[1].address, "2 Test Street")
+        XCTAssertEqual(reviews[1].latitude, 25.001)
+        XCTAssertEqual(reviews[1].longitude, 121.001)
+        XCTAssertEqual(reviews[1].sourceURL, source)
+        XCTAssertTrue(reviews.allSatisfy { $0.missingInfo.contains("Confirm this place before saving as a Map Stamp") })
+        XCTAssertFalse(reviews.flatMap(\.evidence).joined().contains("Private"))
+    }
+
+    @MainActor
+    func testPublicGoogleListIncompleteOrPrivateResponsePreservesOnlySource() throws {
+        let partial = GoogleMapsPublicListLoader.parse(try publicGoogleListPayload(count: 32, reportedCount: 501), expectedListID: "fixture-list-123")
+        XCTAssertTrue(partial.candidates.isEmpty)
+        XCTAssertTrue(partial.notice?.contains("32 of 501") == true)
+        let privateList = GoogleMapsPublicListLoader.parse(Data("<html>Sign in</html>".utf8), expectedListID: "fixture-list-123")
+        for list in [partial, privateList] {
+            let reviews = SocialLinkReviewCandidateService.shared.googleMapsListReviewCandidates(list, sourceURL: "https://www.google.com/maps/placelists/list/fixture-list-123")
+            XCTAssertEqual(reviews.count, 1)
+            XCTAssertTrue(reviews[0].isSourceOnly)
+            XCTAssertNil(reviews[0].latitude)
+            XCTAssertEqual(reviews[0].confidence, 0)
+            XCTAssertEqual(reviews[0].sourceText, list.notice)
+        }
+    }
+
+    @MainActor
+    func testPublicGoogleListRejectsSpoofedHostAndPreservesNetworkFailure() async {
+        let unrelated = await GoogleMapsPublicListLoader.load(sourceURL: "https://www.google.com.evil.test/maps/placelists/list/fixture-list-123") { _ in
+            XCTFail("An unrelated host must not trigger list loading")
+            return Data()
+        }
+        XCTAssertNil(unrelated)
+        let failed = await GoogleMapsPublicListLoader.load(sourceURL: "https://www.google.com/maps/placelists/list/fixture-list-123") { _ in
+            throw URLError(.timedOut)
+        }
+        XCTAssertTrue(failed?.candidates.isEmpty == true)
+        XCTAssertNotNil(failed?.notice)
+    }
+
     @MainActor
     func testGoogleMapsSavedListExtractsEmbeddedPlaceLinks() {
         let html = """
@@ -268,6 +347,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.name), ["Quarter Sheets Pizza Club", "Courage Bagels"])
         XCTAssertEqual(candidates.first?.latitude, 34.0779)
         XCTAssertEqual(candidates.first?.longitude, -118.2543)
+        XCTAssertEqual(candidates.last?.latitude, 34.105)
+        XCTAssertEqual(candidates.last?.longitude, -118.287)
         XCTAssertFalse(candidates.contains { $0.name == "CA Foodie · Jerry Chen" })
         XCTAssertTrue(GoogleMapsListPlaceExtractor.looksLikeGoogleMapsList(
             sourceURL: "https://www.google.com/maps/placelists/list/CA-Foodie",
@@ -3770,7 +3851,7 @@ final class SocialPlacePipelineTests: XCTestCase {
             longitude: -117.826,
             category: .cafe,
             status: .wantToGo,
-            note: "Distance: 852m away",
+            note: SavvyGeneratedLine.marking("Distance: 852m away"),
             sourcePlatform: .googleMaps,
             priceRange: "$$",
             googleRating: 4.6,
@@ -3781,6 +3862,34 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         XCTAssertNil(place.cleanMemoryNote)
         XCTAssertEqual(place.memorySummary(language: .traditionalChinese), "已存成想找時間去的地點。")
+
+        var userDistance = Place.mock
+        userDistance.name = "Utopia Euro Caffe"
+        userDistance.address = "Selected on map"
+        userDistance.note = "Distance: 852m away"
+        XCTAssertEqual(userDistance.cleanMemoryNote, "Distance: 852m away")
+    }
+
+    @MainActor
+    func testSavedPlaceMemorySummaryKeepsUserAuthoredPrefixedNotes() {
+        for note in [
+            "Highlight: the bun was amazing",
+            "Vibe: casual counter seats",
+            "Access: walk up and wait",
+            "Evidence: keep this as my memory",
+            "Creator handle: @me.and.the.bun",
+            "source: a friend told me",
+            "address: use the side street",
+            "rating: better than the reviews",
+            "Recommender: Alice suggested the curry",
+            "Analysis method: I asked the barista",
+            "Source handle: @me.and.the.bun",
+        ] {
+            var place = Place.mock
+            place.note = note
+            XCTAssertEqual(place.cleanMemoryNote, note)
+            XCTAssertEqual(place.memorySummary(language: .english), note)
+        }
     }
 
     // MARK: - Share-text normalization (messy real-world pastes)
@@ -4333,78 +4442,275 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
-    func testLinkAnalysisSkipsThumbnailForExplicitVenueAndStreetAddress() async throws {
-        let extractor = FakeCaptionVenueExtractor(trigger: "百年", venue: nil)
-        let search = CountingAnalysisSearch()
-        let service = SocialLinkReviewCandidateService(
-            googlePlacesService: EmptyGooglePlacesService(),
-            publicSourceSearchService: search,
-            placeResolverService: CountingAnalysisResolver { _, _ in [] },
-            captionVenueExtractor: extractor
-        )
-        var thumbnailLoads = 0
-        let candidates = await service.reviewCandidates(
-            fromEvidenceText: "弘大必喝「百年土種參雞湯」\n台北市萬華區中華路一段88號3樓",
-            sourceURL: "https://www.instagram.com/p/TextComplete/",
-            thumbnailText: {
-                thumbnailLoads += 1
-                return ["Unrelated Thumbnail Cafe"]
-            }
-        )
-        XCTAssertEqual(thumbnailLoads, 0)
-        XCTAssertTrue(extractor.captions.isEmpty)
-        XCTAssertTrue(search.queries.isEmpty)
-        let candidate = try XCTUnwrap(candidates.first)
-        XCTAssertEqual(candidate.candidateName, "百年土種參雞湯")
-        XCTAssertTrue(candidate.address.contains("88號"))
-        XCTAssertFalse(candidate.hasReliableCoordinates, "Skipping OCR must not grant verified coordinates")
-        XCTAssertFalse(candidate.missingInfo.isEmpty)
+    func testEmbeddedSocialCaptionRequiresMatchingPostIdentity() throws {
+        let service = SocialLinkReviewCandidateService()
+        let caption = "前文\n" + String(repeating: "完整上下文。", count: 500) + "\n初泰Pikul 信義象山門市"
+        func item(_ id: String, _ text: String) -> [String: Any] { ["shortcode": id, "caption": ["text": text]] }
+        func html(_ objects: [[String: Any]]) throws -> String {
+            "<script>" + String(decoding: try JSONSerialization.data(withJSONObject: objects), as: UTF8.self) + "</script>"
+        }
+        let document = try html([item("other", "Unrelated venue"), item("target", caption)])
+        XCTAssertEqual(service.embeddedSocialCaption(in: document, sourceURL: URL(string: "https://instagram.com/p/target/")!), caption)
+        XCTAssertNil(service.embeddedSocialCaption(in: document, sourceURL: URL(string: "https://example.com/p/target/")!))
+        XCTAssertNil(service.embeddedSocialCaption(in: document, sourceURL: URL(string: "https://instagram.com/p/missing/")!))
+        XCTAssertNil(service.embeddedSocialCaption(in: try html([item("target", caption), item("target", "Conflicting")]), sourceURL: URL(string: "https://instagram.com/p/target/")!))
+        XCTAssertNil(service.embeddedSocialCaption(in: "<script>{\"caption\":{\"text\":\"Unbound venue\"}}</script>", sourceURL: URL(string: "https://instagram.com/p/target/")!))
     }
 
     @MainActor
-    func testLinkAnalysisKeepsThumbnailForMissingOrIncompleteTextIdentity() async {
-        let service = SocialLinkReviewCandidateService(
-            googlePlacesService: EmptyGooglePlacesService(),
-            publicSourceSearchService: CountingAnalysisSearch(),
-            placeResolverService: CountingAnalysisResolver { _, _ in [] },
-            captionVenueExtractor: nil
-        )
-        for caption in [
-            "", "Log in to Instagram", "📍Ulaman, Bali, Indonesia", "Aurora Museum opens in London.",
-            "Aquarela Coffee\nBangkok", "Aquarela Coffee\nLos Angeles, CA",
-            "Aquarela Coffee\nBangkok 10110", "123 Main Street",
-            "1. Juniper Coffee\n123 Main Street\n2. Aquarela Coffee\nBangkok"
-        ] {
-            var thumbnailLoads = 0
-            _ = await service.reviewCandidates(
-                fromEvidenceText: caption,
-                sourceURL: "https://www.instagram.com/p/NeedsImage/",
-                thumbnailText: {
-                    thumbnailLoads += 1
-                    return []
-                }
-            )
-            XCTAssertEqual(thumbnailLoads, 1, "Missing/area-only identity still needs OCR: \(caption)")
+    func testUnreadableSemanticSourceStaysPendingUntilTextOrOCRIsAvailable() async throws {
+        let url = "https://instagram.com/p/unavailable/"
+        let analyzer = SemanticAnalyzerStub { _, _ in .init(status: "no_place_evidence", venues: []) }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        for text in ["", " \n ", url] {
+            let results = await service.reviewCandidates(fromEvidenceText: text, sourceURL: url) { [] }
+            XCTAssertEqual(results.first?.reviewState, "analysis_pending")
+            XCTAssertTrue(results.first?.shouldRecoverSourceOnServer == true)
+        }
+        XCTAssertTrue(analyzer.calls.isEmpty, "unreadable source must not send an empty semantic request")
+        let failed = await service.reviewCandidates(fromEvidenceText: "Login shell", sourceURL: url, sourceReadFailed: true) { [] }
+        XCTAssertEqual(failed.first?.reviewState, "analysis_pending")
+        let readable = await service.reviewCandidates(fromEvidenceText: "A quiet walk", sourceURL: url) { [] }
+        XCTAssertEqual(readable.first?.reviewState, "source_only")
+        let ocr = await service.reviewCandidates(fromEvidenceText: "", sourceURL: url, sourceReadFailed: true) { ["A quiet walk"] }
+        XCTAssertEqual(ocr.first?.reviewState, "source_only", "successful OCR can establish that readable source has no venue")
+    }
+
+    @MainActor
+    func testThreadsPreservesCaptionAndUsesSemanticPendingState() async {
+        for host in ["www.threads.net", "www.threads.com"] {
+            let url = "https://\(host)/@savvy/post/fixture"
+            let text = "商業午餐\n火山排骨\n初泰Pikul"
+            let bundle = SocialShareTextNormalizer.normalize(text + "\n" + url)
+            XCTAssertTrue(bundle.platform.includesCaptionInAnalysis)
+            XCTAssertTrue(bundle.captionEvidence.contains(text))
+            let analyzer = SemanticAnalyzerStub { _, _ in .pending }
+            let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+            let results = await service.reviewCandidates(fromEvidenceText: text, sourceURL: url) { XCTFail("No OCR on outage"); return [] }
+            XCTAssertTrue(results.first?.isSourceOnly == true)
+            XCTAssertEqual(results.first?.reviewState, "analysis_pending")
         }
     }
 
     @MainActor
-    func testLinkAnalysisRetainsVenueEvidenceReadFromThumbnail() async throws {
-        let service = SocialLinkReviewCandidateService(
-            googlePlacesService: EmptyGooglePlacesService(),
-            publicSourceSearchService: CountingAnalysisSearch(),
-            placeResolverService: CountingAnalysisResolver { _, _ in [] },
-            captionVenueExtractor: nil
-        )
-        let candidates = await service.reviewCandidates(
-            fromEvidenceText: "",
-            sourceURL: "https://www.instagram.com/p/ImageOnly/",
-            thumbnailText: { ["弘大必喝「百年土種參雞湯」", "台北市萬華區中華路一段88號3樓"] }
-        )
+    func testSocialCaptionKeepsParagraphsWithoutOpaqueShareTokens() async throws {
+        let original = "初泰Pikul  信義象山門市\n\n  臺北市信義區信義路五段122號  \nAb1:/ Q9@ \n\n商業午餐與火山排骨\nhttps://instagram.com/p/token/"
+        let bundle = SocialShareTextNormalizer.normalize(original)
+        XCTAssertEqual(bundle.rawShareText, original)
+        XCTAssertTrue(bundle.captionEvidence.contains("初泰Pikul 信義象山門市\n\n臺北市信義區信義路五段122號"))
+        XCTAssertTrue(bundle.captionEvidence.contains("商業午餐與火山排骨"))
+        XCTAssertFalse(bundle.captionEvidence.contains("Ab1:/"))
+        XCTAssertFalse(try XCTUnwrap(bundle.privacyScopedAnalysisInput).contains("Q9@"))
+    }
+
+    private final class SemanticAnalyzerStub: SocialSemanticAnalyzing {
+        var calls: [(String, String?)] = []
+        var response: (String, String?) -> SocialSemanticResult
+        init(_ response: @escaping (String, String?) -> SocialSemanticResult) { self.response = response }
+        func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult {
+            calls.append((caption, ocrText)); return response(caption, ocrText)
+        }
+    }
+
+    private var pikulCaption: String {
+        "商業午餐\n火山排骨\n📍初泰Pikul  信義象山門市\n📍臺北市信義區信義路五段122號\n (近捷運象山站2號出口)"
+    }
+    private func pikulResult(source: String = "caption", matches: [SocialSemanticMapPlace] = [], mapStatus: String = "unverified") -> SocialSemanticResult {
+        func field(_ value: String) -> SocialSemanticField { .init(value: value, quote: value, source: source) }
+        return .init(status: "ready", venues: [.init(name: field("初泰Pikul"), branch: field("信義象山門市"), address: field("臺北市信義區信義路五段122號"), transport: field("近捷運象山站2號出口"), mapStatus: mapStatus, matches: matches)])
+    }
+    @MainActor
+    func testLinkAnalysisUsesFullSemanticCaptionBeforeOCR() async throws {
+        let full = String(repeating: "上下文。", count: 650) + "\n" + pikulCaption + "\n結尾"
+        let result = pikulResult(); let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let search = CountingAnalysisSearch()
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), publicSourceSearchService: search, captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        var loads = 0
+        let candidates = await service.reviewCandidates(fromEvidenceText: full, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { loads += 1; return [] })
+        XCTAssertEqual(analyzer.calls.count, 1); XCTAssertEqual(analyzer.calls.first?.0, full)
+        XCTAssertEqual(loads, 0); XCTAssertTrue(search.queries.isEmpty)
         let candidate = try XCTUnwrap(candidates.first)
-        XCTAssertEqual(candidate.candidateName, "百年土種參雞湯")
-        XCTAssertFalse(candidate.hasReliableCoordinates)
-        XCTAssertTrue(candidate.evidence.contains { $0.contains("OCR") })
+        XCTAssertEqual(candidate.candidateName, "初泰Pikul 信義象山門市")
+        XCTAssertEqual(candidate.address, "臺北市信義區信義路五段122號")
+        XCTAssertEqual(candidate.accessNotes, ["近捷運象山站2號出口"])
+        XCTAssertEqual(candidate.sourceText, full); XCTAssertFalse(candidate.hasReliableCoordinates)
+        XCTAssertTrue(candidate.missingInfo.contains("Map identity not verified"))
+    }
+    @MainActor
+    func testSemanticSourceLinkSurvivesCandidateReloadAndQuotedUnrelatedURL() async throws {
+        let source = "https://instagram.com/p/semantic/"
+        let text = pikulCaption + "\nhttps://unrelated.example/menu"
+        var result = pikulResult()
+        result.venues[0].name.quote = text
+        let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: text, sourceURL: source, thumbnailText: { [] })
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidate.evidence.first, "Source URL: \(source)")
+        // A prior source quote can precede newly merged explicit provenance.
+        let review = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: candidate.candidateName, address: candidate.address,
+            city: nil, latitude: nil, longitude: nil,
+            evidence: ["Source caption quote: https://unrelated.example/menu"] + candidate.evidence,
+            confidence: candidate.confidence, missingInfo: candidate.missingInfo, status: "review", createdAt: Date())
+        let reloaded = try JSONDecoder().decode(PlaceReviewCandidate.self, from: JSONEncoder().encode(review))
+        XCTAssertEqual(Place.from(reloaded).sourceUrl, source)
+        let pending = service.pendingSemanticSource(caption: text, sourceURL: source)
+        XCTAssertEqual(pending.evidence.first, "Source URL: \(source)")
+    }
+
+    @MainActor
+    func testLinkAnalysisUnavailablePreservesSourceWithoutRegexOrOCR() async throws {
+        let analyzer = SemanticAnalyzerStub { _, _ in .pending }
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        var loads = 0
+        let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { loads += 1; return ["fake"] })
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertTrue(candidate.isSourceOnly); XCTAssertEqual(candidate.reviewState, "analysis_pending")
+        XCTAssertEqual(candidate.sourceText, pikulCaption); XCTAssertNil(candidate.latitude); XCTAssertEqual(loads, 0)
+        XCTAssertFalse(candidate.shouldRecoverSourceOnServer, "model outage cannot trigger immediate duplicate analysis")
+    }
+    @MainActor
+    func testLinkAnalysisInsufficientTextUsesOCRThroughSameSemanticService() async throws {
+        let result = pikulResult(source: "ocr")
+        let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? .init(status: "no_place_evidence", venues: []) : result }
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: "", sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
+        XCTAssertEqual(analyzer.calls.count, 1); XCTAssertEqual(analyzer.calls.last?.1, pikulCaption)
+        XCTAssertEqual(candidates.first?.candidateName, "初泰Pikul 信義象山門市"); XCTAssertFalse(candidates.first?.hasReliableCoordinates ?? true)
+    }
+    @MainActor
+    func testLinkAnalysisOCRCannotEraseGroundedCaptionVenue() async throws {
+        var partial = pikulResult(); partial.venues[0].address = nil
+        for next in [SocialSemanticResult(status: "no_place_evidence", venues: []), .init(status: "ready", venues: []), .pending, pikulResult()] {
+            let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? partial : next }
+            let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+            let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
+            XCTAssertEqual(analyzer.calls.count, 2)
+            let candidate = try XCTUnwrap(candidates.first)
+            XCTAssertEqual(candidate.candidateName, "初泰Pikul 信義象山門市")
+            XCTAssertFalse(candidate.isSourceOnly); XCTAssertFalse(candidate.hasReliableCoordinates)
+            if next == pikulResult() { XCTAssertEqual(candidate.address, "臺北市信義區信義路五段122號") }
+        }
+    }
+
+    @MainActor
+    func testLinkAnalysisOCRFailureWithoutCaptionVenueRemainsPending() async throws {
+        let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? .init(status: "no_place_evidence", venues: []) : .pending }
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: "", sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
+        XCTAssertEqual(analyzer.calls.count, 1)
+        XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")
+        XCTAssertTrue(candidates.first?.isSourceOnly ?? false)
+    }
+
+    @MainActor
+    func testSemanticSupplementPreservesEveryVenueAndStrongerMapEvidence() {
+        let map = SocialSemanticMapPlace(id: "pikul", name: "初泰Pikul", address: "臺北市信義區信義路五段122號", latitude: 25, longitude: 121)
+        let original = pikulResult(matches: [map], mapStatus: "matched")
+        XCTAssertEqual(original.supplemented(by: pikulResult()), original)
+        var multiple = original
+        var other = original.venues[0]; other.name.value = "Other venue"; other.name.quote = "Other venue"
+        multiple.venues.append(other)
+        XCTAssertEqual(multiple.supplemented(by: original), multiple)
+        var partial = pikulResult(); partial.venues[0].address = nil
+        XCTAssertEqual(partial.supplemented(by: original), original)
+        XCTAssertEqual(original.supplemented(by: .init(status: "cancelled", venues: [])).status, "cancelled")
+    }
+
+    @MainActor
+    func testLinkAnalysisAmbiguousMapsKeepsChoicesAndConfirmation() async throws {
+        let maps = ["a", "b"].map { SocialSemanticMapPlace(id: $0, name: "初泰Pikul \($0)", address: "地址\($0)", latitude: 25, longitude: 121) }
+        let result = pikulResult(matches: maps, mapStatus: "ambiguous"); let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [] })
+        XCTAssertEqual(candidates.map(\.candidateName), ["初泰Pikul a", "初泰Pikul b"])
+        XCTAssertTrue(candidates.allSatisfy { $0.missingInfo.contains("Choose the correct map candidate") })
+    }
+    @MainActor
+    func testNameOnlyAmbiguousMapsRemainsUnresolved() async throws {
+        let maps = ["a", "b"].map { SocialSemanticMapPlace(id: $0, name: "初泰Pikul", address: "地址\($0)", latitude: 25, longitude: 121) }
+        var result = pikulResult(matches: maps, mapStatus: "ambiguous")
+        result.venues[0].address = nil
+        let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [] })
+        XCTAssertEqual(candidates.count, 1)
+        let clue = try XCTUnwrap(candidates.first)
+        XCTAssertFalse(clue.hasReliableCoordinates); XCTAssertNil(clue.googlePlaceId)
+        XCTAssertEqual(clue.address, ""); XCTAssertEqual(clue.reviewState, "unresolved_place_candidate")
+        XCTAssertEqual(clue.evidence.filter { $0.hasPrefix("Conflicting map alternative:") }.count, 2)
+    }
+
+    @MainActor
+    func testSemanticProviderIdentityAndCategorySurviveLocalVaultReload() async throws {
+        for (name, type, category) in [("Walmart", "department_store", PlaceCategory.shopping), ("Ritz-Carlton", "lodging", .stay)] {
+            let caption = "\(name)\n1 Main Street"
+            let match = SocialSemanticMapPlace(id: "provider-\(name)", name: name, address: "1 Main Street", latitude: 25, longitude: 121, types: [type])
+            let result = SocialSemanticResult(status: "ready", venues: [.init(
+                name: .init(value: name, quote: name, source: "caption"), branch: nil,
+                address: .init(value: "1 Main Street", quote: "1 Main Street", source: "caption"), transport: nil,
+                mapStatus: "matched", matches: [match])])
+            let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: SemanticAnalyzerStub { _, _ in result })
+            let results = await service.reviewCandidates(fromEvidenceText: caption, sourceURL: "https://instagram.com/p/provider/", thumbnailText: { [] })
+            let pending = try XCTUnwrap(results.first)
+            XCTAssertEqual(pending.googlePlaceId, match.id)
+            XCTAssertEqual(pending.googleTypes, [type])
+            XCTAssertEqual(pending.category, category.rawValue)
+            let queued = try JSONDecoder().decode(PendingReviewCandidate.self, from: JSONEncoder().encode(pending))
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("vault.json")
+            _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(queued)
+            let reloaded = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first)
+            let codable = try JSONDecoder().decode(PlaceReviewCandidate.self, from: JSONEncoder().encode(reloaded))
+            let place = Place.from(codable)
+            XCTAssertEqual(place.googlePlaceId, match.id)
+            XCTAssertEqual(place.category, category)
+            var otherEntity = queued
+            otherEntity.googlePlaceId = "different-provider"
+            XCTAssertFalse(reloaded.matchesImport(otherEntity))
+            _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(otherEntity)
+            XCTAssertEqual(try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().count, 2)
+            _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(queued)
+            XCTAssertEqual(try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().count, 2, "same provider repeat reuses its candidate")
+        }
+    }
+
+    @MainActor
+    func testCanonicalSemanticVerificationReusesTheGroundedUnresolvedCandidate() async throws {
+        let analyzer = SemanticAnalyzerStub { _, _ in self.pikulResult() }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        let initial = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/canonical/", thumbnailText: { [] })
+        let unresolved = try XCTUnwrap(initial.first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(unresolved)
+        let old = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first)
+        let match = SocialSemanticMapPlace(id: "canonical-pikul", name: "初泰Pikul 信義象山門市", address: "臺北市信義區信義路五段122號, Taiwan", latitude: 25, longitude: 121)
+        analyzer.response = { _, _ in self.pikulResult(matches: [match], mapStatus: "matched") }
+        let results = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/canonical/", thumbnailText: { [] })
+        let verified = try XCTUnwrap(results.first)
+        XCTAssertTrue(old.matchesImport(verified))
+        var unrelated = verified
+        unrelated.semanticSource?.branch = "不同門市"
+        XCTAssertFalse(old.matchesImport(unrelated))
+        _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(verified)
+        let reloaded = try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates()
+        XCTAssertEqual(reloaded.count, 1)
+        XCTAssertEqual(reloaded.first?.id, old.id)
+        XCTAssertEqual(reloaded.first?.address, match.address)
+        XCTAssertEqual(reloaded.first?.googlePlaceId, match.id)
+        XCTAssertTrue(reloaded.first?.hasReliableCoordinates == true)
+    }
+
+    @MainActor
+    func testLinkAnalysisRejectsUngroundedBackendQuote() async throws {
+        var result = pikulResult(); result.venues[0].name.quote = "not in source"
+        let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [] })
+        XCTAssertTrue(candidates.first?.isSourceOnly ?? false); XCTAssertNil(candidates.first?.latitude)
     }
 
     @MainActor
@@ -4751,7 +5057,11 @@ final class SocialPlacePipelineTests: XCTestCase {
                 missingInfo: item.missingInfo, status: "review", createdAt: Date())
             let place = Place.from(review)
             let sharedNote = ShareRoutePayloadSanitizer.publicNote(place.note) ?? ""
-            XCTAssertEqual(place.note, item.evidence.joined(separator: "\n"))
+            XCTAssertEqual(place.note, "Venue named in source")
+            XCTAssertFalse((place.note ?? "").contains("Evidence tier:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places refined match:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places address:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places coordinates:"))
             let persistedCandidate = String(decoding: try JSONEncoder().encode(item), as: UTF8.self)
             for text in [persistedCandidate, item.evidence.joined(separator: "\n"), place.note ?? "", sharedNote] {
                 for diagnostic in [snapshot.analysisID.uuidString, "analysis_id", "Analysis search counts", "resolver_attempts", "resolver_errors", "resolver_cache_hits", "public_attempts", "public_errors", "public_cache_hits"] {

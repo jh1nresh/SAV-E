@@ -92,8 +92,12 @@ test("PostgreSQL: explicit share, pagination, recipient save and revocation", { 
     assert.equal(ownerShare?.shared, true, "private place must retain owner-visible explicit consent for withdrawal");
     await assert.rejects(getFriendRating(pool, A, placeID), { status: 404 });
     assert.equal(ownerShare?.place_name, "Test restaurant");
+    await pool.query("update places set category = 'shopping' where id = $1", [placeID]);
+    assert.equal((await ownFriendRatings(pool, B)).find((r) => r.place_id === placeID)?.shared, true,
+      "editing the place category must not hide existing owner consent from withdrawal management");
     await withdrawFriendRating(pool, B, placeID);
     assert.equal((await ownFriendRatings(pool, B)).find((r) => r.place_id === placeID)?.shared, false);
+    await pool.query("update places set category = 'food' where id = $1", [placeID]);
     assert.equal((await pool.query("select visibility from place_visibility where place_id = $1", [placeID])).rows[0].visibility, "private");
     await pool.query("update place_visibility set visibility = 'friends' where place_id = $1", [placeID]);
     await assert.rejects(getFriendRating(pool, A, placeID), { status: 404 }, "restoring place visibility cannot restore withdrawn consent");

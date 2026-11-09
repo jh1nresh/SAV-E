@@ -1,0 +1,1234 @@
+import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import pg from "pg";
+import { resolveProfileSubject } from "./accountStatus.js";
+import { AnalysisUsageStore } from "./analysisUsage.js";
+import { reuseCapture } from "./memoryStorage.js";
+import { putFriendRating } from "./friendRatings.js";
+import { PgSendbluePlaceStore, sendblueSavedPlacesTableSql } from "./sendbluePlaceStore.js";
+import { conversationStateTableSql } from "./sendblueBot.js";
+import { reviewsTableSql } from "./sendblueReviewStore.js";
+import { verifiedVisitsTableSql } from "./sendblueReceiptStore.js";
+import { sllrBuyerTableSql } from "./sllrBuyerStore.js";
+import { selectMissingPlacePhotosSQL, updateMissingPlacePhotosSQL } from "./placePhotoBackfill.js";
+import { appAccountTokenFor, applyAppleNotification, entitlementTier, storeAppleEntitlement } from "./entitlementPersistence.js";
+import { proEntitlementPolicy, type VerifiedAppleTransaction } from "./proEntitlement.js";
+
+const schemaSQL = readFileSync(new URL("../sql/schema.sql", import.meta.url), "utf8");
+const privacySQL = readFileSync(new URL("../sql/backend-data-privacy.sql", import.meta.url), "utf8");
+const marker = "-- Backend-owned table privacy boundary";
+const tableNames = (sql: string) => [...sql.matchAll(/\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(\w+)/gim)].map(match => match[1]);
+const sourceSQL = ["../sql/", "../src/"].flatMap(folder => readdirSync(new URL(folder, import.meta.url), { recursive: true, encoding: "utf8", withFileTypes: false })
+  .filter(name => name.endsWith(".sql") || (name.endsWith(".ts") && !name.endsWith(".test.ts")))
+  .map(name => readFileSync(new URL(folder + name, import.meta.url), "utf8"))).join("\n");
+const managedTables = [...new Set(tableNames(sourceSQL))].sort();
+const coreTables = tableNames(schemaSQL).sort();
+const optionalTables = managedTables.filter(name => !coreTables.includes(name));
+const optionalSQL = [
+  // The provider migration targets public in production; qualify its identical
+  // DDL to this fixture's search_path instead of touching any shared schema.
+  readFileSync(new URL("../../supabase/migrations/20260815010000_places_provider_coordinates.sql", import.meta.url), "utf8").replaceAll("public.places", "places"),
+  readFileSync(new URL("../sql/friend-ratings.sql", import.meta.url), "utf8"),
+  readFileSync(new URL("../sql/link-place-intelligence.sql", import.meta.url), "utf8"),
+  sendblueSavedPlacesTableSql, conversationStateTableSql, reviewsTableSql, verifiedVisitsTableSql, sllrBuyerTableSql,
+];
+const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];
+const browserRoles = ["anon", "authenticated", "privacy_public_probe"];
+const fixtureRoles = [...browserRoles, "privacy_backend_owner", "privacy_other_creator", "service_role"];
+const connectionString = process.env.SAVE_ENTITLEMENT_TEST_DATABASE_URL;
+
+function staticAllowlist(sql: string): string[] {
+  const list = sql.match(/managed_tables text\[\] := array\[([\s\S]*?)\]/i)?.[1]
+    ?? sql.match(/foreach managed_table in array array\[([\s\S]*?)\]/i)?.[1]
+    ?? "";
+  return [...list.matchAll(/'([a-z_]+)'/g)].map(match => match[1]).sort();
+}
+
+test("privacy allowlists cover every backend schema table without including unrelated tables", () => {
+  assert.ok(managedTables.length > 0);
+  assert.equal(new Set(managedTables).size, managedTables.length);
+  assert.deepEqual(staticAllowlist(privacySQL), managedTables, "each new backend table needs an explicit reviewed privacy entry");
+  assert.deepEqual(staticAllowlist(schemaSQL.slice(schemaSQL.indexOf(marker))), managedTables, "fresh install and upgrade must cover the same tables");
+  assert.equal(schemaSQL.slice(schemaSQL.indexOf(marker)), privacySQL.slice(privacySQL.indexOf(marker)), "fresh schema and upgrade must share the same privacy boundary");
+});
+
+test("fresh schema privacy guard runs before DDL and documents transactional apply", () => {
+  const guard = schemaSQL.search(/Global default table grants to browser roles require separate authorized remediation/);
+  const guardEnd = schemaSQL.indexOf("end $fresh_schema_privacy_guard$");
+  const ddl = schemaSQL.search(/\bcreate\s+(extension|table)\b/i);
+  assert.ok(guard >= 0 && ddl >= 0 && guard < ddl, "fresh-schema guard must run before DDL");
+  assert.ok(guardEnd >= 0 && guardEnd < ddl, "fresh-schema guard must close before DDL");
+  assert.match(schemaSQL.slice(0, guardEnd), /unnest\(managed_tables\)/, "re-apply table-grant refusal must run before DDL and use the managed allowlist");
+  assert.deepEqual(staticAllowlist(schemaSQL.slice(0, schemaSQL.indexOf(marker))), managedTables, "fresh-schema guard must use the same allowlist");
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const sqlReadme = readFileSync(new URL("../sql/README.md", import.meta.url), "utf8");
+  assert.match(readme, /psql "\$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend\/sql\/schema\.sql/);
+  assert.match(privacySQL, /coalesce\(nullif\(current_setting\('save.privacy_schema', true\), ''\), 'public'\)/);
+  assert.match(schemaSQL, /coalesce\(nullif\(current_setting\('save.privacy_schema', true\), ''\), 'public'\)/);
+  assert.doesNotMatch(privacySQL, /target_schema text := current_schema\(\)/);
+  assert.doesNotMatch(schemaSQL, /target_schema text := current_schema\(\)/);
+  assert.match(readme, /apply-sql\.sh backend-data-privacy\.sql/);
+  assert.match(sqlReadme, /backend-data-privacy\.sql/);
+  assert.match(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
+  assert.match(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
+  assert.match(privacySQL, /a\.grantor <> current_user::regrole/);
+  assert.match(schemaSQL, /a\.grantor <> current_user::regrole/);
+  assert.match(privacySQL, /Managed table ownership by a browser role requires separate authorized remediation/);
+  assert.match(schemaSQL, /Managed table ownership by a browser role requires separate authorized remediation/);
+  assert.match(privacySQL, /Browser-role column grants require separate authorized remediation/);
+  assert.match(schemaSQL, /Browser-role column grants require separate authorized remediation/);
+  assert.match(privacySQL, /Browser role membership reaches a backend owner or privileged role/);
+  assert.match(schemaSQL, /Browser role membership reaches a backend owner or privileged role/);
+  assert.match(privacySQL, /'pg_read_all_data', 'pg_write_all_data', 'pg_maintain'/);
+  assert.match(schemaSQL, /'pg_read_all_data', 'pg_write_all_data', 'pg_maintain'/);
+  assert.match(privacySQL, /privileged\.rolsuper/);
+  assert.match(schemaSQL, /privileged\.rolsuper/);
+  assert.match(schemaSQL.slice(0, guardEnd), /pg_read_all_data/, "fresh-schema guard must refuse implicit data roles before DDL");
+  assert.match(privacySQL, /revoke all privileges on sequences from public/);
+  assert.match(schemaSQL, /revoke all privileges on sequences from public/);
+  assert.match(privacySQL, /revoke all privileges on sequence %I\.%I from public/);
+  assert.match(schemaSQL, /revoke all privileges on sequence %I\.%I from public/);
+  assert.match(privacySQL, /Browser-role sequence grants inherited through role membership/);
+  assert.match(schemaSQL, /Browser-role sequence grants inherited through role membership/);
+  assert.match(privacySQL, /Browser-role sequence grants issued by another grantor/);
+  assert.match(schemaSQL, /Browser-role sequence grants issued by another grantor/);
+  assert.match(privacySQL, /revoke create on schema %I from public/);
+  assert.match(schemaSQL, /revoke create on schema %I from public/);
+  assert.match(privacySQL, /Browser-role schema CREATE grants inherited through role membership/);
+  assert.match(schemaSQL, /Browser-role schema CREATE grants inherited through role membership/);
+  assert.match(privacySQL, /Browser-role schema CREATE grants issued by another grantor/);
+  assert.match(schemaSQL, /Browser-role schema CREATE grants issued by another grantor/);
+  assert.match(privacySQL, /revoke create on database %I from public/);
+  assert.match(schemaSQL, /revoke create on database %I from public/);
+  assert.match(privacySQL, /Browser-role database CREATE grants inherited through role membership/);
+  assert.match(schemaSQL, /Browser-role database CREATE grants inherited through role membership/);
+  assert.match(privacySQL, /Browser-role database CREATE grants issued by another grantor/);
+  assert.match(schemaSQL, /Browser-role database CREATE grants issued by another grantor/);
+  assert.match(schemaSQL.slice(0, guardEnd), /defaclobjtype = 'S'/, "fresh-schema guard must refuse inherited sequence defaults before DDL");
+  assert.match(schemaSQL.slice(0, guardEnd), /privilege_type = 'CREATE'/, "fresh-schema guard must refuse inherited schema CREATE before DDL");
+  assert.match(schemaSQL.slice(0, guardEnd), /pg_database d/, "fresh-schema guard must refuse inherited database CREATE before DDL");
+  const serverSrc = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const backfillCli = readFileSync(new URL("../src/placePhotoBackfillCli.ts", import.meta.url), "utf8");
+  assert.match(serverSrc, /const pool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
+  assert.match(serverSrc, /const analysisHealthPool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
+  assert.match(backfillCli, /const pool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
+  assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
+  assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
+  const repoRoot = new URL("../../", import.meta.url);
+  const markdown = readdirSync(repoRoot, { recursive: true, encoding: "utf8" })
+    .filter(name => name.endsWith(".md") && !name.includes("node_modules/"));
+  const unsafeApply = /psql "\$DATABASE_URL" -f (?:backend\/)?sql\/schema\.sql/;
+  for (const name of markdown) {
+    const text = readFileSync(new URL(name, repoRoot), "utf8");
+    assert.doesNotMatch(text, unsafeApply, name);
+    for (const line of text.split("\n")) {
+      if (!/psql/.test(line) || !/-f/.test(line) || !/schema\.sql/.test(line) || /mistake/i.test(line)) continue;
+      assert.match(line, /-v ON_ERROR_STOP=1 -1/, `${name}: ${line}`);
+      assert.match(line, /-c "set search_path to public"/, `${name}: ${line}`);
+    }
+  }
+  const runbook = readFileSync(new URL("../../docs/2026-08-04-backend-rebuild-runbook.md", import.meta.url), "utf8");
+  assert.doesNotMatch(runbook, /schema\.sql is idempotent/);
+});
+
+type Fixture = { db: pg.Pool; schema: string };
+async function withFixture(run: (fixture: Fixture) => Promise<void>, options: { browser?: boolean; legacy?: boolean; partial?: boolean; install?: boolean } = {}): Promise<void> {
+  const url = new URL(connectionString!);
+  assert.equal(url.pathname, "/save_paid_fixture");
+  assert.match(url.searchParams.get("host") ?? "", /^\/tmp\/save-paid-readiness-[\w-]+\/socket$/);
+  const schema = `privacy_test_${randomUUID().replaceAll("-", "")}`;
+  const db = new pg.Pool({ connectionString, options: `-c search_path=${schema} -c save.privacy_schema=${schema}`, max: 5 });
+  const created: string[] = [];
+  const databaseName = (await db.query("select current_database() as name")).rows[0].name as string;
+  assert.match(databaseName, /^\w+$/);
+  try {
+    await db.query(`create schema ${schema}`);
+    if (options.browser) {
+      for (const role of fixtureRoles) {
+        assert.equal((await db.query("select 1 from pg_roles where rolname=$1", [role])).rowCount, 0, "do not borrow or delete another fixture's roles");
+        await db.query(`create role ${role} nologin nosuperuser ${role === "service_role" ? "bypassrls" : "nobypassrls"}`);
+        created.push(role);
+      }
+      await db.query(`grant usage on schema ${schema} to public`);
+      // PostgreSQL 14 / upgraded `public` still grants CREATE to PUBLIC.
+      await db.query(`grant create on schema ${schema} to public, anon, authenticated`);
+      await db.query(`grant create on database ${databaseName} to public, anon, authenticated`);
+      await db.query(`alter default privileges in schema ${schema} grant all on tables to public, anon, authenticated, service_role`);
+      await db.query(`alter default privileges in schema ${schema} grant all on sequences to public, anon, authenticated, service_role`);
+      await db.query(`grant create on schema ${schema} to privacy_other_creator`);
+      await db.query(`alter default privileges for role privacy_other_creator in schema ${schema} grant all on tables to public, anon, authenticated`);
+    }
+    await db.query("create table privacy_unrelated_sentinel(id int primary key, private_note text)");
+    await db.query("insert into privacy_unrelated_sentinel values(1,'untouched sentinel')");
+    if (options.partial) {
+      await db.query("create table profiles(id text primary key, private_note text)");
+      await db.query("insert into profiles values('partial-owner','PRIVATE partial record')");
+    } else if (options.install !== false) {
+      const privacyStart = schemaSQL.indexOf(marker);
+      await db.query(options.legacy && privacyStart >= 0 ? schemaSQL.slice(0, privacyStart) : schemaSQL);
+      for (const sql of optionalSQL) await db.query(sql);
+    }
+    await run({ db, schema });
+  } finally {
+    await db.query(`drop schema if exists ${schema} cascade`);
+    if (options.browser) await db.query(`revoke create on database ${databaseName} from public, anon, authenticated`);
+    for (const role of created.reverse()) await db.query(`drop role ${role}`);
+    await db.end();
+  }
+}
+
+async function rolePool(fixture: Fixture, role: string, run: (db: pg.Pool) => Promise<void>): Promise<void> {
+  const db = new pg.Pool({ connectionString, options: `-c search_path=${fixture.schema} -c role=${role}`, max: 3 });
+  try { await run(db); } finally { await db.end(); }
+}
+
+async function assertBrowserBoundary({ db, schema }: Fixture, tables = managedTables): Promise<void> {
+  for (const role of browserRoles) {
+    assert.equal((await db.query("select has_schema_privilege($1,$2,'CREATE') as allowed", [role, schema])).rows[0].allowed, false, `${role} must not create objects in the backend schema`);
+    assert.equal((await db.query("select has_database_privilege($1, current_database(), 'CREATE') as allowed", [role])).rows[0].allowed, false, `${role} must not create schemas that can shadow the backend search path`);
+  }
+  const allowed: string[] = [];
+  const columns = await db.query(`select c.relname, a.attname from pg_class c join pg_attribute a on a.attrelid=c.oid
+    where c.relnamespace=$1::regnamespace and a.attnum=1 and not a.attisdropped`, [schema]);
+  for (const role of browserRoles) {
+    for (const table of tables) {
+      const first = columns.rows.find(row => row.relname === table)?.attname;
+      assert.match(first, /^\w+$/);
+      const operations = [
+        ["SELECT", `select * from ${table}`],
+        ["INSERT", `insert into ${table} select * from ${table} where false`],
+        ["UPDATE", `update ${table} set ${first}=${first} where false`],
+        ["DELETE", `delete from ${table} where false`],
+        ["TRUNCATE", `truncate ${table} cascade`],
+      ];
+      for (const [operation, sql] of operations) {
+        const client = await db.connect();
+        try {
+          await client.query("begin");
+          await client.query(`set local role ${role}`);
+          try { await client.query(sql); allowed.push(`${role}:${table}:${operation}`); }
+          catch (error) { assert.equal((error as { code: string }).code, "42501", `${role}:${table}:${operation}`); }
+        } finally { await client.query("rollback"); client.release(); }
+      }
+    }
+  }
+  assert.equal(allowed.length, 0, `${allowed.length} browser operations allowed; examples: ${allowed.slice(0, 8).join(", ")}`);
+  for (const role of browserRoles) {
+    const rows = (await db.query(`select c.relname, p.privilege, has_table_privilege($1,c.oid,p.privilege) as allowed
+      from pg_class c cross join unnest($3::text[]) p(privilege)
+      where c.relnamespace=$2::regnamespace and c.relname=any($4::text[])`, [role, schema, privileges, tables])).rows;
+    assert.equal(rows.length, tables.length * privileges.length);
+    assert.ok(rows.every(row => !row.allowed), `${role} must have no effective table privileges`);
+  }
+  const rows = (await db.query(`select relname, relrowsecurity, relforcerowsecurity from pg_class
+    where relnamespace=$1::regnamespace and relname=any($2::text[])`, [schema, tables])).rows;
+  assert.equal(rows.length, tables.length);
+  assert.ok(rows.every(row => row.relrowsecurity && !row.relforcerowsecurity));
+  const sequences = (await db.query(`select distinct s.relname
+    from pg_class c
+    join pg_depend d on d.refobjid=c.oid and d.classid='pg_class'::regclass
+      and d.refclassid='pg_class'::regclass and d.deptype in ('a','i')
+    join pg_class s on s.oid=d.objid and s.relkind='S'
+    where c.relnamespace=$1::regnamespace and c.relname=any($2::text[])`, [schema, tables])).rows.map(row => row.relname);
+  for (const role of browserRoles) {
+    for (const seq of sequences) {
+      for (const privilege of ["USAGE", "SELECT", "UPDATE"]) {
+        assert.equal((await db.query("select has_sequence_privilege($1,$2,$3) as allowed", [role, seq, privilege])).rows[0].allowed, false, `${role}:${seq}:${privilege}`);
+      }
+    }
+  }
+}
+
+const serialTables = ["sendblue_saved_places", "sendblue_reviews", "sendblue_verified_visits"] as const;
+const sequencePrivileges = ["USAGE", "SELECT", "UPDATE"] as const;
+
+async function creatorSequenceDefaultsToAnon(db: pg.Pool): Promise<number> {
+  return (await db.query(`select count(*)::int as n
+    from pg_default_acl d
+    cross join lateral aclexplode(d.defaclacl) a
+    join pg_roles r on r.oid=a.grantee
+    where d.defaclrole=current_user::regrole and d.defaclobjtype='S' and r.rolname='anon'`)).rows[0].n;
+}
+
+async function assertAnonCannotTouchSequence(db: pg.Pool, seq: string): Promise<void> {
+  for (const privilege of sequencePrivileges) {
+    assert.equal((await db.query("select has_sequence_privilege('anon',$1,$2) as allowed", [seq, privilege])).rows[0].allowed, false, `anon ${seq} ${privilege}`);
+  }
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    await client.query("set local role anon");
+    await assert.rejects(client.query(`select last_value from ${seq}`), (error: unknown) => (error as { code: string }).code === "42501", `anon last_value ${seq}`);
+    await client.query("rollback");
+    await client.query("begin");
+    await client.query("set local role anon");
+    await assert.rejects(client.query(`select setval($1, 2147483647)`, [seq]), (error: unknown) => (error as { code: string }).code === "42501", `anon setval ${seq}`);
+  } finally {
+    await client.query("rollback");
+    client.release();
+  }
+}
+
+async function assertBackendSerialInsert(db: pg.Pool, table: string): Promise<void> {
+  const sql = table === "sendblue_saved_places"
+    ? `insert into ${table}(phone, name) values ('p','n') returning id`
+    : `insert into ${table}(phone, merchant) values ('p','m') returning id`;
+  const id = (await db.query(sql)).rows[0].id;
+  assert.equal(typeof id, "number");
+  assert.ok(id > 0 && id < 2147483647, `${table} backend insert must nextval after a refused setval`);
+}
+
+async function installRuntimeSerialTables(db: pg.Pool): Promise<void> {
+  await db.query(sendblueSavedPlacesTableSql);
+  await db.query(reviewsTableSql);
+  await db.query(verifiedVisitsTableSql);
+}
+
+async function assertQaSequenceBoundary(db: pg.Pool): Promise<void> {
+  assert.equal(await creatorSequenceDefaultsToAnon(db), 0, "current-creator sequence defaults must not grant anon");
+  for (const table of serialTables) {
+    await assertAnonCannotTouchSequence(db, `${table}_id_seq`);
+    await assertBackendSerialInsert(db, table);
+  }
+}
+
+async function assertUnrelatedAndDefaults(fixture: Fixture): Promise<void> {
+  await fixture.db.query("create table privacy_future_sentinel(id int)");
+  await fixture.db.query("create table privacy_future_serial(id serial primary key, note text)");
+  await rolePool(fixture, "privacy_other_creator", db => db.query("create table privacy_other_creator_sentinel(id int)").then(() => {}));
+  for (const role of browserRoles) {
+    await rolePool(fixture, role, async db => {
+      assert.equal((await db.query("select private_note from privacy_unrelated_sentinel")).rows[0].private_note, "untouched sentinel");
+      for (const privilege of privileges) {
+        assert.equal((await db.query("select has_table_privilege(current_user,$1,$2) as allowed", ["privacy_unrelated_sentinel", privilege])).rows[0].allowed, true);
+        assert.equal((await db.query("select has_table_privilege(current_user,$1,$2) as allowed", ["privacy_other_creator_sentinel", privilege])).rows[0].allowed, true, "other creators' defaults stay untouched");
+        assert.equal((await db.query("select has_table_privilege(current_user,$1,$2) as allowed", ["privacy_future_sentinel", privilege])).rows[0].allowed, false, "later tables created by this schema owner start private");
+      }
+      for (const privilege of sequencePrivileges) {
+        assert.equal((await db.query("select has_sequence_privilege(current_user,'privacy_future_serial_id_seq',$1) as allowed", [privilege])).rows[0].allowed, false, "later serial sequences start without browser grants");
+      }
+      await assert.rejects(db.query("select * from privacy_future_sentinel"), (error: unknown) => (error as { code: string }).code === "42501");
+      await assert.rejects(db.query("select last_value from privacy_future_serial_id_seq"), (error: unknown) => (error as { code: string }).code === "42501");
+      const client = await db.connect();
+      try {
+        await client.query("begin");
+        await client.query("insert into privacy_unrelated_sentinel values(2,'client fixture')");
+        await client.query("update privacy_unrelated_sentinel set private_note='client updated' where id=2");
+        await client.query("delete from privacy_unrelated_sentinel where id=2");
+        await client.query("truncate privacy_unrelated_sentinel");
+      } finally { await client.query("rollback"); client.release(); }
+    });
+  }
+  await rolePool(fixture, "service_role", async db => {
+    await db.query("insert into privacy_future_sentinel values(1)");
+    assert.equal((await db.query("select * from privacy_future_sentinel")).rowCount, 1, "server-role defaults remain available");
+    assert.equal((await db.query("insert into privacy_future_serial(note) values('ok') returning id")).rows[0].id, 1, "server-role keeps sequence USAGE");
+  });
+}
+
+async function backendFlow(db: pg.Pool, owner: string): Promise<void> {
+  await db.query("insert into profiles(id,display_name,email) values($1,'Private fixture','private@example.invalid')", [owner]);
+  assert.equal((await resolveProfileSubject(owner, (sql, values) => db.query(sql, [...values]))).profileId, owner);
+  const place = randomUUID(), capture = randomUUID();
+  await db.query("insert into places(id,user_id,name,latitude,longitude,note,google_place_id) values($1,$2,'Private place',25,121,'PRIVATE NOTE','fixture-venue')", [place, owner]);
+  await db.query("update places set note='PRIVATE UPDATED' where id=$1 and user_id=$2", [place, owner]);
+  await putFriendRating(db, owner, place, { stars: 4, eaten: true, shared: false });
+  const sendblue = new PgSendbluePlaceStore(db);
+  assert.equal(await sendblue.save(owner, { name: "Private message place", area: "Fixture" }), 1);
+  assert.equal((await sendblue.list(owner))[0].name, "Private message place");
+  await db.query("insert into captures(id,user_id,source_type,source_url,raw_text) values($1,$2,'url','https://fixture.invalid/private','PRIVATE CLUE')", [capture, owner]);
+  const captureClient = await db.connect();
+  try {
+    assert.equal((await reuseCapture(captureClient, owner, { source_url: "https://fixture.invalid/private" }))?.id, capture);
+    assert.equal(await reuseCapture(captureClient, `${owner}-other`, { source_url: "https://fixture.invalid/private" }), undefined);
+  } finally { captureClient.release(); }
+  const store = new AnalysisUsageStore(db, () => ({ enabled: false }));
+  const analysis = randomUUID();
+  await store.start(owner, analysis);
+  await assert.rejects(store.owner(`${owner}-other`, analysis));
+  await store.finish(owner, analysis, "source_only", [capture]);
+  assert.equal((await store.summary(owner, analysis)).analysis_id, analysis);
+  assert.equal((await db.query("select outcome from analysis_sessions where id=$1", [analysis])).rows[0].outcome, "source_only");
+  const start = Date.now();
+  const transaction: VerifiedAppleTransaction = {
+    originalTransactionId: randomUUID(), transactionId: randomUUID(), appAccountToken: appAccountTokenFor(owner),
+    productId: proEntitlementPolicy.productIDs[0], bundleId: proEntitlementPolicy.expectedBundleID,
+    purchaseDateMs: start - 10, signedDateMs: start, expiresDateMs: start + 60_000, revocationDateMs: null, environment: "Sandbox",
+  };
+  await storeAppleEntitlement(db, owner, transaction);
+  assert.equal(await entitlementTier(db, owner), "pro");
+  await applyAppleNotification(db, transaction, { status: "revoked" }, start + 10);
+  assert.equal(await entitlementTier(db, owner), "free");
+}
+
+async function assertBackendRoles(fixture: Fixture): Promise<void> {
+  for (const table of managedTables) await fixture.db.query(`alter table ${table} owner to privacy_backend_owner`);
+  await rolePool(fixture, "privacy_backend_owner", async db => {
+    const flags = (await db.query("select rolsuper,rolbypassrls from pg_roles where rolname=current_user")).rows[0];
+    assert.deepEqual(flags, { rolsuper: false, rolbypassrls: false });
+    await backendFlow(db, "owner-backend");
+  });
+  await rolePool(fixture, "service_role", async db => {
+    const flags = (await db.query("select rolsuper,rolbypassrls from pg_roles where rolname=current_user")).rows[0];
+    assert.deepEqual(flags, { rolsuper: false, rolbypassrls: true });
+    await backendFlow(db, "service-backend");
+  });
+}
+
+test("privacy migration supports plain PostgreSQL and absent optional tables", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    assert.equal((await fixture.db.query("select count(*)::int as n from pg_roles where rolname=any($1::text[])", [fixtureRoles])).rows[0].n, 0);
+    const before = (await fixture.db.query("select * from profiles")).rows;
+    await fixture.db.query(privacySQL);
+    await fixture.db.query(privacySQL);
+    assert.deepEqual((await fixture.db.query("select * from profiles")).rows, before);
+    assert.equal((await fixture.db.query("select relrowsecurity from pg_class where oid='profiles'::regclass")).rows[0].relrowsecurity, true);
+  }, { partial: true });
+});
+
+test("fresh schema blocks browser CRUD/truncate across all managed tables while preserving backend roles", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await backendFlow(fixture.db, "seed-private");
+    await assertBrowserBoundary(fixture, coreTables);
+    for (const role of browserRoles) {
+      for (const table of optionalTables) {
+        for (const privilege of privileges) assert.equal((await fixture.db.query("select has_table_privilege($1,$2,$3) as allowed", [role, table, privilege])).rows[0].allowed, false, "future optional/runtime tables inherit private defaults");
+      }
+    }
+    await fixture.db.query(privacySQL);
+    await assertBrowserBoundary(fixture);
+    await assertUnrelatedAndDefaults(fixture);
+    await assertBackendRoles(fixture);
+  }, { browser: true });
+});
+
+test("legacy privacy upgrade is idempotent, preserves private records, and only changes managed table access", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await backendFlow(fixture.db, "legacy-private");
+    for (const table of managedTables) await fixture.db.query(`grant all on ${table} to public, anon, authenticated`);
+    const snapshot = async () => (await fixture.db.query(`select jsonb_build_object(
+      'profile',(select to_jsonb(p) from profiles p where id='legacy-private'),
+      'place',(select to_jsonb(p) from places p where user_id='legacy-private'),
+      'capture',(select to_jsonb(c) from captures c where user_id='legacy-private'),
+      'analysis',(select to_jsonb(a) from analysis_sessions a where user_id='legacy-private'),
+      'entitlement',(select to_jsonb(e) from subscription_entitlements e where user_id='legacy-private')) as state`)).rows[0].state;
+    const before = await snapshot();
+    await fixture.db.query(privacySQL);
+    await fixture.db.query(privacySQL);
+    assert.deepEqual(await snapshot(), before);
+    await assertBrowserBoundary(fixture);
+    await assertUnrelatedAndDefaults(fixture);
+    await assertBackendRoles(fixture);
+  }, { browser: true, legacy: true });
+});
+
+test("privacy migration refuses global browser default grants without changing tables or defaults", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant select on tables to public");
+    try {
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole)) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /global.*default|default.*global/i);
+      assert.deepEqual(await state(), before, "refusal must leave existing access and defaults unchanged");
+    } finally { await fixture.db.query("alter default privileges revoke select on tables from public"); }
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema privacy guard fails before DDL when global browser defaults exist", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant select on tables to public");
+    try {
+      await assert.rejects(fixture.db.query(schemaSQL), /global.*default|default.*global/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel"], "refused fresh schema must not create managed tables");
+    } finally { await fixture.db.query("alter default privileges revoke select on tables from public"); }
+  }, { browser: true, install: false });
+});
+
+async function withMembershipParent(fixture: Fixture, run: () => Promise<void>): Promise<void> {
+  assert.equal((await fixture.db.query("select 1 from pg_roles where rolname='privacy_browser_parent'")).rowCount, 0, "do not borrow another fixture's parent role");
+  await fixture.db.query("create role privacy_browser_parent nologin nosuperuser inherit nobypassrls");
+  try { await run(); }
+  finally {
+    await fixture.db.query("revoke privacy_browser_parent from anon, authenticated");
+    await fixture.db.query("drop owned by privacy_browser_parent");
+    await fixture.db.query("drop role if exists privacy_browser_parent");
+  }
+}
+
+test("privacy migration refuses table grants inherited through browser-role membership", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("grant all on places to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','places','TRUNCATE') as allowed")).rows[0].allowed, true, "membership fixture must reproduce inherited TRUNCATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','USAGE')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /inherit|membership/i);
+      assert.deepEqual(await state(), before, "membership refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("privacy migration refuses SET-able NOINHERIT browser-role memberships", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated with inherit false, set true");
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      await fixture.db.query("grant all on places to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','places','SELECT') as allowed")).rows[0].allowed, false, "NOINHERIT membership must not grant effective SELECT");
+      assert.equal((await fixture.db.query("select pg_has_role('anon','privacy_browser_parent','USAGE') as allowed")).rows[0].allowed, false, "USAGE must miss SET-able NOINHERIT membership");
+      assert.equal((await fixture.db.query("select pg_has_role('anon','privacy_browser_parent','MEMBER') as allowed")).rows[0].allowed, true);
+      await fixture.db.query("alter role authenticated login");
+      const browserURL = new URL(connectionString!);
+      browserURL.username = "authenticated";
+      const browser = new pg.Pool({ connectionString: browserURL.toString(), options: `-c search_path=${fixture.schema}`, max: 1 });
+      try {
+        assert.equal((await browser.query("select session_user")).rows[0].session_user, "authenticated");
+        assert.equal((await browser.query("select has_table_privilege(current_user,'places','SELECT') as allowed")).rows[0].allowed, false);
+        await browser.query("begin");
+        try {
+          await browser.query("set local role privacy_browser_parent");
+          assert.equal((await browser.query("select name from places where false")).rowCount, 0, "browser session_user SET ROLE parent must be able to read places");
+        } finally {
+          await browser.query("rollback");
+        }
+      } finally {
+        await browser.end();
+        await fixture.db.query("alter role authenticated nologin");
+      }
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','MEMBER')),
+        'inherit',(select pg_has_role('anon','privacy_browser_parent','USAGE')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /inherit|membership/i);
+      assert.deepEqual(await state(), before, "NOINHERIT membership refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard ignores inherited grants on unrelated tables", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("grant all on privacy_unrelated_sentinel to privacy_browser_parent");
+      await fixture.db.query(schemaSQL);
+      assert.equal((await fixture.db.query("select to_regclass('places') is not null as present")).rows[0].present, true);
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','privacy_unrelated_sentinel','TRUNCATE') as allowed")).rows[0].allowed, true, "unrelated inherited grants stay untouched");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses existing inherited table grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("grant all on places to privacy_browser_parent");
+      await assert.rejects(fixture.db.query(schemaSQL), /inherit|membership/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+async function withDelegatedGrantor(fixture: Fixture, run: () => Promise<void>): Promise<void> {
+  assert.equal((await fixture.db.query("select 1 from pg_roles where rolname='privacy_delegated_grantor'")).rowCount, 0, "do not borrow another fixture's delegated grantor");
+  await fixture.db.query("create role privacy_delegated_grantor nologin nosuperuser inherit nobypassrls");
+  await fixture.db.query("grant privacy_delegated_grantor to current_user");
+  try { await run(); }
+  finally {
+    await fixture.db.query("reset role");
+    await fixture.db.query("revoke privacy_delegated_grantor from current_user");
+    await fixture.db.query("drop owned by privacy_delegated_grantor");
+    await fixture.db.query("drop role if exists privacy_delegated_grantor");
+  }
+}
+
+test("privacy migration refuses browser grants issued by a delegated grantor", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on places to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant truncate on places to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','places','TRUNCATE') as allowed")).rows[0].allowed, true, "delegated grantor fixture must reproduce browser TRUNCATE");
+      const ownerRevoke = async () => {
+        await fixture.db.query("revoke all on places from public, anon, authenticated");
+        return (await fixture.db.query("select has_table_privilege('anon','places','TRUNCATE') as allowed")).rows[0].allowed;
+      };
+      assert.equal(await ownerRevoke(), true, "owner REVOKE must leave the foreign-grantor TRUNCATE");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant truncate on places to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'grantors',(select jsonb_agg(jsonb_build_array(grantor,grantee,privilege_type) order by 1,2,3)
+          from aclexplode((select relacl from pg_class where oid='places'::regclass))) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /grantor/i);
+      assert.deepEqual(await state(), before, "foreign-grantor refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses foreign-grantor browser grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on places to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant truncate on places to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      await assert.rejects(fixture.db.query(schemaSQL), /grantor/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses managed tables owned by a browser role", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter table places owner to anon");
+    const state = async () => (await fixture.db.query(`select jsonb_build_object(
+      'tables',(select jsonb_agg(jsonb_build_array(relname,relowner::regrole::text,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+      'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole)) as state`)).rows[0].state;
+    const before = await state();
+    await assert.rejects(fixture.db.query(privacySQL), /owner|ownership/i);
+    assert.deepEqual(await state(), before, "browser-owner refusal must leave existing access and defaults unchanged");
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses browser-owned tables before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await fixture.db.query("alter table places owner to anon");
+    await assert.rejects(fixture.db.query(schemaSQL), /owner|ownership/i);
+    const names = (await fixture.db.query(`select relname from pg_class
+      where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+    assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses column-level browser grants that survive table revoke", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      await fixture.db.query("grant select (name) on places to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_column_privilege('anon','places','name','SELECT') as allowed")).rows[0].allowed, true, "column fixture must reproduce inherited column SELECT");
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      assert.equal((await fixture.db.query("select has_column_privilege('anon','places','name','SELECT') as allowed")).rows[0].allowed, true, "table REVOKE must leave inherited column SELECT");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'columns',(select jsonb_agg(jsonb_build_array(c.relname,a.attname,a.attacl::text) order by 1,2)
+          from pg_attribute a join pg_class c on c.oid=a.attrelid
+          where a.attacl is not null and c.relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole)) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /column/i);
+      assert.deepEqual(await state(), before, "column-grant refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses column-level browser grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await fixture.db.query("revoke all on places from public, anon, authenticated");
+    await fixture.db.query("grant select (name) on places to public, anon, authenticated");
+    await assert.rejects(fixture.db.query(schemaSQL), /column/i);
+    const names = (await fixture.db.query(`select relname from pg_class
+      where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+    assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+  }, { browser: true, install: false });
+});
+
+async function withTransitiveMembership(fixture: Fixture, run: () => Promise<void>, options: { bypass?: boolean } = {}): Promise<void> {
+  assert.equal((await fixture.db.query("select 1 from pg_roles where rolname=any($1::text[])", [["privacy_access_group", "privacy_inherit_bridge"]])).rowCount, 0, "do not borrow another fixture's transitive roles");
+  await fixture.db.query("create role privacy_access_group nologin nosuperuser inherit nobypassrls");
+  await fixture.db.query("create role privacy_inherit_bridge nologin nosuperuser inherit nobypassrls");
+  await fixture.db.query("grant privacy_access_group to privacy_inherit_bridge");
+  await fixture.db.query("grant privacy_inherit_bridge to authenticated");
+  if (options.bypass) await fixture.db.query("alter role privacy_access_group bypassrls");
+  try { await run(); }
+  finally {
+    await fixture.db.query("revoke privacy_inherit_bridge from authenticated");
+    await fixture.db.query("revoke privacy_access_group from privacy_inherit_bridge");
+    await fixture.db.query("drop owned by privacy_access_group, privacy_inherit_bridge");
+    await fixture.db.query("drop role if exists privacy_inherit_bridge");
+    await fixture.db.query("drop role if exists privacy_access_group");
+  }
+}
+
+test("privacy migration refuses transitive column SELECT/UPDATE and leaves state unchanged", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withTransitiveMembership(fixture, async () => {
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      await fixture.db.query("grant select (name), update (name) on places to privacy_access_group");
+      assert.equal((await fixture.db.query("select has_column_privilege('authenticated','places','name','SELECT') as allowed")).rows[0].allowed, true);
+      assert.equal((await fixture.db.query("select has_column_privilege('authenticated','places','name','UPDATE') as allowed")).rows[0].allowed, true);
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'columns',(select jsonb_agg(jsonb_build_array(c.relname,a.attname,a.attacl::text) order by 1,2)
+          from pg_attribute a join pg_class c on c.oid=a.attrelid
+          where a.attacl is not null and c.relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('authenticated','privacy_access_group','MEMBER')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /column/i);
+      assert.deepEqual(await state(), before, "transitive column refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("privacy migration refuses browser membership in a BYPASSRLS role", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withTransitiveMembership(fixture, async () => {
+      assert.equal((await fixture.db.query("select rolbypassrls from pg_roles where rolname='privacy_access_group'")).rows[0].rolbypassrls, true);
+      assert.equal((await fixture.db.query("select pg_has_role('authenticated','privacy_access_group','MEMBER') as member")).rows[0].member, true);
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('authenticated','privacy_access_group','MEMBER')),
+        'bypass',(select rolbypassrls from pg_roles where rolname='privacy_access_group')) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /privileged|owner/i);
+      assert.deepEqual(await state(), before, "privileged-role refusal must leave existing access and memberships unchanged");
+    }, { bypass: true });
+  }, { browser: true, legacy: true });
+});
+
+for (const implicitRole of ["pg_read_all_data", "pg_write_all_data", "pg_maintain"]) {
+  test(`privacy migration refuses transitive browser implicit ${implicitRole} privileges`, { skip: !connectionString }, async t => {
+    await withFixture(async fixture => {
+      const exists = (await fixture.db.query("select 1 from pg_roles where rolname=$1", [implicitRole])).rowCount;
+      if (!exists) {
+        assert.equal(implicitRole, "pg_maintain", "required read/write predefined roles must exist");
+        assert.ok(privacySQL.includes("'pg_maintain'"), "guard must name the predefined maintenance role on newer servers");
+        t.diagnostic("pg_maintain is unavailable on this PostgreSQL version; SQL name lookup must tolerate absence");
+        return;
+      }
+      await fixture.db.query(privacySQL);
+      await fixture.db.query("create table privacy_future_implicit(id int primary key, private_note text)");
+      await fixture.db.query("insert into privacy_future_implicit values(1,'PRIVATE future record')");
+      await withTransitiveMembership(fixture, async () => {
+        await fixture.db.query(`grant ${implicitRole} to privacy_access_group`);
+        try {
+          assert.equal((await fixture.db.query(`select count(*)::int as n from pg_class c cross join lateral aclexplode(c.relacl) a
+            where c.oid='privacy_future_implicit'::regclass and a.grantee in ('authenticated'::regrole,'privacy_access_group'::regrole)`)).rows[0].n, 0, "access comes from the predefined role, not an ordinary table grant");
+          const flags = (await fixture.db.query("select rolsuper,rolbypassrls from pg_roles where rolname=$1", [implicitRole])).rows[0];
+          assert.deepEqual(flags, { rolsuper: false, rolbypassrls: false });
+          await rolePool(fixture, "authenticated", async db => {
+            if (implicitRole === "pg_read_all_data") {
+              assert.equal((await db.query("select private_note from privacy_future_implicit")).rows[0].private_note, "PRIVATE future record");
+            } else if (implicitRole === "pg_write_all_data") {
+              const client = await db.connect();
+              try {
+                await client.query("begin");
+                assert.equal((await client.query("update privacy_future_implicit set private_note='UNAUTHORIZED UPDATE'")).rowCount, 1);
+              } finally { await client.query("rollback"); client.release(); }
+            }
+          });
+          const state = async () => (await fixture.db.query(`select jsonb_build_object(
+            'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+            'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+            'members',(select pg_has_role('authenticated'::name,$1::name,'MEMBER')),
+            'note',(select private_note from privacy_future_implicit where id=1)) as state`, [implicitRole])).rows[0].state;
+          const before = await state();
+          await assert.rejects(fixture.db.query(privacySQL), /privileged|owner/i);
+          assert.deepEqual(await state(), before, "implicit role refusal must preserve ACLs, RLS, defaults, memberships and private values");
+        } finally {
+          await fixture.db.query(`revoke ${implicitRole} from privacy_access_group`);
+        }
+      });
+    }, { browser: true, partial: true });
+  });
+}
+
+test("documented fresh-install psql fails atomically on unsafe global defaults", { skip: !connectionString }, async t => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant select on tables to public");
+    try {
+      const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+      const command = readme.match(/^psql .*backend\/sql\/schema\.sql$/m)?.[0] ?? "";
+      const args = ["--dbname", connectionString!];
+      if (/ON_ERROR_STOP=1/.test(command)) args.push("-v", "ON_ERROR_STOP=1");
+      if (/(?:^|\s)-1(?:\s|$)/.test(command)) args.push("-1");
+      args.push("-f", fileURLToPath(new URL("../sql/schema.sql", import.meta.url)));
+      const psql = `${execFileSync("pg_config", ["--bindir"], { encoding: "utf8" }).trim()}/psql`;
+      const result = spawnSync(psql, args, { encoding: "utf8", env: { ...process.env, PGOPTIONS: `-c search_path=${fixture.schema} -c save.privacy_schema=${fixture.schema}` } });
+      assert.ifError(result.error);
+      assert.equal(result.signal, null);
+      assert.notEqual(result.status, null);
+      assert.match(command, /-v ON_ERROR_STOP=1 -1/);
+      assert.match(result.stderr, /Global default table grants to browser roles/);
+      const created = (await fixture.db.query("select relname from pg_class where relnamespace=current_schema()::regnamespace and relname=any($1::text[])", [coreTables])).rows;
+      assert.deepEqual({ exitedNonzero: result.status !== 0, created }, { exitedNonzero: true, created: [] }, `fresh install must stop and roll back; psql status=${result.status}, stderr=${result.stderr.slice(-1000)}`);
+      t.diagnostic(`psql exit=${result.status}; rejected global defaults; new managed tables=${created.length}`);
+      assert.equal((await fixture.db.query("select private_note from privacy_unrelated_sentinel")).rows[0].private_note, "untouched sentinel");
+    } finally { await fixture.db.query("alter default privileges revoke select on tables from public"); }
+  }, { browser: true, install: false });
+});
+
+test("fresh schema then runtime serial tables deny anon sequence read and setval", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant all on sequences to public, anon, authenticated");
+    try {
+      await fixture.db.query(schemaSQL);
+      await installRuntimeSerialTables(fixture.db);
+      await assertQaSequenceBoundary(fixture.db);
+      await fixture.db.query(privacySQL);
+      await assertQaSequenceBoundary(fixture.db);
+    } finally {
+      await fixture.db.query("alter default privileges revoke all on sequences from public, anon, authenticated");
+    }
+  }, { browser: true, install: false });
+});
+
+test("privacy re-run revokes leftover browser grants on existing serial sequences", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant all on sequences to public, anon, authenticated");
+    await installRuntimeSerialTables(fixture.db);
+    assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','SELECT') as allowed")).rows[0].allowed, true, "legacy fixture must reproduce browser sequence SELECT");
+    assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','UPDATE') as allowed")).rows[0].allowed, true, "legacy fixture must reproduce browser sequence UPDATE");
+    try {
+      await fixture.db.query(schemaSQL);
+      await assertQaSequenceBoundary(fixture.db);
+      await fixture.db.query(privacySQL);
+      await fixture.db.query(privacySQL);
+      await assertQaSequenceBoundary(fixture.db);
+    } finally {
+      await fixture.db.query("alter default privileges revoke all on sequences from public, anon, authenticated");
+    }
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses sequence grants inherited through browser-role membership", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await installRuntimeSerialTables(fixture.db);
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("revoke all on sequence sendblue_saved_places_id_seq from public, anon, authenticated");
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','UPDATE') as allowed")).rows[0].allowed, true, "membership fixture must reproduce inherited sequence UPDATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'sequences',(select jsonb_agg(jsonb_build_array(relname,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace and relkind='S'),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','MEMBER')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /sequence/i);
+      assert.deepEqual(await state(), before, "inherited sequence refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses sequence grants issued by a delegated grantor", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await installRuntimeSerialTables(fixture.db);
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant update, select, usage on sequence sendblue_saved_places_id_seq to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      await fixture.db.query("revoke all on sequence sendblue_saved_places_id_seq from public, anon, authenticated");
+      assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','UPDATE') as allowed")).rows[0].allowed, true, "owner REVOKE must leave the foreign-grantor sequence UPDATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'sequences',(select jsonb_agg(jsonb_build_array(relname,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace and relkind='S'),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'grantors',(select jsonb_agg(jsonb_build_array(grantor,grantee,privilege_type) order by 1,2,3)
+          from aclexplode((select relacl from pg_class where oid='sendblue_saved_places_id_seq'::regclass))) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /grantor/i);
+      assert.deepEqual(await state(), before, "foreign-grantor sequence refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses foreign-grantor sequence grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query(sendblueSavedPlacesTableSql);
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant update on sequence sendblue_saved_places_id_seq to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      await assert.rejects(fixture.db.query(schemaSQL), /grantor/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel", "sendblue_saved_places", "sendblue_user_locations"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses inherited sequence grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query(sendblueSavedPlacesTableSql);
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("revoke all on sequence sendblue_saved_places_id_seq from public, anon, authenticated");
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_browser_parent");
+      await assert.rejects(fixture.db.query(schemaSQL), /sequence/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel", "sendblue_saved_places", "sendblue_user_locations"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses global defaults inherited through browser-role membership", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("alter default privileges grant select on tables to privacy_browser_parent");
+      try {
+        const state = async () => (await fixture.db.query(`select jsonb_build_object(
+          'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+          'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole)) as state`)).rows[0].state;
+        const before = await state();
+        await assert.rejects(fixture.db.query(privacySQL), /global.*default|inherit|membership/i);
+        assert.deepEqual(await state(), before, "inherited global default refusal must leave existing access unchanged");
+      } finally { await fixture.db.query("alter default privileges revoke select on tables from privacy_browser_parent"); }
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("privacy migration revokes browser schema CREATE so runtime IF NOT EXISTS cannot adopt a browser-owned table", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    assert.equal((await fixture.db.query("select has_schema_privilege('anon', current_schema(), 'CREATE') as allowed")).rows[0].allowed, true, "PG14-style fixture must reproduce browser schema CREATE");
+    const backendRole = (await fixture.db.query("select current_user as name")).rows[0].name;
+    await rolePool(fixture, "anon", async db => {
+      await db.query(sendblueSavedPlacesTableSql);
+      await db.query(`grant all on sendblue_saved_places, sendblue_user_locations to ${backendRole}`);
+    });
+    await fixture.db.query(sendblueSavedPlacesTableSql);
+    assert.equal((await fixture.db.query("select pg_get_userbyid(relowner) as owner from pg_class where oid='sendblue_saved_places'::regclass")).rows[0].owner, "anon");
+    await fixture.db.query("alter table sendblue_saved_places enable row level security");
+    await fixture.db.query("revoke all on sendblue_saved_places from public, authenticated");
+    await fixture.db.query("insert into sendblue_saved_places(phone, name) values('p','PRIVATE PLACE')");
+    const planted = await fixture.db.connect();
+    try {
+      await planted.query("begin");
+      await planted.query("set local role anon");
+      assert.equal((await planted.query("select name from sendblue_saved_places")).rows[0].name, "PRIVATE PLACE", "browser owner bypasses RLS on a planted runtime table");
+    } finally {
+      await planted.query("rollback");
+      planted.release();
+    }
+    await fixture.db.query("drop table sendblue_saved_places, sendblue_user_locations cascade");
+    await fixture.db.query(privacySQL);
+    await fixture.db.query(privacySQL);
+    for (const role of browserRoles) {
+      assert.equal((await fixture.db.query("select has_schema_privilege($1, current_schema(), 'CREATE') as allowed", [role])).rows[0].allowed, false, `${role} must lose schema CREATE`);
+    }
+    await rolePool(fixture, "anon", async db => {
+      await assert.rejects(
+        db.query(sendblueSavedPlacesTableSql),
+        (error: unknown) => (error as { code: string }).code === "42501",
+        "anon must not pre-create the runtime table after privacy apply"
+      );
+    });
+    await fixture.db.query(sendblueSavedPlacesTableSql);
+    const owner = (await fixture.db.query("select pg_get_userbyid(relowner) as owner from pg_class where oid='sendblue_saved_places'::regclass")).rows[0].owner;
+    assert.ok(!browserRoles.includes(owner), `runtime table owner must not be a browser role; got ${owner}`);
+    for (const role of browserRoles) {
+      for (const privilege of privileges) {
+        assert.equal((await fixture.db.query("select has_table_privilege($1,$2,$3) as allowed", [role, "sendblue_saved_places", privilege])).rows[0].allowed, false, `${role} must not inherit grants on the backend-owned runtime table`);
+      }
+    }
+    await rolePool(fixture, "privacy_other_creator", db => db.query("create table privacy_other_after_create_revoke(id int)").then(() => {}));
+    await rolePool(fixture, "anon", async db => {
+      assert.equal((await db.query("select private_note from privacy_unrelated_sentinel")).rows[0].private_note, "untouched sentinel");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses schema CREATE inherited through browser-role membership", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query(`revoke create on schema ${fixture.schema} from public, anon, authenticated`);
+      await fixture.db.query(`grant create on schema ${fixture.schema} to privacy_browser_parent`);
+      assert.equal((await fixture.db.query("select has_schema_privilege('anon', current_schema(), 'CREATE') as allowed")).rows[0].allowed, true, "membership fixture must reproduce inherited schema CREATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'schema',(select nspacl::text from pg_namespace where oid=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','MEMBER')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /schema CREATE|CREATE grants inherited/i);
+      assert.deepEqual(await state(), before, "inherited schema CREATE refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses schema CREATE issued by a delegated grantor", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query(`grant create on schema ${fixture.schema} to privacy_delegated_grantor with grant option`);
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query(`grant create on schema ${fixture.schema} to public, anon, authenticated`);
+      await fixture.db.query("reset role");
+      await fixture.db.query(`revoke create on schema ${fixture.schema} from public, anon, authenticated`);
+      assert.equal((await fixture.db.query("select has_schema_privilege('anon', current_schema(), 'CREATE') as allowed")).rows[0].allowed, true, "owner REVOKE must leave the foreign-grantor schema CREATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'schema',(select nspacl::text from pg_namespace where oid=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'grantors',(select jsonb_agg(jsonb_build_array(grantor,grantee,privilege_type) order by 1,2,3)
+          from aclexplode((select nspacl from pg_namespace where oid=current_schema()::regnamespace))) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /grantor/i);
+      assert.deepEqual(await state(), before, "foreign-grantor schema CREATE refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses inherited schema CREATE before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query(`revoke create on schema ${fixture.schema} from public, anon, authenticated`);
+      await fixture.db.query(`grant create on schema ${fixture.schema} to privacy_browser_parent`);
+      await assert.rejects(fixture.db.query(schemaSQL), /schema CREATE|CREATE grants inherited/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel"], "refused fresh schema must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses foreign-grantor schema CREATE before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query(`grant create on schema ${fixture.schema} to privacy_delegated_grantor with grant option`);
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query(`grant create on schema ${fixture.schema} to public, anon, authenticated`);
+      await fixture.db.query("reset role");
+      await assert.rejects(fixture.db.query(schemaSQL), /grantor/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration revokes database CREATE so a $user schema cannot shadow runtime tables", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    const backendRole = (await fixture.db.query("select current_user as name")).rows[0].name as string;
+    const databaseName = (await fixture.db.query("select current_database() as name")).rows[0].name as string;
+    assert.match(backendRole, /^\w+$/);
+    assert.equal((await fixture.db.query("select has_database_privilege('anon', current_database(), 'CREATE') as allowed")).rows[0].allowed, true, "fixture must reproduce browser database CREATE");
+    await fixture.db.query(`drop schema if exists ${backendRole} cascade`);
+    try {
+      await rolePool(fixture, "anon", async db => {
+        await db.query(`create schema ${backendRole}`);
+        await db.query(`set search_path to ${backendRole}`);
+        await db.query(sendblueSavedPlacesTableSql);
+        await db.query(`grant usage on schema ${backendRole} to ${backendRole}`);
+        await db.query(`grant all on all tables in schema ${backendRole} to ${backendRole}`);
+        await db.query(`grant all on all sequences in schema ${backendRole} to ${backendRole}`);
+      });
+      const unpinned = new pg.Pool({ connectionString, max: 1 });
+      try {
+        await unpinned.query(sendblueSavedPlacesTableSql);
+        const planted = (await unpinned.query(`select pg_get_userbyid(c.relowner) as owner, n.nspname
+          from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          where c.relname='sendblue_saved_places' and pg_table_is_visible(c.oid)`)).rows[0];
+        assert.equal(planted.owner, "anon");
+        assert.equal(planted.nspname, backendRole, "unpinned $user search_path must resolve the browser-owned schema first");
+      } finally {
+        await unpinned.end();
+      }
+      await fixture.db.query(`drop schema if exists ${backendRole} cascade`);
+      await fixture.db.query(privacySQL);
+      await fixture.db.query(privacySQL);
+      for (const role of browserRoles) {
+        assert.equal((await fixture.db.query("select has_database_privilege($1, current_database(), 'CREATE') as allowed", [role])).rows[0].allowed, false, `${role} must lose database CREATE`);
+      }
+      await rolePool(fixture, "anon", async db => {
+        await assert.rejects(
+          db.query(`create schema ${backendRole}`),
+          (error: unknown) => (error as { code: string }).code === "42501",
+          "anon must not create a $user schema after privacy apply"
+        );
+      });
+    } finally {
+      await fixture.db.query(`drop schema if exists ${backendRole} cascade`);
+      await fixture.db.query(`revoke create on database ${databaseName} from public`);
+    }
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses database CREATE inherited through browser-role membership", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    const databaseName = (await fixture.db.query("select current_database() as name")).rows[0].name as string;
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query(`revoke create on database ${databaseName} from public, anon, authenticated`);
+      await fixture.db.query(`grant create on database ${databaseName} to privacy_browser_parent`);
+      assert.equal((await fixture.db.query("select has_database_privilege('anon', current_database(), 'CREATE') as allowed")).rows[0].allowed, true, "membership fixture must reproduce inherited database CREATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'database',(select datacl::text from pg_database where datname=current_database()),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','MEMBER')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /database CREATE|CREATE grants inherited/i);
+      assert.deepEqual(await state(), before, "inherited database CREATE refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses database CREATE issued by a delegated grantor", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    const databaseName = (await fixture.db.query("select current_database() as name")).rows[0].name as string;
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query(`grant create on database ${databaseName} to privacy_delegated_grantor with grant option`);
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query(`grant create on database ${databaseName} to public, anon, authenticated`);
+      await fixture.db.query("reset role");
+      await fixture.db.query(`revoke create on database ${databaseName} from public, anon, authenticated`);
+      assert.equal((await fixture.db.query("select has_database_privilege('anon', current_database(), 'CREATE') as allowed")).rows[0].allowed, true, "owner REVOKE must leave the foreign-grantor database CREATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'database',(select datacl::text from pg_database where datname=current_database()),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'grantors',(select jsonb_agg(jsonb_build_array(grantor,grantee,privilege_type) order by 1,2,3)
+          from aclexplode((select datacl from pg_database where datname=current_database()))) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /grantor/i);
+      assert.deepEqual(await state(), before, "foreign-grantor database CREATE refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses inherited database CREATE before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    const databaseName = (await fixture.db.query("select current_database() as name")).rows[0].name as string;
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query(`revoke create on database ${databaseName} from public, anon, authenticated`);
+      await fixture.db.query(`grant create on database ${databaseName} to privacy_browser_parent`);
+      await assert.rejects(fixture.db.query(schemaSQL), /database CREATE|CREATE grants inherited/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel"], "refused fresh schema must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses foreign-grantor database CREATE before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    const databaseName = (await fixture.db.query("select current_database() as name")).rows[0].name as string;
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query(`grant create on database ${databaseName} to privacy_delegated_grantor with grant option`);
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query(`grant create on database ${databaseName} to public, anon, authenticated`);
+      await fixture.db.query("reset role");
+      await assert.rejects(fixture.db.query(schemaSQL), /grantor/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy apply targets public when search_path resolves an empty $user schema", { skip: !connectionString }, async () => {
+  await withFixture(async () => {
+    const raw = new pg.Pool({ connectionString, max: 1 });
+    const backendRole = (await raw.query("select current_user as name")).rows[0].name as string;
+    assert.match(backendRole, /^\w+$/);
+    try {
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.query("drop table if exists public.profiles cascade");
+      await raw.query(`create schema ${backendRole}`);
+      await raw.query("create table public.profiles(id text primary key, private_note text)");
+      await raw.query("insert into public.profiles values('shadow','PRIVATE')");
+      await raw.query("grant all on public.profiles to public, anon, authenticated");
+      assert.equal((await raw.query("select current_schema() as name")).rows[0].name, backendRole, "default search_path must resolve $user first");
+      assert.equal((await raw.query("select has_table_privilege('anon','public.profiles','SELECT') as allowed")).rows[0].allowed, true);
+      await raw.query(privacySQL);
+      assert.equal((await raw.query("select relrowsecurity from pg_class where oid='public.profiles'::regclass")).rows[0].relrowsecurity, true, "privacy apply must protect public, not the empty $user schema");
+      assert.equal((await raw.query("select has_table_privilege('anon','public.profiles','SELECT') as allowed")).rows[0].allowed, false);
+    } finally {
+      await raw.query("drop table if exists public.profiles cascade");
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.end();
+    }
+  }, { browser: true, install: false });
+});
+
+test("photo backfill pool pin updates public.places when a $user schema is planted", { skip: !connectionString }, async () => {
+  await withFixture(async () => {
+    const raw = new pg.Pool({ connectionString, max: 1 });
+    const backendRole = (await raw.query("select current_user as name")).rows[0].name as string;
+    assert.match(backendRole, /^\w+$/);
+    const publicId = randomUUID();
+    const plantedId = randomUUID();
+    const userId = "did:privy:photo-backfill-owner";
+    try {
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.query("drop table if exists public.places cascade");
+      await raw.query(`create schema ${backendRole}`);
+      await raw.query(`create table public.places (
+        id uuid primary key,
+        user_id text not null,
+        name text not null,
+        address text,
+        latitude double precision,
+        longitude double precision,
+        google_place_id text,
+        source_image_url text,
+        business_photo_urls text[],
+        created_at timestamptz not null default now()
+      )`);
+      await raw.query(`create table ${backendRole}.places (like public.places including all)`);
+      await raw.query(
+        `insert into public.places (id, user_id, name, address, latitude, longitude) values ($1,$2,'Public Cafe','Public St',35.66,139.70)`,
+        [publicId, userId],
+      );
+      await raw.query(
+        `insert into ${backendRole}.places (id, user_id, name, address, latitude, longitude) values ($1,$2,'Planted Cafe','Shadow St',1,1)`,
+        [plantedId, userId],
+      );
+      assert.equal((await raw.query("select current_schema() as name")).rows[0].name, backendRole, "default search_path must resolve $user first");
+      const unpinned = new pg.Pool({ connectionString, max: 1 });
+      const pinned = new pg.Pool({ connectionString, options: "-c search_path=public", max: 1 });
+      try {
+        const shadowed = await unpinned.query(selectMissingPlacePhotosSQL, [userId, 10]);
+        assert.equal(String(shadowed.rows[0].id), plantedId, "unpinned backfill must resolve the planted $user.places table");
+        const real = await pinned.query(selectMissingPlacePhotosSQL, [userId, 10]);
+        assert.equal(String(real.rows[0].id), publicId, "pinned backfill pool must resolve public.places");
+        const updated = await pinned.query(updateMissingPlacePhotosSQL, [publicId, userId, "https://example.test/photo", ["https://example.test/photo"]]);
+        assert.equal(String(updated.rows[0].id), publicId);
+        assert.equal((await raw.query("select source_image_url from public.places where id=$1", [publicId])).rows[0].source_image_url, "https://example.test/photo");
+        assert.equal((await raw.query(`select source_image_url from ${backendRole}.places where id=$1`, [plantedId])).rows[0].source_image_url, null);
+      } finally {
+        await unpinned.end();
+        await pinned.end();
+      }
+    } finally {
+      await raw.query("drop table if exists public.places cascade");
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.end();
+    }
+  }, { browser: true, install: false });
+});

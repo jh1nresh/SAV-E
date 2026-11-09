@@ -1,8 +1,16 @@
+import { LinkPlaceIntelligence, placePopularity } from "./linkPlaceIntelligence.js";
+import { analyzeSocialCaption } from "./socialSemanticExtraction.js";
+import { capturedSourceTexts, recordCapturedSourceText, completeEmptySourceAnalysis, prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity, isGenericSourceOnlyCandidate, supersededCandidateIDs } from "./memoryStorage.js";
 import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
+import { decodeJwt, importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
+import {
+  APPLE_IDENTITY_ISSUER,
+  AppleIdentityTokenError,
+  verifiedAppleIdentity,
+} from "./appleIdentityToken.js";
 import pg, { type PoolClient } from "pg";
 import {
   evaluateAccountConfirmationRequest,
@@ -101,6 +109,12 @@ import {
   type FriendShareShareMetricsRow,
 } from "./friendShareEvents.js";
 import {
+  clipListPlaceIdentities,
+  clipListSaveResponse,
+  existingPlaceMatchingClipIdentity,
+  planClipListSave,
+} from "./clipListSave.js";
+import {
   communityRecommendationSignal,
   normalizeFollowRequest,
   normalizeVisibilityRequest,
@@ -120,6 +134,7 @@ import {
   formatListRow,
   formatPublicListPreview,
   formatShareCodeRow,
+  clipListPlacesBodyMaxBytes,
   listBodyMaxBytes,
   listForMember,
   listMaxItems,
@@ -154,6 +169,7 @@ import {
   WorkflowConflictError,
   isPendingInvestigateReplay,
   planDecisionTransition,
+  validateDecisionAttempt,
   planResultTransition,
   reconcileReputation,
   safeOpaqueRefs,
@@ -168,7 +184,8 @@ import {
   sha256ImmutableWorkflowReceipt,
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
-import { createPrivyUserProvisioner } from "./privyUsers.js";
+import { readAnalysisReadiness } from "./analysisReadiness.js";
+import { createPrivyUserProvisioner, PrivyUserProvisioningError } from "./privyUsers.js";
 import {
   MemoryContractError,
   normalizePreferenceCreate,
@@ -212,20 +229,46 @@ import {
 } from "./usageQuota.js";
 import {
   monthlyLimitUnits,
-  resolveTier,
-  statusFor,
   verifyAppleSignedTransaction,
-  type ProEntitlementStatus,
 } from "./proEntitlement.js";
 import {
   notificationEffect,
   verifyAppleNotification,
 } from "./appleNotifications.js";
+import {
+  storeAppleEntitlement, applyAppleNotification, entitlementTier, readEntitlementReadiness,
+  EntitlementOwnershipError, EntitlementBindingRequiredError,
+  appAccountTokenFor, isEntitlementSchemaUnavailable,
+} from "./entitlementPersistence.js";
 import { deleteAccount } from "./accountDeletion.js";
+import {
+  SavedPlaceLimitError,
+  assertNewSavedPlaceAllowed,
+  updateSavedPlaceWithinLimit,
+  deleteSavedPlace,
+  savedPlaceDeleteScope,
+  savedPlaceGrowthSnapshot,
+  assertSavedPlaceGrowthAllowed,
+} from "./savedPlaceLimit.js";
+import {
+  sanitizePlacePatchBody,
+  sanitizePlacePostBody,
+  sanitizePlaceWorkflowBody,
+} from "./googlePlacesPhotoWrite.js";
 import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
   putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
 } from "./friendRatings.js";
+import { sharedPostBodyMaxBytes } from "./sharedPostPhotos.js";
+import { listSharedPosts, getSharedPostPhoto, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
+import {
+  normalizeShareAnalyzeInput,
+  normalizeShareInstallationId,
+  shareAnalysisInputHash,
+  shareExtensionAnalysisResponse,
+  ShareExtensionSessionError,
+  ShareExtensionSessionStore,
+} from "./shareExtensionSessions.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -248,7 +291,16 @@ const verifyRelatedSourcesPublicVenue = createCachedGooglePublicVenueVerifier({
 const pool = new Pool({
   connectionString: databaseUrl,
   ssl: databaseSSLConfig(databaseUrl),
+  options: "-c search_path=public",
 });
+// Isolate health probes from user requests; bound connection, queue and SQL waits.
+const analysisHealthPool = new Pool({
+  connectionString: databaseUrl, ssl: databaseSSLConfig(databaseUrl),
+  options: "-c search_path=public",
+  max: 1, connectionTimeoutMillis: 2_000, statement_timeout: 2_000, query_timeout: 3_000,
+  idleTimeoutMillis: 10_000, allowExitOnIdle: true,
+});
+analysisHealthPool.on("error", () => console.error("Analysis health database connection unavailable"));
 const relatedPlaceSourcesStore = new PgRelatedPlaceSourcesStore(
   (sql, values) => pool.query(sql, [...values] as QueryValue[]),
 );
@@ -495,8 +547,8 @@ const placeFields = [
   "provider_place_id",
   "provider_map_url",
   "source_image_url",
-  "business_photo_urls",
   "extracted_dishes",
+  "memory_meta",
   "price_range",
   "recommender",
   "google_rating",
@@ -890,9 +942,11 @@ const jsonbFields = new Set([
   "private_payload",
   "public_summary",
   "ratings",
+  "memory_meta",
 ]);
 
 const analysisUsageStore = new AnalysisUsageStore(pool);
+const shareExtensionSessionStore = new ShareExtensionSessionStore(pool);
 
 createServer(async (request, response) => {
   if (request.method === "OPTIONS") {
@@ -905,7 +959,17 @@ createServer(async (request, response) => {
       return sendJson(response, { ok: true, service: "save-backend" });
     }
     if (request.method === "GET" && url.pathname === "/health/source-recovery") {
-      const status = await readSourceRecoveryConfigStatus();
+      const [status, analysis] = await Promise.all([
+        readSourceRecoveryConfigStatus(),
+        readAnalysisReadiness(sql => analysisHealthPool.query(sql)),
+      ]);
+      const ready = status.ready && analysis.ready;
+      response.setHeader("Cache-Control", "no-store");
+      return sendJson(response, { ...status, analysis, ready }, ready ? 200 : 503);
+    }
+    if (request.method === "GET" && url.pathname === "/health/entitlements") {
+      const status = await readEntitlementReadiness(analysisHealthPool);
+      response.setHeader("Cache-Control", "no-store");
       return sendJson(response, status, status.ready ? 200 : 503);
     }
     // Apple posts server notifications with no user session. Authentication is
@@ -970,6 +1034,33 @@ createServer(async (request, response) => {
       return await handleMySaves(response, id);
     }
 
+    if (isV0 && request.method === "GET" && resource === "clip-apple-session" && !id) {
+      response.setHeader("Cache-Control", "private, no-store");
+      const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
+      let appleIssuer = false;
+      try {
+        appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+      } catch {
+        appleIssuer = false;
+      }
+      if (!appleIssuer) {
+        return sendJson(response, { error: "Apple identity token required" }, 401);
+      }
+      try {
+        const privyUserId = await lookupAppleLinkedPrivySubject(token);
+        return sendJson(response, { version: "v0", privy_user_id: privyUserId });
+      } catch (error) {
+        if (error instanceof AppleIdentityTokenError) {
+          return sendJson(response, { error: error.message }, 401);
+        }
+        if (error instanceof ApiError) {
+          return sendJson(response, { error: error.message }, error.status);
+        }
+        throw error;
+      }
+    }
+
     if (isV0 && resource === "account-status") {
       if (segments.length > 2 || (segments.length === 2 && segments[1] !== "confirm")) {
         return sendJson(response, { error: "Not found" }, 404);
@@ -989,7 +1080,7 @@ createServer(async (request, response) => {
             authorizationHeader: request.headers.authorization,
             accountRefSecret: stableAccountRefSecret(process.env),
             expectedAccountRef: body.account_ref,
-            verifySubject: verifiedPrivySubject,
+            verifySubject: verifiedPrivyAccessSubject,
             beginTransaction: async () => { await client.query("begin"); },
             lockSubject: (subject) => lockProfileSubject(client, subject),
             query: (sql, values) => client.query(sql, [...values] as QueryValue[]),
@@ -1018,10 +1109,17 @@ createServer(async (request, response) => {
         accountRefSecret: stableAccountRefSecret(process.env),
         previousAccountRefSecrets: previousAccountRefSecrets(process.env),
         presentedAccountRef: request.headers["x-save-account-ref"],
-        verifySubject: verifiedPrivySubject,
+        verifySubject: verifiedPrivyAccessSubject,
         query: (sql, values) => pool.query(sql, [...values] as QueryValue[]),
       });
       return sendJson(response, result.body, result.statusCode);
+    }
+
+    // Share Extension credentials are deliberately route-scoped. Session
+    // creation accepts a real Privy bearer; later calls accept only the
+    // revocable restricted token and never pass through resolveUserId().
+    if (isV0 && resource === "share-extension") {
+      return await handleShareExtension(request, response, segments.slice(1));
     }
 
     const userId = await resolveUserId(request);
@@ -1035,7 +1133,7 @@ createServer(async (request, response) => {
       }
       const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
       if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
-      const privyUserId = await verifiedPrivySubject(token);
+      const privyUserId = await verifiedPrivyAccessSubject(token);
       await deleteAccount({
         deleteProfile: async () => {
           await pool.query(
@@ -1082,8 +1180,16 @@ createServer(async (request, response) => {
     if (isV0 && resource === "usage" && id === "quota" && segments.length === 2) {
       return await handleUsageQuotaPreview(request, response, userId);
     }
-    if (isV0 && resource === "entitlements" && id === "apple" && segments.length === 2) {
-      return await handleAppleEntitlement(request, response, userId);
+    if (isV0 && resource === "entitlements" && id === "apple") {
+      if (!hasAccountBearerAuthorization(request.headers.authorization)) {
+        return sendJson(response, { error: "Sign in to a Savvy account to manage purchases" }, 401);
+      }
+      if (segments.length === 3 && segments[2] === "account-token") {
+        if (request.method !== "GET") return sendJson(response, { error: "Method not allowed" }, 405);
+        response.setHeader("Cache-Control", "private, no-store");
+        return sendJson(response, { app_account_token: appAccountTokenFor(userId) });
+      }
+      if (segments.length === 2) return await handleAppleEntitlement(request, response, userId);
     }
     if (isV0 && resource === "analysis") {
       return await handleAnalysis(request,response,segments.slice(1),userId);
@@ -1102,6 +1208,52 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "places" && id && segments[2] === "trust-summary") {
       return await handlePlaceTrustSummary(request, response, id, userId);
+    }
+    if (isV0 && ["shared-posts", "passports", "social-profile", "followers"].includes(resource)) {
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Authorization");
+      if (resource === "social-profile" && request.method === "GET" && segments.length === 1) {
+        return sendJson(response, await getSocialProfile(pool, userId));
+      }
+      if (resource === "passports" && request.method === "GET" && id && segments.length === 2) {
+        return sendJson(response, await getPassport(pool, userId, decodeURIComponent(id), url));
+      }
+      if (resource === "followers" && request.method === "GET" && segments.length === 1) {
+        try {
+          return sendJson(response, await listFollowedFriendsPage(userId, normalizeFollowListOptions({
+            search: url.searchParams.get("q"), limit: url.searchParams.get("limit"), cursor: url.searchParams.get("cursor"),
+          }), (sql, values) => pool.query(sql, [...values] as QueryValue[]), "followers"));
+        } catch (error) {
+          if (error instanceof FollowListInputError) return sendJson(response, { error: error.message }, 400);
+          throw error;
+        }
+      }
+      if (resource === "shared-posts") {
+        if (request.method === "GET" && id && segments.length === 4 && segments[2] === "photos") {
+          const data = await getSharedPostPhoto(pool, userId, id, segments[3]);
+          response.setHeader("Content-Type", "image/jpeg");
+          response.setHeader("X-Content-Type-Options", "nosniff");
+          response.writeHead(200);
+          return response.end(data);
+        }
+        if (request.method === "GET" && segments.length === 1) return sendJson(response, await listSharedPosts(pool, userId, url));
+        if (request.method === "GET" && segments.length === 2 && id === "mine") return sendJson(response, await listSharedPosts(pool, userId, url, "mine"));
+        if (request.method === "GET" && segments.length === 2 && id === "saved") return sendJson(response, await savedPostAttributions(pool, userId));
+        if (id && segments.length === 2) {
+          if (request.method === "GET") return sendJson(response, await getSharedPost(pool, userId, id));
+          if (request.method === "PUT") return sendJson(response, await putSharedPost(pool, userId, id, await readJson(request, sharedPostBodyMaxBytes)));
+          if (request.method === "DELETE") {
+            await withdrawSharedPost(pool, userId, id);
+            return sendJson(response, null, 204);
+          }
+        }
+        if (id && request.method === "POST" && segments.length === 3 && segments[2] === "save") {
+          const body = await readJson(request, 2048);
+          if (Object.keys(body).length) return sendJson(response, { error: "Save accepts only the shared post id" }, 400);
+          return sendJson(response, formatPlace(await saveSharedPost(pool, userId, id)), 201);
+        }
+      }
+      return sendJson(response, { error: "Unsupported social route" }, 405);
     }
     if (isV0 && resource === "friend-ratings") {
       response.setHeader("Cache-Control", "private, no-store");
@@ -1127,7 +1279,23 @@ createServer(async (request, response) => {
     if (resource === "places" && id && segments[2] === "visibility") {
       return await handlePlaceVisibility(request, response, id, userId);
     }
-    if (resource === "places") return await handlePlaces(request, response, id, userId);
+    if (isV0 && resource === "place-intelligence" && id === "trending" && segments.length === 2) {
+      if (request.method !== "GET") return sendJson(response, { error: "Unsupported popularity route" }, 405);
+      response.setHeader("Cache-Control","private, no-store");
+      try { return sendJson(response, await placePopularity(pool)); }
+      catch (error) {
+        if (isMissingRelationError(error)) return sendJson(response, { error: "Place intelligence migration required" }, 503);
+        throw error;
+      }
+    }
+    if (isV0 && resource === "places" && id && segments[2] === "source-associations" && segments.length === 3) {
+      if (request.method !== "GET") return sendJson(response, { error: "Unsupported source associations route" }, 405);
+      if (!isUuid(id)) return sendJson(response, { error: "Invalid place ID" }, 400);
+      response.setHeader("Cache-Control","private, no-store");
+      const result = await new LinkPlaceIntelligence(pool).sources(userId,id);
+      return result ? sendJson(response,result) : sendJson(response,{error:"Place not found"},404);
+    }
+    if (resource === "places") return await handlePlaces(request, response, id, userId, url);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
     if (resource === "follows") {
@@ -1155,6 +1323,7 @@ createServer(async (request, response) => {
     return sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
     if (error instanceof FriendRatingError) return sendJson(response, { error: error.message }, error.status);
+    if (error instanceof SavedPlaceLimitError) return sendJson(response, error.body, error.status);
     if (error instanceof AnalysisProviderError) return sendJson(response,{error:"Gemini upstream request failed",status:error.upstreamStatus},502);
     if (error instanceof AnalysisControlError) return sendJson(response,{error:error.message,code:error.code},error.status);
     const status = error instanceof ApiError
@@ -1444,6 +1613,7 @@ async function handlePlaces(
   response: ServerResponse,
   placeId: string | undefined,
   userId: string,
+  url: URL,
 ): Promise<void> {
   if (request.method === "GET" && !placeId) {
     const rows = await fetchPlacesWithOptionalVisibility(userId);
@@ -1451,7 +1621,10 @@ async function handlePlaces(
   }
 
   if (request.method === "POST" && !placeId) {
-    const rawBody = await readJson(request);
+    const rawBody = await readJson(request, clipListPlacesBodyMaxBytes);
+    if (Array.isArray(rawBody.places)) {
+      return await saveClipListPlaces(response, userId, rawBody.places);
+    }
     const providerFieldError = providerCoordinateFieldError(rawBody);
     if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
     let friendShareCode: string | undefined;
@@ -1462,7 +1635,7 @@ async function handlePlaces(
       return sendJson(response, { error: message }, 400);
     }
 
-    const body = withOwner(rawBody, userId);
+    const body = sanitizePlacePostBody(rawBody, userId);
     if (friendShareCode) {
       const link = await friendShareLinkForEvent(friendShareCode);
       if (friendShareLinkIsExpired(link)) {
@@ -1475,43 +1648,80 @@ async function handlePlaces(
         return sendJson(response, { error: "Place does not match the shared place" }, 409);
       }
 
-      const receiptBody: JsonBody = {
-        ...body,
-        origin_shared_place_link_id: link.id,
-      };
-      const insert = buildInsert(
-        "places",
-        receiptBody,
-        [...placeFields, "user_id", "origin_shared_place_link_id"],
-      );
       const client = await pool.connect();
       try {
         await client.query("begin");
-        const { rows } = await client.query(
-          `${insert.sql}
-           ${friendSharePlaceOriginConflictClause}
-           returning *, (xmax = 0) as friend_share_receipt_created`,
-          insert.values,
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+        const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+        const existing = await client.query(
+          "select * from places where user_id = $1",
+          [userId],
         );
-        const result = asObject(rows[0]);
-        const { friend_share_receipt_created: created, ...canonicalPlace } = result;
-        const terminalEvent = created === true
-          ? "friend_share_saved"
-          : "friend_share_duplicate_blocked";
-        await client.query(
-          `insert into friend_share_events (
-             shared_place_link_id,
-             sender_user_id,
-             recipient_user_id,
-             recipient_place_id,
-             event_type,
-             surface
-           )
-           values ($1, $2, $3, $4, $5, 'server')
-           on conflict do nothing`,
-          [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
-        );
+        const matched = existingPlaceMatchingClipIdentity(existing.rows, body);
+        let created: unknown;
+        let canonicalPlace: JsonBody | undefined;
+        if (matched) {
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, matched.id, "friend_share_duplicate_blocked"],
+          );
+        } else {
+          const receiptBody: JsonBody = {
+            ...body,
+            origin_shared_place_link_id: link.id,
+          };
+          const insert = buildInsert(
+            "places",
+            receiptBody,
+            [...placeFields, "user_id", "origin_shared_place_link_id"],
+          );
+          const { rows } = await client.query(
+            `${insert.sql}
+             ${friendSharePlaceOriginConflictClause}
+             returning *, (xmax = 0) as friend_share_receipt_created`,
+            insert.values,
+          );
+          const result = asObject(rows[0]);
+          const { friend_share_receipt_created: nextCreated, ...nextPlace } = result;
+          created = nextCreated;
+          canonicalPlace = nextPlace;
+          const terminalEvent = nextCreated === true
+            ? "friend_share_saved"
+            : "friend_share_duplicate_blocked";
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, nextPlace.id, terminalEvent],
+          );
+        }
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
+        if (matched) {
+          return sendJson(response, {
+            place: formatPlace(asObject(matched)),
+            outcome: "already_saved",
+          }, 201);
+        }
+        if (!canonicalPlace) {
+          throw new Error("Friend share insert returned no place");
+        }
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
           outcome: created === true ? "saved" : "already_saved",
@@ -1525,45 +1735,148 @@ async function handlePlaces(
     }
 
     const insert = buildInsert("places", body, [...placeFields, "user_id"]);
-    const { rows } = await pool.query(
-      `${insert.sql}
-       on conflict (id) do update
-       set id = excluded.id
-       where places.user_id = excluded.user_id
-       returning *`,
-      insert.values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place id conflict" }, 409);
-    return sendJson(response, formatPlace(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+      const { rows } = await client.query(
+        `${insert.sql}
+         on conflict (id) do update
+         set id = excluded.id
+         where places.user_id = excluded.user_id
+         returning *`,
+        insert.values,
+      );
+      if (!rows[0]) {
+        await client.query("rollback");
+        return sendJson(response, { error: "Place id conflict" }, 409);
+      }
+      // PostgreSQL may coerce accepted JSON fields (for example string float8
+      // coordinates). Gate actual stored rows, not a raw-request approximation.
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
+      await client.query("commit");
+      return sendJson(response, formatPlace(rows[0]), 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   if (request.method === "PATCH" && placeId) {
     const rawBody = await readJson(request);
     const providerFieldError = providerCoordinateFieldError(rawBody);
     if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
-    const body = writableFields(rawBody, ["id", "user_id", "created_at", "updated_at"]);
-    const update = buildUpdate("places", body, placeFields);
-    if (!update) return sendJson(response, { error: "No writable fields" }, 400);
+    const createdAt = rawBody.created_at;
+    if (createdAt !== undefined && (typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt)))) {
+      return sendJson(response, { error: "created_at must be a valid timestamp" }, 400);
+    }
+    const { persist: body, silentPhotoNoop } = sanitizePlacePatchBody(rawBody);
+    let update = buildUpdate("places", body, placeFields);
+    if (typeof createdAt === "string") {
+      const separator = update ? "," : "";
+      update ??= { sql: "update places set", values: [] };
+      update.values.push(new Date(createdAt).toISOString());
+      // Source merges retain the earliest collection time, even with concurrent
+      // updates; an incoming timestamp can never move the owned Stamp later.
+      update.sql += `${separator} created_at = least(created_at, $${update.values.length}::timestamptz)`;
+    }
+    if (!update) {
+      if (silentPhotoNoop) {
+        const { rows } = await pool.query(
+          "select * from places where id = $1 and user_id = $2 limit 1",
+          [placeId, userId],
+        );
+        if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
+        return sendJson(response, formatPlace(asObject(rows[0])));
+      }
+      return sendJson(response, { error: "No writable fields" }, 400);
+    }
 
-    const values = [...update.values, placeId, userId];
-    const { rows } = await pool.query(
-      `${update.sql} where id = $${values.length - 1} and user_id = $${values.length} returning *`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
-    return sendJson(response, formatPlace(rows[0]));
+    const updated = await updateSavedPlaceWithinLimit(pool, userId, placeId, update);
+    if (!updated) return sendJson(response, { error: "Place not found" }, 404);
+    return sendJson(response, formatPlace(updated));
   }
 
   if (request.method === "DELETE" && placeId) {
-    const { rows } = await pool.query(
-      "delete from places where id = $1 and user_id = $2 returning id",
-      [placeId, userId],
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
+    const scope = savedPlaceDeleteScope(url.searchParams.getAll("scope"));
+    if (!scope) return sendJson(response, { error: "Unsupported place delete scope" }, 400);
+    await deleteSavedPlace(pool, userId, placeId, scope);
     return sendJson(response, null, 204);
   }
 
   return sendJson(response, { error: "Unsupported places route" }, 405);
+}
+
+async function saveClipListPlaces(
+  response: ServerResponse,
+  userId: string,
+  items: unknown,
+): Promise<void> {
+  if (!Array.isArray(items) || items.length === 0) {
+    return sendJson(response, { error: "places required" }, 400);
+  }
+  if (items.length > listMaxItems) {
+    return sendJson(response, { error: "Too many places" }, 400);
+  }
+
+  // Validate the complete batch before opening a transaction or inserting any row.
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return sendJson(response, { error: "Invalid place in batch" }, 400);
+    }
+    const providerFieldError = providerCoordinateFieldError(item as JsonBody);
+    if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`clip-list-save:${userId}`]);
+    const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+    const existing = await client.query(
+      "select id, name, latitude, longitude, google_place_id, provider_place_id from places where user_id = $1",
+      [userId],
+    );
+    const existingIdentities = existing.rows.flatMap((row) => clipListPlaceIdentities(row));
+    const plan = planClipListSave({
+      items,
+      existingIdentities,
+      existingPlaces: existing.rows,
+      savedPlaceCount: savedPlaceCountBefore,
+    });
+
+    const inserted: Record<string, unknown>[] = [];
+    for (const item of plan.toInsert) {
+      const body = withOwner(item, userId);
+      if (typeof body.id !== "string" || !body.id) body.id = randomUUID();
+      const insert = buildInsert("places", body, [...placeFields, "user_id"]);
+      const { rows } = await client.query(
+        `${insert.sql}
+         on conflict (id) do update
+         set id = excluded.id
+         where places.user_id = excluded.user_id
+         returning *`,
+        insert.values,
+      );
+      if (!rows[0]) {
+        throw new Error("Place id conflict");
+      }
+      inserted.push(rows[0]);
+    }
+
+    await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
+    await client.query("commit");
+    return sendJson(response, clipListSaveResponse(plan, inserted), 201);
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function providerCoordinateFieldError(body: JsonBody): string | undefined {
@@ -2328,6 +2641,109 @@ async function handleRecommendationOutcomes(
 }
 
 class AnalysisProviderError extends Error { constructor(readonly upstreamStatus:number) { super("Upstream provider failed"); } }
+
+async function handleShareExtension(
+  request: IncomingMessage,
+  response: ServerResponse,
+  segments: string[],
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  const [action] = segments;
+  if (segments.length !== 1 || !["sessions", "analyze"].includes(action)) {
+    return sendJson(response, { error: "Not found" }, 404);
+  }
+  try {
+    if (action === "sessions" && request.method === "POST") {
+      const bearer = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!bearer) throw new ShareExtensionSessionError(401, "A Privy bearer token is required");
+      let ownerSubject: string;
+      try { ownerSubject = await verifiedPrivyAccessSubject(bearer); }
+      catch { throw new ShareExtensionSessionError(401, "Invalid Privy bearer token"); }
+      const body = await readJson(request, 2_048);
+      if (Object.keys(body).some(key => key !== "installation_id")) {
+        throw new ShareExtensionSessionError(400, "Unsupported share session field");
+      }
+      const installationId = normalizeShareInstallationId(body.installation_id);
+      const ownerId = await profileIdForPrivySubject(ownerSubject);
+      const issued = await shareExtensionSessionStore.issue(ownerId, ownerSubject, installationId);
+      return sendJson(response, {
+        token: issued.token,
+        owner_subject: issued.session.ownerSubject,
+        expires_at: issued.session.expiresAt.toISOString(),
+      }, 201);
+    }
+    if (action === "sessions" && request.method === "DELETE") {
+      const token = requiredShareExtensionToken(request);
+      await shareExtensionSessionStore.revoke(token);
+      return sendJson(response, null, 204);
+    }
+    if (action === "analyze" && request.method === "POST") {
+      const token = requiredShareExtensionToken(request);
+      const session = await shareExtensionSessionStore.authorize(token);
+      const input = normalizeShareAnalyzeInput(await readJson(request, 65_536));
+      const inputHash = shareAnalysisInputHash(input);
+      const claim = await shareExtensionSessionStore.claimAnalysis(session.id, input.analysisId, inputHash).catch(async error => {
+        if (error instanceof ShareExtensionSessionError && error.code === "analysis_failed") {
+          await analysisUsageStore.finish(session.ownerId, input.analysisId, "failed", []).catch(() => {});
+        }
+        throw error;
+      });
+      if (claim.kind === "replay") return sendJson(response, claim.response);
+
+      let usageStarted = false;
+      let usageFinished = false;
+      let claimFinished = false;
+      try {
+        await analysisUsageStore.start(session.ownerId, input.analysisId, false, true);
+        usageStarted = true;
+        const ownerCache = new LinkPlaceIntelligence(pool).ownerCache(session.ownerId);
+        const recovery = await withAnalysisUsage(analysisUsageStore, session.ownerId, input.analysisId, () =>
+          runSourceSearchRecovery({
+            sourceUrl: input.sourceUrl,
+            semanticSourceText: input.caption,
+          }, undefined, undefined, {
+            includeMediaEvidence: false,
+            semanticAnalyzer: source => analyzeSocialCaption(source, { cache: ownerCache }),
+          }));
+        const providerFailed = recovery.receipt.failureReason?.kind === "provider_failure";
+        await analysisUsageStore.finish(
+          session.ownerId,
+          input.analysisId,
+          providerFailed ? "failed" : recovery.candidates.length ? "review_candidate" : "source_only",
+          [],
+        );
+        usageFinished = true;
+        const result = shareExtensionAnalysisResponse(session.ownerSubject, recovery);
+        await shareExtensionSessionStore.completeAnalysis(session.id, input.analysisId, inputHash, result);
+        claimFinished = true;
+        return sendJson(response, result);
+      } catch (error) {
+        if (!claimFinished) {
+          await shareExtensionSessionStore.failAnalysis(session.id, input.analysisId, inputHash).catch(() => {});
+        }
+        if (usageStarted && !usageFinished) {
+          await analysisUsageStore.finish(session.ownerId, input.analysisId, "failed", []).catch(() => {});
+        }
+        throw error;
+      }
+    }
+    return sendJson(response, { error: "Method not allowed" }, 405);
+  } catch (error) {
+    if (error instanceof ShareExtensionSessionError) return sendJson(response, { error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
+    if (isMissingRelationError(error)) return sendJson(response, { error: "Share Extension sessions are unavailable" }, 503);
+    throw error;
+  }
+}
+
+function requiredShareExtensionToken(request: IncomingMessage): string {
+  const header = request.headers["x-save-share-token"];
+  if (typeof header !== "string" || !header || header.length > 256) {
+    throw new ShareExtensionSessionError(401, "A share session token is required");
+  }
+  return header;
+}
+
 function requestAnalysisId(request: IncomingMessage, body?: JsonBody): string | undefined {
   const header=request.headers["x-save-analysis-id"];
   if (Array.isArray(header)) throw new AnalysisControlError(400,"analysis_invalid_id","Invalid analysis identifier");
@@ -2355,6 +2771,16 @@ async function handleAnalysis(request:IncomingMessage,response:ServerResponse,se
     if(action === "client-events") {
       await analysisUsageStore.clientEvents(userId,aid,body.events,body.events_truncated ?? false);
       return sendJson(response,{recorded:true});
+    }
+    if(action === "extract-place-clues") {
+      await analysisUsageStore.owner(userId,aid);
+      if (typeof body.caption !== "string" || (body.ocrText !== undefined && typeof body.ocrText !== "string")) {
+        throw new ApiError(400,"Invalid source text");
+      }
+      const result = await withAnalysisUsage(analysisUsageStore,userId,aid,() =>
+        analyzeSocialCaption({ caption: body.caption as string, ocrText: body.ocrText as string | undefined },
+          { cache:new LinkPlaceIntelligence(pool).ownerCache(userId) }));
+      return sendJson(response,result);
     }
     if(action === "places") {
       await analysisUsageStore.owner(userId,aid);
@@ -2538,16 +2964,7 @@ async function handleUsageQuotaPreview(
 /// cannot lock anyone out either.
 async function currentEntitlementTier(userId: string): Promise<"free" | "pro"> {
   try {
-    const { rows } = await pool.query(
-      `select status, expires_at
-       from subscription_entitlements
-       where user_id = $1
-       order by expires_at desc nulls first
-       limit 1`,
-      [userId],
-    );
-    const row = rows[0] as { status: ProEntitlementStatus; expires_at: string | null } | undefined;
-    return resolveTier(row);
+    return await entitlementTier(pool, userId);
   } catch (error) {
     if (!isMissingRelationError(error)) {
       console.warn("Entitlement lookup failed; treating the caller as free.");
@@ -2585,62 +3002,33 @@ async function handleAppleEntitlement(
     return sendJson(response, { error: "Transaction could not be verified" }, 400);
   }
 
-  const status = statusFor(transaction);
-  const expiresAt = transaction.expiresDateMs === null
-    ? null
-    : new Date(transaction.expiresDateMs).toISOString();
-
   try {
-    await pool.query(
-      `insert into subscription_entitlements (
-         user_id, original_transaction_id, product_id, status, environment,
-         expires_at, last_verified_at
-       ) values ($1, $2, $3, $4, $5, $6, now())
-       on conflict (original_transaction_id) do update set
-         user_id = excluded.user_id,
-         product_id = excluded.product_id,
-         status = excluded.status,
-         environment = excluded.environment,
-         expires_at = excluded.expires_at,
-         last_verified_at = now()`,
-      [
-        userId,
-        transaction.originalTransactionId,
-        transaction.productId,
-        status,
-        transaction.environment,
-        expiresAt,
-      ],
-    );
+    const { row } = await storeAppleEntitlement(pool, userId, transaction);
+    return sendJson(response, {
+      tier: await currentEntitlementTier(userId),
+      status: row.status,
+      product_id: row.product_id,
+      expires_at: row.expires_at,
+      environment: row.environment,
+    });
   } catch (error) {
-    if (!isMissingRelationError(error)) throw error;
-    // Schema not applied yet. Report honestly rather than implying the
-    // entitlement was stored.
-    console.warn("subscription_entitlements is missing; entitlement was not persisted.");
+    if (error instanceof EntitlementOwnershipError) {
+      return sendJson(response, { code: "subscription_owner_conflict", error: error.message }, 409);
+    }
+    if (error instanceof EntitlementBindingRequiredError) {
+      return sendJson(response, { code: "subscription_account_binding_required", error: error.message }, 409);
+    }
+    if (!isEntitlementSchemaUnavailable(error)) throw error;
+    console.warn("Entitlement schema is unavailable; transaction was not persisted.");
     return sendJson(response, { error: "Entitlement storage is unavailable" }, 503);
   }
-
-  const tier = resolveTier({ status, expires_at: expiresAt });
-  return sendJson(response, {
-    tier,
-    status,
-    product_id: transaction.productId,
-    expires_at: expiresAt,
-    environment: transaction.environment,
-  });
 }
 
 /// Handle an App Store Server Notification v2.
 ///
-/// Three rules govern this handler, each protecting against a specific failure:
-///
-/// 1. Once the signature verifies, always return 200. Apple retries non-2xx for
-///    days, so a 500 loop on one odd notification is worse than a no-op.
-/// 2. Never insert. Entitlement rows are only ever created by an authenticated
-///    user posting their own transaction; if a webhook could insert, anyone who
-///    could forge a delivery would mint entitlement against an arbitrary user.
-/// 3. Update by `original_transaction_id` only, so repeated deliveries of the
-///    same notification converge instead of accumulating.
+/// Verify before applying, never create ownership from a webhook, and compare
+/// signed period/event versions atomically. Storage failures return non-2xx so
+/// Apple can retry rather than permanently losing a refund or renewal.
 async function handleAppleServerNotification(
   request: IncomingMessage,
   response: ServerResponse,
@@ -2660,8 +3048,7 @@ async function handleAppleServerNotification(
 
   const notification = await verifyAppleNotification(signedPayload);
   if (!notification) {
-    // Unverified: reject. This is the one case that must NOT return 200,
-    // because acknowledging an unsigned payload would invite replay.
+    // Unverified signed data must never reach entitlement persistence.
     return sendJson(response, { error: "Notification could not be verified" }, 400);
   }
 
@@ -2674,38 +3061,18 @@ async function handleAppleServerNotification(
   }
 
   try {
-    const { rowCount } = await pool.query(
-      `update subscription_entitlements
-       set status = $2,
-           expires_at = $3,
-           product_id = $4,
-           environment = $5,
-           last_verified_at = now()
-       where original_transaction_id = $1`,
-      [
-        notification.transaction.originalTransactionId,
-        effect.status,
-        effect.expiresAt,
-        notification.transaction.productId,
-        notification.transaction.environment,
-      ],
+    const applied = await applyAppleNotification(
+      pool, notification.transaction, effect, notification.signedDateMs,
     );
-
-    if (rowCount === 0) {
-      // No local row for this subscription. Acknowledge so Apple stops
-      // retrying, but do not create one -- see rule 2 above.
-      console.log(
-        `[apple-notifications] ${notification.notificationType} for unknown subscription; ignored`,
-      );
-      return sendJson(response, { received: true, applied: false });
-    }
+    return sendJson(response, { received: true, applied });
   } catch (error) {
-    if (!isMissingRelationError(error)) throw error;
-    console.warn("subscription_entitlements is missing; notification was not applied.");
-    return sendJson(response, { received: true, applied: false });
+    if (error instanceof EntitlementOwnershipError) {
+      return sendJson(response, { code: "subscription_owner_conflict", error: error.message }, 409);
+    }
+    if (!isEntitlementSchemaUnavailable(error)) throw error;
+    console.warn("Entitlement schema is unavailable; notification was not applied.");
+    return sendJson(response, { error: "Entitlement storage is unavailable" }, 503);
   }
-
-  return sendJson(response, { received: true, applied: true });
 }
 
 async function recordGeminiFailure(
@@ -4261,6 +4628,11 @@ async function handleMemory(
 ): Promise<void> {
   const [kind, id] = segments;
 
+  if (kind === "duplicate-audit" && request.method === "GET") {
+    const { rows } = await pool.query("select pc.*, c.source_url from place_candidates pc join captures c on c.id=pc.capture_id where c.user_id=$1 order by pc.created_at, pc.id", [userId]);
+    const places = await pool.query("select id, name, address, latitude, longitude from places where user_id=$1", [userId]);
+    return sendJson(response, { groups: duplicateCandidateGroups(rows, places.rows) });
+  }
   if (kind === "captures" && id && segments[2] === "search-recovery") {
     return await handleCaptureSearchRecovery(request, response, id, userId);
   }
@@ -4292,14 +4664,16 @@ async function handleCaptureSearchRecovery(
   const workflowRunId = stringValue(body.workflow_run_id);
   if (workflowRunId) await ensureWorkflowRunOwner(workflowRunId, userId);
 
-  const { rows } = await pool.query("select * from captures where id = $1 and user_id = $2", [captureId, userId]);
+  const { rows } = await pool.query("select *, md5(jsonb_build_array(source_url,raw_text,source_resolution->'captured_text_v1')::text) as intelligence_stamp from captures where id = $1 and user_id = $2", [captureId, userId]);
   const capture = asObject(rows[0]);
 
   if(body.include_media_evidence !== undefined && typeof body.include_media_evidence !== "boolean") throw new ApiError(400,"include_media_evidence must be a boolean");
   const requestedAnalysis=requestAnalysisId(request,body);
+  if (body.explicit_retry !== undefined && typeof body.explicit_retry !== "boolean") throw new ApiError(400, "explicit_retry must be a boolean");
+  if (body.explicit_retry === true && !requestedAnalysis) throw new ApiError(400, "explicit_retry requires an analysis ID");
   if(requestedAnalysis) await analysisUsageStore.owner(userId,requestedAnalysis);
-  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false};
-  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId},async()=>{
+  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),semanticSourceText:capturedSourceTexts(capture).join("\n\n") || null,title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false,semanticAnalysisVersion:"grounded-caption-v2",videoAnalysisVersion:process.env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true" ? "frames-v1" : null};
+  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId,...(body.explicit_retry === true ? { retryAnalysisId: requestedAnalysis } : {})},async()=>{
     const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
     let completed=false;
     let investigatingVersion:string|undefined;
@@ -4308,31 +4682,72 @@ async function handleCaptureSearchRecovery(
         const investigating=await pool.query("update captures set status='investigating' where id=$1 and user_id=$2 returning updated_at::text as version",[captureId,userId]);
         if(!investigating.rows[0]) throw new ApiError(404,"Capture not found");
         investigatingVersion=investigating.rows[0].version;
-        const recovery=await runSourceSearchRecovery(input,undefined,undefined,{persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence});
+        const intelligence = new LinkPlaceIntelligence(pool).extractionCache(userId,captureId,input.sourceUrl,String(capture.intelligence_stamp));
+        let extractionCacheHits = 0, correctionsApplied = 0;
+        const recovery=await runSourceSearchRecovery(input,undefined,undefined,{
+          persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence,
+          semanticAnalyzer: async source => {
+            const semantic = await analyzeSocialCaption(source, { cache:intelligence.cache,
+              onCacheUsage: event => { if (event.status === "hit") extractionCacheHits += 1; } });
+            if (semantic.status === "analysis_pending") return semantic;
+            const feedback = await intelligence.feedback(semantic).catch(() => ({result:semantic,applied:0}));
+            correctionsApplied += feedback.applied;
+            return { ...feedback.result, extractionKey:intelligence.key() };
+          },
+        });
         const client=await pool.connect();
         const createdCandidates:JsonBody[]=[];
+        const persistedSuccessorIds:string[]=[];
+        const supersededCandidateIds:string[]=[];
+        let effectiveWorkflowRunId = workflowRunId;
         const sourceResolution=recovery.sourceResolution ? sourceResolutionResponseBody(recovery.sourceResolution) : null;
         try {
           await client.query("begin");
           await client.query("set local statement_timeout='10s'");
+          await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+          const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+          const originalRun = workflowRunId ? await lockedWorkflowRun(client, workflowRunId, userId) : undefined;
           await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
-          const existing=await client.query("select name,address from place_candidates where capture_id=$1",[captureId]);
-          const keys=new Set(existing.rows.map(row=>candidateKey(row.name,row.address)));
+          const assignedRuns = new Set<string>();
           for(const candidate of recovery.candidates) {
-            const key=candidateKey(candidate.name,candidate.address);
-            if(keys.has(key)) continue;
-            keys.add(key);
-            const insert=buildInsert("place_candidates",sourceSearchCandidateBody(candidate,captureId,workflowRunId),placeCandidateFields);
-            const inserted=await client.query(`${insert.sql} returning *`,insert.values);
-            createdCandidates.push(formatPlaceCandidate(inserted.rows[0]));
+            const workflow = await captureRecoveryWorkflow(client, userId, capture, originalRun, candidate, body.explicit_retry === true, assignedRuns, recovery.errors.length === 0 && recovery.candidates.every(candidate => sameCandidateIdentity(candidate, candidate)));
+            const candidateBody = sourceSearchCandidateBody(candidate,captureId,workflow.runId);
+            const terminal = workflow.existing.find(row => ["saved", "confirmed", "rejected"].includes(String(row.status)) && sameCandidateIdentity(row, candidateBody));
+            if (terminal) candidateBody.workflow_run_id = terminal.workflow_run_id ?? null;
+            const prepared = await prepareCandidate(client, candidateBody);
+            const insert=buildInsert("place_candidates",prepared.body,placeCandidateFields);
+            const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`,insert.values)).rows[0];
+            if (!prepared.existing) await intelligence.bindCandidate(client,String(row.id),recovery.semanticInputKey);
+            if (["review", "needs_more_evidence", "saved", "confirmed"].includes(row.status)) persistedSuccessorIds.push(String(row.id));
+            if (["review", "needs_more_evidence", "source_only"].includes(row.status)) {
+              if (row.workflow_run_id) assignedRuns.add(String(row.workflow_run_id));
+              if (!createdCandidates.some(candidate => candidate.id === row.id)) createdCandidates.push(formatPlaceCandidate(row));
+            }
+            if (workflow.resultAttemptNo && workflow.runId) {
+              if (!["review", "needs_more_evidence"].includes(row.status)) throw new WorkflowConflictError("Recovery candidate changed; refresh saved places before retrying");
+              await recordPlaceRecoveryResult(workflow.runId, userId, normalizePlaceRecoveryWorkerResult({
+                result_type: "review_candidate", evidence_tier: "weak",
+                attempt_no: workflow.resultAttemptNo, explicit_retry: true,
+                candidate_refs: [row.id], evidence_refs: [captureId, row.id],
+                idempotency_key: `source-retry:${aid}`, operator_id: "save-backend",
+                permission_snapshot: { scopes: ["place_recovery.explicit_retry"] },
+              }), client);
+            }
           }
+          if (createdCandidates.length) {
+            const runIds = new Set(createdCandidates.map(candidate => stringValue(candidate.workflow_run_id)));
+            effectiveWorkflowRunId = runIds.size === 1 ? [...runIds][0] : undefined;
+          }
+          if (recovery.candidates.length && recovery.errors.length === 0) supersededCandidateIds.push(...await supersedeSourceOnlyCandidates(client, captureId, body.explicit_retry === true ? persistedSuccessorIds : undefined));
+          if (recovery.semanticStatus === "no_place_evidence" && recovery.errors.length === 0) await completeEmptySourceAnalysis(client, captureId, workflowRunId);
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
-          await client.query("update captures set status='review',source_resolution=coalesce($3::jsonb,source_resolution),updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
+          await client.query("update captures set status='review',source_resolution=case when $3::jsonb is null then source_resolution else coalesce(source_resolution,'{}'::jsonb) || $3::jsonb end,updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
+          await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
-        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
+        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.receipt.failureReason?.kind === "provider_failure" ? "failed" : recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
-        return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
+        return {source_intelligence:{extraction_cache_hits:extractionCacheHits,corrections_applied:correctionsApplied},capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
     } finally {
       if(!completed && investigatingVersion) {
@@ -4356,6 +4771,63 @@ async function handleCaptureSearchRecovery(
     result.created_candidates=current.rows.map(formatPlaceCandidate);
   }
   return sendJson(response,result);
+}
+
+// The prior run is locked before its capture. Settled user decisions remain
+// immutable; each actionable venue gets its own independently settleable run.
+async function captureRecoveryWorkflow(
+  client: PoolClient, userId: string, capture: JsonBody, original: JsonBody | undefined,
+  candidate: SourceSearchCandidate, explicitRetry: boolean, assignedRuns: Set<string>, completeBatchIdentity: boolean,
+): Promise<{ runId?: string; resultAttemptNo?: number; existing: JsonBody[] }> {
+  const { rows } = await client.query(
+    `select pc.*, wr.status as run_status, wr.credit_settlement as run_settlement,
+       wr.result_candidate_refs as run_candidate_refs,
+       exists(select 1 from workflow_receipts receipt where receipt.run_id=wr.id
+         and receipt.receipt_type='analysis' and receipt.is_current) as has_receipt
+     from place_candidates pc left join workflow_runs wr on wr.id=pc.workflow_run_id and wr.user_id=$2
+     where pc.capture_id=$1 order by pc.created_at, pc.id`, [capture.id, userId]);
+  const unchanged = { runId: original ? String(original.id) : undefined, existing: rows };
+  if (!original || (!explicitRetry && original.credit_settlement === "pending" && !["completed", "failed"].includes(String(original.status)))) return unchanged;
+  if (rows.some(row => ["saved", "confirmed", "rejected"].includes(row.status) && sameCandidateIdentity(row, candidate))) return unchanged;
+  if (!explicitRetry) throw new WorkflowConflictError("A settled workflow requires an explicit source retry");
+  if (!rows.some(row => row.workflow_run_id === original.id)) throw new WorkflowConflictError("Workflow does not belong to this capture");
+  const compatible = rows.find(row =>
+    ["review", "needs_more_evidence"].includes(row.status) && row.run_settlement === "pending"
+    && row.run_status === "needs_review" && row.has_receipt
+    && Array.isArray(row.run_candidate_refs) && row.run_candidate_refs.length === 1 && row.run_candidate_refs[0] === row.id
+    && sameCandidateIdentity(row, candidate));
+  const reusable = compatible ? String(compatible.workflow_run_id) : undefined;
+  if (reusable) {
+    const run = await lockedWorkflowRun(client, reusable, userId);
+    if (run.credit_settlement === "pending" && run.status === "needs_review") return { ...unchanged, runId: reusable };
+    throw new WorkflowConflictError("Recovery candidate changed; refresh the saved place state before retrying");
+  }
+  if (original.credit_settlement === "pending" && !assignedRuns.has(String(original.id))) {
+    const receipt = await currentAnalysisReceipt(client, String(original.id));
+    const originalCandidates = rows.filter(row => row.workflow_run_id === original.id);
+    // Spend the existing reservation on the first venue through the supported
+    // next-attempt transition; keep the earlier source-only receipt as history.
+    if ((original.result_type === "source_only_clue" || !receipt)
+      && originalCandidates.length > 0 && originalCandidates.every(isGenericSourceOnlyCandidate)
+      && completeBatchIdentity && rows.every(row => ["source_only", "rejected"].includes(row.status))) {
+      return { ...unchanged, resultAttemptNo: receipt ? Number(receipt.attempt_no) + 1 : Number(original.current_attempt_no) };
+    }
+  }
+  const input = { source_url: capture.source_url ?? undefined, source_type: capture.source_type,
+    input_ref: capture.id, credit_reserved: original.credit_reserved,
+    budget_policy: { credit_reserved: original.credit_reserved, retry_of_run_id: original.id } };
+  const run = normalizePlaceRecoveryRunCreate(input);
+  const order = await createPlaceRecoveryWorkOrder(client, userId, normalizePlaceRecoveryWorkOrderCreate(input));
+  const insert = buildInsert("workflow_runs", {
+    work_order_id: order.id, workflow_id: run.workflowId, listing_id: run.listingId, user_id: userId,
+    source_url: run.sourceUrl ?? null, source_type: run.sourceType, status: "queued",
+    current_attempt_no: 1, credit_reserved: run.creditReserved, credit_settlement: "pending",
+  }, workflowRunFields);
+  const created = (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+  await client.query("update work_orders set status='running' where id=$1 and user_id=$2", [order.id, userId]);
+  await insertCreditLedger(client, { run_id: created.id, user_id: userId, attempt_no: 1,
+    settlement_key: "reserve", delta: -run.creditReserved, reason: "reserve", settlement: "pending" });
+  return { runId: String(created.id), resultAttemptNo: 1, existing: rows };
 }
 
 async function handleMemoryCaptures(
@@ -4388,9 +4860,14 @@ async function handleMemoryCaptures(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       if(aid) await analysisUsageStore.owner(userId,aid,client);
-      const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+      const reused = await reuseCapture(client, userId, body);
+      const rows = reused ? [reused] : (await client.query(`${insert.sql} returning *`, insert.values)).rows;
+      if (!reused) rows[0] = await recordCapturedSourceText(client, rows[0], body.raw_text);
       if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatCapture(rows[0]), 201);
     } catch(error) { await client.query("rollback"); throw error; }
@@ -4449,29 +4926,50 @@ async function handleMemoryCandidates(
     if (body.workflow_run_id) await ensureWorkflowRunOwner(body.workflow_run_id, userId);
     await ensureOwnedPlaceReference(body.place_id, userId);
 
-    const insert = buildInsert("place_candidates", body, placeCandidateFields);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    return sendJson(response, formatPlaceCandidate(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+      const prepared = await prepareCandidate(client, body);
+      const insert = buildInsert("place_candidates", prepared.body, placeCandidateFields);
+      const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
+      await client.query("commit");
+      return sendJson(response, formatPlaceCandidate(row), prepared.existing ? 200 : 201);
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   if (request.method === "PATCH" && candidateId) {
     const body = writableFields(await readJson(request), ["id", "capture_id", "created_at", "updated_at"]);
+    if (body.evidence !== undefined) body.evidence = externalCandidateEvidence(body.evidence);
     await ensureOwnedPlaceReference(body.place_id, userId);
     const update = buildUpdate("place_candidates", body, placeCandidateFields);
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
     const values = [...update.values, candidateId, userId];
-    const { rows } = await pool.query(
-      `${update.sql}
-       from captures c
-       where place_candidates.capture_id = c.id
-         and place_candidates.id = $${values.length - 1}
-         and c.user_id = $${values.length}
-       returning place_candidates.*`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Candidate not found" }, 404);
-    return sendJson(response, formatPlaceCandidate(rows[0]));
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
+      const { rows } = await client.query(
+        `${update.sql}
+         from captures c
+         where place_candidates.capture_id = c.id
+           and place_candidates.id = $${values.length - 1}
+           and c.user_id = $${values.length}
+         returning place_candidates.*`, values,
+      );
+      if (!rows[0]) throw new ApiError(404, "Candidate not found");
+      if (body.status === "saved" || body.status === "confirmed") await reconcileSavedCandidates(client, userId, candidateId);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
+      await client.query("commit");
+      return sendJson(response, formatPlaceCandidate(rows[0]));
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   return sendJson(response, { error: "Unsupported memory candidates route" }, 405);
@@ -4916,6 +5414,10 @@ function isMissingRelationError(error: unknown): boolean {
 }
 
 function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: string, workflowRunId?: string): JsonBody {
+  const hasProviderIdentity = typeof candidate.placeId === "string" && candidate.placeId.trim() === candidate.placeId
+    && candidate.placeId.length > 0 && candidate.placeId.length <= 300 && !/[\u0000-\u001f\u007f]/.test(candidate.placeId)
+    && typeof candidate.latitude === "number" && Number.isFinite(candidate.latitude) && Math.abs(candidate.latitude) <= 90
+    && typeof candidate.longitude === "number" && Number.isFinite(candidate.longitude) && Math.abs(candidate.longitude) <= 180;
   return {
     capture_id: captureId,
     workflow_run_id: workflowRunId,
@@ -4924,19 +5426,13 @@ function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: 
     city: "",
     latitude: candidate.latitude ?? null,
     longitude: candidate.longitude ?? null,
-    evidence: candidate.evidence.map((text) => ({ text })),
+    evidence: [...candidate.evidence.map((text) => ({ text })),
+      ...(candidate.semanticSource ? [{ semantic_source: candidate.semanticSource }] : []),
+      ...(hasProviderIdentity ? [{ google_place_id: candidate.placeId, google_types: candidate.types ?? [] }] : [])],
     confidence: candidate.confidence,
     missing_info: candidate.missingInfo,
     status: "review",
   };
-}
-
-function candidateKey(name: string, address: string): string {
-  return `${canonicalCandidateValue(name)}|${canonicalCandidateValue(address)}`;
-}
-
-function canonicalCandidateValue(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ").trim();
 }
 
 function stringArray(value: unknown): string[] | undefined {
@@ -5394,6 +5890,8 @@ async function recordPlaceRecoveryDecision(
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
     let run = await lockedWorkflowRun(client, runId, userId);
     let currentReceipt = await currentAnalysisReceipt(client, runId);
     if (!currentReceipt) {
@@ -5486,6 +5984,7 @@ async function recordPlaceRecoveryDecision(
           "select * from workflow_receipts where id = $1",
           [replay.receipt_id],
         );
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
         return {
           created: false,
@@ -5510,6 +6009,7 @@ async function recordPlaceRecoveryDecision(
     });
     if (plan.kind === "idempotent") {
       const { rows: receiptRows } = await client.query("select * from workflow_receipts where id = $1", [plan.receiptId]);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return {
         created: false,
@@ -5518,11 +6018,17 @@ async function recordPlaceRecoveryDecision(
       };
     }
 
+    // Call site only. The places insert and cap check live inside the helper.
     await insertFinalPlaceForDecision(client, userId, decision);
     await validateDecisionReferences(client, runId, userId, stringValue(run.result_type), decision);
-    if (attemptNo !== currentAttemptNo || receiptAttemptNo !== currentAttemptNo) {
-      throw new WorkflowConflictError("A retry is already pending or the decision targets a stale attempt");
-    }
+    validateDecisionAttempt({
+      action: decision.action,
+      requestedAttemptNo: attemptNo,
+      currentAttemptNo,
+      currentAnalysisAttemptNo: receiptAttemptNo,
+      candidateId,
+      currentCandidateRefs: stringArray(run.result_candidate_refs) ?? [],
+    });
 
     const result = normalizePlaceRecoveryWorkerResult({
       result_type: run.result_type ?? "source_only_clue",
@@ -5623,6 +6129,7 @@ async function recordPlaceRecoveryDecision(
     }
     await refreshWorkflowReputationSnapshot(client, userId, updatedRun, currentReceipt);
 
+    await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
     await client.query("commit");
     return {
       created: true,
@@ -5657,7 +6164,18 @@ async function insertFinalPlaceForDecision(
     throw new WorkflowContractError("final_place requires name, address, latitude, and longitude");
   }
 
-  const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);
+  // recordPlaceRecoveryDecision already owns the raw-user lock, acquired
+  // before the workflow/candidate row locks and held through the final guard.
+  const existing = await client.query(
+    "select id from places where id = $1 and user_id = $2",
+    [decision.finalPlaceId, userId],
+  );
+  if (existing.rows[0]) {
+    throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
+  }
+  await assertNewSavedPlaceAllowed(client, userId, decision.finalPlace);
+
+  const body = withOwner(pickFields(sanitizePlaceWorkflowBody(decision.finalPlace), placeFields), userId);
   const insert = buildInsert("places", body, [...placeFields, "user_id"]);
   const { rows } = await client.query(`${insert.sql} on conflict (id) do nothing returning id`, insert.values);
   if (!rows[0]) throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
@@ -5672,13 +6190,14 @@ async function validateDecisionReferences(
 ): Promise<void> {
   if (decision.candidateId) {
     const { rows } = await client.query(
-      `select pc.id
+      `select pc.id, pc.evidence
        from place_candidates pc
        join captures c on c.id = pc.capture_id
        where pc.id = $1 and pc.workflow_run_id = $2 and c.user_id = $3`,
       [decision.candidateId, runId, userId],
     );
     if (!rows[0]) throw new ApiError(404, "Workflow candidate not found");
+    if (supersededCandidateID(rows[0])) throw new WorkflowConflictError("This source clue has been superseded; decide on its recovered candidates");
   }
   if (decision.finalPlaceId) {
     const { rows } = await client.query("select id from places where id = $1 and user_id = $2", [decision.finalPlaceId, userId]);
@@ -5703,6 +6222,7 @@ async function updateDecisionCandidateState(
   decision: UserDecisionInput,
 ): Promise<void> {
   if (!decision.candidateId) return;
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
   const status = decision.action === "reject"
     ? "rejected"
     : decision.action === "source_only"
@@ -5721,6 +6241,7 @@ async function updateDecisionCandidateState(
      where pc.capture_id = c.id and pc.id = $3 and c.user_id = $4`,
     [status, decision.finalPlaceId ?? null, decision.candidateId, userId],
   );
+  if (status === "saved" || status === "confirmed") await reconcileSavedCandidates(client, userId, decision.candidateId);
 }
 
 async function persistWorkflowResultSteps(
@@ -6271,11 +6792,82 @@ async function ensurePrivyPhoneProfile(
   }
 }
 
+async function lookupAppleLinkedPrivySubject(token: string): Promise<string> {
+  const identity = await verifiedAppleIdentity(token);
+  if (!privyUserProvisioner) {
+    throw new ApiError(503, "Apple identity linking unavailable");
+  }
+  try {
+    const privyUser = await privyUserProvisioner.findUserForApple(identity.subject);
+    if (!privyUser?.id) {
+      throw new ApiError(404, "Apple identity is not linked");
+    }
+    return privyUser.id;
+  } catch (error) {
+    if (error instanceof PrivyUserProvisioningError) {
+      throw new ApiError(error.status, error.message);
+    }
+    throw error;
+  }
+}
+
+async function verifiedAppleLinkedPrivySubject(token: string): Promise<string> {
+  const identity = await verifiedAppleIdentity(token);
+  if (!privyUserProvisioner) {
+    throw new ApiError(503, "Apple identity linking unavailable");
+  }
+  try {
+    const privyUser = await privyUserProvisioner.ensureUserForApple(identity.subject);
+    if (!privyUser.id) {
+      throw new ApiError(502, "Apple identity linking unavailable");
+    }
+    return privyUser.id;
+  } catch (error) {
+    if (error instanceof PrivyUserProvisioningError) {
+      throw new ApiError(error.status, error.message);
+    }
+    throw error;
+  }
+}
+
+async function verifiedPrivyAccessSubject(token: string): Promise<string> {
+  let appleIssuer = false;
+  try {
+    appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+  } catch {
+    appleIssuer = false;
+  }
+  if (appleIssuer) {
+    throw new ApiError(401, "Privy bearer token required");
+  }
+  return await verifiedPrivySubject(token);
+}
+
+async function verifiedBearerPrivySubject(token: string): Promise<string> {
+  let appleIssuer = false;
+  try {
+    appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+  } catch {
+    appleIssuer = false;
+  }
+  if (appleIssuer) {
+    try {
+      return await verifiedAppleLinkedPrivySubject(token);
+    } catch (error) {
+      if (error instanceof AppleIdentityTokenError) {
+        throw new ApiError(401, error.message);
+      }
+      throw error;
+    }
+  }
+  return await verifiedPrivySubject(token);
+}
+
 async function resolveUserId(request: IncomingMessage): Promise<string> {
   const header = request.headers.authorization ?? "";
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
   if (token) {
-    const privySubject = await verifiedPrivySubject(token);
+    const privySubject = await verifiedBearerPrivySubject(token);
     return await profileIdForPrivySubject(privySubject);
   }
 
@@ -6559,7 +7151,7 @@ function formatCapture(row: JsonBody): JsonBody {
 }
 
 function formatPlaceCandidate(row: JsonBody): JsonBody {
-  return formatDates(row);
+  return formatDates({ ...row, superseded_by_candidate_id: supersededCandidateID(row) ?? null, superseded_by_candidate_ids: supersededCandidateIDs(row) });
 }
 
 function formatAgentDecision(row: JsonBody): JsonBody {

@@ -121,6 +121,7 @@ enum SocialSharePlatform: String, Codable {
     case taobaoInstantCommerce = "taobao_instant_commerce"
     case tiktok
     case instagram
+    case threads
     case googleMaps
     case appleMaps
     case chinaMaps
@@ -128,7 +129,7 @@ enum SocialSharePlatform: String, Codable {
 
     var includesCaptionInAnalysis: Bool {
         switch self {
-        case .douyin, .xiaohongshu, .dianping, .meituan, .taobaoInstantCommerce, .tiktok, .instagram:
+        case .douyin, .xiaohongshu, .dianping, .meituan, .taobaoInstantCommerce, .tiktok, .instagram, .threads:
             return true
         case .googleMaps, .appleMaps, .chinaMaps, .generic:
             return false
@@ -185,14 +186,16 @@ enum SocialShareTextNormalizer {
         let captionLines = working
             .components(separatedBy: .newlines)
             .map(SocialPlaceEvidenceScorer.cleanText)
-            .filter { !$0.isEmpty && !looksLikeShareTokenNoise($0) }
+            .filter { !looksLikeShareTokenNoise($0) }
 
         return SocialShareSourceBundle(
             rawShareText: rawShareText,
             embeddedURLStrings: urls,
             primaryURLString: primary,
             platform: primary.map(platform(forURLString:)) ?? .generic,
-            captionEvidence: captionLines.joined(separator: "\n"),
+            captionEvidence: primary.map { platform(forURLString: $0).includesCaptionInAnalysis } == true
+                ? captionLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                : captionLines.filter { !$0.isEmpty }.joined(separator: "\n"),
             creatorName: creatorName
         )
     }
@@ -220,6 +223,7 @@ enum SocialShareTextNormalizer {
         if isHost(host, domain: "ele.me") { return .taobaoInstantCommerce }
         if isHost(host, domain: "tiktok.com") { return .tiktok }
         if isHost(host, domain: "instagram.com") { return .instagram }
+        if isHost(host, domain: "threads.net") || isHost(host, domain: "threads.com") { return .threads }
         if isHost(host, domain: "amap.com") || isHost(host, domain: "map.baidu.com") { return .chinaMaps }
         if host == "maps.app.goo.gl" || (isHost(host, domain: "goo.gl") && path.contains("maps")) { return .googleMaps }
         if isHost(host, domain: "google.com") && path.contains("/maps") { return .googleMaps }
@@ -291,7 +295,7 @@ enum SocialShareTextNormalizer {
             return 3
         case .tiktok:
             return 4
-        case .instagram:
+        case .instagram, .threads:
             return 5
         case .generic:
             return 6
@@ -3157,5 +3161,61 @@ struct SocialPlaceParser {
             seen.insert(key)
             return true
         }
+    }
+}
+
+/// Shared by the ink save sheet and the share extension.
+/// A link is not a place unless it names a known shop or is a map link.
+enum SavePlaceLinkGate {
+    static let notAPlaceMessage = "這則跟地點無關，所以沒有存成地點，不會出現在地圖上，也不能蓋章。"
+    static let placesKey = "save.ink.places.v1"
+
+    /// App and Share Extension both use this suite. `.standard` is per-process.
+    static func sharedPlacesDefaults() -> UserDefaults {
+        UserDefaults(suiteName: SAVEProductionConfig.appGroupSuiteName) ?? .standard
+    }
+
+    static func knownPlaceNames() -> [String] {
+        names(fromInkPlaces: sharedPlacesDefaults().data(forKey: placesKey))
+    }
+
+    static func rejects(urlString: String, evidence: String, knownPlaceNames: [String]) -> Bool {
+        let combined = [evidence, urlString].filter { !$0.isEmpty }.joined(separator: "\n")
+        guard let url = httpURL(in: urlString) ?? httpURL(in: combined) else { return false }
+        if isMapLink(url) { return false }
+        if linkedPlaceName(in: combined, knownPlaceNames: knownPlaceNames) != nil { return false }
+        return true
+    }
+
+    static func linkedPlaceName(in text: String, knownPlaceNames: [String]) -> String? {
+        knownPlaceNames
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 2 }
+            .first { text.contains($0) }
+    }
+
+    static func names(fromInkPlaces data: Data?) -> [String] {
+        guard let data,
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
+        return rows.compactMap { $0["name"] as? String }.filter { $0.count >= 2 }
+    }
+
+    private static func httpURL(in text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed), url.scheme == "http" || url.scheme == "https" {
+            return url
+        }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let url = detector.firstMatch(in: text, options: [], range: range)?.url else { return nil }
+        return (url.scheme == "http" || url.scheme == "https") ? url : nil
+    }
+
+    private static func isMapLink(_ url: URL) -> Bool {
+        let host = (url.host ?? "").lowercased()
+        return host.contains("maps.") || host.contains("openstreetmap.org") || url.path.contains("/maps")
     }
 }

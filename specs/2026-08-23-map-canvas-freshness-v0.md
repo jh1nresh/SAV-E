@@ -52,10 +52,10 @@
   it ships in a build the founder has seen rendered.
 
 - Files and systems in scope:
-  - `SAV-E/Views/Map/MapView.swift` — `.mapStyle` block, `DefaultPOIMarker`,
+  - `SAV-E/Legacy/Views/Map/MapView.swift` — `.mapStyle` block, `DefaultPOIMarker`,
     `MapMarkerState`, `CurrentLocationButton`, context badge overlay
-  - map chrome owners in `SAV-E/App/ContentView.swift` (`SaveMapRootView`
-    invocation, `AtlasTabBar` placement) and `SAV-E/Views/Home/SaveRootViews.swift`
+  - map chrome owners in `SAV-E/Legacy/App/ContentView.swift` (`SaveMapRootView`
+    invocation, `AtlasTabBar` placement) and `SAV-E/Legacy/Views/Home/SaveRootViews.swift`
   - Out of scope: backend, parsing, Review pipeline, auth, payment, Trips,
     tab structure, any Feeds/tasks/3D work discussed separately.
 

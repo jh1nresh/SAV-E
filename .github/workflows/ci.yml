@@ -4,7 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Keep required checks on the existing PR stack rooted in the #279 UI.
+    # Fast lane only. The required `ios` suite lives in ios.yml.
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+    branches:
+      - main
+      - cursor/doodle-v1-home-eef3
+      - cursor/tile-town-product-lock-4894
+      - codex/share-analysis-recovery
+      - codex/p0-provider-status
+      - codex/p1-share-keep-working
+      - codex/p1-analysis-cost-efficiency
   workflow_dispatch:
 
 permissions:
@@ -12,52 +22,29 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs share a group so superseded runs cancel. Non-PR events (main push,
+  # workflow_dispatch) use run_id so they never share a group: GitHub still
+  # drops pending jobs in a group even when cancel-in-progress is false.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  ios:
+  # Compile-only gate so an iOS compile error fails in ~10 min instead of
+  # waiting on the 75-minute unit+UI job. No tests and no simulator boot.
+  ios-build:
     runs-on: macos-26
-    # The UI suite is ~10 minutes on a healthy runner but has been observed at
-    # 3-4x that on a contended one, and failing tests are now retried.
-    timeout-minutes: 75
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2
-
-      - name: Verify CI test selection
-        run: python3 -B -m unittest discover -s Tests/ci -p 'test_*.py' -v
-
-      - name: Select iOS coverage
-        id: scope
-        env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: python3 scripts/select-ios-tests.py --output-dir "$RUNNER_TEMP"
-
-      - name: Upload test selection
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: save-test-selection-${{ github.sha }}
-          path: ${{ runner.temp }}/ios-test-selection.json
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Select Xcode 26.6
-        if: steps.scope.outputs.run == 'true'
         run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Verify toolchain
-        if: steps.scope.outputs.run == 'true'
         run: xcodebuild -version
 
-      - name: Check secrets packaging
-        if: steps.scope.outputs.run == 'true'
-        run: scripts/test-package-google-places-secrets.sh
-
       - name: Cache SwiftPM packages
-        if: steps.scope.outputs.run == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
@@ -65,8 +52,65 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-
 
+      - name: Cache DerivedData
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVE-DerivedData/Build
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
+
+      - name: Build app, Share Extension, and tests without booting a simulator
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAV-E \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build-for-testing
+
+  # Fast lane: compile already ran in ios-build, then SAVETests plus the
+  # HoP E4 screenshot UI test. Not a required check. Name is `ios-fast`
+  # so it cannot satisfy ruleset `ios`.
+  ios-fast:
+    name: ios-fast
+    if: github.event_name == 'pull_request'
+    needs: [ios-build]
+    runs-on: macos-26
+    timeout-minutes: 50
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Verify toolchain
+        run: xcodebuild -version
+
+      - name: Check secrets packaging
+        run: scripts/test-package-google-places-secrets.sh
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Cache DerivedData
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVE-DerivedData/Build
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
+
       - name: Build without booting a simulator
-        if: steps.scope.outputs.run == 'true'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -80,7 +124,6 @@ jobs:
 
       - name: Create focused test simulator
         id: simulator
-        if: steps.scope.outputs.run == 'true'
         run: |
           udid="$(xcrun simctl create \
             'SAV-E CI' \
@@ -88,100 +131,64 @@ jobs:
             'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
           # Boot now and block until the device reports ready, so first-boot
-          # work never lands inside a test's launch budget. Letting xcodebuild
-          # cold-boot the simulator is what surfaces as "Timed out while
-          # launching application via Xcode" on the first test of a step.
+          # work never lands inside a test's launch budget.
           xcrun simctl bootstatus "$udid" -b
+          xcrun simctl privacy "$udid" grant location com.wanderly.app || true
+          xcrun simctl privacy "$udid" grant location-always com.wanderly.app || true
 
       - name: Run unit tests
-        if: steps.scope.outputs.run == 'true'
+        env:
+          SAVE_GATE5_EVIDENCE_DIR: ${{ runner.temp }}/SAVE-Gate5/imagerenderer
+          SAVE_SKIP_LOCATION_PROMPT: "1"
         run: |
+          mkdir -p "$SAVE_GATE5_EVIDENCE_DIR"
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-Units.xcresult" \
             -only-testing:SAVETests \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
-      - name: Reset focused simulator before UI tests
-        if: steps.scope.outputs.ui == 'true'
+      - name: Export ImageRenderer gate 5 attachments
+        if: always()
         run: |
-          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
-          xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
-          # An erased device does first-boot work on the next boot. Do it here
-          # rather than inside the first test's app launch.
-          xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
-
-      # -retry-tests-on-failure is the backstop for simulator-level faults the
-      # test code cannot defend against (wedged backboard, "Failed to get
-      # background assertion"), which have taken out whole runs on main. It
-      # only re-runs tests that failed, so a green run costs nothing, and a
-      # genuine regression still fails all three attempts. Any retry that did
-      # happen is surfaced by the next step rather than being swallowed.
-      - name: Run selected UI regression tests
-        id: ui_tests
-        # Job budget is 75. 60 was too tight once Plan replaced Origin: unit
-        # tests plus four UI tests that needed three attempts (run 33905649737)
-        # hit the 1h wall while Home-Saves was still running.
-        timeout-minutes: 55
-        if: steps.scope.outputs.ui == 'true'
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
-        run: |
-          ui_args=()
-          while IFS= read -r argument; do
-            ui_args+=("$argument")
-          done < "$RUNNER_TEMP/ios-ui-args.txt"
-          if ((${#ui_args[@]} == 0)); then
-            echo 'UI coverage was selected but no test arguments were produced.' >&2
-            exit 1
+          mkdir -p "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          mkdir -p "$RUNNER_TEMP/SAVE-Gate5/imagerenderer"
+          if [[ -d "$RUNNER_TEMP/SAVE-Units.xcresult" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-Units.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
           fi
-          scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            "${ui_args[@]}" \
-            -test-iterations 3 \
-            -retry-tests-on-failure \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            test
+          if [[ -f "$RUNNER_TEMP/SAVE-Gate5/xcattachments/manifest.json" ]]; then
+            python3 scripts/export-gate5-named-stills.py \
+              --manifest "$RUNNER_TEMP/SAVE-Gate5/xcattachments/manifest.json" \
+              --attachments "$RUNNER_TEMP/SAVE-Gate5/xcattachments" \
+              --dest "$RUNNER_TEMP/SAVE-Gate5/imagerenderer"
+          fi
 
-      - name: Enforce Atlas production visual parity
-        if: steps.scope.outputs.ui == 'true'
+      - name: Capture simulator catalog screenshots and 60fps motion
         run: |
-          Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
-            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
-            --threshold 0.90
+          scripts/capture-map-photo-pin-gate5.sh \
+            '${{ steps.simulator.outputs.udid }}' \
+            "$RUNNER_TEMP/SAVE-Gate5"
 
-      - name: Export first-run visual evidence
-        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
-        run: |
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run"
+      - name: Upload map photo-pin gate 5 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-map-photo-pins-gate5-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/SAVE-Gate5
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Reset focused simulator before Trip sheet UI test
-        if: steps.scope.outputs.trip == 'true'
-        run: |
-          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
-          xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
-          # An erased device does first-boot work on the next boot. Do it here
-          # rather than inside the first test's app launch.
-          xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
-
-      - name: Run Trip atlas sheet family UI test
-        timeout-minutes: 15
-        if: steps.scope.outputs.trip == 'true'
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Trip-Sheets-tests.log
+      - name: Capture E4 free-cap screenshots
+        if: always() && steps.simulator.outputs.udid != ''
+        timeout-minutes: 25
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -189,47 +196,38 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable \
-            -test-iterations 3 \
-            -retry-tests-on-failure \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-E4.xcresult" \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testFreeCapE4Screenshots \
+            CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-Trip-Sheets"
 
-      # A retried test reports as a pass, which is the point — but silently
-      # passing on the second attempt is exactly how ambient flake hides. Name
-      # every test that needed more than one attempt so the trend stays visible
-      # even while the job is green.
-      - name: Report retried UI tests
-        if: always() && (steps.scope.outputs.ui == 'true')
+      - name: Export E4 screenshot attachments
+        if: always()
         run: |
-          shopt -s nullglob
-          logs=("$RUNNER_TEMP"/SAVE-*-tests.log)
-          if ((${#logs[@]} == 0)); then
-            echo "No UI test logs found; nothing to report."
-            exit 0
+          mkdir -p "$RUNNER_TEMP/SAVE-E4/xcattachments"
+          cat > "$RUNNER_TEMP/SAVE-E4/INDEX.txt" <<'EOF'
+          Ink notebook main screen (XCTAttachments from testFreeCapE4Screenshots)
+
+          Expected files under xcattachments/:
+            ink-main-signed-in — signed-in app opens on the ink notebook, no tab bar
+          Screen 14, ink-14-friends-empty.png, is the SAVETests ImageRenderer still.
+          These stills are pending founder approval.
+          EOF
+          if [[ -d "$RUNNER_TEMP/SAVE-E4.xcresult" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-E4.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-E4/xcattachments"
           fi
-          # `|| true`: this step must never be the reason a job fails. Under
-          # `bash -eo pipefail` a grep that matches nothing exits 1, which
-          # would turn "the UI step died before running any test" into a
-          # second, misleading failure right next to the real one.
-          retried="$(
-            cat "${logs[@]}" |
-              grep -oE "Test Case '-\[[^]]+\]' (passed|failed)" |
-              sed -E "s/^Test Case '-\[(.+)\]' .*/\1/" |
-              sort | uniq -c |
-              awk '$1 > 1 { printf "%s attempts: %s %s\n", $1, $2, $3 }' || true
-          )"
-          if [[ -z "$retried" ]]; then
-            echo "No UI test needed a retry."
-            exit 0
-          fi
-          while IFS= read -r line; do
-            echo "::warning title=Flaky UI test::$line"
-          done <<< "$retried"
+
+      - name: Upload E4 free-cap screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-free-cap-e4-${{ github.sha }}
+          path: ${{ runner.temp }}/SAVE-E4
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''
@@ -251,38 +249,155 @@ jobs:
           fi
           exit "$cleanup_status"
 
-      - name: Upload Atlas parity evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: save-atlas-parity-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/SAVE-Atlas-Parity
-            ${{ runner.temp }}/SAVE-First-Run
-            ${{ runner.temp }}/SAVE-Trip-Sheets
-            ${{ runner.temp }}/SAVE-*-tests.log
-          if-no-files-found: warn
-          retention-days: 14
+  # Draft-safe App Clip journal screenshots. XCTAttachments are produced on
+  # the macOS runner and uploaded as appclip-doodle-screenshots-<sha>.
+  appclip-screenshots:
+    runs-on: macos-26
+    timeout-minutes: 25
 
-      - name: Build unsigned release candidate without a simulator
-        if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Verify toolchain
+        run: xcodebuild -version
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVEClip-DerivedData/SourcePackages
+          key: clip-spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            clip-spm-${{ runner.os }}-
+
+      - name: Create focused test simulator
+        id: simulator
         run: |
-          release_plist="$RUNNER_TEMP/CI-Release-Secrets.plist"
-          trap 'rm -f "$release_plist"' EXIT
-          cp SAV-E/Resources/Secrets.plist.template "$release_plist"
-          plutil -replace GOOGLE_PLACES_API_KEY \
-            -string 'CI_BUILD_ONLY_NON_SECRET_VALUE' \
-            "$release_plist"
-          chmod 600 "$release_plist"
-          SAVE_RELEASE_SECRETS_PLIST="$release_plist" scripts/xcodebuild-clean.sh \
+          udid="$(xcrun simctl create \
+            'SAV-E Clip CI' \
+            'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' \
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Run App Clip screenshot UI tests
+        run: |
+          scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -scheme SAVEClip \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -derivedDataPath "$RUNNER_TEMP/SAVEClip-DerivedData" \
+            -only-testing:SAVEClipUITests \
+            -resultBundlePath "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+            test
+          bash scripts/extract-xcresult-attachments.sh \
+            "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
+            "$RUNNER_TEMP/appclip-doodle-screenshots"
+
+      - name: App Clip size inventory
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/appclip-doodle-screenshots"
+          python3 scripts/appclip-size-inventory.py \
+            --out "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+          {
+            echo
+            echo "## Built SAVEClip.app (Debug, not a thinning report)"
+            echo
+            find "$RUNNER_TEMP/SAVEClip-DerivedData" -name 'SAVEClip.app' -type d \
+              -exec du -sh {} \; || true
+          } >> "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+          python3 - "$RUNNER_TEMP/appclip-doodle-screenshots" "$GITHUB_SHA" <<'PY'
+          from pathlib import Path
+          import sys
+          out = Path(sys.argv[1])
+          sha = sys.argv[2]
+          (out / "11-iansui-proof.md").write_text(
+              "# Iansui proof\n\n"
+              "This VM cannot copy into `/workspace/shared/eng/2026-10-22-pr307-shots/`.\n\n"
+              "- Bundled file path: `SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf`\n"
+              "- SAVEClip resource in `SAV-E.xcodeproj/project.pbxproj`: "
+              "`Iansui-ClipTitles.ttf in SAVEClip Resources`\n"
+              "- UIFont / PostScript name in code: `Iansui-Regular` "
+              "(`ClipDisplayType.cjkName` in `SAV-EClip/ClipDoodleTheme.swift`)\n"
+              "- Register: `CTFontManagerRegisterFontsForURL` of `Iansui-ClipTitles.ttf` "
+              "in `ClipDisplayType.register`\n"
+              "- Used for: place name, list title, and state titles when locale is zh-Hant "
+              "(`ClipDisplayType.title`)\n"
+              "- Latin shop-name fallback: Iansui cascades to Caveat "
+              "(`UIFontDescriptor.AttributeName.cascadeList`)\n"
+              "- Not shipped: `Iansui-SavvySubset.ttf` (3.48 MB)\n"
+          )
+          (out / "12-screenshot-manifest.md").write_text(
+              "# Screenshot attachment names\n\n"
+              f"Artifact: `appclip-doodle-screenshots-{sha}`\n\n"
+              "QA asked for a copy into `/workspace/shared/eng/2026-10-22-pr307-shots/`. "
+              "This runner cannot write that folder; XCTAttachment names below are the "
+              "files in this artifact / xcresult.\n\n"
+              "## Requested copies\n\n"
+              "- 01-place: `01-place-zh-Hant-sender`, `02-place-en-inline`, "
+              "`place-zh-Hant-dark`, `place-en-dark`\n"
+              "- 05-state: `05-state-loading`, `05-state-expired`, `05-state-offline`, "
+              "`05-state-server`, `05-state-malformed` plus `-dark` for each\n"
+              "- save-fail: `save-fail-zh-Hant-light`, `save-fail-en-dark`\n"
+              "- skoverlay: `skoverlay-zh-Hant-light`, `skoverlay-en-dark`\n\n"
+              "## Screens 01–18 (light + dark where captured)\n\n"
+              "01. `01-place-zh-Hant-sender` / `place-zh-Hant-dark`\n"
+              "02. `02-place-en-inline` / `place-en-dark`\n"
+              "03. `03-list-zh-Hant-five-places` / `list-en-dark`\n"
+              "04. `04-list-en-light` / `list-en-dark`\n"
+              "05. `05-state-*` light + `05-state-*-dark`\n"
+              "06. `06-place-max-dynamic-type`\n"
+              "07. `saved-zh-Hant-light` / `saved-en-dark`\n"
+              "08. `cap50-zh-Hant-light` / `cap50-en-dark`\n"
+              "09. `duplicate-zh-Hant-light` / `duplicate-en-dark`\n"
+              "10. `signin-one-zh-Hant` / `signin-one-en-dark`\n"
+              "11. `signin-list-en`\n"
+              "12. `signin-fail-zh-Hant-light` / `signin-fail-en-dark`\n"
+              "13. `save-fail-zh-Hant-light` / `save-fail-en-dark`\n"
+              "14. `skoverlay-zh-Hant-light` / `skoverlay-en-dark`\n"
+              "15. `offline-dark`\n"
+              "16. `19-list-saved-zh-Hant` / `19-list-saved-en-dark`\n"
+              "17. `19b-list-partial-zh-Hant`\n"
+              "18. `19b-list-partial-en-dark`\n"
+          )
+          PY
+
+      - name: Upload App Clip screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: appclip-doodle-screenshots-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/appclip-doodle-screenshots
+            ${{ runner.temp }}/SAVEClipUITests.xcresult
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Tear down simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          cleanup_status=0
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          if ! xcrun simctl list devices |
+            grep -F '${{ steps.simulator.outputs.udid }}' |
+            grep -Fq '(Shutdown)'; then
+            echo 'Simulator shutdown could not be verified.' >&2
+            cleanup_status=1
+          fi
+          if ! xcrun simctl delete '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion failed.' >&2
+            cleanup_status=1
+          elif xcrun simctl list devices | grep -Fq '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion could not be verified.' >&2
+            cleanup_status=1
+          fi
+          exit "$cleanup_status"
 
   backend:
     uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d
@@ -290,7 +405,10 @@ jobs:
       node-version: "22"
       working-directory: backend
       lockfile: backend/package-lock.json
-      # Registry 503s are retried in backend `validate`, not the reusable audit step.
+      # Keep the reusable audit step off. `validate` already runs
+      # audit:self-test, the auto-rerun classifier tests, then
+      # audit:production (npm audit --json with retries). Enabling this
+      # flag would add a second non-retrying `npm audit`.
       check-script: validate
       audit-production: false
       job-key: save-backend
@@ -339,30 +457,3 @@ jobs:
       audit-production: true
       job-key: save-evidence-rubric
       timeout-minutes: 8
-
-  release-readiness:
-    if: github.event_name == 'push'
-    needs: [ios, backend, save-contracts, evidence-rubric]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Write release-readiness receipt
-        run: |
-          python3 scripts/write-save-release-readiness.py \
-            --output "$RUNNER_TEMP/save-release-readiness.json" \
-            --commit "$GITHUB_SHA" \
-            --repository "$GITHUB_REPOSITORY" \
-            --run-id "$GITHUB_RUN_ID" \
-            --run-attempt "$GITHUB_RUN_ATTEMPT"
-          python3 -m json.tool "$RUNNER_TEMP/save-release-readiness.json" >/dev/null
-
-      - name: Upload release-readiness receipt
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: save-release-readiness-${{ github.sha }}
-          path: ${{ runner.temp }}/save-release-readiness.json
-          if-no-files-found: error
-          retention-days: 14

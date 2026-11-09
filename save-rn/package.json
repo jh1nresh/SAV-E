@@ -11,6 +11,7 @@
     "check:import-links": "node scripts/check-import-link-fixtures.js",
     "check:friend-share": "node scripts/check-friend-share-fixtures.js",
     "check:app-clip-invoke": "node scripts/check-app-clip-invoke.js",
+    "check:in-app-browser": "node scripts/check-in-app-browser.js",
     "check:save-cards": "node scripts/check-save-card-fixtures.js",
     "check:save-actions": "node scripts/check-save-action-fixtures.js",
     "audit:production": "node scripts/check-production-audit.js"
@@ -40,15 +41,19 @@
   },
   "private": true,
   "overrides": {
-    "axios": "1.18.0",
-    "brace-expansion": "5.0.9",
+    "axios": "1.20.0",
+    "brace-expansion": "5.0.12",
+    "compression": "1.8.2",
     "hono": "4.13.1",
     "nanoid": "3.3.18",
     "postcss": "8.5.23",
+    "shell-quote": "1.12.0",
     "socket.io-parser": "4.2.7",
+    "source-map-js": "1.2.2",
     "tar": "7.5.22",
     "use-sync-external-store": "1.6.0",
     "uuid": "^11.1.1",
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "zod": "4.6.6"
   }
 }

@@ -12,11 +12,31 @@ hygiene or docs PR.
    - `friend-ratings.sql` — creates `idx_places_id_user_id` if missing, then
      the Friends rating tables. Safe on a database that has `places` but lacks
      that composite unique index.
-3. Verify (read-only), then Railway-deploy the backend, then iOS.
+   - `share-extension-sessions.sql` — after `analysis-usage.sql`; stores only
+     hashed Share Extension tokens and their bounded analysis replay records.
+   - `places-memory-meta.sql` — nullable jsonb on `places` for extra clue
+     evidence, highlights, vibe, access, and priced recommended items. Do not
+     write this into `places.note`.
+3. `backend-data-privacy.sql` — existing installs only, after the additive
+   files above. Separately authorized. Fresh `schema.sql` already includes the
+   same boundary. From `backend/`:
+   `./scripts/apply-sql.sh backend-data-privacy.sql` then
+   `./scripts/apply-sql.sh backend-data-privacy.sql --apply`.
+4. Verify (read-only), then Railway-deploy the backend, then iOS. Verify the
+   privacy apply with catalog-only readback of RLS flags, effective
+   browser-role table privileges, owned-sequence privileges on managed
+   serial/identity columns, and schema `CREATE` denied to
+   `PUBLIC`/`anon`/`authenticated`; `/health/entitlements` does not inspect
+   this boundary.
 
 `friend-ratings.sql` is self-contained for the composite FK: it creates
 `idx_places_id_user_id` with `IF NOT EXISTS` before
 `references places(id, user_id)`.
+
+Founder-only, **not** in the apply order above: `google-photo-url-cleanup.sql`
+and `google-photo-url-verify.sql`. See
+[docs/operations/google-photo-url-cleanup.md](../../docs/operations/google-photo-url-cleanup.md).
+Merge is not apply. Agents must not run them.
 
 ## Apply
 
@@ -40,7 +60,7 @@ prod URL only carries `sslmode`) is:
 
 ```bash
 PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 \
-  -f sql/friend-ratings.sql
+  -c "set search_path to public" -f sql/friend-ratings.sql
 ```
 
 If the URL has other query parameters (`options`, `target_session_attrs`,

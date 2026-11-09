@@ -70,6 +70,7 @@ export function publicRecommendationRow(row: JsonObject): JsonObject {
   return {
     ...row,
     note: null,
+    memory_meta: null,
     source_image_url: null,
     source_url: publicRecommendationSourceURL(row.source_url),
   };

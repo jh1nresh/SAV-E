@@ -15,7 +15,20 @@ import Observation
 final class SaveEntitlementStore {
     static let shared = SaveEntitlementStore()
 
-    private(set) var tier: SaveProTier = .free
+    private var confirmedTier: SaveProTier = .free
+    var tier: SaveProTier {
+        guard stateSession == currentSession() else { return .free }
+        return isFailingOpen ? (storeKit.serverVerifiedTier ?? .free) : confirmedTier
+    }
+
+    /// Local saved-place refusal may run only after this session received a
+    /// server quota. Unresolved and fail-open stay off so a Pro account is
+    /// not parked as free before `refresh()`.
+    var hasAuthoritativeSavedPlaceTier: Bool {
+        stateSession == currentSession()
+            && ["free", "pro"].contains(quota?.tier ?? "")
+            && !isFailingOpen
+    }
     private(set) var quota: SaveUsageQuotaPreview?
     private(set) var isRefreshing = false
     /// True when the server could not be reached, so the UI can avoid making
@@ -23,42 +36,71 @@ final class SaveEntitlementStore {
     private(set) var isFailingOpen = false
 
     private let storeKit: SaveStoreKitService
+    private let currentSession: () -> SaveEntitlementSession
+    private var stateSession: SaveEntitlementSession?
+    private var refreshID: UUID?
     private let loadQuota: () async throws -> SaveUsageQuotaPreview
 
     init(
         storeKit: SaveStoreKitService = .shared,
+        currentSession: @escaping () -> SaveEntitlementSession = { .current },
         loadQuota: @escaping () async throws -> SaveUsageQuotaPreview = {
             try await SupabaseService.shared.fetchUsageQuotaPreview()
         }
     ) {
         self.storeKit = storeKit
+        self.currentSession = currentSession
         self.loadQuota = loadQuota
     }
 
     // MARK: - Refresh
 
+    func resetForSessionChange() {
+        stateSession = nil
+        refreshID = nil
+        confirmedTier = .free
+        quota = nil
+        isRefreshing = false
+        isFailingOpen = false
+    }
+
     func refresh() async {
-        guard !isRefreshing else { return }
+        let session = currentSession()
+        if stateSession != session {
+            resetForSessionChange()
+            stateSession = session
+        }
+        guard session.owner != nil, !isRefreshing else { return }
+        let operation = UUID()
+        refreshID = operation
         isRefreshing = true
-        defer { isRefreshing = false }
-
+        defer {
+            if refreshID == operation {
+                isRefreshing = false
+                refreshID = nil
+            }
+        }
         await storeKit.refreshEntitlements()
-
+        guard isCurrent(session, operation: operation) else { return }
         do {
             let preview = try await loadQuota()
+            guard isCurrent(session, operation: operation) else { return }
             quota = preview
-            tier = preview.resolvedTier
+            confirmedTier = preview.resolvedTier
             isFailingOpen = false
+            NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)
         } catch {
-            // No server truth available. Keep working; do not downgrade a user
-            // who may legitimately be Pro, and do not upgrade one who is not.
-            //
-            // A tier confirmed by the backend during this session is still
-            // evidence, so it outranks the purely local StoreKit signal.
+            guard isCurrent(session, operation: operation) else { return }
             quota = nil
-            tier = storeKit.serverVerifiedTier ?? storeKit.locallyObservedTier
+            // A local Apple observation is not backend authorization, and a
+            // previous account's cached Pro tier must never cross this boundary.
+            confirmedTier = .free
             isFailingOpen = true
         }
+    }
+
+    private func isCurrent(_ session: SaveEntitlementSession, operation: UUID) -> Bool {
+        !Task.isCancelled && currentSession() == session && stateSession == session && refreshID == operation
     }
 
     // MARK: - Gate
@@ -67,7 +109,7 @@ final class SaveEntitlementStore {
     /// `shouldPresentPaywall` rather than inspecting the tier directly, so the
     /// enforcement switch stays in one place.
     func decideAIAssist() -> SaveAIAssistDecision {
-        guard let quota else { return .allowed }
+        guard stateSession == currentSession(), let quota else { return .allowed }
         return SaveAIAssistGate.decide(
             tier: tier,
             usedUnits: quota.usedUnits,
@@ -76,16 +118,29 @@ final class SaveEntitlementStore {
         )
     }
 
-    /// A paywall may only appear as a *reaction* to a refusal, and only once the
-    /// user has produced a confirmed Map Stamp. Both conditions are checked here
-    /// so no call site can bypass the trigger policy.
+    /// Model-allowance refusal is not a Pro sales trigger. AI quota never opens the places paywall.
+    /// Pro's only benefit is unlimited saved places; exhausted allowance shows a neutral notice.
     func shouldPresentPaywall(
         for decision: SaveAIAssistDecision,
         hasConfirmedMapStamp: Bool
     ) -> Bool {
-        // The value proof must exist before pricing is ever shown.
-        guard hasConfirmedMapStamp else { return false }
-        return decision.isRefusal
+        _ = decision
+        _ = hasConfirmedMapStamp
+        return false
+    }
+
+    /// Neutral copy when the monthly model allowance is used up. Not a paywall.
+    nonisolated static func exhaustedAllowanceMessage(language: AppLanguage = .english) -> String {
+        switch language {
+        case .traditionalChinese:
+            return SaveAIAssistUserCopy.exhaustedTraditionalChinese
+        case .english:
+            return SaveAIAssistUserCopy.exhaustedEnglish
+        }
+    }
+
+    func allowanceNotice(language: AppLanguage = .english) -> String? {
+        decideAIAssist().isRefusal ? Self.exhaustedAllowanceMessage(language: language) : nil
     }
 
     /// Passive Passport entry. Still requires a confirmed Map Stamp so pricing
@@ -161,4 +216,8 @@ nonisolated struct SaveEntitlementResponse: Codable, Equatable, Sendable {
     var resolvedTier: SaveProTier {
         SaveProTier(rawValue: tier) ?? .free
     }
+}
+
+extension Notification.Name {
+    static let saveEntitlementDidRefresh = Notification.Name("save.entitlementDidRefresh")
 }

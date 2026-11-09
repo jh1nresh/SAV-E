@@ -101,17 +101,9 @@ export async function runPlacePhotoBackfill(options: {
       }
 
       receipt.matched += 1;
-      receipt.wouldUpdate += 1;
-      if (!options.apply) continue;
-
-      const result = await options.query(updateMissingPlacePhotosSQL, [
-        place.id,
-        userId,
-        photoURLs[0],
-        photoURLs,
-      ]);
-      if (result.rows.length === 1) receipt.updated += 1;
-      else receipt.raced += 1;
+      // G5: Places photo URLs / references must not be persisted. place_id
+      // remains the only durable Google identifier. Report the match only.
+      receipt.skipped += 1;
     } catch {
       receipt.failed += 1;
     }
@@ -160,6 +152,7 @@ export function selectBestPhotoCandidate(
   });
 }
 
+/** Transient Places Photo URL builder. Do not write the result to storage. */
 export function persistableGooglePhotoURL(photoReference: string): string {
   const url = new URL("https://maps.googleapis.com/maps/api/place/photo");
   url.searchParams.set("maxwidth", "900");

@@ -9,8 +9,10 @@
 | [Product overview](product-overview.md) | App surfaces, stack, and product boundaries |
 | [Local setup](setup.md) | Local configuration and Xcode project generation |
 | [Verification](verification.md) | Native, backend, web, and fixture checks |
+| [Map photo-pin evidence](evidence/map-photo-pins/README.md) | DESIGN gate 5 CI ImageRenderer + simulator captures |
 | [Sharing](sharing.md) | Share routes, Universal Links, and App Clip configuration |
 | [Release and TestFlight](releasing.md) | Signing, archives, upload, and release prerequisites |
+| [App Store upload blockers](app-store-upload-blockers.md) | What blocks archive → TestFlight → ASC submit now |
 
 ## Contracts and runbooks
 
@@ -21,6 +23,8 @@
 | [Runtime agent contract](save-agent-contract.md) | Evidence and memory boundaries |
 | [Public test readiness](save-public-test-readiness.md) | Readiness checklist and evidence requirements |
 | [Backend rebuild runbook](2026-08-04-backend-rebuild-runbook.md) | Dated backend recovery procedure |
+| [Google photo URL cleanup](operations/google-photo-url-cleanup.md) | Founder-only G5 backup / cleanup / verify (not a migration) |
+| [PR 306 photo attribution evidence](evidence/pr306/README.md) | Simulator light/dark captures for G1–G8 |
 | [App Store Connect rename](app-store-connect-savvy-rename.md) | Savvy naming procedure |
 
 ## Security reviews

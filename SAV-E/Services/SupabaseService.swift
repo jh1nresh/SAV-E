@@ -1,20 +1,31 @@
 import Foundation
 
+/// Pins queued imports across token-provider suspension and every nested request.
+enum SAVEPendingImportSessionScope {
+    @TaskLocal static var current: (generation: Int, owner: String)?
+}
+
 // MARK: - Protocol
 
 protocol SupabaseServiceProtocol {
+    /// Strict confirmation must reject services whose writes are offline no-ops.
+    var isConfigured: Bool { get }
     func startAnalysis(id: UUID) async throws -> UUID?
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async
 
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data)
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
-    func updatePlace(_ place: Place) async throws
+    func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
+    func deletePlaceGroup(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate]
+    func fetchReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate]
+    func fetchReviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup]
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws
     func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder
     func createPlaceRecoveryRun(workOrderId: UUID?, sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun
@@ -80,6 +91,13 @@ protocol RelatedPlaceSourcesProviding {
 
 protocol AccountDeletionProviding {
     func deleteAccount() async throws
+    func deleteAccount(startedBy userId: String, generation: Int) async throws
+}
+
+extension AccountDeletionProviding {
+    func deleteAccount(startedBy userId: String, generation: Int) async throws {
+        try await deleteAccount()
+    }
 }
 
 // MARK: - Errors
@@ -106,8 +124,28 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    // Fakes/alternate services must explicitly opt into strict backend confirmation.
+    var isConfigured: Bool { false }
+
+    func deletePlaceGroup(_ placeId: UUID) async throws {
+        try await deletePlace(placeId)
+    }
+
+    func updatePlace(_ place: Place) async throws {
+        try await updatePlace(place, previous: nil)
+    }
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult {
+        try await recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: workflowRunId, explicitRetry: false)
+    }
+    func fetchReviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] { [] }
+    func fetchReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate] {
+        try await fetchReviewCandidates().filter { $0.captureId == captureId }
+    }
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        throw SupabaseError.notConfigured
+    }
 }
 
 // MARK: - Implementation
@@ -137,6 +175,35 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return started.analysis_id
     }
 
+    func analyzeSocialCaption(caption: String, ocrText: String?) async throws -> SocialSemanticResult {
+        if let context = SAVEAnalysisScope.current {
+            try await context.checkAllowed()
+            var fields: [String: Any] = ["caption": caption]
+            if let ocrText { fields["ocrText"] = ocrText }
+            let body = try Self.jsonBody(fields)
+            let data = try await request(path: "/v0/analysis/\(context.id.uuidString)/extract-place-clues", method: "POST", body: body)
+            let result = try JSONDecoder().decode(SocialSemanticResult.self, from: data)
+            if result.status == "analysis_pending", result.reason == "semantic_analysis_unavailable" {
+                await context.markProviderFailure()
+            }
+            return result
+        }
+        // Intents may run outside the import scope. They still need normal
+        // authentication, owned accounting and the same backend extraction.
+        let context = SAVEAnalysisContext(id: UUID())
+        do {
+            _ = try await startAnalysis(id: context.id)
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await analyzeSocialCaption(caption: caption, ocrText: ocrText)
+            }
+            await finishAnalysis(context, outcome: result.status == "ready" ? "review_candidate" : result.status == "analysis_pending" && result.reason != "source_out_of_bounds" ? "failed" : "source_only")
+            return result
+        } catch {
+            await finishAnalysis(context, outcome: error is CancellationError ? "cancelled" : "failed")
+            throw error
+        }
+    }
+
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {
         let snapshot = await context.snapshot(outcome: outcome)
         // An unstructured task can finish the receipt even when its import was cancelled.
@@ -152,7 +219,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }.value
     }
 
-    private var isConfigured: Bool {
+    var isConfigured: Bool {
         apiBaseURL != nil
     }
 
@@ -167,16 +234,36 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     /// Only the opaque JWS is sent. The server reads product, expiry, and
     /// revocation out of Apple's signature, so nothing this client asserts
     /// about its own tier is trusted.
+    func fetchPurchaseAccountToken() async throws -> UUID {
+        struct TokenResponse: Decodable { let app_account_token: UUID }
+        let data = try await request(path: "/v0/entitlements/apple/account-token")
+        return try JSONDecoder().decode(TokenResponse.self, from: data).app_account_token
+    }
+
     func registerAppleTransaction(signedTransaction: String) async throws -> SaveEntitlementResponse {
         guard isConfigured else { throw SupabaseError.notConfigured }
         let body = try Self.jsonBody(["signed_transaction": signedTransaction])
-        let data = try await request(path: "/v0/entitlements/apple", method: "POST", body: body)
-        return try JSONDecoder.supabase.decode(SaveEntitlementResponse.self, from: data)
+        do {
+            let data = try await request(path: "/v0/entitlements/apple", method: "POST", body: body)
+            return try JSONDecoder.supabase.decode(SaveEntitlementResponse.self, from: data)
+        } catch SupabaseError.apiError(let status, let body) {
+            if let error = SaveSubscriptionRegistrationError.from(status: status, body: Data(body.utf8)) { throw error }
+            throw SupabaseError.apiError(status, body)
+        }
     }
 
     func deleteAccount() async throws {
+        let session = await MainActor.run {
+            (PrivyAuthService.shared.currentUserId, PrivyAuthService.shared.sessionGeneration)
+        }
+        guard let owner = session.0 else { throw SupabaseError.notAuthenticated }
+        try await deleteAccount(startedBy: owner, generation: session.1)
+    }
+
+    func deleteAccount(startedBy userId: String, generation: Int) async throws {
         guard isConfigured else { throw SupabaseError.notConfigured }
-        try await request(path: "/v0/account", method: "DELETE")
+        try await request(path: "/v0/account", method: "DELETE",
+            accountDeletionSession: (generation, userId))
     }
 
     // MARK: - Places
@@ -187,6 +274,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/places")
 
         let rows = try JSONDecoder.supabase.decode([PlaceRow].self, from: data)
+        // `/places` is already owner-scoped by the resolved profile id. After a
+        // Privy login is linked to an existing phone/SMS profile, `userId` is
+        // the Privy subject while each row.user_id is that profile id — they
+        // are not equal, so do not compare them here.
         return rows.map { $0.toPlace() }
     }
 
@@ -194,9 +285,20 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { return }
 
         let row = PlaceRow.from(place: place, userId: userId)
-        let body = try JSONEncoder.supabase.encode(row)
+        let body = try row.encodedForRemoteWrite()
 
-        try await request(path: "/places", method: "POST", body: body)
+        do {
+            try await request(path: "/places", method: "POST", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
+    }
+
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try JSONSerialization.data(withJSONObject: ["places": items])
+        let (data, response) = try await requestWithResponse(path: "/places", method: "POST", body: body)
+        return (response.statusCode, data)
     }
 
     func saveFriendSharedPlace(
@@ -207,8 +309,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let row = PlaceRow.from(place: place, userId: userId, friendShareCode: code)
-        let body = try JSONEncoder.supabase.encode(row)
-        let data = try await request(path: "/places", method: "POST", body: body)
+        let body = try row.encodedForRemoteWrite()
+        let data: Data
+        do {
+            data = try await request(path: "/places", method: "POST", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
         let response = try JSONDecoder.supabase.decode(FriendSharedPlaceSaveResponse.self, from: data)
         guard let outcome = FriendSharedPlaceSaveResult.Outcome(rawValue: response.outcome) else {
             throw SupabaseError.invalidResponse("Savvy returned an invalid friend share save outcome")
@@ -216,34 +323,123 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return FriendSharedPlaceSaveResult(place: response.place.toPlace(), outcome: outcome)
     }
 
-    func updatePlace(_ place: Place) async throws {
+    func updatePlace(_ place: Place, previous: Place? = nil) async throws {
         guard isConfigured else { return }
 
-        let updates: [String: Any?] = [
+        var updates: [String: Any?] = [
             "name": place.name,
             "address": place.address,
             "category": place.category.rawValue,
             "status": place.status.rawValue,
-            "rating": place.rating,
-            "note": place.note,
-            // Enrichment fields: without these, business photos/hours fetched
-            // on detail open only ever lived in memory and never synced.
-            "google_place_id": place.googlePlaceId,
-            "google_rating": place.googleRating,
-            "google_price_level": place.googlePriceLevel,
-            "price_range": place.priceRange,
-            "opening_hours": place.openingHours,
-            "source_image_url": place.sourceImageUrl,
-            "business_photo_urls": place.businessPhotoUrls,
         ]
+        // Local-vault fallbacks legitimately omit remote enrichment. Send a
+        // field only when it is present on a full write, or when it actually
+        // changed versus `previous`. JSON null is reserved for an explicit
+        // non-nil-to-nil clear.
+        let hasPrevious = previous != nil
+        Self.assignChangedOptional("rating", place.rating, previous: previous?.rating, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_place_id", place.googlePlaceId, previous: previous?.googlePlaceId, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_rating", place.googleRating, previous: previous?.googleRating, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_price_level", place.googlePriceLevel, previous: previous?.googlePriceLevel, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("price_range", place.priceRange, previous: previous?.priceRange, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("opening_hours", place.openingHours, previous: previous?.openingHours, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional(
+            "source_image_url",
+            GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+            previous: GooglePlacesPhotoURL.persistableString(previous?.sourceImageUrl),
+            hasPrevious: hasPrevious,
+            into: &updates
+        )
+        // `business_photo_urls` is retired. Session photos are not written back.
+        // Account-backed attribution lives on `recommender`. Send a handle
+        // only when it is displayable and actually changed, so a photo
+        // enrichment PATCH cannot rewrite or invent one.
+        let nextHandle = SaveSourceHandle.displayable(place.recommender ?? place.sourceHandle)
+        let previousHandle = SaveSourceHandle.displayable(previous?.recommender ?? previous?.sourceHandle)
+        if previous == nil {
+            if let nextHandle { updates["recommender"] = nextHandle }
+        } else if nextHandle != previousHandle {
+            if let nextHandle {
+                updates["recommender"] = nextHandle
+            } else {
+                let nextRaw = SaveSourceHandle.stored(place.recommender ?? place.sourceHandle)
+                // Explicit user clear, or an invalid leftover (coordinate/URL).
+                // A normal edit that still has a valid previous handle and a
+                // missing local copy omits this key via nextHandle == previousHandle
+                // when both displayable values are nil.
+                if nextRaw == nil || SaveSourceHandle.looksLikeCoordinate(nextRaw ?? "") || SaveSourceHandle.looksLikeURL(nextRaw ?? "") {
+                    updates["recommender"] = NSNull()
+                }
+            }
+        }
+        if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
+            updates["source_platform"] = place.sourcePlatform.rawValue
+        }
+        if previous == nil {
+            if let sourceUrl = place.sourceUrl { updates["source_url"] = sourceUrl }
+        } else if place.sourceUrl != previous?.sourceUrl {
+            updates["source_url"] = place.sourceUrl ?? NSNull()
+        }
+        // `places.note` is the user's plain memory. Extra clue evidence,
+        // highlights, vibe, access, and priced recommended items live in
+        // `memory_meta`. Rewrite the column with the same user text when extra
+        // evidence changes so leftover SavvyMemory envelopes are healed; never
+        // dump structured memory into this field. Photo enrichment (unchanged
+        // note and memory) omits both. Assign `NSNull` for a cleared note —
+        // `[String: Any?]` drops a bare `nil` instead of sending JSON null.
+        let previousRawNote = previous?.note
+        let previousWasEnvelope = previousRawNote != nil
+            && Place.decodedWireNote(previousRawNote).note != previousRawNote
+        if previous == nil {
+            if let note = place.userFacingNote { updates["note"] = note }
+        } else if place.userFacingNote != previous?.userFacingNote
+            || previousWasEnvelope
+            || place.hasAdditionalEvidence(unlike: previous)
+            || place.hasStructuredDetails(unlike: previous) {
+            updates["note"] = place.userFacingNote ?? NSNull()
+        }
+        let nextMeta = place.memoryMetaForPersistence()
+        let previousMeta = previous?.memoryMetaForPersistence()
+        // Partial callers (photo enrichment) pass `previous` so unchanged
+        // structured memory is omitted instead of wiped.
+        if previous == nil {
+            if let nextMeta, !nextMeta.isEmpty {
+                updates["memory_meta"] = try nextMeta.jsonObject()
+            }
+        } else if nextMeta != previousMeta {
+            if let nextMeta, !nextMeta.isEmpty {
+                updates["memory_meta"] = try nextMeta.jsonObject()
+            } else if previousMeta != nil {
+                updates["memory_meta"] = try PlaceMemoryMeta.cleared.jsonObject()
+            }
+        }
+        let nextDishes = place.savedRecommendedItems.map(\.name)
+        let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
+        if previous == nil {
+            if !nextDishes.isEmpty { updates["extracted_dishes"] = nextDishes }
+        } else if nextDishes != previousDishes {
+            updates["extracted_dishes"] = nextDishes
+        }
+        if place.createdAt > .distantPast {
+            updates["created_at"] = ISO8601DateFormatter().string(from: place.createdAt)
+        }
         let body = try Self.jsonBody(updates)
 
-        try await request(path: "/places/\(place.id)", method: "PATCH", body: body)
+        do {
+            try await request(path: "/places/\(place.id)", method: "PATCH", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func deletePlace(_ placeId: UUID) async throws {
         guard isConfigured else { return }
         try await request(path: "/places/\(placeId)", method: "DELETE")
+    }
+
+    func deletePlaceGroup(_ placeId: UUID) async throws {
+        guard isConfigured else { return }
+        try await request(path: "/places/\(placeId)?scope=group", method: "DELETE")
     }
 
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {
@@ -331,6 +527,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     static func httpError(statusCode: Int, body: String) -> SupabaseError {
+        if SavePlaceLimitError.matchesServerResponse(status: statusCode, body: body) {
+            return .apiError(statusCode, body)
+        }
         if statusCode == 401 || statusCode == 403 {
             return .notAuthenticated
         }
@@ -522,7 +721,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
         let body = try Self.jsonBody([
             "analysis_id": SAVEAnalysisScope.current?.id.uuidString,
-            "source_type": "url",
+            "source_type": candidate.sourceURL == nil ? "note" : "url",
+            "created_at": ISO8601DateFormatter().string(from: candidate.savedAt),
             "source_url": candidate.sourceURL,
             "raw_text": candidate.sourceText,
             "title": candidate.candidateName,
@@ -536,7 +736,24 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID? = nil) async throws -> UUID {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
-        let evidence = candidate.evidence.map { ["text": $0] }
+        var sourceEvidence = candidate.evidence
+        if let sourceURL = candidate.sourceURL, !sourceURL.isEmpty {
+            let marker = "Source URL: \(sourceURL)"
+            sourceEvidence = [marker] + sourceEvidence.filter { $0 != marker }
+        }
+        var evidence: [[String: Any]] = sourceEvidence.map { ["text": $0] }
+        if let scope = SaveCorrectionLearning.scopeKey(for: candidate) {
+            evidence.append(["correction_scope_v1": scope])
+        }
+        if !candidate.isSourceOnly, candidate.hasReliableCoordinates,
+           let placeID = candidate.googlePlaceId, !placeID.isEmpty {
+            evidence.append(["google_place_id": placeID, "google_types": candidate.googleTypes])
+        }
+        if let original = candidate.semanticSource, !original.name.isEmpty, !original.address.isEmpty {
+            var fields: [String: Any] = ["name": original.name, "address": original.address]
+            if let branch = original.branch { fields["branch"] = branch }
+            evidence.append(["semantic_source": fields])
+        }
         let body = try Self.jsonBody([
             "capture_id": captureId.uuidString,
             "workflow_run_id": workflowRunId?.uuidString,
@@ -548,20 +765,26 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "evidence": evidence,
             "confidence": candidate.confidence,
             "missing_info": candidate.missingInfo,
-            "status": "review",
+            "status": candidate.isSourceOnly ? "source_only" : "review",
+            "created_at": ISO8601DateFormatter().string(from: candidate.savedAt),
         ])
-        let data = try await request(path: "/memory/candidates", method: "POST", body: body)
-        let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
-        return row.id
+        do {
+            let data = try await request(path: "/memory/candidates", method: "POST", body: body)
+            let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
+            return row.id
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> SourceSearchRecoveryResult {
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil, explicitRetry: Bool = false) async throws -> SourceSearchRecoveryResult {
         try await SAVEAnalysisScope.current?.checkAllowed()
         guard isConfigured else { return SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil) }
 
         let body = try Self.jsonBody([
             "workflow_run_id": workflowRunId?.uuidString,
             "include_media_evidence": true,
+            "explicit_retry": explicitRetry,
             "analysis_id": SAVEAnalysisScope.current?.id.uuidString,
         ])
         let data = try await request(
@@ -589,6 +812,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return rows.map { $0.toCandidate() }
     }
 
+    func fetchReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate] {
+        guard isConfigured else { return [] }
+        let data = try await request(path: "/memory/candidates?capture_id=\(captureId.uuidString)")
+        return try JSONDecoder.supabase.decode([PlaceCandidateRow].self, from: data).map { $0.toCandidate() }
+    }
+
+    func fetchReviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] {
+        let data = try await request(path: "/memory/duplicate-audit")
+        struct Audit: Decodable { let groups: [SaveReviewDuplicateGroup] }
+        return try JSONDecoder().decode(Audit.self, from: data).groups
+    }
+
     func fetchOriginCaptures() async throws -> [SaveOriginCapture] {
         guard isConfigured else { return [] }
 
@@ -608,7 +843,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             values["place_id"] = placeId.uuidString
         }
         let body = try Self.jsonBody(values)
-        try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+        do {
+            try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // MARK: - Place Recovery Workflow
@@ -654,8 +893,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.jsonBody(decision.body)
-        let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
-        return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
+        do {
+            let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
+            return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // MARK: - Trips
@@ -764,8 +1007,80 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func saveFriendRestaurant(placeID: UUID) async throws -> Place {
-        let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
-        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        do {
+            let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
+            return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
+    }
+
+    // Explicit follower posts, independent of the owner's private place memory.
+    func fetchSharedPosts(mine: Bool, filter: SharedPostFilter, cursor: String?) async throws -> SharedPlacePostsPage {
+        let path = Self.sharedPostsPath(base: mine ? "/v0/shared-posts/mine" : "/v0/shared-posts", filter: filter, cursor: cursor)
+        return try JSONDecoder().decode(SharedPlacePostsPage.self, from: await request(path: path))
+    }
+
+    func fetchSharedPost(id: UUID) async throws -> SharedPlacePost {
+        try JSONDecoder().decode(SharedPlacePost.self, from: await request(path: "/v0/shared-posts/\(id)"))
+    }
+
+    func fetchSharedPostPhoto(id: UUID, index: Int) async throws -> Data {
+        try await request(path: "/v0/shared-posts/\(id)/photos/\(index)")
+    }
+
+    func fetchSocialProfileCounts() async throws -> SocialProfileCounts {
+        try JSONDecoder().decode(SocialProfileCounts.self, from: await request(path: "/v0/social-profile"))
+    }
+
+    func fetchSharedPassport(authorID: String, filter: SharedPostFilter, cursor: String?) async throws -> SharedPassportPage {
+        guard let author = authorID.urlPathEncoded else { throw SupabaseError.recordNotFound }
+        let path = Self.sharedPostsPath(base: "/v0/passports/\(author)", filter: filter, cursor: cursor)
+        return try JSONDecoder().decode(SharedPassportPage.self, from: await request(path: path))
+    }
+
+    func putSharedPost(id: UUID, draft: SharedPostDraft) async throws -> SharedPlacePost {
+        guard draft.isValid else { throw SupabaseError.invalidResponse("Invalid post") }
+        let body = try JSONEncoder().encode(draft)
+        return try JSONDecoder().decode(SharedPlacePost.self, from: await request(path: "/v0/shared-posts/\(id)", method: "PUT", body: body))
+    }
+
+    func withdrawSharedPost(id: UUID) async throws {
+        try await request(path: "/v0/shared-posts/\(id)", method: "DELETE")
+    }
+
+    func saveSharedPost(id: UUID) async throws -> Place {
+        do {
+            let data = try await request(path: "/v0/shared-posts/\(id)/save", method: "POST", body: Data("{}".utf8))
+            return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
+    }
+
+    private func mappedSavedPlaceLimit(_ error: Error) -> Error {
+        if error is SavePlaceLimitError { return error }
+        if case .apiError(let status, let body) = error as? SupabaseError,
+           let limit = SavePlaceLimitError.fromServerResponse(status: status, body: body) {
+            return limit
+        }
+        return error
+    }
+
+    func fetchFollowers(cursor: String?) async throws -> SaveFollowedFriendsPage {
+        var components = URLComponents()
+        components.path = "/v0/followers"
+        components.queryItems = [URLQueryItem(name: "limit", value: "50")]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try JSONDecoder().decode(SaveFollowedFriendsPage.self, from: await request(path: components.string!))
+    }
+
+    static func sharedPostsPath(base: String, filter: SharedPostFilter, cursor: String?) -> String {
+        var components = URLComponents()
+        components.path = base
+        components.queryItems = [URLQueryItem(name: "limit", value: "24"), URLQueryItem(name: "status", value: filter.rawValue)]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return components.string ?? base
     }
 
     func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
@@ -987,14 +1302,16 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         method: String = "GET",
         body: Data? = nil,
         requiresAuth: Bool = true,
-        additionalHeaders: [String: String] = [:]
+        additionalHeaders: [String: String] = [:],
+        accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> Data {
         let (data, _) = try await requestWithResponse(
             path: path,
             method: method,
             body: body,
             requiresAuth: requiresAuth,
-            additionalHeaders: additionalHeaders
+            additionalHeaders: additionalHeaders,
+            accountDeletionSession: accountDeletionSession
         )
         return data
     }
@@ -1005,10 +1322,23 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         body: Data? = nil,
         requiresAuth: Bool = true,
         additionalHeaders: [String: String] = [:],
-        baseURLOverride: String? = nil
+        baseURLOverride: String? = nil,
+        accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> (Data, HTTPURLResponse) {
-        let friendSession: Int? = path.hasPrefix("/v0/friend-ratings")
-            ? await MainActor.run { PrivyAuthService.shared.sessionGeneration } : nil
+        let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
+        let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
+            || path.hasPrefix("/v0/entitlements/") || path == "/v0/usage/quota"
+        let friendSession: (Int, String?)?
+        if accountDeletionSession != nil {
+            // A successful deletion must still reach owner-scoped local cleanup
+            // after the account changes while the response is in flight.
+            friendSession = nil
+        } else if let importing = SAVEPendingImportSessionScope.current {
+            friendSession = (importing.generation, importing.owner)
+        } else {
+            friendSession = sessionBound
+                ? await MainActor.run { (PrivyAuthService.shared.sessionGeneration, PrivyAuthService.shared.currentUserId) } : nil
+        }
         guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
         guard let url = URL(string: "\(base)\(path)") else {
@@ -1016,9 +1346,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         var request = URLRequest(url: url)
-        if path.hasPrefix("/v0/friend-ratings") { request.cachePolicy = .reloadIgnoringLocalCacheData }
+        if isSocialRequest { request.cachePolicy = .reloadIgnoringLocalCacheData }
         request.httpMethod = method
-        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
+        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = path.hasSuffix("/extract-place-clues") ? 90 : 8 }
+        // Public video recovery includes a bounded download and frame analysis.
+        if path.hasPrefix("/memory/captures/"), path.hasSuffix("/search-recovery") {
+            request.timeoutInterval = 180
+        }
         request.setValue(SAVEAnalysisScope.current?.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         for (name, value) in additionalHeaders {
@@ -1034,8 +1368,17 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             }
         }
 
+        if let accountDeletionSession {
+            let stillCurrent = await MainActor.run {
+                PrivyAuthService.shared.sessionGeneration == accountDeletionSession.generation
+                    && PrivyAuthService.shared.currentUserId == accountDeletionSession.owner
+            }
+            guard stillCurrent else { throw CancellationError() }
+            try Task.checkCancellation()
+        }
+
         if let friendSession {
-            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession.0 && PrivyAuthService.shared.currentUserId == friendSession.1 }
             guard stillCurrent else { throw CancellationError() }
             try Task.checkCancellation()
         }
@@ -1052,6 +1395,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
                 throw CancellationError()
             }
             throw SupabaseError.networkError(error)
+        }
+
+        if let friendSession {
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession.0 && PrivyAuthService.shared.currentUserId == friendSession.1 }
+            guard stillCurrent else { throw CancellationError() }
+            try Task.checkCancellation()
         }
 
         guard let http = response as? HTTPURLResponse else {
@@ -1078,6 +1427,24 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     private static func jsonBody(_ values: [String: Any?]) throws -> Data {
         let object = values.mapValues { $0 ?? NSNull() }
         return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    private static func assignChangedOptional<Value: Equatable>(
+        _ key: String,
+        _ current: Value?,
+        previous: Value?,
+        hasPrevious: Bool,
+        into updates: inout [String: Any?]
+    ) {
+        if !hasPrevious {
+            if let current {
+                updates[key] = current
+            }
+            return
+        }
+        if current != previous {
+            updates[key] = current ?? NSNull()
+        }
     }
 }
 
@@ -1703,15 +2070,18 @@ struct PlaceRecoveryDecisionDraft: Equatable {
     var reason: String?
 
     var body: [String: Any?] {
-        [
+        var payload: [String: Any?] = [
             "action": action,
             "candidate_id": candidateId?.uuidString,
             "final_place_id": finalPlaceId?.uuidString,
-            "final_place": finalPlacePayload,
             "reason_code": reasonCode,
             "edited_payload": editedPayload,
             "reason": reason,
         ]
+        if let finalPlacePayload {
+            payload["final_place"] = finalPlacePayload
+        }
+        return payload
     }
 
     static func == (lhs: PlaceRecoveryDecisionDraft, rhs: PlaceRecoveryDecisionDraft) -> Bool {
@@ -1743,13 +2113,11 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = finalPlace.coordinateSystem { payload["coordinate_system"] = value.rawValue }
         if let value = finalPlace.locationProvider { payload["location_provider"] = value.rawValue }
         if let value = finalPlace.providerPlaceId { payload["provider_place_id"] = value }
-        if let value = finalPlace.providerMapUrl { payload["provider_map_url"] = value }
+        if let value = finalPlace.confirmableProviderMapUrl { payload["provider_map_url"] = value }
         if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
             payload["source_image_url"] = value
         }
-        if let value = GooglePlacesPhotoURL.persistableStrings(finalPlace.businessPhotoUrls) {
-            payload["business_photo_urls"] = value
-        }
+        // `business_photo_urls` is retired; do not send session photo URLs.
         if let value = finalPlace.extractedDishes { payload["extracted_dishes"] = value }
         if let value = finalPlace.priceRange { payload["price_range"] = value }
         if let value = finalPlace.recommender { payload["recommender"] = value }
@@ -1838,6 +2206,7 @@ private struct PlaceRow: Codable {
     let source_image_url: String?
     let business_photo_urls: [String]?
     let extracted_dishes: [String]?
+    let memory_meta: PlaceMemoryMeta?
     let price_range: String?
     let recommender: String?
     let google_rating: Double?
@@ -1849,7 +2218,53 @@ private struct PlaceRow: Codable {
     let friend_share_code: String?
 
     func toPlace() -> Place {
-        Place(
+        let decoded = Place.decodedWireNote(note)
+        let meta = memory_meta
+        let fromEnvelope = decoded.highlights.recommendedItems
+        let fromDishes = (extracted_dishes ?? []).map { RecommendedItem(name: $0, price: nil) }
+        let recommendedItems: [RecommendedItem]?
+        if let fromMeta = meta?.recommended {
+            if fromMeta.isEmpty {
+                recommendedItems = []
+            } else {
+                var items = fromMeta
+                for item in fromEnvelope + fromDishes {
+                    if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                        if items[index].price == nil { items[index].price = item.price }
+                    } else {
+                        items.append(item)
+                    }
+                }
+                recommendedItems = items
+            }
+        } else {
+            var items: [RecommendedItem] = []
+            for item in fromEnvelope + fromDishes {
+                if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                    if items[index].price == nil { items[index].price = item.price }
+                } else {
+                    items.append(item)
+                }
+            }
+            recommendedItems = items.isEmpty ? nil : items
+        }
+        let additional: [String]?
+        if let evidence = meta?.evidence {
+            additional = evidence.filter { line in
+                guard let source_url else { return true }
+                return line != "Source URL: \(source_url)"
+            }
+        } else {
+            let lines = decoded.additional.filter { line in
+                guard let source_url else { return true }
+                return line != "Source URL: \(source_url)"
+            }
+            additional = lines.isEmpty ? nil : lines
+        }
+        let highlights = meta?.highlights ?? (decoded.highlights.placeHighlights.isEmpty ? nil : decoded.highlights.placeHighlights)
+        let vibe = meta?.vibe ?? (decoded.highlights.vibeTags.isEmpty ? nil : decoded.highlights.vibeTags)
+        let access = meta?.access ?? (decoded.highlights.accessNotes.isEmpty ? nil : decoded.highlights.accessNotes)
+        return Place(
             id: id,
             name: name,
             address: address,
@@ -1859,7 +2274,7 @@ private struct PlaceRow: Codable {
             category: PlaceCategory(rawValue: category) ?? .food,
             status: PlaceStatus(rawValue: status) ?? .wantToGo,
             rating: rating,
-            note: note,
+            note: decoded.note,
             sourceUrl: source_url,
             sourcePlatform: SourcePlatform(rawValue: source_platform) ?? .other,
             coordinateSystem: coordinate_system.flatMap(PlaceCoordinateSystem.init(rawValue:)),
@@ -1867,16 +2282,21 @@ private struct PlaceRow: Codable {
             providerPlaceId: provider_place_id,
             providerMapUrl: provider_map_url,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(source_image_url),
-            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(business_photo_urls),
+            businessPhotoUrls: PlaceBusinessPhotoPersistence.importedRemoteURLs(business_photo_urls),
             extractedDishes: extracted_dishes,
             priceRange: price_range,
             recommender: recommender,
             googleRating: google_rating,
             googlePriceLevel: google_price_level,
             openingHours: opening_hours,
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            createdAt: memoryCollectionDate(created_at),
             visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
-            socialSignal: social_signal?.toSignal()
+            socialSignal: social_signal?.toSignal(),
+            placeHighlights: highlights,
+            recommendedItems: recommendedItems,
+            vibeTags: vibe,
+            accessNotes: access,
+            additionalSourceEvidence: additional
         )
     }
 
@@ -1892,16 +2312,17 @@ private struct PlaceRow: Codable {
             category: place.category.rawValue,
             status: place.status.rawValue,
             rating: place.rating,
-            note: place.note,
+            note: place.userFacingNote,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
             coordinate_system: place.coordinateSystem?.rawValue,
             location_provider: place.locationProvider?.rawValue,
             provider_place_id: place.providerPlaceId,
-            provider_map_url: place.providerMapUrl,
+            provider_map_url: place.confirmableProviderMapUrl,
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
-            business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
+            business_photo_urls: PlaceBusinessPhotoPersistence.importedRemoteURLs(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
+            memory_meta: place.memoryMetaForPersistence(),
             price_range: place.priceRange,
             recommender: place.recommender,
             google_rating: place.googleRating,
@@ -1912,6 +2333,23 @@ private struct PlaceRow: Codable {
             social_signal: nil,
             friend_share_code: friendShareCode
         )
+    }
+
+    /// Omits `business_photo_urls` entirely. JSON `null` would still be a
+    /// writable field on insert; founder cleanup owns clearing existing rows.
+    func encodedForRemoteWrite() throws -> Data {
+        let data = try JSONEncoder.supabase.encode(self)
+        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Place write body was not a JSON object"
+                )
+            )
+        }
+        object.removeValue(forKey: "business_photo_urls")
+        return try JSONSerialization.data(withJSONObject: object)
     }
 }
 
@@ -2028,6 +2466,8 @@ private struct SourceSearchRecoveryRow: Codable {
 }
 
 private struct PlaceCandidateRow: Codable {
+    let superseded_by_candidate_id: UUID?
+    let superseded_by_candidate_ids: [UUID]?
     let id: UUID
     let capture_id: UUID?
     let workflow_run_id: UUID?
@@ -2043,7 +2483,7 @@ private struct PlaceCandidateRow: Codable {
     let created_at: String
 
     func toCandidate() -> PlaceReviewCandidate {
-        PlaceReviewCandidate(
+        var candidate = PlaceReviewCandidate(
             id: id,
             captureId: capture_id,
             workflowRunId: workflow_run_id,
@@ -2056,13 +2496,36 @@ private struct PlaceCandidateRow: Codable {
             confidence: confidence,
             missingInfo: missing_info ?? [],
             status: status,
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+            createdAt: memoryCollectionDate(created_at)
         )
+        // Provider metadata is structured evidence, never parsed from quoted captions.
+        let identities = (evidence ?? []).filter { $0.google_place_id?.isEmpty == false }
+        if candidate.hasReliableCoordinates, candidate.status != "source_only",
+           Set(identities.compactMap(\.google_place_id)).count == 1,
+           let identity = identities.first {
+            candidate.googlePlaceId = identity.google_place_id
+            candidate.category = PlaceCategory.from(googleTypes: Array(Set(identities.flatMap { $0.google_types ?? [] })).sorted())
+        }
+        let originals = Set((evidence ?? []).compactMap(\.semantic_source))
+        if originals.count == 1, Set(identities.compactMap(\.google_place_id)).count <= 1 {
+            candidate.semanticSource = originals.first
+        }
+        let scopes = Set((evidence ?? []).compactMap(\.correction_scope_v1))
+        if scopes.count == 1, let scope = scopes.first, SaveCorrectionLearning.validScope(scope) {
+            candidate.correctionScopeKey = scope
+        }
+        candidate.supersededByCandidateID = superseded_by_candidate_id
+        candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
+        return candidate
     }
 }
 
 private struct PlaceCandidateEvidenceRow: Codable {
+    let correction_scope_v1: String?
     let text: String?
+    let google_place_id: String?
+    let google_types: [String]?
+    let semantic_source: SemanticSourceIdentity?
 }
 
 private struct TripRow: Codable {
@@ -2074,7 +2537,7 @@ private struct TripRow: Codable {
     let end_date: String?
     let is_optimized: Bool
     let created_at: String
-    let trip_stops: [TripStopRow]?
+    let trip_stops: [TripStopPersistRow]?
 
     func toTrip() -> Trip {
         let df = DateFormatter()
@@ -2107,12 +2570,12 @@ private struct TripRow: Codable {
             end_date: trip.endDate.map { df.string(from: $0) },
             is_optimized: trip.isOptimized,
             created_at: ISO8601DateFormatter().string(from: trip.createdAt),
-            trip_stops: includeStops ? trip.places.map { TripStopRow.from(stop: $0, tripId: trip.id) } : nil
+            trip_stops: includeStops ? trip.places.map { TripStopPersistRow.from(stop: $0, tripId: trip.id) } : nil
         )
     }
 }
 
-private struct TripStopRow: Codable {
+private struct TripStopPersistRow: Codable {
     let id: UUID
     let trip_id: UUID
     let place_id: UUID?
@@ -2137,8 +2600,8 @@ private struct TripStopRow: Codable {
         )
     }
 
-    static func from(stop: TripStop, tripId: UUID) -> TripStopRow {
-        TripStopRow(
+    static func from(stop: TripStop, tripId: UUID) -> TripStopPersistRow {
+        TripStopPersistRow(
             id: stop.id,
             trip_id: tripId,
             place_id: stop.placeId,
@@ -2320,6 +2783,14 @@ struct SaveListShareCodeInfo: Identifiable, Hashable {
 
 // MARK: - JSON Coding
 
+/// PostgreSQL API dates include fractional seconds. Preserve them instead of
+/// making old memories appear newly collected each time they are fetched.
+private func memoryCollectionDate(_ value: String) -> Date {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value) ?? .distantPast
+}
+
 extension JSONDecoder {
     static let supabase: JSONDecoder = {
         let d = JSONDecoder()
@@ -2341,5 +2812,19 @@ private extension String {
 
     var urlQueryEncoded: String? {
         addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+    }
+}
+
+struct SaveReviewDuplicateGroup: Decodable, Identifiable {
+    let candidateIDs: [UUID]
+    let pendingCandidateIDs: [UUID]
+    let savedPlaceIDs: [UUID]
+    let reason: String
+    var id: String { candidateIDs.map(\.uuidString).sorted().joined(separator: ":") }
+    enum CodingKeys: String, CodingKey {
+        case candidateIDs = "candidate_ids"
+        case pendingCandidateIDs = "pending_candidate_ids"
+        case savedPlaceIDs = "saved_place_ids"
+        case reason
     }
 }

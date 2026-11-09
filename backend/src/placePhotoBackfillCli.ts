@@ -10,6 +10,7 @@ async function main(): Promise<void> {
   const pool = new Pool({
     connectionString: databaseURL,
     ssl: databaseSSLConfig(databaseURL),
+    options: "-c search_path=public",
   });
   const query: BackfillQuery = async (sql, values) => {
     const result = await pool.query(sql, [...values]);

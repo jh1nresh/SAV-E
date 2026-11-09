@@ -4,6 +4,94 @@ import XCTest
 
 final class AppLanguageSettingsTests: XCTestCase {
     @MainActor
+    func testSystemLanguageUsesPreferenceOrderAndSupportedFallback() {
+        XCTAssertEqual(AppLanguageSettings.resolveSystemLanguage(["en-US", "zh-Hant-TW"]), .english)
+        XCTAssertEqual(AppLanguageSettings.resolveSystemLanguage(["zh-Hant-TW", "en-US"]), .traditionalChinese)
+        XCTAssertEqual(AppLanguageSettings.resolveSystemLanguage(["ja-JP", "en-GB", "zh-Hant"]), .english)
+        XCTAssertEqual(AppLanguageSettings.resolveSystemLanguage(["ja-JP", "zh-TW", "en"]), .traditionalChinese)
+        XCTAssertEqual(AppLanguageSettings.resolveSystemLanguage(["fr-FR"]), .english)
+        XCTAssertEqual(AppLanguageSettings.resolveSystemLanguage([]), .english)
+    }
+
+    @MainActor
+    func testDefaultFollowsSystemWithoutPersistingAnOverride() {
+        let suite = "AppLanguageSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var preferred = ["en-US", "zh-Hant"]
+        let settings = AppLanguageSettings(userDefaults: defaults, preferredLanguages: { preferred })
+        XCTAssertEqual(settings.preference, .system)
+        XCTAssertEqual(settings.language, .english)
+        XCTAssertNil(defaults.string(forKey: "save.appLanguage"))
+        let invalidated = expectation(description: "system language invalidates UI consumers")
+        withObservationTracking { _ = settings.text(.language) } onChange: { invalidated.fulfill() }
+        preferred = ["zh-Hant-TW", "en-US"]
+        settings.refreshSystemLanguage()
+        wait(for: [invalidated], timeout: 1)
+        XCTAssertEqual(settings.language, .traditionalChinese)
+        XCTAssertEqual(settings.locale.identifier, "zh-Hant")
+        XCTAssertNil(defaults.string(forKey: "save.appLanguage"))
+    }
+
+    @MainActor
+    func testManualChoicePersistsAndCanReturnToSystem() {
+        let suite = "AppLanguageSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var preferred = ["zh-Hant"]
+        let settings = AppLanguageSettings(userDefaults: defaults, preferredLanguages: { preferred })
+        settings.language = .english
+        XCTAssertEqual(settings.preference, .english)
+        settings.refreshSystemLanguage()
+        XCTAssertEqual(settings.language, .english)
+        XCTAssertEqual(AppLanguageSettings(userDefaults: defaults, preferredLanguages: { preferred }).language, .english)
+        settings.preference = .system
+        XCTAssertEqual(settings.language, .traditionalChinese)
+        preferred = ["en-US"]
+        settings.refreshSystemLanguage()
+        XCTAssertEqual(settings.language, .english)
+        XCTAssertEqual(AppLanguageSettings(userDefaults: defaults, preferredLanguages: { ["zh-Hant"] }).preference, .system)
+    }
+
+    @MainActor
+    func testExistingManualChoicesAndInvalidPreferences() {
+        let suite = "AppLanguageSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for preference in [AppLanguagePreference.english, .traditionalChinese] {
+            defaults.set(preference.rawValue, forKey: "save.appLanguage")
+            XCTAssertEqual(AppLanguageSettings(userDefaults: defaults).preference, preference)
+        }
+        defaults.set("unknown", forKey: "save.appLanguage")
+        XCTAssertEqual(AppLanguageSettings(userDefaults: defaults).preference, .system)
+    }
+
+    @MainActor
+    func testInkEnglishCopyPreservesUserContentAndVerificationMeaning() {
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(0, language: .english), "0 visits")
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(1, language: .english), "1 visit")
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(2, language: .english), "2 visits")
+        XCTAssertEqual(SaveInkSystemCopy.visitCount(1, language: .traditionalChinese), "1 次")
+        XCTAssertEqual(SaveInkSentiment.again.title(language: .english), "Would return")
+        XCTAssertEqual(SaveInkSystemCopy.text("剛存的", language: .english), "Recently saved")
+        XCTAssertEqual(SaveInkSystemCopy.text("My private note: 喜歡這家", language: .english), "My private note: 喜歡這家")
+        XCTAssertEqual(SaveInkSystemCopy.text("剛存的", language: .traditionalChinese), "剛存的")
+    }
+
+    @MainActor
+    func testEnglishSystemCopyNeverTranslatesUserNotesWithTheSameText() {
+        for note in ["剛存的", "存了，還沒去", "剛存下來，到了再按「我到了」。"] {
+            var place = recommendationPlace()
+            place.note = note
+            let row = SaveInkPlaceCatalog.row(place: place, ink: nil)
+            XCTAssertTrue(row.blurbIsUserContent)
+            XCTAssertTrue(row.detailNoteIsUserContent)
+            XCTAssertEqual(SaveInkSystemCopy.text(row.blurb, language: .english, isUserContent: row.blurbIsUserContent), note)
+            XCTAssertEqual(SaveInkSystemCopy.text(row.detailNote, language: .english, isUserContent: row.detailNoteIsUserContent), note)
+        }
+    }
+
+    @MainActor
     func testTraditionalChineseSharedLabelsDoNotFallBackToEnglish() {
         XCTAssertEqual(PlaceCategory.cafe.displayName(language: .traditionalChinese), "咖啡")
         XCTAssertEqual(PlaceStatus.wantToGo.memoryCardLabel(language: .traditionalChinese), "地圖章")

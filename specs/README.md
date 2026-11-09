@@ -122,7 +122,7 @@ Existing filenames remain stable so prior PR links and script references continu
 - [Launch: Purchase Path Ready, Trigger Later](2026-09-04-launch-purchase-path-trigger-later-v0.md)
 - [Savvy — App Store Listing (1.0.0)](app-store-listing.md)
 - [App Store Screenshot Refresh v5](app-store-screenshot-brief-v5.md)
-- [Savvy — App Store Launch Checklist (1.0.0 / build 103)](launch-checklist.md)
+- [Savvy — App Store Launch Checklist (1.0.0 / build 110)](launch-checklist.md)
 - [Launch Without A Paywall](launch-without-paywall.md)
 - [Usage Metering + Quota Preview v0](usage-metering-quota-preview-v0.md)
 

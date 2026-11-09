@@ -1,14 +1,86 @@
 import CoreLocation
+import ImageIO
+import UIKit
 import SwiftUI
 import XCTest
 @testable import SAVE
 
 final class AtlasOneJobPerTabUITests: XCTestCase {
+    @MainActor
+    func testUnratedPostEncodesExplicitNullAndNoPrivateFields() throws {
+        let draft = SharedPostDraft(status: .wantToGo, stars: nil, caption: "")
+        XCTAssertTrue(draft.isValid)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+        XCTAssertTrue(json["stars"] is NSNull)
+        XCTAssertEqual(json["status"] as? String, "wantToGo")
+        XCTAssertEqual(Set(json.keys), ["status", "stars", "caption"])
+        XCTAssertFalse(SharedPostDraft(status: .wantToGo, stars: 4, caption: "").isValid)
+        XCTAssertFalse(SharedPostDraft(status: .visited, stars: .nan, caption: "").isValid)
+        XCTAssertFalse(SharedPostDraft(status: .visited, stars: nil, caption: String(repeating: "a", count: 501)).isValid)
+        XCTAssertTrue(SharedPostDraft(status: .visited, stars: 4.5, caption: String(repeating: "a", count: 500)).isValid)
+    }
+
+    @MainActor
+    func testPostPhotosEncodeOnlyExplicitAttachmentsAndBoundPayloads() throws {
+        var draft = SharedPostDraft(status: .wantToGo, stars: nil, caption: "", photos: [])
+        let empty = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+        XCTAssertEqual(empty["photos"] as? [String], [])
+        draft.photos = [Data([1, 2, 3])]
+        let selected = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+        XCTAssertEqual(selected["photos"] as? [String], ["AQID"])
+        XCTAssertEqual(Set(selected.keys), ["status", "stars", "caption", "photos"])
+        draft.photos = Array(repeating: Data([1]), count: 3)
+        XCTAssertTrue(draft.isValid)
+        draft.photos?.append(Data([1]))
+        XCTAssertFalse(draft.isValid)
+        draft.photos = [Data(count: SharedPostDraft.maxPhotoBytes + 1)]
+        XCTAssertFalse(draft.isValid)
+        draft.photos = [Data()]
+        XCTAssertFalse(draft.isValid)
+    }
+
+    @MainActor
+    func testSelectedPhotoIsDownsampledWithoutGPSOrEXIF() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 2400, height: 1800), format: format).image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2400, height: 1800))
+        }
+        let original = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(original as CFMutableData, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try XCTUnwrap(image.cgImage), [
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 25.0, kCGImagePropertyGPSLatitudeRef: "N"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: "PRIVATE FIXTURE"]
+        ] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let result = try SharedPostPhotoEncoder.jpeg(from: original as Data)
+        XCTAssertLessThanOrEqual(result.count, SharedPostDraft.maxPhotoBytes)
+        XCTAssertNotNil(result.range(of: Data([0xff, 0xc0])), "The server accepts baseline JPEG frames.")
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(result as CFData, nil))
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        XCTAssertLessThanOrEqual(try XCTUnwrap(properties[kCGImagePropertyPixelWidth] as? Int), 1200)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(properties[kCGImagePropertyPixelHeight] as? Int), 1200)
+        XCTAssertNil(properties[kCGImagePropertyGPSDictionary])
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        XCTAssertNil(exif?[kCGImagePropertyExifUserComment])
+        XCTAssertThrowsError(try SharedPostPhotoEncoder.jpeg(from: Data("not an image".utf8)))
+    }
+
+    @MainActor
+    func testPostPaginationEncodesCursorWithoutChangingFilter() throws {
+        let path = SupabaseService.sharedPostsPath(base: "/v0/shared-posts/mine", filter: .visited, cursor: "a+/=&cursor")
+        let components = try XCTUnwrap(URLComponents(string: path))
+        XCTAssertEqual(components.path, "/v0/shared-posts/mine")
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "cursor" })?.value, "a+/=&cursor")
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "status" })?.value, "visited")
+    }
+
     func testPrimaryLoadingSurfacesShareTheAtlasLoadingCard() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
-        let trips = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
-        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let trips = try source(at: "SAV-E/Legacy/Views/Trips/TripPackViews.swift")
+        let drawer = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
 
         XCTAssertTrue(theme.contains("struct SaveAtlasLoadingCard"))
         XCTAssertTrue(theme.contains("SavePostcardPerforatedMedallion"))
@@ -21,7 +93,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testLiveHomeLeadsWithSavedPlacesAndKeepsSecondaryManagement() throws {
-        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let screens = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
         let home = try typeBody("HomeAtlasScreen", in: screens)
         let library = try typeBody("HomeSavedPlacesLibrary", in: screens)
         let reviewTicket = try typeBody("ReviewTicket", in: screens)
@@ -60,16 +132,27 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             "A tall saved-place list must top-align or it covers BrandHeader."
         )
         XCTAssertTrue(library.contains(".clipped()"))
+        XCTAssertTrue(library.contains("SaveHomeSearch()"))
+        XCTAssertTrue(library.contains("filter(search.matches)"))
+        XCTAssertFalse(library.contains("SpriteKit"))
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
+        let saveHome = try typeBody("SaveHomeView", in: try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift"))
+        XCTAssertTrue(saveHome.contains("SaveDoodleHomeView("))
+        XCTAssertFalse(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertTrue(saveHome.contains("SaveHomeReviewQueue.previewIDs"))
+        XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
+        let bridge = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
+        XCTAssertTrue(bridge.contains("searchPlace: place"))
+        XCTAssertTrue(bridge.contains("SaveHomeReviewQueue.isSourceClue"))
     }
 
     func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {
-        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let screens = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
         let row = try typeBody("HomeSavedPlaceRow", in: screens)
         let hero = try typeBody("HomeFeaturedPlaceHero", in: screens)
         let thumbnail = try typeBody("HomeSavedPlaceThumbnail", in: screens)
-        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let bridge = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
 
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(row.contains("placeID: place.id"))
@@ -96,7 +179,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(screens.contains("mapOptions.mapType = .hybrid"))
         XCTAssertTrue(bridge.contains("HomePlaceCardArt.photoURL(for: place)"))
 
-        let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let home = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(bridge.contains("await mapViewModel.refreshHomePlacePhoto(id: placeID)"))
         XCTAssertTrue(home.contains("ReviewDemo.isOfflineUITestMode"))
 
@@ -274,19 +357,32 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     func testVisualParityPrefersTheLiveFiveTabHome() throws {
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
-        let workflow = try source(at: ".github/workflows/ci.yml")
+        let workflow = try source(at: ".github/workflows/ios.yml")
         let selector = try source(at: "scripts/select-ios-tests.py")
         let baseline = try source(at: "Tests/ci/full-ui-baseline.json")
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
+        XCTAssertTrue(script.contains("five-tab-capture*)"))
+        XCTAssertTrue(script.contains("five-tab-paywall*)"))
+        XCTAssertTrue(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("priority=1"))
+        XCTAssertTrue(script.contains("--ignore-rects"))
+        XCTAssertTrue(script.contains("24,132,354,176;24,444,354,22;24,698,354,50"))
+        XCTAssertFalse(script.contains("0,432,402,104"))
+        XCTAssertFalse(script.contains("0,728,402,146"))
+        XCTAssertTrue(selector.contains("\"testDoodlePaywallParity\""))
+        XCTAssertTrue(
+            baseline.contains(
+                "SAVEUITests/SAVEScreenshotRailTests/testDoodlePaywallParity"
+            )
+        )
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
-        // select-ios-tests.py. The live five-tab Home capture must stay in
-        // BASELINE (every UI route) and the frozen full list, or visual
-        // parity falls back to the older atlas-home attachment.
+        // select-ios-tests.py. The required `ios` job still uses that wiring.
+        // Founder 2026-11-01: the suite that runs is the ink notebook.
         XCTAssertTrue(selector.contains("\"testCaptureFiveTabLanding\""))
-        XCTAssertTrue(selector.contains("BASELINE[:2]"))
+        XCTAssertTrue(selector.contains("FULL = list(INK)"))
+        XCTAssertFalse(selector.contains("BASELINE[:2]"))
         XCTAssertTrue(
             baseline.contains(
                 "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding"
@@ -297,16 +393,28 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(workflow.contains("run-visual-parity.sh"))
         XCTAssertTrue(workflow.contains("$RUNNER_TEMP/SAVE-UI.xcresult"))
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
-        XCTAssertTrue(rail.contains("home.photoHero"))
-        XCTAssertTrue(rail.contains("pngRepresentation.count"))
-        XCTAssertTrue(
-            rail.contains("1_200_000"),
-            "Parity attach must wait for painted Home covers, not the pin fallback."
-        )
+        XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
+        XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(rail.contains("--uitest-doodle-parity-fixture"))
+        XCTAssertTrue(rail.contains("Home has no map component"))
+        XCTAssertFalse(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(rail.contains("func testHomeShowOnMapFocusesPlace"))
+        XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
+        XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
+        XCTAssertTrue(rail.contains("func testMapSavedUnsavedVisitedTaipeiFixture"))
+        XCTAssertTrue(rail.contains("home.eat"))
+        XCTAssertTrue(rail.contains("home.passport"))
+        XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
+        XCTAssertTrue(selector.contains("testFreeCapE4Screenshots"))
+        XCTAssertTrue(selector.contains("testInkNotebookReachesEveryScreenAndReturnsHome"))
+        XCTAssertFalse(selector.contains("testHomeListProgressiveSearch"))
+        XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertFalse(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
-        let review = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let review = try source(at: "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift")
         let card = try typeBody("ReviewCandidateDetailCard", in: review)
         let header = try XCTUnwrap(
             review.components(separatedBy: "private func reviewPostcardHeader").dropFirst().first
@@ -339,18 +447,23 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testSavesQueueIsContinuousAndKeepsCaptureCoral() throws {
-        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let saves = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("firstViewportTicketLimit = 3"))
         XCTAssertTrue(saves.contains("SaveAtlasPalette.coral.opacity(0.92)"))
         XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
         XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
+        XCTAssertTrue(saves.contains("saves.place.\\(place.id.uuidString)"))
+        XCTAssertFalse(
+            saves.contains("saves.mapStamp.postcard"),
+            "A generic postcard identifier must not steal saves.place.<uuid> from the Map Stamp ticket."
+        )
     }
 
     func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {
-        let file = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let file = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         let saves = try typeBody("SaveLibraryView", in: file)
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
 
         // Failure fixture: after #157 demoted Saves off the root bar, the
         // page still padded for ReferenceViewport status bar (48) and the
@@ -372,7 +485,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testTripsKeepsOneSecondaryTicket() throws {
-        let trips = try typeBody("TripsAtlasScreen", in: try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift"))
+        let trips = try typeBody("TripsAtlasScreen", in: try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift"))
         XCTAssertTrue(trips.contains("tripRecommendations.first"))
         XCTAssertTrue(trips.contains("tripSummaries.dropFirst().first"))
         XCTAssertFalse(trips.contains("prefix(2)"))
@@ -380,9 +493,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testMapRestStateHasNoDefaultPlaceCard() throws {
-        let map = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
-        let markers = try source(at: "SAV-E/Views/Map/MapView.swift")
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let markers = try source(at: "SAV-E/Legacy/Views/Map/MapView.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(map.contains("if let place = mapViewModel.selectedPlace"))
         XCTAssertTrue(map.contains("} else if !hidesCommandShelf"))
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
@@ -413,11 +526,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testMapSearchIsDockedWithParkedDetents() throws {
-        let shelf = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
-        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
-        let map = try source(at: "SAV-E/Views/Map/MapView.swift")
-        let root = try source(at: "SAV-E/App/ContentView.swift")
-        let tabBar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let shelf = try source(at: "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let panel = try source(at: "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift")
+        let map = try source(at: "SAV-E/Legacy/Views/Map/MapView.swift")
+        let root = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let tabBar = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
 
         XCTAssertTrue(root.contains("SaveMapDrawerPanel("))
         XCTAssertTrue(root.contains("hidesCommandShelf: true"))
@@ -467,15 +580,18 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             map.contains("alignment: .topTrailing"),
             "Locate must not return to the pre-#184 top-trailing burial workaround."
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             tabBar.contains(".glassEffect("),
-            "Tab-bar glass stays parked on AtlasTabBar; this ticket must not move it."
+            "Founder lock 2026-10-15: the root bar is a flat pixel slab, not floating glass."
         )
+        XCTAssertTrue(tabBar.contains("AtlasPalette.canvas"))
+        XCTAssertTrue(tabBar.contains("AtlasPalette.stroke"))
+        XCTAssertFalse(tabBar.contains(".clipShape(Capsule())"))
     }
 
     func testMapSearchShelfTapFocusesAndDragDoesNot() throws {
-        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
-        let root = try source(at: "SAV-E/App/ContentView.swift")
+        let panel = try source(at: "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift")
+        let root = try source(at: "SAV-E/Legacy/App/ContentView.swift")
         XCTAssertTrue(panel.contains("guard !collapsedDragConsumedTap else { return }"))
         XCTAssertTrue(panel.contains("onExpand(true)"))
         XCTAssertTrue(panel.contains("if stage == .collapsed { onExpand(false) }"))
@@ -485,19 +601,28 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testPassportPutsLanguageAndProBehindDisclosure() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         let disclosure = try identifierBody("profile.controlsDisclosure", in: passport)
         XCTAssertTrue(passport.contains("profile.stampLedger"))
         XCTAssertTrue(disclosure.contains("profile.language"))
         XCTAssertTrue(disclosure.contains("profile.pro"))
+        XCTAssertTrue(
+            disclosure.contains(".accessibilityElement(children: .contain)"),
+            "Disclosure must expose profile.pro as its own control, not flatten into profile.controlsDisclosure"
+        )
         XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }
 
+    @MainActor
     func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
+        let page = try source(at: "SAV-E/Legacy/Views/Profile/SaveDoodlePassportView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
 
+        XCTAssertFalse(SaveDoodlePassportFlags.showTodayMissions)
+        XCTAssertFalse(SaveDoodlePassportFlags.showFieldStreak)
+        XCTAssertFalse(SaveDoodlePassportFlags.showStampLedger)
         XCTAssertTrue(passport.contains("if !todayMissions.isEmpty"))
         XCTAssertTrue(passport.contains("PassportTodayOnSavvyStrip"))
         XCTAssertTrue(passport.contains("Your quests"))
@@ -507,6 +632,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
         XCTAssertTrue(passport.contains("profile.connections"))
         XCTAssertTrue(passport.contains("opensConnections = true"))
+        XCTAssertTrue(passport.contains("opensCollected"))
         XCTAssertTrue(passport.contains("onReviewAll()"))
         XCTAssertTrue(content.contains("onReviewAll:"))
         XCTAssertTrue(content.contains("pathByOpening"))
@@ -516,15 +642,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
         XCTAssertFalse(passport.contains("profile.activityDisclosure"))
-
-        XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
-            < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
-            < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
-            < passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
-            < passport.range(of: "profile.controlPocket")!.lowerBound)
+        XCTAssertTrue(page.contains("SaveDoodlePassportPage"))
+        XCTAssertTrue(passport.contains("SharedPostsGrid"))
+        XCTAssertTrue(passport.contains("profile.cover"))
+        XCTAssertTrue(passport.contains("profile.controlPocket"))
+        XCTAssertTrue(passport.contains("PassportCountingRulesPanel"))
+        XCTAssertTrue(passport.contains("PassportVisibilityPanel"))
         XCTAssertTrue(passport.range(of: "profile.controlPocket")!.lowerBound
             < passport.range(of: "PassportCountingRulesPanel")!.lowerBound)
         XCTAssertTrue(passport.range(of: "PassportCountingRulesPanel")!.lowerBound
@@ -539,24 +662,37 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(passport.contains("serverVerifiedTier"))
     }
 
-    func testPrimaryHeadersUseTheCurrentSavvyLogo() throws {
-        let components = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+    func testPrimaryHeadersUseTheCurrentSavvyBrandTreatment() throws {
+        let components = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Components.swift")
         let brandHeader = try typeBody("BrandHeader", in: components)
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let root = try source(at: "SAV-E/Legacy/Views/Home/SaveRootViews.swift")
         let rootHeader = try typeBody("SaveAtlasBrandHeader", in: root)
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let profile = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
         let passportTopBar = try typeBody("PassportTopBar", in: profile)
 
         XCTAssertTrue(brandHeader.contains("Image(\"SavvyLogo\")"))
-        XCTAssertFalse(brandHeader.contains("MemoMascotMark"))
+        XCTAssertFalse(brandHeader.contains("SavvyBrandMark"))
         XCTAssertTrue(rootHeader.contains("Image(\"SavvyLogo\")"))
-        XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
-        XCTAssertTrue(passportTopBar.contains("Image(\"SavvyLogo\")"))
+        XCTAssertTrue(rootHeader.contains("accessibilityIdentifier(\"root.passport\")"))
+        XCTAssertTrue(rootHeader.contains("Open Savvy Passport"))
+        XCTAssertFalse(rootHeader.contains("SavvyBrandMark"))
+        XCTAssertTrue(passportTopBar.contains("SaveDisplayTitle(text: \"Savvy\""))
+        XCTAssertTrue(passportTopBar.contains("accessibilityLabel(\"Savvy\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
+
+        let saveHome = try typeBody("SaveHomeView", in: root)
+        let screens = try source(at: "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift")
+        let home = try typeBody("HomeAtlasScreen", in: screens)
+        XCTAssertTrue(saveHome.contains("SaveDoodleHomeView("))
+        XCTAssertFalse(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertFalse(saveHome.contains("SaveHomeMemoryView"))
+        XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
+        XCTAssertTrue(saveHome.contains("onOpenPassport: onOpenPassport"))
+        XCTAssertTrue(home.contains("home.more"))
     }
 
     func testOriginCommunityCardCanReshareWithoutPublishingPrivateClues() throws {
-        let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+        let origin = try source(at: "SAV-E/Legacy/Views/Origin/SaveOriginView.swift")
 
         XCTAssertTrue(origin.contains("SavePlaceShareButton(content: .communityRecommendation(place))"))
         XCTAssertTrue(origin.contains("origin.reshare.\\(place.id.uuidString)"))
@@ -565,16 +701,18 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     func testPassportActionsSharePlacesAndKeepBulkImportInCapture() throws {
-        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let passport = try source(at: "SAV-E/Legacy/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/Legacy/App/ContentView.swift")
+        let capture = try source(at: "SAV-E/Legacy/Views/Capture/SaveCaptureFlowView.swift")
 
         XCTAssertTrue(passport.contains("SavePlaceShareButton(content: .place(place))"))
         XCTAssertTrue(passport.contains("profile.share.\\(place.id)"))
         XCTAssertTrue(passport.contains(".contentShape(Rectangle())"))
         XCTAssertFalse(passport.contains("profile.importGoogleTakeout"))
 
-        XCTAssertTrue(content.contains("capture.importGoogleTakeout"))
-        XCTAssertTrue(content.contains("GoogleTakeoutImportView("))
+        XCTAssertTrue(capture.contains("capture.importGoogleTakeout"))
+        XCTAssertTrue(capture.contains("GoogleTakeoutImportView("))
+        XCTAssertTrue(capture.contains("if isGoogleTakeoutPresented"))
         XCTAssertTrue(content.contains("onSaveGoogleTakeoutImport: { drafts in"))
     }
 
@@ -584,25 +722,22 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             "SAV-E/Services/SaveStoreKitService.swift",
         ]
         let oneJobSwiftFiles: Set<String> = [
-            "Prototypes/AtlasPostcard/Sources/Presentation.swift",
-            "Prototypes/AtlasPostcard/Sources/Screens.swift",
-            "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift",
-            "SAV-E/Views/Drawer/AIDrawerView.swift",
-            "SAV-E/Views/Home/SaveRootViews.swift",
-            "SAV-E/Views/Profile/ProfileView.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Presentation.swift",
+            "Prototypes/AtlasPostcard/Legacy/Sources/Screens.swift",
+            "SAV-E/Legacy/Views/Atlas/SaveAtlasProductionBridge.swift",
+            "SAV-E/Legacy/Views/Drawer/AIDrawerView.swift",
+            "SAV-E/Legacy/Views/Home/SaveRootViews.swift",
+            "SAV-E/Legacy/Views/Profile/ProfileView.swift",
             "Tests/SocialPlacePipelineTests/AtlasOneJobPerTabUITests.swift",
         ]
         XCTAssertTrue(grantPathFiles.isDisjoint(with: oneJobSwiftFiles))
 
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
-        // The literal here must match the shipped grant path. The original
-        // assertion looked for "serverVerifiedTier ?? locallyObservedTier",
-        // a string that has never existed in this file (the call is qualified
-        // with `storeKit.`), so it could only ever have failed. It never did,
-        // because the file was not a member of any build target.
-        XCTAssertTrue(
-            store.contains("storeKit.serverVerifiedTier ?? storeKit.locallyObservedTier")
-        )
+        // Presentation must not promote a local Apple observation into Pro.
+        // Purchase, restore and offline expiry behavior is exercised by
+        // SaveEntitlementWiringTests against the real service types.
+        XCTAssertTrue(store.contains("storeKit.serverVerifiedTier"))
+        XCTAssertFalse(store.contains("storeKit.locallyObservedTier"))
     }
 
     private func typeBody(_ typeName: String, in source: String) throws -> String {

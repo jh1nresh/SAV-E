@@ -37,25 +37,71 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppLanguagePreference: String, CaseIterable, Identifiable {
+    case system
+    case english = "en"
+    case traditionalChinese = "zh-Hant"
+
+    var id: String { rawValue }
+
+    func displayName(language: AppLanguage) -> String {
+        switch self {
+        case .system:
+            return language.localized(english: "Follow iOS", traditionalChinese: "跟隨 iOS")
+        case .english: return AppLanguage.english.displayName
+        case .traditionalChinese: return AppLanguage.traditionalChinese.displayName
+        }
+    }
+}
+
 @Observable
 final class AppLanguageSettings: ObservableObject {
     @ObservationIgnored private let storageKey = "save.appLanguage"
     @ObservationIgnored private let userDefaults: UserDefaults
+    @ObservationIgnored private let preferredLanguages: () -> [String]
+    private var systemLanguage: AppLanguage
 
-    var language: AppLanguage {
+    var preference: AppLanguagePreference {
         didSet {
-            userDefaults.set(language.rawValue, forKey: storageKey)
+            userDefaults.set(preference.rawValue, forKey: storageKey)
+            refreshSystemLanguage()
         }
     }
 
-    init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
-        let storedLanguage = userDefaults.string(forKey: storageKey)
-        self.language = AppLanguage(rawValue: storedLanguage ?? "") ?? Self.defaultLanguageFromLocale()
+    /// Keep existing consumers and explicit language assignments working.
+    var language: AppLanguage {
+        get {
+            switch preference {
+            case .system: return systemLanguage
+            case .english: return .english
+            case .traditionalChinese: return .traditionalChinese
+            }
+        }
+        set {
+            preference = newValue == .english ? .english : .traditionalChinese
+        }
     }
 
-    private static func defaultLanguageFromLocale() -> AppLanguage {
-        Locale.preferredLanguages.contains { $0.hasPrefix("zh") } ? .traditionalChinese : .english
+    var locale: Locale { Locale(identifier: language.rawValue) }
+
+    init(
+        userDefaults: UserDefaults = .standard,
+        preferredLanguages: @escaping () -> [String] = { Locale.preferredLanguages }
+    ) {
+        self.userDefaults = userDefaults
+        self.preferredLanguages = preferredLanguages
+        self.systemLanguage = Self.resolveSystemLanguage(preferredLanguages())
+        self.preference = AppLanguagePreference(rawValue: userDefaults.string(forKey: storageKey) ?? "") ?? .system
+    }
+
+    static func resolveSystemLanguage(_ preferences: [String]) -> AppLanguage {
+        let supported = AppLanguage.allCases.map(\.rawValue)
+        let resolved = Bundle.preferredLocalizations(from: supported, forPreferences: preferences).first
+        return AppLanguage(rawValue: resolved ?? "") ?? .english
+    }
+
+    func refreshSystemLanguage() {
+        systemLanguage = Self.resolveSystemLanguage(preferredLanguages())
     }
 
     func text(_ key: SaveTextKey) -> String {
@@ -280,7 +326,7 @@ enum SaveText {
         case .accountManagedByLogin:
             return localized(english: "Email and sign-in provider stay managed by your login account.", traditionalChinese: "電子信箱與登入方式仍由你的登入帳號管理。", language: language)
         case .localMemoHelper:
-            return localized(english: "Local Memo helper", traditionalChinese: "本機 Memo 小助手", language: language)
+            return localized(english: "Local Savvy helper", traditionalChinese: "本機 Savvy 小助手", language: language)
         case .memoHelper:
             return localized(english: "MEMO HELPER", traditionalChinese: "MEMO 助手", language: language)
         case .reviewFirst:
@@ -312,7 +358,7 @@ enum SaveText {
         case .chooseLanguage:
             return localized(english: "Choose Language", traditionalChinese: "選擇語言", language: language)
         case .languageDescription:
-            return localized(english: "Savvy will use this language inside the app.", traditionalChinese: "Savvy 會在 app 內使用你選的語言。", language: language)
+            return localized(english: "Choose English or Traditional Chinese, or follow your iOS language settings.", traditionalChinese: "選擇英文、繁體中文，或跟隨 iOS 的語言設定。", language: language)
         case .signOut:
             return localized(english: "Sign Out", traditionalChinese: "登出", language: language)
         case .askPlaceholder:

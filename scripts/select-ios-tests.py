@@ -9,12 +9,27 @@ import subprocess
 from pathlib import Path
 
 RAIL = "SAVEUITests/SAVEScreenshotRailTests/"
+# Founder 2026-11-01: the five-tab shell is gone. The suite opens the ink notebook.
+INK = [
+    RAIL + "testFreeCapE4Screenshots",
+    RAIL + "testInkNotebookReachesEveryScreenAndReturnsHome",
+    RAIL + "testInkNotebookEmptyFriendsReachesScreen14AndReturnsHome",
+    RAIL + "testF10HomeControlsSpeakChinese",
+    "SAVEUITests/SAVEScreenshotRailTests/testInkLanguageSwitchingPersistsAndReturnsToIOS",
+    "SAVEUITests/SAVEScreenshotRailTests/testInkEnglishWelcomeAllowsLanguageAndStartAtLargeType",
+]
 ONBOARDING = "SAVEUITests/SAVEOnboardingCarouselTests"
+PHOTO_ATTR = "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
 TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
 BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
+    "testDoodlePaywallParity",
+    "testDoodleCaptureParity",
+    "testDoodleCapturePaywallDarkParity",
+    "testHomeAndPassportWarmDarkMode",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
+    "testHomeSearchAndPendingCandidateOpenDirectly",
     "testCaptureMultipleResultsExcludeOlderClues",
     "testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed",
     "testSavedPlaceEntryUsesSingleCanonicalDetail",
@@ -26,40 +41,57 @@ BASELINE = [RAIL + name for name in (
     "testTripUsesPlanMapAndTopSharePostcardPocket",
     "testRapidChromeTransitionsKeepAppAlive",
     "testPassportAndPostalImportSurfacesAreReachable",
+    "testSocialPassportGridAndComposer",
+    "testPassportListsEntryOpensListsDirectly",
+    "testFriendsComingSoon",
+    "testSavedPlaceLimitPaywallStatesFreeCap",
+    "testSavedPlaceLimitPaywallRetryIsActionable",
+    "testUnplacedLabelFullScreenAtDeviceWidth",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.
 SURFACES = {
-    "SAV-E/Views/Map/SaveMapDrawerPanel.swift": "map",
+    "SAV-E/Legacy/Views/Map/SaveMapDrawerPanel.swift": "map",
     "SAV-E/Views/Onboarding/OnboardingView.swift": "onboarding",
-    "SAV-E/Views/Plan/SavePlanView.swift": "plan",
+    "SAV-E/Legacy/Views/Plan/SavePlanView.swift": "plan",
 }
 TESTS = {
-    "map": [RAIL + name for name in (
-        "testMapSearchDrawerResizesThroughThreeStages",
-        "testSavedPlaceEntryUsesSingleCanonicalDetail",
-        "testTripMapMarkerDetailReturnsToScopedTabs",
-        "testRapidChromeTransitionsKeepAppAlive",
-    )],
-    "onboarding": [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"],
-    "plan": [RAIL + name for name in (
-        "testPlanChatDraftAndConversationSurviveTabChange",
-        "testPlanTabDraftsFromSavedMapStamps",
-        "testPlanCandidateCanBeConfirmedSavedAndOpened",
-        "testTripUsesPlanMapAndTopSharePostcardPocket",
-        "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch",
-    )],
+    "map": list(INK),
+    "onboarding": list(INK),
+    "plan": list(INK),
 }
-# Full/main stays the frozen 17-selector gate. Plan extras belong on the
+# Full/main retains every frozen selector plus the social passport flow. Plan extras belong on the
 # Plan route only. Folding them into FULL made this CI-scoping PR require
 # testPlanTabDraftsFromSavedMapStamps, which is not on current main and
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.
-FULL = list(BASELINE)
+FULL = list(INK)
+
+# Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
+# selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()
+# to revert. Tests are a subset of FULL; nothing is skipped or rewritten.
+FOCUS_PROFILES = {
+    "tile-town-home": {
+        "tests": list(INK),
+        "trip": False,
+        "units": False,
+    },
+}
+
+
+def requested_focus():
+    """Return a named focus profile, or empty for default/full coverage.
+
+    Main pushes never focus, even if the env is set, so the merge gate stays
+    the full suite. Unknown names fail loudly instead of silently widening.
+    """
+    if os.environ.get("GITHUB_REF") == "refs/heads/main":
+        return ""
+    return os.environ.get("SAVE_UI_TEST_FOCUS", "").strip()
 
 
 def select(paths, *, full=False):
     if full or not paths:
-        return result("full", FULL, trip=True)
+        return result("ink", FULL, trip=False)
     surfaces = set()
     unit = False
     for path in paths:
@@ -73,19 +105,17 @@ def select(paths, *, full=False):
         elif path.startswith("Tests/SocialPlacePipelineTests/") and path.endswith(".swift"):
             unit = True
         else:
-            return result("full", FULL, trip=True)
+            return result("ink", FULL, trip=False)
     if surfaces:
-        tests = BASELINE[:2]  # Keep production parity and five-tab smoke on every UI PR.
-        for surface in sorted(surfaces):
-            tests += TESTS[surface]
-        return result("+".join(sorted(surfaces)), list(dict.fromkeys(tests)),
-                      trip="plan" in surfaces)
+        return result("+".join(sorted(surfaces)), list(INK), trip=False)
     return result("unit" if unit else "non-ios", [], run=unit)
 
 
-def result(profile, tests, *, trip=False, run=True):
+def result(profile, tests, *, trip=False, run=True, units=None):
+    if units is None:
+        units = run
     return {"profile": profile, "run": run, "ui": bool(tests),
-            "trip": trip, "tests": tests}
+            "trip": trip, "units": units, "tests": tests}
 
 
 def changed_paths(base):
@@ -105,7 +135,31 @@ def main():
     args = parser.parse_args()
     paths = []
     reason = "non-PR runs always use full integration coverage"
-    if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+    focus = requested_focus()
+    if focus:
+        if focus not in FOCUS_PROFILES:
+            known = ", ".join(sorted(FOCUS_PROFILES))
+            raise SystemExit(
+                f"unknown SAVE_UI_TEST_FOCUS={focus!r}; known profiles: {known}"
+            )
+        spec = FOCUS_PROFILES[focus]
+        plan = result(
+            f"focus:{focus}",
+            spec["tests"],
+            trip=spec["trip"],
+            run=True,
+            units=spec.get("units", False),
+        )
+        reason = (
+            f"SAVE_UI_TEST_FOCUS={focus}; iteration set only "
+            "(unset the env to restore default/full coverage)"
+        )
+        if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+            try:
+                paths = changed_paths(os.environ.get("PR_BASE_SHA", ""))
+            except (ValueError, UnicodeError, subprocess.CalledProcessError):
+                paths = []
+    elif os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
         try:
             paths = changed_paths(os.environ.get("PR_BASE_SHA", ""))
             plan = select(paths)
@@ -121,13 +175,16 @@ def main():
     (args.output_dir / "ios-ui-args.txt").write_text(
         "".join(f"-only-testing:{test}\n" for test in plan["tests"]))
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key in ("profile", "run", "ui", "trip"):
+        for key in ("profile", "run", "ui", "trip", "units"):
             value = str(plan[key]).lower() if isinstance(plan[key], bool) else plan[key]
             output.write(f"{key}={value}\n")
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
         summary.write(f"### iOS coverage: {plan['profile']}\n\n{reason}.\n\n")
-        summary.write(f"Build + unit: {plan['run']}; UI selectors: {len(plan['tests'])}; "
-                      f"isolated Trip sheet: {plan['trip']}.\n\n")
+        summary.write(
+            f"Build: {plan['run']}; units: {plan['units']}; "
+            f"UI selectors: {len(plan['tests'])}; "
+            f"isolated Trip sheet: {plan['trip']}.\n\n"
+        )
         for test in plan["tests"] + ([TRIP_SHEET] if plan["trip"] else []):
             summary.write(f"- `{test}`\n")
     print(json.dumps(plan, indent=2))

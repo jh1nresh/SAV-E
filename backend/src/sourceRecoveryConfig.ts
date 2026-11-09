@@ -8,6 +8,7 @@ const execFileAsync = promisify(execFile);
 export type SourceRecoveryConfigStatus = {
   ready: boolean;
   keyframeExtractionEnabled: boolean;
+  videoVenueAnalysis: { enabled: boolean; ready: boolean };
   ocr: {
     enabled: boolean;
     command: string;
@@ -41,6 +42,21 @@ export async function readSourceRecoveryConfigStatus(
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  const videoEnabled = env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true";
+  let videoReady = true;
+  if (videoEnabled) {
+    if (!(env.GEMINI_API_KEY?.trim() || env.GOOGLE_GEMINI_API_KEY?.trim())) {
+      errors.push("Video venue analysis requires the existing Gemini key");
+      videoReady = false;
+    }
+    for (const command of [env.SAVE_VIDEO_YTDLP_COMMAND ?? "yt-dlp", env.SAVE_VIDEO_FFMPEG_COMMAND ?? "ffmpeg", env.SAVE_VIDEO_FFPROBE_COMMAND ?? "ffprobe"]) {
+      if (!await executableExists(command)) {
+        errors.push("Video venue analysis is missing a required executable");
+        videoReady = false;
+      }
+    }
+  }
+
   const ocrReady = !ocrEnabled || await executableExists(ocrCommand);
   if (ocrEnabled && !ocrReady) errors.push(`SAVE_ENABLE_SERVER_OCR=true but ${ocrCommand} is not executable`);
 
@@ -61,6 +77,7 @@ export async function readSourceRecoveryConfigStatus(
   return {
     ready: errors.length === 0,
     keyframeExtractionEnabled,
+    videoVenueAnalysis: { enabled: videoEnabled, ready: videoReady },
     ocr: {
       enabled: ocrEnabled,
       command: ocrCommand,

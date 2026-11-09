@@ -144,7 +144,7 @@ test("owner-scoped SQL selects only KML fields and preserves request order", () 
   assert.match(normalized, /where user_id = \$1/);
   assert.match(normalized, /id = any\(\$2::uuid\[\]\)/);
   assert.match(normalized, /order by array_position\(\$2::uuid\[\], id\)/);
-  assert.doesNotMatch(normalized, /note|source_url|source_image_url|business_photo_urls|extracted_dishes|opening_hours/);
+  assert.doesNotMatch(normalized, /note|source_url|source_image_url|business_photo_urls|extracted_dishes|memory_meta|opening_hours/);
 });
 
 test("KML response headers prevent caching and content sniffing", () => {
