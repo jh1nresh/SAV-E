@@ -15,11 +15,16 @@ final class CityLandmarkTests: XCTestCase {
         XCTAssertEqual(upper.y, 508, accuracy: 0.001)
 
         let podium = try XCTUnwrap(landmark.childNode(withName: "city-101-podium", recursively: false))
-        let box = try XCTUnwrap(podium.geometry as? SCNBox)
-        XCTAssertEqual(box.width, 125, accuracy: 0.001)
-        XCTAssertEqual(box.length, 95, accuracy: 0.001)
-        XCTAssertEqual(box.height, 25, accuracy: 0.001)
+        let shape = try XCTUnwrap(podium.geometry as? SCNShape)
+        let outline = try XCTUnwrap(shape.path)
+        XCTAssertEqual(outline.bounds.width, 138.900705, accuracy: 0.001)
+        XCTAssertEqual(outline.bounds.height, 147.8782305, accuracy: 0.001)
+        XCTAssertEqual(shape.extrusionDepth, 25, accuracy: 0.001)
         XCTAssertEqual(podium.position.y, 12.5, accuracy: 0.001)
+        let roof = podium.convertPosition(.init(0, -41.5, 12.5), to: landmark)
+        XCTAssertEqual(roof.x, 0, accuracy: 0.001)
+        XCTAssertEqual(roof.y, 25, accuracy: 0.001)
+        XCTAssertEqual(roof.z, 41.5, accuracy: 0.001)
 
         let tiers = landmark.childNodes.filter { $0.name?.hasPrefix("city-101-tier-") == true }
         XCTAssertEqual(tiers.count, 8)
@@ -76,9 +81,13 @@ final class CityLandmarkTests: XCTestCase {
         XCTAssertFalse(CityLandmark101.containsInterior(.init(32, 120, 0)))
     }
 
-    func testInteriorRespectsPodiumRoundingMastAndFiniteBounds() {
+    func testInteriorRespectsSourcePodiumMastAndFiniteBounds() {
         XCTAssertTrue(CityLandmark101.containsInterior(.init(61, 12.5, 46)))
-        XCTAssertFalse(CityLandmark101.containsInterior(.init(62.4, 1, 47.4)))
+        // Source wings extend past the old box; the eastern recess stays open.
+        XCTAssertTrue(CityLandmark101.containsInterior(.init(-5, 12.5, -65)))
+        XCTAssertTrue(CityLandmark101.containsInterior(.init(35, 12.5, 75)))
+        XCTAssertFalse(CityLandmark101.containsInterior(.init(55, 12.5, -15)))
+        XCTAssertFalse(CityLandmark101.containsInterior(.init(75, 12.5, 0)))
         XCTAssertTrue(CityLandmark101.containsInterior(.init(0, 25, 0)))
         XCTAssertTrue(CityLandmark101.containsInterior(.init(1.7, 470, 0)))
         XCTAssertFalse(CityLandmark101.containsInterior(.init(1.7, 500, 0)))
@@ -86,6 +95,22 @@ final class CityLandmarkTests: XCTestCase {
         XCTAssertFalse(CityLandmark101.containsInterior(.init(0, 508, 0)))
         XCTAssertFalse(CityLandmark101.containsInterior(.init(.nan, 120, 0)))
         XCTAssertFalse(CityLandmark101.containsInterior(.init(0, .infinity, 0)))
+    }
+
+    func testPodiumUsesBundledContourAndPreservesRoofContact() throws {
+        let way = try XCTUnwrap(CitySceneData.elements?.first { $0["id"] as? Int == 1_159_328_965 })
+        let geometry = try XCTUnwrap(way["geometry"] as? [[String: Double]])
+        let footprint = CityLandmark101.podiumFootprint
+        XCTAssertEqual(footprint.count, 69)
+        XCTAssertEqual(CityStreetDetail.podium, footprint)
+        for (point, source) in zip(footprint, geometry.dropLast()) {
+            XCTAssertEqual(point.x, (try XCTUnwrap(source["lon"]) - 121.564468) * 100_850, accuracy: 0.0001)
+            XCTAssertEqual(point.y, (try XCTUnwrap(source["lat"]) - 25.033968) * 111_195, accuracy: 0.0001)
+        }
+        let contact = CityLandmark101.pinContact
+        XCTAssertEqual(contact, .init(0, 25, 41.5))
+        XCTAssertTrue(CityLandmark101.containsInterior(contact - .init(0, 0.01, 0)))
+        XCTAssertFalse(CityLandmark101.containsInterior(contact), "The roof contact must stay outside the tower shaft")
     }
 
     private func ringVertices(at height: Float, in source: SCNGeometrySource) -> [SIMD3<Float>] {

@@ -39,9 +39,35 @@ enum CityLandmark101 {
         var capTop = false
     }
 
-    private static let podium = (width: 125.0, height: 25.0, length: 95.0, rounding: 1.4)
-    // A point on the podium roof, clear of the tower shaft.
-    static let pinContact = SIMD3(0.0, podium.height, podium.length / 2 - 6)
+    static let podiumHeight = 25.0
+    // East/north coordinates, shared by the mesh, storefronts and shadow caster.
+    static let podiumFootprint: [CGPoint] = {
+        let fallback: [CGPoint] = [
+            .init(x: -62.5, y: -47.5), .init(x: 62.5, y: -47.5),
+            .init(x: 62.5, y: 47.5), .init(x: -62.5, y: 47.5),
+        ]
+        guard let way = CitySceneData.elements?.first(where: { $0["id"] as? Int == 1_159_328_965 }),
+              let geometry = way["geometry"] as? [[String: Double]], geometry.count >= 4 else { return fallback }
+        var points: [CGPoint] = []
+        for vertex in geometry {
+            guard let lat = vertex["lat"], let lon = vertex["lon"], lat.isFinite, lon.isFinite else { return fallback }
+            let point = CGPoint(x: (lon - CityScenePlace.originLongitude) * 100_850,
+                                y: (lat - CityScenePlace.originLatitude) * 111_195)
+            guard abs(point.x) < 250, abs(point.y) < 250 else { return fallback }
+            points.append(point)
+        }
+        if points.first == points.last { points.removeLast() }
+        return points.count >= 3 ? points : fallback
+    }()
+    private static let podiumPath: UIBezierPath = {
+        let path = UIBezierPath()
+        path.move(to: podiumFootprint[0])
+        podiumFootprint.dropFirst().forEach { path.addLine(to: $0) }
+        path.close()
+        return path
+    }()
+    // Preserve the existing roof contact while the source footprint replaces the box.
+    static let pinContact = SIMD3(0.0, podiumHeight, 41.5)
     private static let mastSides = 12
     private static let mast: [(bottom: Float, top: Float, foot: Double, tip: Double, collar: Bool)] = [
         (468, 473, 2.30, 2.00, true),
@@ -102,16 +128,8 @@ enum CityLandmark101 {
     static func containsInterior(_ eye: SIMD3<Double>) -> Bool {
         guard eye.x.isFinite, eye.y.isFinite, eye.z.isFinite, eye.y > 0 else { return false }
         let x = abs(eye.x), y = eye.y, z = abs(eye.z)
-        guard x < podium.width / 2, z < podium.length / 2 else { return false }
-
-        if y < podium.height {
-            let radius = podium.rounding
-            let offset = SIMD3(
-                max(0, x - (podium.width / 2 - radius)),
-                max(0, abs(y - podium.height / 2) - (podium.height / 2 - radius)),
-                max(0, z - (podium.length / 2 - radius))
-            )
-            return simd_length_squared(offset) < radius * radius
+        if y < podiumHeight {
+            return podiumPath.contains(CGPoint(x: eye.x, y: -eye.z))
         }
 
         for profile in shells {
@@ -138,9 +156,10 @@ enum CityLandmark101 {
     static func hidesPinContact(from eye: SIMD3<Double>) -> Bool {
         let delta = eye - pinContact
         let length = simd_length(delta)
-        guard length > 2, delta.z < 0, eye.y > podium.height else { return false }
+        guard length > 2, delta.z < 0, eye.y > podiumHeight else { return false }
         let direction = delta / length
-        let limit = min(length, (pinContact.z + podium.length / 2) / -direction.z,
+        let towerHalfSpan = Double(shells.flatMap(\.rings).map(\.halfSpan).max() ?? 0)
+        let limit = min(length, (pinContact.z + towerHalfSpan) / -direction.z,
                         (Double(mast.last!.top) - pinContact.y) / direction.y)
         // Sample the ray only where it can intersect the tower's actual shells.
         for distance in stride(from: 2.0, to: limit, by: 3) {
@@ -154,12 +173,13 @@ enum CityLandmark101 {
         tower.name = "surface-landmark-101"
         root.addChildNode(tower)
 
-        let box = SCNBox(width: CGFloat(podium.width), height: CGFloat(podium.height),
-                         length: CGFloat(podium.length), chamferRadius: CGFloat(podium.rounding))
-        box.firstMaterial = material(0xb7b9a6)
-        let podiumNode = SCNNode(geometry: box)
+        let shape = SCNShape(path: podiumPath, extrusionDepth: podiumHeight)
+        let wall = material(0xa5a197)
+        shape.materials = [material(0xb7b9a6), wall, wall]
+        let podiumNode = SCNNode(geometry: shape)
         podiumNode.name = "city-101-podium"
-        podiumNode.position.y = Float(podium.height / 2)
+        podiumNode.eulerAngles.x = -.pi / 2
+        podiumNode.position.y = Float(podiumHeight / 2)
         tower.addChildNode(podiumNode)
 
         let finishes = makeFinishes()

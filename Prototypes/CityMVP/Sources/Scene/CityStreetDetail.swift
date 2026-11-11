@@ -8,10 +8,7 @@ enum CityStreetDetail {
     static let xinyiOfficeWayID = 226945262
     static let cityHall = CityDistrictCamera.coordinate(x: -94, z: 107)
     static let songzhi = CityDistrictCamera.coordinate(x: 96, z: 112)
-    nonisolated static let podium: [CGPoint] = [
-        .init(x: -62.5, y: -47.5), .init(x: 62.5, y: -47.5),
-        .init(x: 62.5, y: 47.5), .init(x: -62.5, y: 47.5),
-    ]
+    static var podium: [CGPoint] { CityLandmark101.podiumFootprint }
 
     enum Finish {
         case retail, office, stone, brick, plaster, sage, civic, transit
@@ -849,7 +846,7 @@ enum CityStreetDetail {
     }
 
     static func addCornerFixtures(to root: SCNNode) {
-        decorate(way: 101, footprint: podium, height: 25, levels: 5, finish: .retail, in: root)
+        decorate(way: 101, footprint: podium, height: CityLandmark101.podiumHeight, levels: 5, finish: .retail, in: root)
         addSign(title: "市府路", subtitle: "CITY HALL RD.", x: -83, z: 127, in: root)
         addSign(title: "松智路", subtitle: "SONGZHI RD.", x: 113, z: 135, in: root)
         addSign(title: "信義路五段", subtitle: "XINYI RD. SEC. 5", x: 83, z: 93, in: root)
@@ -938,7 +935,7 @@ enum CityStreetDetail {
                 buildings.addLines(between: area > 0 ? polygon : Array(polygon.reversed()))
                 buildings.closeSubpath()
             }
-            for caster in input.casters + [Caster(footprint: podium, height: 25)] {
+            for caster in input.casters {
                 let base = caster.footprint.map { pixel($0.x, -$0.y) }
                 guard let first = base.first else { continue }
                 let dx = offset.x * caster.height * 2, dz = offset.y * caster.height * 2

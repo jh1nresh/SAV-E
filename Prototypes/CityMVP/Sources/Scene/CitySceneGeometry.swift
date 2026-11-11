@@ -141,7 +141,9 @@ enum CitySceneGeometry {
             let sun = CitySceneGeometry.sunPosition
             let offset = CGPoint(x: CGFloat(-sun.x / sun.y), y: CGFloat(-sun.z / sun.y))
             return CityStreetDetail.ShadowInput(
-                casters: casters, trees: trees, offset: offset,
+                casters: casters + [.init(footprint: CityLandmark101.podiumFootprint,
+                                          height: CityLandmark101.podiumHeight)],
+                trees: trees, offset: offset,
                 landmarkBands: CityLandmark101.shadowBands + CityNanShanArchitecture.shadowBands(in: scene.rootNode) + skywalkShadows
             )
         }
