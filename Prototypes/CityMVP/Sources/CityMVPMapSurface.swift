@@ -5,13 +5,37 @@ import MapKit
 /// Shared saved-place identity, separate from illustrative building geometry.
 @MainActor
 enum CityMVPPlaceBridge {
-    private static let highlightedWays = [137077760, 234589397, 226945262]
-    private static let landmarkID = "landmark-101"
+    private static let highlightedWays = [137077760, CitySceneData.att4FunWayID, 226945262]
+    static let landmarkID = "landmark-101"
+    static let cityHallID = "way/142113976"
+    static let cityHallCoordinate = CityDistrictCamera.coordinate(x: -5.1, z: -397.5)
+    static let context = CityScenePlace.contextPlaces()
+    private static let sampledContext = context.filter { place in
+        place.id == landmarkID || highlightedWays.contains { place.id == "way/\($0)" }
+    }
+    private static let modelContacts: [String: SIMD3<Double>] = {
+        let ids = Set(highlightedWays + [CityCivicArchitecture.wayID])
+        let heights: [String: Double] = (CitySceneData.elements ?? []).reduce(into: [:]) { heights, way in
+            guard let id = way["id"] as? Int, ids.contains(id),
+                  let tags = way["tags"] as? [String: String], tags["building"] != nil else { return }
+            heights["way/\(id)"] = CitySceneData.buildingHeight(tags, way: id)
+        }
+        var contacts = ["landmark-101": CityLandmark101.pinContact]
+        for place in context {
+            guard let height = heights[place.id] else { continue }
+            contacts[place.id] = SIMD3(place.x, height, place.z)
+        }
+        return contacts
+    }()
     private static let landmarkSource = "https://www.openstreetmap.org/?mlat=25.033968&mlon=121.564468#map=18/25.033968/121.564468"
 
+    static func isPrimaryContextPin(_ id: String) -> Bool {
+        id == landmarkID || id == cityHallID
+    }
+
     static func showsContextPin(_ id: String, in frame: CityDistrictCamera) -> Bool {
-        guard frame.distance < 3_800 else { return false }
-        return id == landmarkID || (frame.opacity > 0.5 && highlightedWays.contains { id == "way/\($0)" })
+        guard frame.distance < CityDistrictCamera.contextPinDistance else { return false }
+        return isPrimaryContextPin(id) || (frame.opacity > 0.5 && highlightedWays.contains { id == "way/\($0)" })
     }
 
     static func hasBundledCoordinate(_ place: Place) -> Bool {
@@ -19,12 +43,16 @@ enum CityMVPPlaceBridge {
         return url == landmarkSource || url.hasPrefix("https://www.openstreetmap.org/way/")
     }
 
-    static func projectsSavedPin(_ place: Place, in frame: CityDistrictCamera) -> Bool {
-        guard inScene(place), let url = place.sourceUrl else { return false }
-        if url == landmarkSource { return showsContextPin(landmarkID, in: frame) }
-        return highlightedWays.contains { way in
-            url == "https://www.openstreetmap.org/way/\(way)" && showsContextPin("way/\(way)", in: frame)
+    static func projectsSavedPin(_ place: Place, in frame: CityDistrictCamera,
+                                 registration: CityDistrictRegistration) -> Bool {
+        guard inScene(place), let source = place.sourceUrl else { return false }
+        if source == "https://www.openstreetmap.org/\(cityHallID)" {
+            // City Hall has a dedicated native annotation when the frame cannot draw it.
+            return showsContextPin(cityHallID, in: frame)
         }
+        guard let context = sampledContext.first(where: { sourceURL(for: $0) == source }),
+              showsContextPin(context.id, in: frame) else { return false }
+        return frame.ownsContextPin(contextPin(for: applying(place, to: context), registration: registration))
     }
 
     static func sourceURL(for place: CityScenePlace) -> String {
@@ -38,6 +66,48 @@ enum CityMVPPlaceBridge {
         // Never join branches merely by name or proximity.
         return saved.first { $0.sourceUrl == sourceURL(for: place) }
     }
+
+    static func contextID(for place: Place) -> String? {
+        guard let source = place.sourceUrl else { return nil }
+        return context.first { sourceURL(for: $0) == source }?.id
+    }
+
+    static func cityHallPlace(in saved: [Place]) -> CityScenePlace? {
+        guard let cityHall = context.first(where: { $0.id == cityHallID }) else { return nil }
+        guard let match = savedMatch(for: cityHall, in: saved.filter(inScene)) else { return cityHall }
+        return applying(match, to: cityHall)
+    }
+
+    static func contextPins(in saved: [Place], registration: CityDistrictRegistration) -> [CityDistrictCamera.Pin] {
+        let visibleSaved = saved.filter(inScene)
+        return sampledContext.map { place in
+            let displayed = savedMatch(for: place, in: visibleSaved).map { applying($0, to: place) } ?? place
+            return contextPin(for: displayed, registration: registration)
+        }
+    }
+
+    static func contextPin(for place: CityScenePlace, registration: CityDistrictRegistration) -> CityDistrictCamera.Pin {
+        let coordinate = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
+        return .init(id: place.id, coordinate: registration.mapCoordinate(coordinate),
+                     modelContact: modelContact(for: place.id, at: coordinate))
+    }
+
+    static func modelContact(for id: String?, at coordinate: CLLocationCoordinate2D) -> SIMD3<Double>? {
+        guard let id, let contact = modelContacts[id], let place = context.first(where: { $0.id == id }) else { return nil }
+        let point = CityDistrictCamera.world(coordinate)
+        guard hypot(point.x - place.x, point.z - place.z) <= 1 else { return nil }
+        return contact
+    }
+
+    static func select(_ place: CityScenePlace, in viewModel: MapViewModel) {
+        if let saved = savedMatch(for: place, in: viewModel.places) {
+            viewModel.selectPlace(saved, enrichPhoto: false)
+        } else {
+            viewModel.clearSelectedMapObject()
+            viewModel.selectedMapCandidate = candidate(for: place)
+        }
+    }
+
     static func inScene(_ place: Place) -> Bool {
         place.isMapKitMappable && abs((place.longitude - 121.564468) * 100850) < 650
             && abs((place.latitude - 25.033968) * 111195) < 650
@@ -48,13 +118,17 @@ enum CityMVPPlaceBridge {
         let mapped = context.map { place -> CityScenePlace in
             guard let match = savedMatch(for: place, in: visibleSaved) else { return place }
             used.insert(match.id)
-            return CityScenePlace(id: place.id, title: match.name, category: match.category.rawValue,
-                                  address: match.address, latitude: match.latitude, longitude: match.longitude, isSaved: true)
+            return applying(match, to: place)
         }
         return mapped + visibleSaved.filter { !used.contains($0.id) }.map {
             CityScenePlace(id: "saved:\($0.id.uuidString)", title: $0.name, category: $0.category.rawValue,
                            address: $0.address, latitude: $0.latitude, longitude: $0.longitude, isSaved: true)
         }
+    }
+
+    private static func applying(_ match: Place, to place: CityScenePlace) -> CityScenePlace {
+        CityScenePlace(id: place.id, title: match.name, category: match.category.rawValue,
+                       address: match.address, latitude: match.latitude, longitude: match.longitude, isSaved: true)
     }
     static func candidate(for place: CityScenePlace) -> SaveMapCandidate {
         SaveMapCandidate(
@@ -70,154 +144,194 @@ enum CityMVPPlaceBridge {
     }
 }
 
+struct CityMVPSelectedPin {
+    let anchor: CityDistrictCamera.Pin
+    let contextID: String?
+    let title: String
+    let isSaved: Bool
+
+    @MainActor
+    init?(viewModel: MapViewModel, registration: CityDistrictRegistration?) {
+        if let place = viewModel.selectedPlace, place.isMapKitMappable {
+            let coordinate = CityMVPPlaceBridge.hasBundledCoordinate(place)
+                ? registration?.mapCoordinate(place.coordinate) ?? place.coordinate : place.coordinate
+            contextID = CityMVPPlaceBridge.contextID(for: place)
+            anchor = .init(id: place.id.uuidString, coordinate: coordinate,
+                           modelContact: CityMVPPlaceBridge.modelContact(for: contextID, at: place.coordinate))
+            title = place.name
+            isSaved = true
+        } else if let candidate = viewModel.selectedMapCandidate, candidate.hasTrustworthyCoordinate {
+            contextID = candidate.id.hasPrefix("city-mvp:") ? String(candidate.id.dropFirst(9)) : nil
+            let coordinate = contextID != nil
+                ? registration?.mapCoordinate(candidate.coordinate) ?? candidate.coordinate : candidate.coordinate
+            anchor = .init(id: candidate.id, coordinate: coordinate,
+                           modelContact: CityMVPPlaceBridge.modelContact(for: contextID, at: candidate.coordinate))
+            title = candidate.title
+            isSaved = false
+        } else {
+            return nil
+        }
+    }
+
+    func artwork(contactOpacity: Double = 0, titleAbove: Bool = false,
+                 browsePhotoDiameter: CGFloat = CityPinArtwork.photoDiameter) -> some View {
+        CityPinArtwork(id: contextID, title: title, symbol: isSaved ? "bookmark.fill" : "mappin",
+                       saved: isSaved, selected: true, contactOpacity: contactOpacity,
+                       browsePhotoDiameter: browsePhotoDiameter)
+            .id(anchor.id)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityValue(isSaved ? "Map Stamp" : "Unsaved place")
+            .accessibilityIdentifier("cityMVP.selectedGroundPin")
+            .overlay(alignment: .top) {
+                // The label can move out of the card's way without moving the photo or its anchor.
+                Color.clear.frame(height: 0)
+                    .overlay(alignment: titleAbove ? .bottom : .top) {
+                        CityPinArtwork.Title(text: title, selected: true)
+                            .offset(y: titleAbove ? -5 : CityPinArtwork.height + 5)
+                            .accessibilityIdentifier("cityMVP.selectedGroundPinTitle")
+                            .accessibilityHidden(!CityDistrictTrace.enabled)
+                    }
+            }
+            .transaction { $0.animation = nil }
+    }
+}
+
 struct CityMVPMapSurface<AppleMap: View>: View {
     @ObservedObject var viewModel: MapViewModel
     let frame: CityDistrictCamera?
-    let proxy: MapProxy
     let registration: CityDistrictRegistration?
+    let selectedPin: CityMVPSelectedPin?
+    @Binding var sceneReady: Bool
+    let registrationFailed: Bool
+    let retryRegistration: () -> Void
+    let navigate: (MapCamera, Animation?) -> Void
     let appleMap: () -> AppleMap
     @AppStorage(CityMVPStyle.nightPreference) private var night = false
     @Environment(\.appLanguageSettings) private var language
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var city = City.taipei
+    @State private var sceneRequested = false
+    @State private var scenePreparationFailed = false
+    @State private var sceneGeneration = 0
     @State private var showsAgent = false
     @State private var showsPlaces = false
     @State private var showsFriends = false
     @State private var query = ""
-    @State private var context = CityScenePlace.contextPlaces()
+    @State private var expandedPanelHeight: CGFloat = 240
+    @State private var compactPanelHeight = CityMVPPlacePanel.minimumCompactHeight
+    @State private var verifyOverviewRequested = false
+    @State private var verifyLaunchFinished = false
     enum City: String, CaseIterable { case taipei = "Taipei 台北", shanghai = "Shanghai 上海" }
+    private static var panelBottomInset: CGFloat { 122 }
 
-    private var places: [CityScenePlace] { CityMVPPlaceBridge.places(context: context, saved: viewModel.filteredPlaces) }
-    private var shows3D: Bool { (frame?.opacity ?? 0) > 0.5 }
+    private var places: [CityScenePlace] {
+        CityMVPPlaceBridge.places(context: CityMVPPlaceBridge.context, saved: viewModel.places)
+    }
+    private var showsStreetDetail: Bool { frame?.showsStreetDetail == true }
+    private var verifyAtOverview: Bool {
+        guard verifyOverviewRequested, !verifyLaunchFinished, let frame else { return false }
+        return frame.style == .city && abs(frame.distance - CityMVPCameras.taipei.distance) < 160
+    }
 
     private var isNearTaipei: Bool {
         guard let camera = frame?.mapCamera else { return false }
         return camera.distance < 30_000 && abs(camera.centerCoordinate.latitude - 25.034) < 0.3
             && abs(camera.centerCoordinate.longitude - 121.564) < 0.3
     }
+
+    private var sceneRevealAnimation: Animation? { reduceMotion ? nil : .easeOut(duration: 0.22) }
+
     var body: some View {
         ZStack(alignment: .top) {
             if city == .shanghai {
                 shanghaiPlaceholder
             } else {
                 appleMap()
-                if let frame, frame.shouldPrewarm {
-                    CitySceneView(projection: frame.projection, night: night,
-                                  landmarkPoint: CityDistrictTrace.enabled ? landmarkPoint : nil,
-                                  nativeDistance: frame.distance)
-                        .opacity(frame.opacity)
+                if sceneRequested || frame?.shouldPrewarm == true {
+                    CitySceneView(projection: frame?.projection, sceneOpacity: frame?.opacity ?? 0,
+                                  sceneBlend: frame?.sceneBlend, night: night,
+                                  landmarkPoint: CityDistrictTrace.enabled ? frame?.landmarkPoint : nil,
+                                  nativeDistance: frame?.distance ?? .infinity,
+                                  onReady: { ready in
+                                      sceneReady = ready
+                                      scenePreparationFailed = !ready
+                                      CityDistrictTrace.write("scene-ready\t\(ready)")
+                                  })
+                        .id(sceneGeneration)
                         .mask {
-                            VStack(spacing: 0) {
-                                Color.black
-                                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                                    .frame(height: 28)
-                                Color.clear.frame(height: 118)
+                            Group {
+                                if let frame { CityDistrictSceneMask(frame: frame) } else { Color.clear }
                             }
+                            .mask { CityMVPAttributionMask() }
+                        }
+                        .opacity(frame?.sceneLayerOpacity ?? 0)
+                        .animation(sceneRevealAnimation, value: sceneReady)
+                        .onAppear {
+                            sceneRequested = true
+                            sceneReady = false
+                            scenePreparationFailed = false
                         }
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
-                placePins
+                if let frame, !frame.cloudPatches.isEmpty {
+                    CityDistrictCloudVeil(patches: frame.cloudPatches, night: night)
+                        .opacity(frame.cloudOpacity)
+                        .animation(sceneRevealAnimation, value: sceneReady)
+                        .mask { CityMVPAttributionMask() }
+                }
+                placePins.animation(sceneRevealAnimation, value: sceneReady)
             }
-            VStack(spacing: 7) {
-                HStack(spacing: 9) {
-                    Button { showsFriends = true } label: {
-                        Image(systemName: "person.2.fill").frame(width: 44, height: 44)
-                    }
-                    .cityMVPGlass(in: Circle())
-                    .accessibilityLabel("朋友推薦 Friends")
-                    .accessibilityIdentifier("cityMVP.friends")
-                    Menu {
-                        Button("世界 World", systemImage: "globe") { openAppleMap(at: CityMVPCameras.world) }
-                        Button("台北 Taipei", systemImage: "building.2") { openAppleMap(at: registeredTaipei) }
-                        Button("市府路 × 信義路", systemImage: "tree") { openCorner(CityStreetDetail.cityHall) }
-                            .disabled(registration == nil)
-                        Button("松智路 × 信義路", systemImage: "tree") { openCorner(CityStreetDetail.songzhi) }
-                            .disabled(registration == nil)
-                        Button("上海 Shanghai", systemImage: "building.columns") {
-                            viewModel.clearSelectedMapObject()
-                            city = .shanghai
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(city == .shanghai ? "Shanghai" : "Explore").font(.system(size: 14, weight: .semibold))
-                            Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
-                        }.padding(.horizontal, 15).frame(height: 44)
-                    }
-                    .cityMVPGlass(in: Capsule())
-                    .accessibilityIdentifier("cityMVP.city")
-                    Spacer(minLength: 0)
-                    if city == .taipei {
-                        Button {
-                            zoomToDistrict(!shows3D)
-                        } label: {
-                            Text(shows3D ? "Map" : "3D").font(.system(size: 13, weight: .bold))
-                                .frame(width: 44, height: 44)
-                        }
-                        .cityMVPGlass(in: Circle())
-                        .accessibilityLabel(shows3D ? "Back to Apple Maps" : "Explore Taipei 101 in 3D")
-                        .accessibilityIdentifier("cityMVP.mode")
-                        .accessibilityValue(modeValue)
-                        .disabled(registration == nil)
-                    }
-                    Button { night.toggle() } label: {
-                        Image(systemName: night ? "moon.stars.fill" : "sun.max.fill")
-                            .frame(width: 44, height: 44)
-                    }
-                    .cityMVPGlass(in: Circle())
-                    .accessibilityLabel(language.localized(english: "Map lighting", traditionalChinese: "地圖光線"))
-                    .accessibilityValue(night
-                        ? language.localized(english: "Night", traditionalChinese: "夜晚")
-                        : language.localized(english: "Day", traditionalChinese: "白天"))
-                    .accessibilityIdentifier("cityMVP.lighting")
-                    Button { showsAgent = true } label: {
-                        Image(systemName: "sparkles").frame(width: 44, height: 44)
-                    }
-                    .cityMVPGlass(in: Circle())
-                    .foregroundStyle(CityMVPStyle.blue)
-                    .accessibilityLabel("SAV-E Agent")
-                    .accessibilityIdentifier("cityMVP.agent")
-                }
-                if city == .taipei && !shows3D {
-                    HStack(spacing: 8) {
-                        mapShortcut("World", symbol: "globe", id: "world") { openAppleMap(at: CityMVPCameras.world) }
-                        mapShortcut("Taipei", symbol: "building.2", id: "taipei") { openAppleMap(at: registeredTaipei) }
-                            .accessibilityAddTraits(isNearTaipei ? .isSelected : [])
-                        Spacer(minLength: 0)
-                    }
-                }
-                if city == .taipei && shows3D {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            Button { showsPlaces = true } label: {
-                                Image(systemName: "list.bullet").frame(width: 44, height: 44)
-                            }
-                            .cityMVPGlass(in: Circle())
-                            .accessibilityLabel("Places 地點")
-                            .accessibilityIdentifier("cityMVP.places")
-                        }
-                    }.padding(.top, 18)
-                }
-            }
-            .foregroundStyle(CityMVPStyle.ink)
-            .padding(.horizontal, 16).padding(.top, 62)
+            mapChrome
         }
         .coordinateSpace(name: CityDistrictCamera.space)
+        .onChange(of: city) { _, value in
+            if value == .shanghai { sceneReady = false }
+        }
+        .task(id: registration) {
+            guard registration != nil, CityDistrictTrace.opensDistrictOnLaunch, !verifyOverviewRequested else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(700))
+                verifyOverviewRequested = true
+                openAppleMap(at: registeredTaipei)
+            } catch { return }
+        }
+        .task(id: verifyAtOverview) {
+            guard verifyAtOverview else { return }
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+                if CityDistrictTrace.selectsLandmarkOnLaunch {
+                    select(CityMVPPlaceBridge.landmarkID)
+                    try await Task.sleep(for: .milliseconds(350))
+                }
+            } catch { return }
+            verifyLaunchFinished = true
+            if CityDistrictTrace.opensOverviewOnly { return }
+            if CityDistrictTrace.opensCityHallOnLaunch {
+                openCorner(CityMVPPlaceBridge.cityHallCoordinate, heading: 180)
+            } else if CityDistrictTrace.opensCornerOnLaunch {
+                openCorner(CityStreetDetail.songzhi)
+            } else {
+                zoomToDistrict(true, centered: true)
+            }
+        }
         .overlay(alignment: .top) {
             if CityDistrictTrace.enabled {
                 Color.clear
                     .frame(width: 220, height: 220)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("Map pinch area")
+                    .accessibilityValue(frame.map { String(Int($0.heading.rounded())) } ?? "")
                     .accessibilityIdentifier("cityMVP.pinchArea")
                     .allowsHitTesting(false)
                     .padding(.top, 160)
             }
         }
         .onChange(of: frame) { _, sample in
-            guard CityDistrictTrace.enabled, let sample, sample.distance < 5_500 else { return }
-            let point = landmarkPoint
-            CityDistrictTrace.write("map\t\(sample.distance)\t\(sample.opacity)\t\(sample.projection?.error ?? -1)\t\(selectedContextID == "landmark-101")\t\(point?.x ?? -1)\t\(point?.y ?? -1)")
+            guard CityDistrictTrace.enabled, let sample else { return }
+            let landmarkSelection = selectedPin?.contextID == CityMVPPlaceBridge.landmarkID ? selectedPin : nil
+            CityDistrictTrace.record(sample, landmarkSelection: landmarkSelection?.anchor)
         }
         .background(CityMVPStyle.canvas)
         .overlay(alignment: .bottom) {
@@ -225,7 +339,10 @@ struct CityMVPMapSurface<AppleMap: View>: View {
                 if let place = viewModel.selectedPlace {
                     CityMVPPlacePanel(name: place.name, detail: place.address, saved: place, candidate: nil,
                                       photoCredit: CityPinArtwork.photo(for: selectedContextID),
-                                      onSave: { _ in }, onClose: viewModel.clearSelectedMapObject)
+                                      onSave: { _ in }, onClose: viewModel.clearSelectedMapObject,
+                                      compact: shouldCompactPanel,
+                                      onExpandedHeight: { expandedPanelHeight = $0 },
+                                      onCompactHeight: { compactPanelHeight = $0 })
                         .id(place.id)
                 } else if let candidate = viewModel.selectedMapCandidate {
                     CityMVPPlacePanel(name: candidate.title, detail: candidate.subtitle, saved: nil, candidate: candidate,
@@ -233,23 +350,14 @@ struct CityMVPMapSurface<AppleMap: View>: View {
                                       onSave: { candidate in
                         let place = try await viewModel.saveMapCandidateAsPlace(candidate)
                         viewModel.selectPlace(place, enrichPhoto: false)
-                    }, onClose: viewModel.clearSelectedMapObject)
+                    }, onClose: viewModel.clearSelectedMapObject,
+                                      compact: shouldCompactPanel,
+                                      onExpandedHeight: { expandedPanelHeight = $0 },
+                                      onCompactHeight: { compactPanelHeight = $0 })
                         .id(candidate.id)
                 }
             }
-            .padding(.horizontal, 14).padding(.bottom, 122)
-        }
-        .overlay(alignment: .topLeading) {
-            if city == .taipei, let frame, frame.opacity > 0 {
-                Text(CityScenePlace.contextDataAvailable
-                     ? "© OpenStreetMap contributors · ODbL"
-                     : "Street data unavailable · 101 model only")
-                    .font(.system(size: 9)).foregroundStyle(CityMVPStyle.ink)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(CityMVPStyle.panel.opacity(0.96), in: Capsule())
-                    .padding(.leading, 16).padding(.top, 167)
-                    .allowsHitTesting(false)
-            }
+            .padding(.horizontal, 14).padding(.bottom, Self.panelBottomInset)
         }
         .sheet(isPresented: $showsAgent) {
             CityMVPAgentSheet(places: viewModel.places, onOpen: openAgentPlace)
@@ -276,81 +384,251 @@ struct CityMVPMapSurface<AppleMap: View>: View {
             }
         }
     }
-    private var modeValue: String {
-        let mode = shows3D ? "District" : "Map"
-        guard CityDistrictTrace.enabled, let frame else { return mode }
-        return "\(mode) \(Int(frame.distance))"
+    private var mapChrome: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                cityMenu
+                Button { showsFriends = true } label: {
+                    Image(systemName: "person.2.fill").frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .cityMVPGlass(in: Circle())
+                .accessibilityLabel("朋友推薦 Friends")
+                .accessibilityIdentifier("cityMVP.friends")
+                Spacer(minLength: 4)
+                HStack(spacing: 0) {
+                    if city == .taipei { modeButton }
+                    lightingButton
+                }
+                .buttonStyle(.plain)
+                .cityMVPGlass(in: Capsule())
+            }
+            if city == .taipei, let frame, frame.opacity > 0 {
+                Text(CityScenePlace.contextDataAvailable
+                     ? "© OpenStreetMap contributors · ODbL"
+                     : "Street data unavailable · 101 model only")
+                    .font(.system(size: 9))
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(CityMVPStyle.panel.opacity(0.96), in: Capsule())
+                    .allowsHitTesting(false)
+            }
+        }
+        .foregroundStyle(CityMVPStyle.ink)
+        .padding(.horizontal, 16).padding(.top, 62)
     }
 
-    private var landmarkPoint: CGPoint? {
-        guard let registration else { return nil }
-        return proxy.convert(registration.mapCoordinate(CityDistrictCamera.coordinate(x: 0, z: 0)),
-                             to: .named(CityDistrictCamera.space))
+    private var cityMenu: some View {
+        Menu {
+            Button("世界 World", systemImage: "globe") { openAppleMap(at: CityMVPCameras.world) }
+            Button("台北 Taipei", systemImage: "building.2") { openAppleMap(at: registeredTaipei) }
+            Button("上海 Shanghai", systemImage: "building.columns") {
+                viewModel.clearSelectedMapObject()
+                city = .shanghai
+            }
+            if city == .taipei {
+                Section("Taipei 3D") {
+                    Button("臺北市政府 Taipei City Hall", systemImage: "building.columns") {
+                        openCorner(CityMVPPlaceBridge.cityHallCoordinate, heading: 180)
+                    }
+                    .disabled(registration == nil)
+                    Button("市府路 × 信義路", systemImage: "tree") { openCorner(CityStreetDetail.cityHall) }
+                        .disabled(registration == nil)
+                    Button("松智路 × 信義路", systemImage: "tree") { openCorner(CityStreetDetail.songzhi) }
+                        .disabled(registration == nil)
+                }
+            }
+            Section {
+                if city == .taipei && showsStreetDetail {
+                    Button("Places 地點", systemImage: "list.bullet") { showsPlaces = true }
+                }
+                Button("SAV-E Agent", systemImage: "sparkles") { showsAgent = true }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "globe").font(.system(size: 14, weight: .semibold))
+                Text(city == .shanghai ? "Shanghai" : isNearTaipei ? "Taipei" : "Explore")
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+            }
+            .padding(.horizontal, 12).frame(height: 44)
+        }
+        .cityMVPGlass(in: Capsule())
+        .accessibilityIdentifier("cityMVP.city")
+    }
+
+    private var modeButton: some View {
+        Button {
+            if registration == nil {
+                retryRegistration()
+                return
+            }
+            // Retry preparation only when the user taps.
+            if scenePreparationFailed {
+                scenePreparationFailed = false
+                sceneGeneration += 1
+            }
+            zoomToDistrict(!showsStreetDetail)
+        } label: {
+            Text(registrationFailed || scenePreparationFailed ? "Retry" : showsStreetDetail ? "Map" : "3D")
+                .font(.system(size: 13, weight: .bold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(registrationFailed ? "Retry map alignment" : scenePreparationFailed ? "Retry 3D street scene" : showsStreetDetail ? "Back to Taipei overview" : "Explore Taipei 101 at street level")
+        .accessibilityIdentifier("cityMVP.mode")
+        .accessibilityValue(modeValue)
+        .disabled(registration == nil && !registrationFailed)
+    }
+
+    private var lightingButton: some View {
+        Button { night.toggle() } label: {
+            Image(systemName: night ? "moon.stars.fill" : "sun.max.fill")
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(language.localized(english: "Map lighting", traditionalChinese: "地圖光線"))
+        .accessibilityValue(night
+            ? language.localized(english: "Night", traditionalChinese: "夜晚")
+            : language.localized(english: "Day", traditionalChinese: "白天"))
+        .accessibilityIdentifier("cityMVP.lighting")
+    }
+
+    private var modeValue: String {
+        guard registration != nil else { return registrationFailed ? "Alignment unavailable" : "Aligning map" }
+        let hasModeledOverview = (frame?.opacity ?? 0) > 0.5
+        let mode = showsStreetDetail ? "District" : hasModeledOverview ? "Overview" : "Map"
+        guard CityDistrictTrace.enabled, let frame else { return mode }
+        return "\(mode) \(Int(frame.distance)) \(Int((frame.opacity * 100).rounded()))%"
+    }
+
+    private struct OverlayPin: Identifiable {
+        let id: String
+        let contextID: String?
+        let title: String
+        let symbol: String
+        let saved: Bool
+        let selected: Bool
+        let placement: CityDistrictCamera.PinPlacement
+        let reveal: Double
+    }
+
+    private func contextPins(in frame: CityDistrictCamera) -> [OverlayPin] {
+        guard registration != nil, frame.distance < CityDistrictCamera.contextPinDistance else { return [] }
+        return places.compactMap { place in
+            guard place.id != selectedContextID, CityMVPPlaceBridge.showsContextPin(place.id, in: frame),
+                  let placement = contextPlacement(for: place, in: frame) else { return nil }
+            let reveal = pinReveal(for: place.id, saved: place.isSaved, in: frame)
+            return OverlayPin(id: place.id, contextID: place.id, title: place.title,
+                              symbol: place.id == CityMVPPlaceBridge.cityHallID ? "building.columns" : contextSymbol(place.category),
+                              saved: place.isSaved, selected: false, placement: placement, reveal: reveal)
+        }
+    }
+
+    private func pinReveal(for contextID: String?, saved: Bool, in frame: CityDistrictCamera) -> Double {
+        guard !saved, let contextID else { return 1 }
+        return CityDistrictCamera.contextPinReveal(
+            distance: frame.distance, sceneOpacity: frame.opacity,
+            primary: CityMVPPlaceBridge.isPrimaryContextPin(contextID)
+        )
     }
 
     private var placePins: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             if let frame {
-                if registration != nil, frame.distance < 3_800 {
-                    ForEach(places.filter { place in
-                        CityMVPPlaceBridge.showsContextPin(place.id, in: frame) && place.id != selectedContextID
-                    }) { place in
-                        if let point = projected(latitude: place.latitude, longitude: place.longitude, registered: true, in: geometry.size) {
-                            Button { select(place.id) } label: {
-                                CityPinArtwork(id: place.id, title: place.title, symbol: contextSymbol(place.category),
-                                               saved: place.isSaved, selected: false)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(place.title)
-                            .accessibilityValue(place.isSaved ? "Map Stamp" : "Unsaved place")
-                            .accessibilityIdentifier("cityMVP.groundPin.\(place.id)")
-                            .position(x: point.x, y: point.y - CityPinArtwork.height / 2)
+                let context = contextPins(in: frame)
+                let photoDiameter = CityPinArtwork.zoomPhotoDiameter(distance: frame.distance)
+                let selection = selectedPin.flatMap { pin in
+                    frame.selectedPlacement(for: pin.anchor).map { (pin: pin, placement: $0) }
+                }
+                let compactTop = frame.viewport.height - Self.panelBottomInset - compactPanelHeight
+                let titleAbove = selection.map { $0.placement.point.y + CityPinArtwork.selectedTitleClearance > compactTop } ?? false
+                let reserved: [CGRect] = selection.map { selection in
+                    let point = selection.placement.point
+                    let hasPhoto = CityPinArtwork.photo(for: selection.pin.contextID) != nil
+                    return [
+                        CityPinLabelLayout.badge(at: point, diameter: hasPhoto ? CityPinArtwork.selectedPhotoDiameter : 60,
+                                                 selected: true),
+                        CityPinLabelLayout.title(selection.pin.title, at: point, selected: true, above: titleAbove),
+                    ]
+                } ?? []
+                let entries = context.map { pin in
+                    let point = pin.placement.point
+                    let diameter = CityPinArtwork.photo(for: pin.id) == nil ? 32 : photoDiameter
+                    let scale = CityPinArtwork.visibleScale(reveal: pin.reveal, reduceMotion: reduceMotion)
+                    return CityPinLabelLayout.Entry(
+                        id: pin.id,
+                        badge: CityPinLabelLayout.badge(at: point, diameter: diameter * scale),
+                        title: CityPinLabelLayout.title(pin.title, at: point),
+                        reveal: pin.reveal,
+                        priority: pin.saved ? 2 : CityMVPPlaceBridge.isPrimaryContextPin(pin.id) ? 1 : 0
+                    )
+                }
+                let titles = CityPinLabelLayout.titleOpacities(entries, selectedBounds: reserved)
+                let pins = context + (selection.map { selection in
+                    [OverlayPin(id: selection.pin.contextID ?? selection.pin.anchor.id,
+                                contextID: selection.pin.contextID, title: selection.pin.title,
+                                symbol: selection.pin.isSaved ? "bookmark.fill" : "mappin",
+                                saved: selection.pin.isSaved, selected: true,
+                                placement: selection.placement, reveal: 1)]
+                } ?? [])
+                ForEach(pins) { pin in
+                    let placement = pin.placement
+                    let sourceReveal = pinReveal(for: pin.contextID, saved: pin.saved, in: frame)
+                    let sourceScale = CityPinArtwork.visibleScale(reveal: sourceReveal, reduceMotion: reduceMotion)
+                    Button { select(pin.id) } label: {
+                        CityPinArtwork(id: pin.contextID, title: pin.title, symbol: pin.symbol,
+                                       saved: pin.saved, selected: pin.selected,
+                                       contactOpacity: placement.contactOpacity,
+                                       browsePhotoDiameter: photoDiameter * (pin.selected ? sourceScale : 1),
+                                       zoomReveal: pin.reveal, titleOpacity: titles[pin.id] ?? 1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(pin.title)
+                    .accessibilityValue(pin.saved ? "Map Stamp" : "Unsaved place")
+                    .accessibilityIdentifier(pin.selected ? "cityMVP.selectedGroundPin" : "cityMVP.groundPin.\(pin.id)")
+                    .opacity(pin.reveal)
+                    .allowsHitTesting(!pin.selected && pin.reveal >= 0.45)
+                    .accessibilityHidden(pin.reveal < 0.45)
+                    .overlay(alignment: .top) {
+                        if pin.selected {
+                            Color.clear.frame(height: 0)
+                                .overlay(alignment: titleAbove ? .bottom : .top) {
+                                    CityPinArtwork.Title(text: pin.title, selected: true)
+                                        .offset(y: titleAbove ? -5 : CityPinArtwork.height + 5)
+                                        .accessibilityIdentifier("cityMVP.selectedGroundPinTitle")
+                                        .accessibilityHidden(!CityDistrictTrace.enabled)
+                                }
+                                .allowsHitTesting(false)
                         }
                     }
-                }
-                if let selection = selectedPin,
-                   let point = projected(latitude: selection.latitude, longitude: selection.longitude, registered: selection.registered, in: geometry.size) {
-                    CityPinArtwork(id: selectedContextID, title: selection.title, symbol: selection.symbol,
-                                   saved: viewModel.selectedPlace != nil, selected: true)
-                        .id(selection.identity)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(selection.title)
-                        .accessibilityValue(viewModel.selectedPlace != nil ? "Map Stamp" : "Unsaved place")
-                        .accessibilityIdentifier("cityMVP.selectedGroundPin")
-                        .position(x: point.x, y: point.y - CityPinArtwork.height / 2)
-                        .allowsHitTesting(false)
+                    .zIndex(pin.selected ? 1 : 0)
+                    .position(x: placement.point.x, y: placement.point.y - CityPinArtwork.height / 2)
+                    .transaction { $0.animation = nil }
                 }
             }
         }
+        .clipped()
+    }
+
+    // Shrink the drawer rather than moving either the camera or selected anchor.
+    // Its expanded size is retained while compact to avoid a layout feedback loop.
+    private var shouldCompactPanel: Bool {
+        guard let frame, let selectedPin,
+              let point = frame.selectedOverlayPoint(for: selectedPin.anchor),
+              CGRect(origin: .zero, size: frame.viewport).contains(point) else { return false }
+        return point.y + 36 > frame.viewport.height - Self.panelBottomInset - expandedPanelHeight
     }
 
     private var selectedContextID: String? {
-        if let saved = viewModel.selectedPlace {
-            return context.first { CityMVPPlaceBridge.savedMatch(for: $0, in: [saved]) != nil }?.id
-        }
-        return viewModel.selectedMapCandidate?.id.hasPrefix("city-mvp:") == true
-            ? viewModel.selectedMapCandidate.map { String($0.id.dropFirst(9)) } : nil
+        selectedPin?.contextID
     }
 
-    private var selectedPin: (identity: String, title: String, latitude: Double, longitude: Double, symbol: String, registered: Bool)? {
-        if let place = viewModel.selectedPlace, place.isMapKitMappable {
-            return (String(describing: place.id), place.name, place.latitude, place.longitude, "bookmark.fill",
-                    CityMVPPlaceBridge.hasBundledCoordinate(place))
-        }
-        if let candidate = viewModel.selectedMapCandidate {
-            return (candidate.id, candidate.title, candidate.latitude, candidate.longitude, "mappin",
-                    candidate.id.hasPrefix("city-mvp:"))
-        }
-        return nil
-    }
-
-    private func projected(latitude: Double, longitude: Double, registered: Bool, in size: CGSize) -> CGPoint? {
-        let source = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        let native = registered ? registration?.mapCoordinate(source) ?? source : source
-        guard let point = proxy.convert(native, to: .named(CityDistrictCamera.space)),
-              point.x.isFinite, point.y.isFinite,
-              CGRect(origin: .zero, size: size).contains(point) else { return nil }
-        return point
+    private func contextPlacement(for place: CityScenePlace, in frame: CityDistrictCamera) -> CityDistrictCamera.PinPlacement? {
+        guard let registration else { return nil }
+        let pin = CityMVPPlaceBridge.contextPin(for: place, registration: registration)
+        return frame.contextPlacement(for: pin)
     }
 
     private func contextSymbol(_ category: String) -> String {
@@ -363,16 +641,6 @@ struct CityMVPMapSurface<AppleMap: View>: View {
         }
     }
 
-    private func mapShortcut(_ title: String, symbol: String, id: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: symbol).font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 12).frame(minHeight: 44)
-                .cityMVPGlass(in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("cityMVP.\(id)")
-    }
-
     private var registeredTaipei: MapCamera {
         let camera = CityMVPCameras.taipei
         let coordinate = registration?.mapCoordinate(camera.centerCoordinate) ?? camera.centerCoordinate
@@ -381,33 +649,26 @@ struct CityMVPMapSurface<AppleMap: View>: View {
 
     private func openAppleMap(at camera: MapCamera) {
         city = .taipei
-        viewModel.clearSelectedMapObject()
-        withAnimation(SaveTheme.Motion.standardSpring) {
-            viewModel.cameraPosition = .camera(camera)
-        }
+        navigate(camera, SaveTheme.Motion.standardSpring)
     }
 
-    private func openCorner(_ coordinate: CLLocationCoordinate2D) {
+    private func openCorner(_ coordinate: CLLocationCoordinate2D, heading: Double = 0) {
         guard let registration else { return }
         city = .taipei
-        withAnimation(.easeInOut(duration: 0.55)) {
-            viewModel.cameraPosition = .camera(MapCamera(centerCoordinate: registration.mapCoordinate(coordinate), distance: 550,
-                                                         heading: 0, pitch: 49))
-        }
+        navigate(MapCamera(centerCoordinate: registration.mapCoordinate(coordinate), distance: 550,
+                           heading: heading, pitch: 49), .easeInOut(duration: 0.55))
     }
 
-    private func zoomToDistrict(_ closer: Bool) {
+    private func zoomToDistrict(_ closer: Bool, centered: Bool = false) {
         guard let registration else { return }
         let current = frame?.mapCamera ?? registeredTaipei
         let offset = CityDistrictCamera.world(registration.sceneCoordinate(current.centerCoordinate))
-        let isLocal = max(abs(offset.x), abs(offset.z)) < 450
-        let camera = (isLocal || !closer) ? current : registeredTaipei
+        let isLocal = current.distance < 30_000 && max(abs(offset.x), abs(offset.z)) < 450
+        let camera = centered || (closer && !isLocal) ? registeredTaipei : current
         let next = MapCamera(centerCoordinate: camera.centerCoordinate,
-                             distance: closer ? 1_450 : 2_900,
+                             distance: closer ? 1_450 : CityDistrictCamera.overviewDistance,
                              heading: camera.heading, pitch: camera.pitch)
-        withAnimation(.easeInOut(duration: 0.55)) {
-            viewModel.cameraPosition = .camera(next)
-        }
+        navigate(next, .easeInOut(duration: 0.55))
     }
 
     private func openAgentPlace(_ place: Place) {
@@ -416,8 +677,7 @@ struct CityMVPMapSurface<AppleMap: View>: View {
             let coordinate = CityMVPPlaceBridge.hasBundledCoordinate(place)
                 ? registration?.mapCoordinate(place.coordinate) ?? place.coordinate
                 : place.coordinate
-            viewModel.cameraPosition = .camera(MapCamera(centerCoordinate: coordinate,
-                                                         distance: 900, heading: 0, pitch: 30))
+            navigate(MapCamera(centerCoordinate: coordinate, distance: 900, heading: 0, pitch: 30), nil)
         }
         viewModel.selectPlace(place, enrichPhoto: false)
     }
@@ -436,14 +696,7 @@ struct CityMVPMapSurface<AppleMap: View>: View {
     }
     private func select(_ id: String) {
         guard let place = places.first(where: { $0.id == id }) else { return }
-        if let saved = CityMVPPlaceBridge.savedMatch(for: place, in: viewModel.places) {
-            viewModel.selectPlace(saved, enrichPhoto: false)
-        } else {
-            // Preserve Savvy's real unsaved-candidate drawer, without network enrichment
-            // or location prompts based on illustrative OSM geometry.
-            viewModel.clearSelectedMapObject()
-            viewModel.selectedMapCandidate = CityMVPPlaceBridge.candidate(for: place)
-        }
+        CityMVPPlaceBridge.select(place, in: viewModel)
     }
     private var shanghaiPlaceholder: some View {
         VStack(spacing: 14) {
@@ -454,8 +707,8 @@ struct CityMVPMapSurface<AppleMap: View>: View {
             Text("Jing’an Temple 3D will appear after the map connection and model alignment are verified.")
                 .font(.caption).foregroundStyle(CityMVPStyle.muted).multilineTextAlignment(.center)
             Button("Explore Taipei 101") {
-                openAppleMap(at: registeredTaipei)
-                zoomToDistrict(true)
+                city = .taipei
+                zoomToDistrict(true, centered: true)
             }
                 .buttonStyle(.borderedProminent).tint(CityMVPStyle.ink)
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -466,6 +719,41 @@ struct CityMVPMapSurface<AppleMap: View>: View {
         case .missingKey: "This test build has no Amap iOS key. Taipei remains available."
         case .bundleMismatch: "The local configuration does not match this test app. No connection was attempted."
         case .sdkNotConnected: "A local key is configured. Native SDK integration and account permissions still need verification."
+        }
+    }
+}
+
+private struct CityMVPAttributionMask: View {
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                verticalFade(clearance: 118, height: 28)
+                // The two native attribution areas keep their full original
+                // clearance. Extend the scene only through the middle.
+                if geometry.size.width >= 360, geometry.size.height >= 600 {
+                    verticalFade(clearance: 64, height: 48)
+                        .mask {
+                            HStack(spacing: 0) {
+                                Color.clear.frame(width: 120)
+                                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: 34)
+                                Color.black
+                                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: 34)
+                                Color.clear.frame(width: 120)
+                            }
+                        }
+                }
+            }
+        }
+    }
+
+    private func verticalFade(clearance: CGFloat, height: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            Color.black
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: height)
+            Color.clear.frame(height: clearance)
         }
     }
 }

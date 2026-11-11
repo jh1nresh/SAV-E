@@ -10,10 +10,31 @@ struct MapView: View {
     let numberedPlacePositions: [UUID: Int]
     let contextBadgeText: String?
 #if SAVVY_CITY_MVP
+    private struct CityMVPDestination {
+        let id = UUID()
+        let requestedAt = ContinuousClock().now
+        let camera: MapCamera
+        let animation: Animation?
+        var started = false
+    }
+
     @State private var cityMVPFrame: CityDistrictCamera?
+    @State private var cityMVPSceneReady = false
+    private var cityMVPRenderFrame: CityDistrictCamera? {
+        cityMVPFrame?.withSceneReadiness(cityMVPSceneReady)
+    }
     @State private var cityMVPRegistration: CityDistrictRegistration?
-    @State private var cityMVPUsesGlobeImagery = true
+    @State private var cityMVPRegistrationFailed = false
+    @State private var cityMVPRegistrationAttempt = 0
+    @State private var cityMVPStyle = CityDistrictMapStyle.globe
+    @State private var cityMVPStyleRevision = 0
+    @State private var cityMVPAppliedStyleRevision = 0
+    @State private var cityMVPStyleAppliedAt: ContinuousClock.Instant?
+    @State private var cityMVPObservedCamera: MapCamera?
+    @State private var cityMVPProjectionRefresh: Task<Void, Never>?
     @State private var cityMVPRegionUpdate: Task<Void, Never>?
+    @State private var cityMVPDestination: CityMVPDestination?
+    @State private var cityMVPDestinationPreparation: Task<Void, Never>?
 #endif
 
     init(
@@ -30,22 +51,35 @@ struct MapView: View {
         self.showsAuxiliaryPins = showsAuxiliaryPins
         self.numberedPlacePositions = numberedPlacePositions
         self.contextBadgeText = contextBadgeText
+#if SAVVY_CITY_MVP
+        if let distance = viewModel.cameraPosition.camera?.distance {
+            _cityMVPStyle = State(initialValue: CityDistrictMapStyle.globe.updated(for: distance))
+        }
+#endif
     }
 
     var body: some View {
 #if SAVVY_CITY_MVP
         if displayedPlaces == nil {
-            let frame = cityMVPFrame
+            let frame = cityMVPRenderFrame
             let registration = cityMVPRegistration
             MapReader { proxy in
-                CityMVPMapSurface(viewModel: viewModel, frame: frame, proxy: proxy, registration: registration) {
+                CityMVPMapSurface(viewModel: viewModel, frame: frame, registration: registration,
+                                  selectedPin: cityMVPSelectedPin, sceneReady: $cityMVPSceneReady,
+                                  registrationFailed: cityMVPRegistrationFailed,
+                                  retryRegistration: {
+                                      cityMVPRegistrationFailed = false
+                                      cityMVPRegistrationAttempt += 1
+                                  }, navigate: navigateCityMVP) {
                     standardMap(proxy: proxy)
                 }
             }
-            .task {
-                if cityMVPRegistration == nil {
-                    cityMVPRegistration = await CityDistrictRegistration.resolve()
-                }
+            .task(id: cityMVPRegistrationAttempt) {
+                guard cityMVPRegistration == nil else { return }
+                let registration = await CityDistrictRegistration.resolve()
+                guard !Task.isCancelled else { return }
+                cityMVPRegistration = registration
+                cityMVPRegistrationFailed = registration == nil
             }
         } else {
             standardMap()
@@ -58,7 +92,129 @@ struct MapView: View {
 #if SAVVY_CITY_MVP
     private var cityMVPMapStyle: MapStyle {
         guard displayedPlaces == nil else { return .standard(elevation: .flat) }
-        return cityMVPUsesGlobeImagery ? .imagery(elevation: .realistic) : .standard(elevation: .realistic)
+        return cityMVPStyle == .globe ? .imagery(elevation: .realistic) : .standard(elevation: .flat)
+    }
+
+    private var cityMVPSelectedPin: CityMVPSelectedPin? {
+        CityMVPSelectedPin(viewModel: viewModel, registration: cityMVPRegistration)
+    }
+
+    private var cityMVPCityHall: CityScenePlace? {
+        CityMVPPlaceBridge.cityHallPlace(in: viewModel.places)
+    }
+
+    private var cityMVPContextPins: [CityDistrictCamera.Pin] {
+        guard let registration = cityMVPRegistration else { return [] }
+        return CityMVPPlaceBridge.contextPins(in: viewModel.places, registration: registration)
+    }
+
+    private func navigateCityMVP(to camera: MapCamera, animation: Animation?) {
+        cityMVPDestinationPreparation?.cancel()
+        let destination = CityMVPDestination(camera: camera, animation: animation)
+        cityMVPDestination = destination
+        let style = cityMVPStyle.updated(for: camera.distance)
+        CityDistrictTrace.navigation("requested", style: style, distance: camera.distance)
+        if style != cityMVPStyle {
+            applyCityMVPStyle(style)
+        } else if cityMVPStyleRevision == cityMVPAppliedStyleRevision {
+            if let applied = cityMVPStyleAppliedAt, ContinuousClock().now < applied.advanced(by: .milliseconds(120)) {
+                prepareCityMVPDestination()
+            } else {
+                startCityMVPDestination(destination)
+            }
+        }
+    }
+
+    private func applyCityMVPStyle(_ style: CityDistrictMapStyle) {
+        cityMVPProjectionRefresh?.cancel()
+        withTransaction(Transaction(animation: nil)) {
+            cityMVPFrame = nil
+            cityMVPStyle = style
+            cityMVPStyleRevision += 1
+        }
+    }
+
+    private func prepareCityMVPDestination() {
+        guard let destination = cityMVPDestination, !destination.started,
+              cityMVPStyleRevision == cityMVPAppliedStyleRevision else { return }
+        cityMVPDestinationPreparation?.cancel()
+        // Give the native style change time to publish its final camera before
+        // writing a new target. New native samples extend the quiet period.
+        let applied = cityMVPStyleAppliedAt ?? destination.requestedAt
+        let deadline = min(ContinuousClock().now.advanced(by: .milliseconds(120)),
+                           max(applied, destination.requestedAt).advanced(by: .milliseconds(750)))
+        cityMVPDestinationPreparation = Task { @MainActor in
+            do { try await Task.sleep(until: deadline, clock: .continuous) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            startCityMVPDestination(destination)
+        }
+    }
+
+    private func startCityMVPDestination(_ destination: CityMVPDestination) {
+        guard cityMVPDestination?.id == destination.id, cityMVPDestination?.started == false else { return }
+        cityMVPDestination?.started = true
+        CityDistrictTrace.navigation("started", style: cityMVPStyle, distance: destination.camera.distance)
+        withAnimation(destination.animation) {
+            viewModel.cameraPosition = .camera(destination.camera)
+        }
+    }
+
+    private func cancelCityMVPDestination() {
+        cityMVPDestinationPreparation?.cancel()
+        cityMVPDestination = nil
+    }
+
+    private func observeCityMVPCamera(_ camera: MapCamera, settled: Bool, proxy: MapProxy, viewport: CGSize) {
+        cityMVPProjectionRefresh?.cancel()
+        cityMVPObservedCamera = camera
+        if let destination = cityMVPDestination {
+            if !destination.started {
+                prepareCityMVPDestination()
+            } else if viewModel.cameraPosition.positionedByUser
+                        || (settled && cityMVPStyle.updated(for: camera.distance) == cityMVPStyle) {
+                cancelCityMVPDestination()
+            }
+        }
+        let style = cityMVPStyle.observing(distance: camera.distance, settled: settled,
+                                          hasDestination: cityMVPDestination != nil)
+        if style != cityMVPStyle {
+            applyCityMVPStyle(style)
+            return
+        }
+        sampleCityMVPCamera(camera, proxy: proxy, viewport: viewport, canRefresh: true)
+    }
+
+    private func sampleCityMVPCamera(_ camera: MapCamera, proxy: MapProxy, viewport: CGSize, canRefresh: Bool) {
+        guard cityMVPStyleRevision == cityMVPAppliedStyleRevision, viewport.width > 0, viewport.height > 0 else { return }
+        let cityHallPin = camera.distance < 3_800 ? cityMVPRegistration.flatMap { registration in
+            cityMVPCityHall.map { CityMVPPlaceBridge.contextPin(for: $0, registration: registration) }
+        } : nil
+        let sample = CityDistrictCamera(camera: camera, registration: cityMVPRegistration, style: cityMVPStyle,
+                                        styleRevision: cityMVPStyleRevision, viewport: viewport,
+                                        selectedPin: cityMVPSelectedPin?.anchor, cityHallPin: cityHallPin,
+                                        contextPins: camera.distance < 3_800 ? cityMVPContextPins : [],
+                                        traceCameraCenter: CityDistrictTrace.enabled) {
+            proxy.convert($0, to: .named(CityDistrictCamera.space))
+        }
+        if canRefresh, sample.needsProjectionRefresh {
+            if cityMVPFrame?.canRetainProjection(for: sample) != true { cityMVPFrame = sample }
+            refreshCityMVPCamera(proxy: proxy, viewport: viewport)
+        } else {
+            cityMVPFrame = sample
+        }
+    }
+
+    private func refreshCityMVPCamera(proxy: MapProxy, viewport: CGSize) {
+        cityMVPProjectionRefresh?.cancel()
+        guard cityMVPObservedCamera != nil else { return }
+        // MapProxy conversion may be unavailable during the layout or style update.
+        cityMVPProjectionRefresh = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(34)) }
+            catch { return }
+            guard !Task.isCancelled, let camera = cityMVPObservedCamera else { return }
+            sampleCityMVPCamera(camera, proxy: proxy, viewport: viewport, canRefresh: false)
+        }
     }
 #endif
 
@@ -76,9 +232,9 @@ struct MapView: View {
     private func showsNativeSavedPin(_ place: Place) -> Bool {
 #if SAVVY_CITY_MVP
         if displayedPlaces == nil {
-            if viewModel.selectedPlace?.id == place.id { return false }
-            if cityMVPRegistration != nil, let frame = cityMVPFrame,
-               CityMVPPlaceBridge.projectsSavedPin(place, in: frame) { return false }
+            if cityMVPSelectedPin?.anchor.id == place.id.uuidString { return false }
+            if let registration = cityMVPRegistration, let frame = cityMVPRenderFrame,
+               CityMVPPlaceBridge.projectsSavedPin(place, in: frame, registration: registration) { return false }
         }
 #endif
         return place.isMapKitMappable
@@ -86,7 +242,7 @@ struct MapView: View {
 
     private func showsNativeCandidatePin(_ candidate: SaveMapCandidate) -> Bool {
 #if SAVVY_CITY_MVP
-        if displayedPlaces == nil && viewModel.selectedMapCandidate?.id == candidate.id { return false }
+        if displayedPlaces == nil && cityMVPSelectedPin?.anchor.id == candidate.id { return false }
 #endif
         return true
     }
@@ -122,6 +278,35 @@ struct MapView: View {
                     }
 #else
                     UserAnnotation()
+#endif
+
+#if SAVVY_CITY_MVP
+                    if proxy != nil, let pin = cityMVPSelectedPin,
+                       cityMVPRenderFrame?.ownsSelectedPin(pin.anchor) != true {
+                        Annotation("", coordinate: pin.anchor.coordinate, anchor: .bottom) {
+                            pin.artwork()
+                        }
+                    }
+
+                    if proxy != nil, let frame = cityMVPRenderFrame, frame.distance < 3_800,
+                       let registration = cityMVPRegistration, let cityHall = cityMVPCityHall,
+                       cityMVPSelectedPin?.contextID != cityHall.id {
+                        let pin = CityMVPPlaceBridge.contextPin(for: cityHall, registration: registration)
+                        if !frame.ownsCityHallPin(pin) {
+                            Annotation("", coordinate: pin.coordinate, anchor: .bottom) {
+                                Button {
+                                    CityMVPPlaceBridge.select(cityHall, in: viewModel)
+                                } label: {
+                                    CityPinArtwork(id: cityHall.id, title: cityHall.title, symbol: "building.columns",
+                                                   saved: cityHall.isSaved, selected: false)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(cityHall.title)
+                                .accessibilityValue(cityHall.isSaved ? "Map Stamp" : "Unsaved place")
+                                .accessibilityIdentifier("cityMVP.groundPin.\(cityHall.id)")
+                            }
+                        }
+                    }
 #endif
 
                     ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(showsNativeSavedPin)) { place in
@@ -215,7 +400,7 @@ struct MapView: View {
                 }
                 .mapFeatureSelectionDisabled { feature in
 #if SAVVY_CITY_MVP
-                    feature.kind != .pointOfInterest || (displayedPlaces == nil && (cityMVPFrame?.opacity ?? 0) > 0.5)
+                    feature.kind != .pointOfInterest || (displayedPlaces == nil && cityMVPRenderFrame?.showsStreetDetail == true)
 #else
                     feature.kind != .pointOfInterest
 #endif
@@ -234,14 +419,11 @@ struct MapView: View {
                     guard displayedPlaces == nil else { return }
 #if SAVVY_CITY_MVP
                     if let proxy {
-                        cityMVPFrame = CityDistrictCamera(camera: context.camera, registration: cityMVPRegistration) {
-                            proxy.convert($0, to: .named(CityDistrictCamera.space))
-                        }
+                        observeCityMVPCamera(context.camera, settled: false, proxy: proxy, viewport: geo.size)
                         cityMVPRegionUpdate?.cancel()
                         cityMVPRegionUpdate = Task { @MainActor in
                             do { try await Task.sleep(for: .milliseconds(200)) }
                             catch { return }
-                            cityMVPUsesGlobeImagery = context.camera.distance > 3_000_000
                             viewModel.updateVisibleMapRegion(context.region)
                         }
                         return
@@ -250,7 +432,49 @@ struct MapView: View {
                     viewModel.updateVisibleMapRegion(context.region)
                 }
 #if SAVVY_CITY_MVP
-                .onDisappear { cityMVPRegionUpdate?.cancel() }
+                .onMapCameraChange(frequency: .onEnd) { context in
+                    guard let proxy else { return }
+                    observeCityMVPCamera(context.camera, settled: true, proxy: proxy, viewport: geo.size)
+                }
+                .onChange(of: cityMVPStyleRevision) { _, revision in
+                    guard let proxy else { return }
+                    cityMVPAppliedStyleRevision = revision
+                    cityMVPStyleAppliedAt = ContinuousClock().now
+                    CityDistrictTrace.navigation("style-applied", style: cityMVPStyle,
+                                                 distance: cityMVPObservedCamera?.distance ?? -1)
+                    refreshCityMVPCamera(proxy: proxy, viewport: geo.size)
+                    prepareCityMVPDestination()
+                }
+                .onChange(of: viewModel.cameraPosition.positionedByUser) { _, positionedByUser in
+                    guard proxy != nil, positionedByUser else { return }
+                    cancelCityMVPDestination()
+                }
+                .onChange(of: cityMVPRegistration) { _, _ in
+                    guard let proxy else { return }
+                    cityMVPFrame = nil
+                    refreshCityMVPCamera(proxy: proxy, viewport: geo.size)
+                }
+                .onChange(of: geo.size) { _, size in
+                    guard let proxy else { return }
+                    cityMVPFrame = nil
+                    refreshCityMVPCamera(proxy: proxy, viewport: size)
+                }
+                .onChange(of: cityMVPSelectedPin?.anchor) { _, _ in
+                    guard let proxy else { return }
+                    refreshCityMVPCamera(proxy: proxy, viewport: geo.size)
+                }
+                .onChange(of: cityMVPContextPins) { _, _ in
+                    guard let proxy, let camera = cityMVPObservedCamera, camera.distance < 3_800 else { return }
+                    refreshCityMVPCamera(proxy: proxy, viewport: geo.size)
+                }
+                .onDisappear {
+                    guard proxy != nil else { return }
+                    cityMVPRegionUpdate?.cancel()
+                    cityMVPProjectionRefresh?.cancel()
+                    cancelCityMVPDestination()
+                    cityMVPObservedCamera = nil
+                    cityMVPFrame = nil
+                }
 #endif
                 .accessibilityIdentifier("map.liveSurface")
                 .overlay(alignment: .bottomTrailing) {

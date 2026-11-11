@@ -2,7 +2,7 @@
 import UIKit
 import SceneKit
 
-/// Decorative traffic on two non-intersecting one-way carriageways.
+/// Decorative traffic following the bundled Xinyi street geometry.
 @MainActor
 enum CityStreetTraffic {
     static let nodeName = "xinyi-street-traffic"
@@ -21,6 +21,20 @@ enum CityStreetTraffic {
             distances = lengths
         }
 
+        func distance(atX x: CGFloat) -> CGFloat? {
+            distance(at: x, along: \.x)
+        }
+
+        func distance(at value: CGFloat, along axis: KeyPath<CGPoint, CGFloat>) -> CGFloat? {
+            for (i, a) in points.dropLast().enumerated() {
+                let start = a[keyPath: axis], end = points[i + 1][keyPath: axis]
+                guard start != end, min(start, end) <= value, value <= max(start, end) else { continue }
+                let fraction = (value - start) / (end - start)
+                return distances[i] + (distances[i + 1] - distances[i]) * fraction
+            }
+            return nil
+        }
+
         func position(at meters: CGFloat) -> (point: CGPoint, heading: CGFloat) {
             let i = distances.dropFirst().firstIndex { $0 >= meters } ?? points.count - 1
             let a = points[i - 1], b = points[i]
@@ -31,34 +45,160 @@ enum CityStreetTraffic {
         }
     }
 
+    struct Pace {
+        struct Sample {
+            let distance: CGFloat
+            let speed: CGFloat
+            let time: CGFloat
+        }
+
+        let samples: [Sample]
+        var duration: CGFloat { samples.last!.time }
+        static let fadeLength: CGFloat = 14
+
+        init(lane: Lane, cruiseSpeed: CGFloat, junctions: [CGFloat]) {
+            let approach: CGFloat = 34
+            let speedSteps: [CGFloat] = [-34, -24, -16, -8, 0, 8, 16, 24, 34]
+            let landmarks = junctions.flatMap { crossing in speedSteps.map { crossing + $0 } }
+            let distances = Set(lane.distances + landmarks + [Self.fadeLength, lane.length - Self.fadeLength])
+                .filter { $0 >= 0 && $0 <= lane.length }.sorted()
+            var result: [Sample] = []
+            for distance in distances {
+                let nearest = junctions.map { abs($0 - distance) }.min() ?? approach
+                let t = min(1, nearest / approach)
+                let speed = cruiseSpeed * (0.52 + 0.48 * t * t * (3 - 2 * t))
+                let time = result.last.map { $0.time + 2 * (distance - $0.distance) / ($0.speed + speed) } ?? 0
+                result.append(Sample(distance: distance, speed: speed, time: time))
+            }
+            samples = result
+        }
+
+        func startTimes(direction: Int) -> [CGFloat] {
+            [0.08, 0.22, 0.41, 0.55, 0.76, 0.9].map { (CGFloat($0) + CGFloat(direction) * 0.06) * duration }
+        }
+
+        func sample(at time: CGFloat) -> Sample {
+            if time <= 0 { return samples.first! }
+            guard let i = samples.dropFirst().firstIndex(where: { $0.time >= time }) else { return samples.last! }
+            let a = samples[i - 1], b = samples[i]
+            let elapsed = time - a.time
+            let acceleration = (b.speed - a.speed) / (b.time - a.time)
+            return Sample(distance: a.distance + elapsed * (a.speed + acceleration * elapsed / 2),
+                          speed: a.speed + acceleration * elapsed, time: time)
+        }
+
+        func opacity(at distance: CGFloat) -> CGFloat {
+            max(0, min(1, distance / Self.fadeLength, (samples.last!.distance - distance) / Self.fadeLength))
+        }
+    }
+
+    struct Flow {
+        enum Street { case xinyi, songzhi, cityHall }
+
+        let street: Street
+        let lane: Lane
+        let pace: Pace
+        let cycle: CGFloat
+        let starts: [CGFloat]
+
+        func travelTime(for start: CGFloat, elapsed: CGFloat) -> CGFloat {
+            (start + elapsed).truncatingRemainder(dividingBy: cycle)
+        }
+    }
+
     static func lanes(from roads: [CityStreetSurface.Road]) -> [Lane] {
         let byID = Dictionary(uniqueKeysWithValues: roads.map { ($0.id, $0) })
-        let lanes = [[334841515, 334841513], [198645490, 334841514, 668037877, 229070522]]
-        return lanes.compactMap { ids in
-            var path: [CGPoint] = []
-            for id in ids {
-                guard let road = byID[id] else { return nil }
-                for point in road.path where path.last.map({ hypot($0.x - point.x, $0.y - point.y) > 0.2 }) ?? true {
-                    path.append(point)
-                }
-            }
-            guard path.count >= 2 else { return nil }
-            // The outside lane of each carriageway, respecting its OSM direction.
-            let offset = CityStreetSurface.offset(path, by: 3.35)
-            var clipped: [CGPoint] = []
-            for (a, b) in zip(offset, offset.dropFirst()) where abs(b.x - a.x) > 0.01 {
-                let t0 = (-274 - a.x) / (b.x - a.x), t1 = (302 - a.x) / (b.x - a.x)
-                let begin = max(0, min(t0, t1)), end = min(1, max(t0, t1))
-                guard end > begin else { continue }
-                for f in [begin, end] {
-                    let point = CGPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
-                    if clipped.last.map({ hypot($0.x - point.x, $0.y - point.y) > 0.08 }) ?? true {
-                        clipped.append(point)
-                    }
-                }
-            }
-            return clipped.count >= 2 ? Lane(points: clipped) : nil
+        return [[334841515, 334841513], [198645490, 334841514, 668037877, 229070522]].compactMap { ids in
+            guard let path = connectedPath(ids, in: byID) else { return nil }
+            return clippedLane(path, offset: 3.35, along: \.x, in: -274...302)
         }
+    }
+
+    static func flows(from roads: [CityStreetSurface.Road]) -> [Flow] {
+        let through = lanes(from: roads).enumerated().map { direction, lane in
+            let junctions = [CityStreetDetail.cityHall, CityStreetDetail.songzhi]
+                .compactMap { lane.distance(atX: CGFloat(CityDistrictCamera.world($0).x)) }
+            return (lane, Pace(lane: lane, cruiseSpeed: direction == 0 ? 10.8 : 11.6, junctions: junctions))
+        }
+        let byID = Dictionary(uniqueKeysWithValues: roads.map { ($0.id, $0) })
+        let cycle: CGFloat = 78
+        let songzhiX = CGFloat(CityDistrictCamera.world(CityStreetDetail.songzhi).x)
+        let arterial = through.enumerated().compactMap { direction, pair in
+            phasedFlow(.xinyi, lane: pair.0, pace: pair.1, cycle: cycle,
+                       crossing: pair.0.distance(atX: songzhiX),
+                       passages: [6, 12, 18, 24, 30, 36].map { $0 + CGFloat(direction) * 1.4 })
+        }
+        let songzhi = connectedPath([23403474, 1335559367, 1335559366], in: byID)
+        let crossStreet = songzhi.map { path in
+            [path, Array(path.reversed())].enumerated().compactMap { direction, path -> Flow? in
+                guard let lane = clippedLane(path, offset: 2.3, along: \.y, in: 18...207),
+                      let crossing = lane.distance(at: 118, along: \.y) else { return nil }
+                let pace = Pace(lane: lane, cruiseSpeed: 8, junctions: [crossing])
+                return phasedFlow(.songzhi, lane: lane, pace: pace, cycle: cycle, crossing: crossing,
+                                  passages: [51, 64].map { $0 + CGFloat(direction) * 1.4 })
+            }
+        } ?? []
+        // The conflicting movements must all share the same cycle.
+        let mainFlows: [Flow]
+        if arterial.count == 2 && crossStreet.count == 2 {
+            mainFlows = arterial + crossStreet
+        } else {
+            mainFlows = through.enumerated().map { direction, pair in
+                Flow(street: .xinyi, lane: pair.0, pace: pair.1, cycle: pair.1.duration,
+                     starts: pair.1.startTimes(direction: direction))
+            }
+        }
+
+        // City Hall Road ends at Xinyi. Keep these local movements north of
+        // the junction until there is a separate set of turn paths.
+        let approaches = [231534776, 252657368].enumerated().compactMap { direction, id -> Flow? in
+            guard let path = byID[id]?.path,
+                  let lane = clippedLane(path, offset: 0, along: \.y, in: 15...90) else { return nil }
+            let pace = Pace(lane: lane, cruiseSpeed: 7, junctions: [])
+            return Flow(street: .cityHall, lane: lane, pace: pace, cycle: cycle,
+                        starts: [4, 30, 56].map { $0 + CGFloat(direction) * 4 })
+        }
+        return mainFlows + approaches
+    }
+
+    private static func phasedFlow(_ street: Flow.Street, lane: Lane, pace: Pace, cycle: CGFloat,
+                                   crossing: CGFloat?, passages: [CGFloat]) -> Flow? {
+        guard pace.duration < cycle, let crossing,
+              let time = pace.samples.first(where: { $0.distance == crossing })?.time else { return nil }
+        let starts = passages.map { (cycle + time - $0).truncatingRemainder(dividingBy: cycle) }
+        return Flow(street: street, lane: lane, pace: pace, cycle: cycle, starts: starts)
+    }
+
+    private static func connectedPath(_ ids: [Int], in roads: [Int: CityStreetSurface.Road]) -> [CGPoint]? {
+        var path: [CGPoint] = []
+        for id in ids {
+            guard let way = roads[id]?.path, let first = way.first else { return nil }
+            if let last = path.last, hypot(last.x - first.x, last.y - first.y) > 0.2 { return nil }
+            for point in way where path.last.map({ hypot($0.x - point.x, $0.y - point.y) > 0.2 }) ?? true {
+                path.append(point)
+            }
+        }
+        return path
+    }
+
+    private static func clippedLane(_ path: [CGPoint], offset: CGFloat, along axis: KeyPath<CGPoint, CGFloat>,
+                                    in range: ClosedRange<CGFloat>) -> Lane? {
+        let shifted = CityStreetSurface.offset(path, by: offset)
+        var clipped: [CGPoint] = []
+        for (a, b) in zip(shifted, shifted.dropFirst()) {
+            let start = a[keyPath: axis], delta = b[keyPath: axis] - start
+            guard abs(delta) > 0.01 else { continue }
+            let t0 = (range.lowerBound - start) / delta, t1 = (range.upperBound - start) / delta
+            let begin = max(0, min(t0, t1)), end = min(1, max(t0, t1))
+            guard end > begin else { continue }
+            for f in [begin, end] {
+                let point = CGPoint(x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f)
+                if clipped.last.map({ hypot($0.x - point.x, $0.y - point.y) > 0.08 }) ?? true {
+                    clipped.append(point)
+                }
+            }
+        }
+        return clipped.count >= 2 ? Lane(points: clipped) : nil
     }
 
     static func add(to root: SCNNode, roads: [CityStreetSurface.Road]) {
@@ -67,44 +207,51 @@ enum CityStreetTraffic {
         layer.isPaused = true
         root.addChildNode(layer)
         let paint = [0xdeb54f, 0x4c7f82, 0xe4e1d8, 0xa65950, 0x748097]
-        for (direction, lane) in lanes(from: roads).enumerated() {
-            let carCount = 6
-            for i in 0..<carCount {
+        for (direction, flow) in flows(from: roads).enumerated() {
+            let lane = flow.lane, pace = flow.pace
+            let idle = flow.cycle - pace.duration
+            let zero = lane.position(at: 0)
+            let reset = SCNAction.group([
+                .move(to: world(zero.point), duration: 0),
+                .rotateTo(x: 0, y: zero.heading, z: 0, duration: 0, usesShortestUnitArc: true),
+                .fadeOpacity(to: 0, duration: 0),
+            ])
+            let loop = SCNAction.repeatForever(.sequence([reset, travel(on: lane, pace: pace, from: 0),
+                                                          .wait(duration: idle)]))
+            for (i, start) in flow.starts.enumerated() {
                 let taxi = (i + direction) % 4 == 0
                 let color = taxi ? paint[0] : paint[1 + (i + direction) % (paint.count - 1)]
-                let car = model(color: color, taxi: taxi, tall: (i + direction) % 3 == 2)
-                let fraction = (CGFloat(i) + (direction == 0 ? 0.26 : 0.68)) / CGFloat(carCount)
-                let start = lane.length * fraction
-                let first = lane.position(at: start)
+                let car = vehicleModel(color: color, taxi: taxi, tall: (i + direction) % 3 == 2)
+                let distance = pace.sample(at: start).distance
+                let first = lane.position(at: distance)
                 car.position = world(first.point)
                 car.eulerAngles.y = Float(first.heading)
+                car.opacity = pace.opacity(at: distance)
                 layer.addChildNode(car)
-                let zero = lane.position(at: 0)
-                let reset = SCNAction.group([
-                    .move(to: world(zero.point), duration: 0),
-                    .rotateTo(x: 0, y: zero.heading, z: 0, duration: 0, usesShortestUnitArc: true),
-                    .fadeOpacity(to: 0, duration: 0),
-                ])
-                let speed: CGFloat = direction == 0 ? 10.8 : 11.6
-                let loop = SCNAction.repeatForever(.sequence([reset, travel(on: lane, from: 0, speed: speed)]))
-                car.runAction(.sequence([travel(on: lane, from: start, speed: speed), loop]))
+                let remaining = start < pace.duration
+                    ? SCNAction.sequence([travel(on: lane, pace: pace, from: start), .wait(duration: idle)])
+                    : SCNAction.wait(duration: flow.cycle - start)
+                car.runAction(.sequence([remaining, loop]))
             }
         }
     }
 
-    private static func travel(on lane: Lane, from start: CGFloat, speed: CGFloat) -> SCNAction {
-        let fadeLength: CGFloat = 14
-        let stops = Set(lane.distances + [fadeLength, lane.length - fadeLength]).sorted().filter { $0 > start }
-        var previous = start
+    private static func travel(on lane: Lane, pace: Pace, from start: CGFloat) -> SCNAction {
+        var previous = pace.sample(at: start)
         var actions: [SCNAction] = []
-        for next in stops {
-            let end = lane.position(at: next)
-            let duration = (next - previous) / speed
-            let opacity = max(0, min(1, next / fadeLength, (lane.length - next) / fadeLength))
+        for next in pace.samples where next.time > start {
+            let end = lane.position(at: next.distance)
+            let duration = next.time - previous.time
+            let movement = SCNAction.move(to: world(end.point), duration: duration)
+            // Match the speeds on either side of each checkpoint.
+            let entry = Float(2 * previous.speed / (previous.speed + next.speed))
+            movement.timingFunction = { @Sendable time in
+                time * (entry + (1 - entry) * time)
+            }
             actions.append(.group([
-                .move(to: world(end.point), duration: duration),
+                movement,
                 .rotateTo(x: 0, y: end.heading, z: 0, duration: min(0.2, duration), usesShortestUnitArc: true),
-                .fadeOpacity(to: opacity, duration: duration),
+                .fadeOpacity(to: pace.opacity(at: next.distance), duration: duration),
             ]))
             previous = next
         }
@@ -122,7 +269,7 @@ enum CityStreetTraffic {
         return geometry
     }()
 
-    private static func model(color: Int, taxi: Bool, tall: Bool) -> SCNNode {
+    static func vehicleModel(color: Int, taxi: Bool, tall: Bool, parked: Bool = false) -> SCNNode {
         let car = SCNNode()
         let length: CGFloat = tall ? 5.15 : 4.6
         let width: CGFloat = tall ? 2.12 : 1.91
@@ -158,8 +305,11 @@ enum CityStreetTraffic {
         shadow.eulerAngles.x = -.pi / 2
         shadow.position.y = 0.025
         shadow.renderingOrder = 2
-        car.addChildNode(shadow)
-        return car
+        // A parked car never needs its body pieces transformed independently.
+        // Keep the shared ground shadow separate from the opaque body mesh.
+        let vehicle = parked ? car.flattenedClone() : car
+        vehicle.addChildNode(shadow)
+        return vehicle
     }
 
     private static let carShadow = { () -> SCNPlane in

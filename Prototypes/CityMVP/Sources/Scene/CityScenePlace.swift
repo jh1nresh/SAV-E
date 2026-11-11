@@ -44,6 +44,17 @@ struct CityScenePlace: Identifiable, Equatable {
 
 /// Bundled public OSM data; no network, credentials or user vault access.
 enum CitySceneData {
+    static let att4FunWayID = 234589397
+
+    static func buildingHeight(_ tags: [String: String], way: Int) -> Double {
+        // Fujitec documents ten above-ground floors. The extract has no height,
+        // so use an illustrative 4.2 m per retail floor for this authored model.
+        let fallback = Double(tags["building:levels"] ?? "").map { $0 * 3.2 }
+            ?? (way == att4FunWayID ? 42 : 16)
+        return min(300, max(tags["building"] == "roof" ? 1 : 4,
+                            Double(tags["height"]?.replacingOccurrences(of: " m", with: "") ?? "") ?? fallback))
+    }
+
     static let elements: [[String: Any]]? = {
         guard let url = Bundle.main.url(forResource: "taipei-osm", withExtension: "json"),
               let data = try? Data(contentsOf: url),

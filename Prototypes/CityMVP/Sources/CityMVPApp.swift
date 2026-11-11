@@ -44,8 +44,10 @@ enum CityMVPCameras {
     }
 
     static var taipei: MapCamera {
-        MapCamera(centerCoordinate: .init(latitude: 25.033968, longitude: 121.564468),
-                  distance: 2_900, heading: 35, pitch: 52)
+        // Match the pitch MapKit settles on at this overview. A higher request
+        // can trigger a second camera adjustment after the destination arrives.
+        MapCamera(centerCoordinate: CityDistrictCamera.coordinate(x: -15, z: -175),
+                  distance: CityDistrictCamera.overviewDistance, heading: 20, pitch: 35)
     }
 }
 #endif

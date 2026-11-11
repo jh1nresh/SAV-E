@@ -26,6 +26,62 @@ final class CityMVPTests: XCTestCase {
         }
     }
 
+    func testStreetTrafficSlowsAtBothCrossingsAndKeepsCarsApart() throws {
+        let flows = CityStreetTraffic.flows(from: CityStreetSurface.roads()).filter { $0.street == .xinyi }
+        XCTAssertEqual(flows.count, 2)
+        for (direction, flow) in flows.enumerated() {
+            let cruiseSpeed = direction == 0 ? 10.8 : 11.6
+            for x: CGFloat in [-94, 96] {
+                let distance = try XCTUnwrap(flow.lane.distance(atX: x))
+                let closest = try XCTUnwrap(flow.pace.samples.min { abs($0.distance - distance) < abs($1.distance - distance) })
+                XCTAssertEqual(closest.speed, cruiseSpeed * 0.52, accuracy: 0.02)
+                XCTAssertEqual(flow.pace.sample(at: closest.time).distance, distance, accuracy: 0.01)
+            }
+        }
+    }
+
+    func testStreetTrafficSeparatesCrossingDirectionsAndRespectsCityHallTJunction() {
+        let flows = CityStreetTraffic.flows(from: CityStreetSurface.roads())
+        let approaches = flows.filter { $0.street == .cityHall }
+        XCTAssertEqual(flows.map(\.street), [.xinyi, .xinyi, .songzhi, .songzhi, .cityHall, .cityHall])
+        XCTAssertTrue(approaches.allSatisfy { $0.lane.points.allSatisfy { $0.y <= 90.01 } })
+        let crossStreet = flows.filter { $0.street == .songzhi }
+        XCTAssertEqual(crossStreet.count, 2)
+        guard crossStreet.count == 2 else { return }
+        XCTAssertGreaterThan(crossStreet[0].lane.points.first!.y, crossStreet[0].lane.points.last!.y)
+        XCTAssertLessThan(crossStreet[1].lane.points.first!.y, crossStreet[1].lane.points.last!.y)
+
+        var streetsSeen = Set<CityStreetTraffic.Flow.Street>()
+        for time in stride(from: CGFloat.zero, to: 156, by: 0.2) {
+            var crossingStreets = Set<CityStreetTraffic.Flow.Street>()
+            for flow in flows {
+                let distances = flow.starts.compactMap { start -> CGFloat? in
+                    let local = flow.travelTime(for: start, elapsed: time)
+                    guard local < flow.pace.duration else { return nil }
+                    return flow.pace.sample(at: local).distance
+                }.sorted()
+                XCTAssertTrue(zip(distances, distances.dropFirst()).allSatisfy { $1 - $0 > 24 })
+                for distance in distances {
+                    let point = flow.lane.position(at: distance).point
+                    if (flow.street == .xinyi && abs(point.x - 96) < 13)
+                        || (flow.street == .songzhi && abs(point.y - 118) < 22) {
+                        crossingStreets.insert(flow.street)
+                    }
+                }
+            }
+            XCTAssertLessThanOrEqual(crossingStreets.count, 1, "Conflicting traffic at \(time)s")
+            streetsSeen.formUnion(crossingStreets)
+        }
+        XCTAssertEqual(streetsSeen, [.xinyi, .songzhi])
+    }
+
+    func testStreetTrafficSkipsCrossingWhenItsMappedConnectionIsMissing() {
+        let roads = CityStreetSurface.roads().filter { $0.id != 1335559367 }
+        let flows = CityStreetTraffic.flows(from: roads)
+        XCTAssertEqual(flows.map(\.street), [.xinyi, .xinyi, .cityHall, .cityHall])
+        XCTAssertTrue(flows.filter { $0.street == .xinyi }.allSatisfy { $0.cycle == $0.pace.duration })
+    }
+
     func testExplicitConfirmationPersistsAcrossFreshStoresWithoutSavingOtherContext() async throws {
         let namespace = "city-mvp-test-\(UUID().uuidString)"
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(namespace)
@@ -68,9 +124,12 @@ final class CityMVPTests: XCTestCase {
     }
 
     func testProviderOffsetKeepsDistrictEdgeAndProjectionInTheSameSpace() throws {
-        let registration = try XCTUnwrap(CityDistrictRegistration.fromLandmark(
-            .init(latitude: 25.030941, longitude: 121.568341)
+        let landmark = CLLocationCoordinate2D(latitude: 25.030941, longitude: 121.568341)
+        let registration = try XCTUnwrap(CityDistrictRegistration.fromSearchResult(
+            name: "台北101大楼", coordinate: landmark
         ))
+        XCTAssertEqual(CityDistrictRegistration.fromSearchResult(name: "台北101大樓", coordinate: landmark), registration)
+        XCTAssertNil(CityDistrictRegistration.fromSearchResult(name: "台北101购物中心", coordinate: landmark))
         let coordinate = registration.mapCoordinate(CityDistrictCamera.coordinate(x: 520, z: 0))
         let camera = MapCamera(centerCoordinate: coordinate, distance: 1_450, heading: 0, pitch: 0)
         let frame = CityDistrictCamera(camera: camera, registration: registration) { native in

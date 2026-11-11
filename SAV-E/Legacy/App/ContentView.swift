@@ -722,7 +722,10 @@ struct ContentView: View {
                     CityMVPBottomBar(selection: selectedRootTab, onSelect: selectRootTab,
                                      onSearch: { selectRootTab(.map); openMapSearch() },
                                      onCapture: { openDrawer(.addLink, tripID: nil) })
-                        .placed(x: 24, y: AtlasTabBarMetrics.mapY, width: 345, height: 62)
+                        .placed(x: CityMVPBottomBar.horizontalInset,
+                                y: AtlasMetrics.height - CityMVPBottomBar.height - CityMVPBottomBar.bottomClearance,
+                                width: AtlasMetrics.width - CityMVPBottomBar.horizontalInset * 2,
+                                height: CityMVPBottomBar.height)
                 }
             }
 #else
