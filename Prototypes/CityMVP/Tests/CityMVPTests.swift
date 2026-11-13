@@ -1,7 +1,11 @@
 import XCTest
 import MapKit
 import SwiftUI
+#if canImport(SAVE)
+@testable import SAVE
+#else
 @testable import SavvyCityMVP
+#endif
 
 @MainActor
 final class CityMVPTests: XCTestCase {
@@ -147,6 +151,74 @@ final class CityMVPTests: XCTestCase {
         XCTAssertNil(CityDistrictRegistration.fromLandmark(.init(latitude: 31.23, longitude: 121.47)))
     }
 
+    func testArrivalIsTransparentBeforeProjectionCutoffAndForInvalidDistances() {
+        for distance in [Double.infinity, -.infinity, .nan, -1, 0, 5_200, 5_800] {
+            XCTAssertEqual(CitySceneReveal.arrivalOpacity(distance: distance), 0)
+        }
+    }
+
+    func testArrivalKeepsTheEntireNearDistrictSolid() {
+        for distance in [4_800.0, 4_692, 4_350, 3_650, 1_450, 700] {
+            XCTAssertEqual(CitySceneReveal.arrivalOpacity(distance: distance), 1)
+        }
+    }
+
+    func testArrivalIsContinuousInBothZoomDirections() {
+        for boundary in [4_800.0, 5_200] {
+            let before = CitySceneReveal.arrivalOpacity(distance: boundary - 0.01)
+            let after = CitySceneReveal.arrivalOpacity(distance: boundary + 0.01)
+            XCTAssertLessThan(abs(after - before), 0.000001)
+        }
+        let values = stride(from: 5_200.0, through: 4_800, by: -1)
+            .map { CitySceneReveal.arrivalOpacity(distance: $0) }
+        XCTAssertEqual(values.first, 0)
+        XCTAssertEqual(values.last, 1)
+        XCTAssertEqual(CitySceneReveal.arrivalOpacity(distance: 5_000), 0.5)
+        for (before, after) in zip(values, values.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(after, before)
+            XCTAssertLessThanOrEqual(after - before, 0.004)
+        }
+        XCTAssertEqual(Array(values.reversed()), stride(from: 4_800.0, through: 5_200, by: 1)
+            .map { CitySceneReveal.arrivalOpacity(distance: $0) })
+    }
+
+    func testPairedAnchorRequiresBothExplicitVerificationGates() {
+        let input = "--verify-paired-mapkit-anchor=25.030941,121.568341"
+        XCTAssertNil(CityDistrictRegistration.pairedFixture(arguments: [input]))
+        XCTAssertNil(CityDistrictRegistration.pairedFixture(arguments: ["--verify-xinyi", input]))
+        XCTAssertNil(CityDistrictRegistration.pairedFixture(arguments: ["--verify-xinyi-far-render", input]))
+        XCTAssertNotNil(CityDistrictRegistration.pairedFixture(arguments: ["--verify-xinyi", "--verify-xinyi-far-render", input]))
+    }
+
+    func testPairedAnchorRejectsMalformedDuplicateAndOutOfDistrictInput() {
+        let gates = ["--verify-xinyi", "--verify-xinyi-far-render"]
+        let prefix = CityDistrictRegistration.pairedAnchorPrefix
+        for input in ["", ",", "25.03", "25.03,", "nan,121.568341", "25.030941,inf",
+                      "91,121", "31.23,121.47", "25.030941,121.568341,0"] {
+            XCTAssertNil(CityDistrictRegistration.pairedFixture(arguments: gates + [prefix + input]), input)
+        }
+        let valid = prefix + "25.030941,121.568341"
+        XCTAssertNil(CityDistrictRegistration.pairedFixture(arguments: gates + [valid, valid]))
+    }
+
+    func testPairedAnchorPreservesControlOffsetAndLabelsProvenance() throws {
+        // A redacted public landmark fixture tests parsing, not a live query.
+        let coordinate = CLLocationCoordinate2D(latitude: 25.030941, longitude: 121.568341)
+        let control = try XCTUnwrap(CityDistrictRegistration.fromSearchResult(name: "台北101", coordinate: coordinate))
+        let paired = try XCTUnwrap(CityDistrictRegistration.pairedFixture(arguments:
+            ["--verify-xinyi", "--verify-xinyi-far-render", "--verify-paired-mapkit-anchor=25.030941,121.568341"]))
+        XCTAssertEqual(control.provenance, .liveSearch)
+        XCTAssertEqual(paired.provenance, .pairedFixture)
+        XCTAssertEqual(paired.latitudeOffset, control.latitudeOffset)
+        XCTAssertEqual(paired.longitudeOffset, control.longitudeOffset)
+        let source = CityDistrictCamera.coordinate(x: 510, z: -400)
+        let mapped = paired.mapCoordinate(source)
+        XCTAssertEqual(mapped.latitude, control.mapCoordinate(source).latitude)
+        XCTAssertEqual(mapped.longitude, control.mapCoordinate(source).longitude)
+        XCTAssertEqual(paired.sceneCoordinate(mapped).latitude, source.latitude, accuracy: 1e-10)
+        XCTAssertEqual(paired.sceneCoordinate(mapped).longitude, source.longitude, accuracy: 1e-10)
+    }
+
     func testAmapConfigurationNeverClaimsConnection() {
         XCTAssertEqual(CityMVPConfiguration.amapStatus(values: nil, bundleID: "local.savvy.city-mvp"), .missingKey)
         XCTAssertEqual(CityMVPConfiguration.amapStatus(values: ["APIKey": "  "], bundleID: "local.savvy.city-mvp"), .missingKey)
@@ -172,12 +244,19 @@ final class CityMVPTests: XCTestCase {
         XCTAssertFalse(CityMVPPlaceBridge.inScene(outside))
         XCTAssertTrue(CityMVPPlaceBridge.places(context: [], saved: [wrongSystem, outside]).isEmpty)
     }
-    func testLocalBuildCannotUseProductionConfig() {
+    func testConfigurationMatchesTheActualAppTarget() {
+#if canImport(SAVE)
+        XCTAssertEqual(SAVEProductionConfig.appGroupSuiteName, "group.com.wanderly.app")
+        XCTAssertEqual(SAVEProductionConfig.defaultAPIBaseURL, "https://save-backend-production.up.railway.app")
+        XCTAssertEqual(ReviewDemo.isOfflineUITestMode,
+            ProcessInfo.processInfo.arguments.contains("--uitest-review-demo-offline"))
+#else
         XCTAssertTrue(ReviewDemo.isOfflineUITestMode)
         XCTAssertEqual(ReviewDemo.uiTestStorageIdentifier, "city-mvp-local")
         XCTAssertEqual(SAVEProductionConfig.defaultAPIBaseURL, "http://127.0.0.1:9")
         XCTAssertNotEqual(SAVEProductionConfig.appGroupSuiteName, "group.com.wanderly.app")
         XCTAssertNil(SAVEProductionConfig.configValue(for: ["PRIVY_APP_ID", "GOOGLE_PLACES_API_KEY"]))
+#endif
     }
     func testBundledSceneHasUniqueUnsavedFinitePlaces() {
         XCTAssertTrue(CityScenePlace.contextDataAvailable)

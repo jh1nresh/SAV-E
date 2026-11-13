@@ -375,11 +375,12 @@ enum CityCivicLandscape {
     }
 
     nonisolated struct PavingInput: Sendable {
+        let coverage: CityStreetSurface.GroundCoverage?
         fileprivate let features: [PavingFeature]
         fileprivate let carriageways: [CityStreetSurface.Road]
     }
 
-    static func publicPaving(elements: [[String: Any]]) -> PavingInput {
+    static func publicPaving(elements: [[String: Any]], coverage: CityStreetSurface.GroundCoverage? = nil) -> PavingInput {
         let features = elements.compactMap { item -> PavingFeature? in
             guard let tags = item["tags"] as? [String: String], CityStreetSurface.isGround(tags) else { return nil }
             let isPavedPlaza = (item["id"] as? Int).map { pavedParkIDs.contains($0) } == true
@@ -409,7 +410,7 @@ enum CityCivicLandscape {
             }
             return PavingFeature(route: route, style: style, retailWidth: retailWidth)
         }
-        return PavingInput(features: features, carriageways: CityStreetSurface.groundCarriagewayRoutes(in: elements))
+        return PavingInput(coverage: coverage, features: features, carriageways: CityStreetSurface.groundCarriagewayRoutes(in: elements))
     }
 
     @concurrent nonisolated static func preparePublicPaving(_ input: PavingInput) async throws -> CGImage? {
@@ -425,7 +426,8 @@ enum CityCivicLandscape {
             let g = output.cgContext
             g.scaleBy(x: 2, y: 2); g.translateBy(x: -extent.minX, y: -extent.minY)
             drawPublicPaving(g, input: input)
-            CityStreetSurface.fadeNorthernCoverage(g)
+            if let coverage = input.coverage { CityStreetSurface.applyGroundCoverage(coverage, to: g) }
+            else { CityStreetSurface.fadeNorthernCoverage(g) }
         }.cgImage
     }
 
@@ -537,12 +539,14 @@ enum CityCivicLandscape {
         ParkingRow(start: .init(x: 68, y: 183), count: 7, alongZ: true),
     ]
 
-    nonisolated private static func drawSurfaceParking(_ g: CGContext) {
-        let outline = CityStreetSurface.polyline([
+    nonisolated static let surfaceParkingPolygon: [CGPoint] = [
             .init(x: -3, y: 138), .init(x: 58, y: 138), .init(x: 66, y: 148),
             .init(x: 66, y: 174), .init(x: 78, y: 178), .init(x: 78, y: 204),
             .init(x: 24, y: 204), .init(x: 24, y: 177), .init(x: -3, y: 177),
-        ], closed: true)
+    ]
+
+    nonisolated private static func drawSurfaceParking(_ g: CGContext) {
+        let outline = CityStreetSurface.polyline(surfaceParkingPolygon, closed: true)
         g.saveGState()
         g.addPath(outline); g.clip()
         g.setFillColor(CityStreetSurface.color(0x737477).cgColor)
@@ -583,16 +587,17 @@ enum CityCivicLandscape {
         root.addChildNode(layer)
     }
 
-    nonisolated private static func draw101Forecourt(_ g: CGContext) {
-        // Paved areas flank the podium at the two road corners.
-        let courts = [
+    // Paved areas flank the podium at the two road corners.
+    nonisolated static let forecourtPolygons: [[CGPoint]] = [
             [.init(x: -84, y: 59), .init(x: -64, y: 53), .init(x: -57, y: 82), .init(x: -17, y: 90),
              .init(x: -19, y: 95), .init(x: -82, y: 92)],
             [.init(x: 20, y: 73), .init(x: 78, y: 69), .init(x: 85, y: 90), .init(x: 79, y: 97),
              .init(x: 24, y: 95)],
-        ] as [[CGPoint]]
+    ]
+
+    nonisolated private static func draw101Forecourt(_ g: CGContext) {
         g.saveGState()
-        for court in courts { g.addPath(CityStreetSurface.polyline(court, closed: true)) }
+        for court in forecourtPolygons { g.addPath(CityStreetSurface.polyline(court, closed: true)) }
         g.clip()
         CityStreetSurface.drawPavers(g, origin: extent.origin,
                                     colors: [0xc0b7aa, 0xbbb0a3, 0xcac0b0, 0xb5aa9e], grout: 0xaa9d8f)

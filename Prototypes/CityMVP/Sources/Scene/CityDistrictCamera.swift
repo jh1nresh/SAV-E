@@ -6,6 +6,9 @@ import simd
 enum CityDistrictMapStyle: String {
     case globe, city
 
+    static let quietNativeLabels = CityContextPlace.enabled
+        || (CityDistrictTrace.enabled && ProcessInfo.processInfo.arguments.contains("--verify-quiet-native-labels"))
+
     func updated(for distance: Double) -> Self {
         guard distance.isFinite, distance > 0 else { return self }
         switch self {
@@ -21,6 +24,8 @@ enum CityDistrictMapStyle: String {
 }
 
 struct CityDistrictCamera: Equatable {
+    static let cloudHandoffEnabled = CityMVPPreviewConfiguration.enabled || ["--verify-xinyi", "--verify-opaque-reveal", "--verify-material-tone", "--verify-cloud-handoff"]
+        .allSatisfy { ProcessInfo.processInfo.arguments.contains($0) }
     static let space = "cityMVP.viewport"
     static let overviewDistance = 2_900.0
     static let contextPinDistance = 3_800.0
@@ -36,6 +41,11 @@ struct CityDistrictCamera: Equatable {
     private static let cloudPeakDistance = 3_900.0
     private static let cloudClearDistance = 1_650.0
     private static let maximumFitError = 8.0
+
+    static func cloudHandoffTone(distance: Double) -> Double {
+        guard distance.isFinite, distance > 0 else { return 0 }
+        return fade((9_000 - distance) / 4_500)
+    }
 
     struct CloudPatch: Equatable {
         let center: CGPoint
@@ -165,6 +175,11 @@ struct CityDistrictCamera: Equatable {
     let projection: Projection?
     private let fittedOpacity: Double
     private var sceneReady = true
+    let cloudHandoff: Bool
+    var projectionCutoff: Double { cloudHandoff ? 9_000 : Self.prewarmDistance }
+    // Native MapKit owns far pins on its presentation clock. Conversion gaps
+    // inside the modeled range never change this geographic owner.
+    var usesGeographicPinOverlay: Bool { !cloudHandoff || distance < projectionCutoff }
     var opacity: Double { sceneReady ? fittedOpacity : 0 }
     var sceneBlend: SceneBlend? {
         guard viewport.width > 0, viewport.height > 0,
@@ -181,13 +196,22 @@ struct CityDistrictCamera: Equatable {
     }
     var sceneLayerOpacity: Double { sceneBlend?.layerOpacity ?? opacity }
     var showsStreetDetail: Bool { opacity > 0.5 && distance <= Self.streetDistance }
-    var cloudOpacity: Double { sceneReady ? fittedCloudOpacity : 0 }
+    var cloudOpacity: Double { sceneReady || cloudHandoff ? fittedCloudOpacity : 0 }
     let cloudPatches: [CloudPatch]
     private let fittedCloudOpacity: Double
     let requestedOpacity: Double
     let shouldPrewarm: Bool
     let landmarkPoint: CGPoint?
     let cameraCenterPoint: CGPoint?
+    /// Public landmark-only observation. Never used by the renderer or camera.
+    struct RegistrationInspection: Equatable {
+        let latitudeOffset: Double
+        let longitudeOffset: Double
+        let provenance: String
+        let sourcePoint: CGPoint?
+        let registeredPoint: CGPoint?
+    }
+    let registrationInspection: RegistrationInspection?
     private let registration: CityDistrictRegistration?
     private let eyeInsideLandmark: Bool
     private let hiddenContact: SIMD3<Double>?
@@ -203,7 +227,19 @@ struct CityDistrictCamera: Equatable {
         return frame
     }
 
-    var needsProjectionRefresh: Bool { requestedOpacity > 0 && projection == nil && !eyeInsideLandmark }
+    var needsProjectionRefresh: Bool {
+        if shouldPrewarm && projection == nil && !eyeInsideLandmark { return true }
+        // MapProxy may briefly lose conversions after a native camera change.
+        // Outside model preparation there is no fitted projection to trigger
+        // the existing retry, but the geographic clouds and selected pin still
+        // need a fresh native sample. The caller schedules only one retry.
+        // A partial conversion gap drops one bank just as an all-nil sample
+        // drops every bank; both need the same bounded recovery.
+        return cloudHandoff && style == .city && registration != nil
+            && ((selectedPin != nil && selectedPoint == nil)
+                || contextAnchors.contains(where: { $0.point == nil })
+                || (fittedCloudOpacity > 0 && cloudPatches.count < Self.boundaryCloudPatches.count))
+    }
     var hasRegistration: Bool { registration != nil }
 
     var mapCamera: MapCamera {
@@ -214,7 +250,9 @@ struct CityDistrictCamera: Equatable {
     @MainActor
     init(camera: MapCamera, registration: CityDistrictRegistration?, style: CityDistrictMapStyle = .city,
          styleRevision: Int = 0, viewport: CGSize = .zero, selectedPin: Pin? = nil, cityHallPin: Pin? = nil,
-         contextPins: [Pin] = [], traceCameraCenter: Bool = false, project: (CLLocationCoordinate2D) -> CGPoint?) {
+         contextPins: [Pin] = [], traceCameraCenter: Bool = false, inspectRegistration: Bool = false,
+         cloudHandoff: Bool = CityDistrictCamera.cloudHandoffEnabled, project: (CLLocationCoordinate2D) -> CGPoint?) {
+        self.cloudHandoff = cloudHandoff
         self.style = style
         self.styleRevision = styleRevision
         self.viewport = viewport
@@ -224,27 +262,42 @@ struct CityDistrictCamera: Equatable {
         heading = camera.heading
         pitch = camera.pitch
         self.registration = registration
+        if inspectRegistration, let registration {
+            let origin = Self.coordinate(x: 0, z: 0)
+            registrationInspection = RegistrationInspection(
+                latitudeOffset: registration.latitudeOffset, longitudeOffset: registration.longitudeOffset,
+                provenance: registration.provenance.rawValue,
+                sourcePoint: Self.finitePoint(project(origin)),
+                registeredPoint: Self.finitePoint(project(registration.mapCoordinate(origin))))
+        } else {
+            registrationInspection = nil
+        }
         let target = Self.world(registration?.sceneCoordinate(camera.centerCoordinate) ?? camera.centerCoordinate)
         let edge = max(abs(target.x), abs(target.z))
         let hasViewport = viewport.width > 0 && viewport.height > 0
         let outerReach = Self.groundHalfExtent + min(1_000, distance * 0.65)
         let reachFade = Self.fade((outerReach - edge) / 200)
-        let canSeePastCenter = hasViewport && distance < Self.fadeOutDistance && reachFade > 0
-        shouldPrewarm = style == .city && registration != nil && distance < Self.prewarmDistance
+        let prewarm = cloudHandoff ? 9_000 : Self.prewarmDistance
+        let canSeePastCenter = hasViewport && distance < (cloudHandoff ? prewarm : Self.fadeOutDistance) && reachFade > 0
+        shouldPrewarm = style == .city && registration != nil && distance < prewarm
             && (edge < 850 || canSeePastCenter)
         // Use the modeled skyline at the existing Taipei overview. Keep a
         // longer blend outside it so the gray native building yields sooner.
         let zoom = Self.fade((Self.fadeOutDistance - distance) / (Self.fadeOutDistance - Self.overviewDistance))
         let centerCoverage = Self.fade((680 - edge) / 230)
-        let shouldFit = shouldPrewarm && zoom > 0 && (centerCoverage > 0 || canSeePastCenter)
-        if shouldPrewarm, let registration, distance > Self.cloudClearDistance, centerCoverage > 0, hasViewport {
-            let approach = Self.fade((Self.prewarmDistance - distance) /
-                                     (Self.prewarmDistance - Self.cloudPeakDistance))
+        let shouldFit = shouldPrewarm && (centerCoverage > 0 || canSeePastCenter)
+        let cloudStart = cloudHandoff ? 10_000 : Self.prewarmDistance
+        let cloudPeak = cloudHandoff ? 8_000 : Self.cloudPeakDistance
+        let cloudCoverage = cloudHandoff ? reachFade : centerCoverage
+        let canShowClouds = cloudHandoff
+            ? style == .city && registration != nil && distance < cloudStart : shouldPrewarm
+        if canShowClouds, let registration, distance > Self.cloudClearDistance, cloudCoverage > 0, hasViewport {
+            let approach = Self.fade((cloudStart - distance) / (cloudStart - cloudPeak))
             let reveal = Self.fade((distance - Self.cloudClearDistance) /
-                                   (Self.cloudPeakDistance - Self.cloudClearDistance))
-            fittedCloudOpacity = 0.42 * approach * reveal * centerCoverage
+                                   (cloudPeak - Self.cloudClearDistance))
+            fittedCloudOpacity = (cloudHandoff ? 0.98 : 0.42) * approach * reveal * cloudCoverage
             cloudPatches = Self.projectCloudPatches(registration: registration, viewport: viewport,
-                                                    opening: 1 - reveal, project: project)
+                                                    opening: 1 - reveal, boundaryBanks: cloudHandoff, project: project)
         } else {
             fittedCloudOpacity = 0
             cloudPatches = []
@@ -266,7 +319,7 @@ struct CityDistrictCamera: Equatable {
             requestedOpacity = zoom * max(centerCoverage, visibleCoverage)
             eyeInsideLandmark = CityLandmark101.containsInterior(fit.eye)
             fittedOpacity = eyeInsideLandmark ? 0 : requestedOpacity
-            projection = fittedOpacity > 0 ? fit : nil
+            projection = eyeInsideLandmark ? nil : fit
         } else {
             // Ask for the normal projection refresh while a nearby viewport
             // might still overlap the district.
@@ -353,7 +406,7 @@ struct CityDistrictCamera: Equatable {
 
     func canRetainProjection(for sample: Self) -> Bool {
         projection != nil && sample.needsProjectionRefresh
-            && styleRevision == sample.styleRevision && style == sample.style
+            && styleRevision == sample.styleRevision && style == sample.style && cloudHandoff == sample.cloudHandoff
             && viewport == sample.viewport && registration == sample.registration
             && latitude == sample.latitude && longitude == sample.longitude && distance == sample.distance
             && heading == sample.heading && pitch == sample.pitch
@@ -402,13 +455,21 @@ struct CityDistrictCamera: Equatable {
         return x * x * (3 - 2 * x)
     }
 
-    private static func projectCloudPatches(registration: CityDistrictRegistration, viewport: CGSize, opening: Double,
+    private static let boundaryCloudPatches: [(x: Double, z: Double, radius: Double)] = [
+        // Cover the join with the surrounding map, leaving the center
+        // readable. Three central clouds exposed every road endpoint.
+        (-650, -550, 430), (0, -570, 420), (650, -550, 440),
+        (-710, 0, 430), (710, 0, 430),
+        (-650, 650, 440), (0, 710, 420), (650, 650, 430),
+    ]
+
+    private static func projectCloudPatches(registration: CityDistrictRegistration, viewport: CGSize, opening: Double, boundaryBanks: Bool,
                                             project: (CLLocationCoordinate2D) -> CGPoint?) -> [CloudPatch] {
         func screenPoint(x: Double, z: Double) -> CGPoint? {
             finitePoint(project(registration.mapCoordinate(coordinate(x: x, z: z))))
         }
         // Keep the haze on the district as the native camera pans or rotates.
-        let patches: [(x: Double, z: Double, radius: Double)] = [
+        let patches: [(x: Double, z: Double, radius: Double)] = boundaryBanks ? boundaryCloudPatches : [
             (-290, -360, 490),
             (260, -130, 530),
             (-210, 220, 400),

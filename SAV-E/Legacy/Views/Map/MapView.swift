@@ -10,6 +10,7 @@ struct MapView: View {
     let numberedPlacePositions: [UUID: Int]
     let contextBadgeText: String?
 #if SAVVY_CITY_MVP
+    @Environment(\.cityMVPMapIsVisible) private var cityMVPMapIsVisible
     private struct CityMVPDestination {
         let id = UUID()
         let requestedAt = ContinuousClock().now
@@ -31,6 +32,10 @@ struct MapView: View {
     @State private var cityMVPAppliedStyleRevision = 0
     @State private var cityMVPStyleAppliedAt: ContinuousClock.Instant?
     @State private var cityMVPObservedCamera: MapCamera?
+    @State private var cityMVPCameraSettled = false
+    @State private var cityMVPLabelPolicy = CityNativeLabelPolicy.native
+    @State private var cityMVPLabelChangeCamera: MapCamera?
+    @State private var cityMVPLabelPolicyRevision = 0
     @State private var cityMVPProjectionRefresh: Task<Void, Never>?
     @State private var cityMVPRegionUpdate: Task<Void, Never>?
     @State private var cityMVPDestination: CityMVPDestination?
@@ -70,7 +75,10 @@ struct MapView: View {
                                   retryRegistration: {
                                       cityMVPRegistrationFailed = false
                                       cityMVPRegistrationAttempt += 1
-                                  }, navigate: navigateCityMVP) {
+                                  }, navigate: navigateCityMVP,
+                                  nativeLabelsQuiet: cityMVPLabelsQuiet,
+                                  labelChangeCamera: cityMVPLabelChangeCamera,
+                                  labelPolicyRevision: cityMVPLabelPolicyRevision) {
                     standardMap(proxy: proxy)
                 }
             }
@@ -92,7 +100,33 @@ struct MapView: View {
 #if SAVVY_CITY_MVP
     private var cityMVPMapStyle: MapStyle {
         guard displayedPlaces == nil else { return .standard(elevation: .flat) }
-        return cityMVPStyle == .globe ? .imagery(elevation: .realistic) : .standard(elevation: .flat)
+        if cityMVPStyle == .globe { return .imagery(elevation: .realistic) }
+        if cityMVPLabelsQuiet {
+            return .standard(elevation: .flat, emphasis: .muted,
+                             pointsOfInterest: .excludingAll, showsTraffic: false)
+        }
+        return .standard(elevation: .flat)
+    }
+
+    private var cityMVPLabelsQuiet: Bool {
+        CityDistrictMapStyle.quietNativeLabels && cityMVPStyle == .city && cityMVPLabelPolicy == .district
+    }
+
+    private func updateCityMVPLabelPolicy() {
+        guard CityDistrictMapStyle.quietNativeLabels, let camera = cityMVPObservedCamera else { return }
+        let next = cityMVPLabelPolicy.updated(camera: camera, registration: cityMVPRegistration,
+            style: cityMVPStyle, sceneReady: cityMVPSceneReady,
+            projectionAvailable: cityMVPFrame?.projection != nil, settled: cityMVPCameraSettled,
+            contextLabels: CityContextPlace.enabled)
+        guard next != cityMVPLabelPolicy else { return }
+        // Diagnostic only. A label transition never writes cameraPosition or
+        // resets the fitted scene, selected place, map identity or viewport.
+        if CityDistrictTrace.enabled {
+            cityMVPLabelChangeCamera = camera
+            cityMVPLabelPolicyRevision += 1
+        }
+        CityDistrictTrace.write("native-label-policy\t\(next.rawValue)\t\(camera.distance)\t\(camera.centerCoordinate.latitude)\t\(camera.centerCoordinate.longitude)")
+        withTransaction(Transaction(animation: nil)) { cityMVPLabelPolicy = next }
     }
 
     private var cityMVPSelectedPin: CityMVPSelectedPin? {
@@ -105,7 +139,7 @@ struct MapView: View {
 
     private var cityMVPContextPins: [CityDistrictCamera.Pin] {
         guard let registration = cityMVPRegistration else { return [] }
-        return CityMVPPlaceBridge.contextPins(in: viewModel.places, registration: registration)
+        return CityMVPPlaceBridge.contextPins(in: viewModel.filteredPlaces, registration: registration)
     }
 
     private func navigateCityMVP(to camera: MapCamera, animation: Animation?) {
@@ -166,8 +200,10 @@ struct MapView: View {
     }
 
     private func observeCityMVPCamera(_ camera: MapCamera, settled: Bool, proxy: MapProxy, viewport: CGSize) {
+        CityMVPLatencyObservation.camera(camera, settled: settled)
         cityMVPProjectionRefresh?.cancel()
         cityMVPObservedCamera = camera
+        cityMVPCameraSettled = settled
         if let destination = cityMVPDestination {
             if !destination.started {
                 prepareCityMVPDestination()
@@ -183,6 +219,7 @@ struct MapView: View {
             return
         }
         sampleCityMVPCamera(camera, proxy: proxy, viewport: viewport, canRefresh: true)
+        if settled { updateCityMVPLabelPolicy() }
     }
 
     private func sampleCityMVPCamera(_ camera: MapCamera, proxy: MapProxy, viewport: CGSize, canRefresh: Bool) {
@@ -193,8 +230,9 @@ struct MapView: View {
         let sample = CityDistrictCamera(camera: camera, registration: cityMVPRegistration, style: cityMVPStyle,
                                         styleRevision: cityMVPStyleRevision, viewport: viewport,
                                         selectedPin: cityMVPSelectedPin?.anchor, cityHallPin: cityHallPin,
-                                        contextPins: camera.distance < 3_800 ? cityMVPContextPins : [],
-                                        traceCameraCenter: CityDistrictTrace.enabled) {
+                                        contextPins: cityMVPStyle == .city ? cityMVPContextPins : [],
+                                        traceCameraCenter: CityDistrictTrace.enabled,
+                                        inspectRegistration: CityMVPPreviewConfiguration.inspectsPreview) {
             proxy.convert($0, to: .named(CityDistrictCamera.space))
         }
         if canRefresh, sample.needsProjectionRefresh {
@@ -218,14 +256,33 @@ struct MapView: View {
     }
 #endif
 
+    private var showsLegacyLocationControl: Bool {
+#if SAVVY_CITY_MVP
+        // City Lab root has its own44pt locate in top map chrome.
+        // Keep the legacy control for embedded maps and shipping builds.
+        return displayedPlaces != nil
+#else
+        return true
+#endif
+    }
+
     private func rootMapBottomInset(safeArea: CGFloat) -> CGFloat {
 #if SAVVY_CITY_MVP
-        // The place panel may open during a pinch. Keep the native camera's
-        // viewport fixed so that choosing a pin cannot move the map.
-        return 96
+        // City Lab leaves the native credits at the bottom of the full map.
+        // Its dock sits above that footer. Keep this inset selection-independent
+        // so opening a place card cannot move the native camera.
+        return 0
 #else
         return max(safeArea + (viewModel.selectedPlace == nil ? 148 : 240),
                    viewModel.selectedPlace == nil ? 160 : 252)
+#endif
+    }
+
+    private var savedPinAnchor: UnitPoint {
+#if SAVVY_CITY_MVP
+        displayedPlaces == nil ? .bottom : .center
+#else
+        .center
 #endif
     }
 
@@ -281,36 +338,51 @@ struct MapView: View {
 #endif
 
 #if SAVVY_CITY_MVP
+#if targetEnvironment(simulator)
+                    // Independent native rendered reference, only in an explicit
+                    // far-ground diagnostic. Roof-contact frames are excluded.
+                    if CityMVPPreviewConfiguration.inspectsPreview,
+                       ProcessInfo.processInfo.arguments.contains("--inspect-pin-reference"),
+                       displayedPlaces == nil, let pin = cityMVPSelectedPin,
+                       let frame = cityMVPRenderFrame,
+                       frame.style == .city, frame.distance > 9_500,
+                       frame.projection == nil, frame.opacity == 0,
+                       frame.selectedPlacement(for: pin.anchor)?.contactOpacity == 0 {
+                        Annotation("", coordinate: pin.anchor.coordinate, anchor: .center) {
+                            Circle().strokeBorder(Color(red: 1, green: 0, blue: 1), lineWidth: 3)
+                                .frame(width: 36, height: 36)
+                                .allowsHitTesting(false)
+                                .accessibilityIdentifier("cityMVP.nativePinReference")
+                                .transaction { $0.animation = nil }
+                        }
+                    }
+#endif
                     if proxy != nil, let pin = cityMVPSelectedPin,
-                       cityMVPRenderFrame?.ownsSelectedPin(pin.anchor) != true {
-                        Annotation("", coordinate: pin.anchor.coordinate, anchor: .bottom) {
+                       !pin.usesGeographicOverlay(style: cityMVPRenderFrame?.style ?? cityMVPStyle,
+                                                  hasRegistration: cityMVPRegistration != nil,
+                                                  geographicPinsEnabled: cityMVPRenderFrame?.usesGeographicPinOverlay ?? true) {
+                        Annotation("", coordinate: pin.anchor.coordinate, anchor: CityPinArtwork.nativeSelectedAnchor) {
                             pin.artwork()
                         }
                     }
 
-                    if proxy != nil, let frame = cityMVPRenderFrame, frame.distance < 3_800,
-                       let registration = cityMVPRegistration, let cityHall = cityMVPCityHall,
-                       cityMVPSelectedPin?.contextID != cityHall.id {
-                        let pin = CityMVPPlaceBridge.contextPin(for: cityHall, registration: registration)
-                        if !frame.ownsCityHallPin(pin) {
-                            Annotation("", coordinate: pin.coordinate, anchor: .bottom) {
-                                Button {
-                                    CityMVPPlaceBridge.select(cityHall, in: viewModel)
-                                } label: {
-                                    CityPinArtwork(id: cityHall.id, title: cityHall.title, symbol: "building.columns",
-                                                   saved: cityHall.isSaved, selected: false)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel(cityHall.title)
-                                .accessibilityValue(cityHall.isSaved ? "Map Stamp" : "Unsaved place")
-                                .accessibilityIdentifier("cityMVP.groundPin.\(cityHall.id)")
-                            }
-                        }
-                    }
 #endif
 
                     ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(showsNativeSavedPin)) { place in
-                        Annotation("", coordinate: nativePinCoordinate(place)) {
+                        Annotation("", coordinate: nativePinCoordinate(place), anchor: savedPinAnchor) {
+#if SAVVY_CITY_MVP
+                            if displayedPlaces == nil {
+                                CityNativeSavedPin(place: place) {
+                                    CityPinSelectionObservation.record("native-saved-map-tap", id: CityMVPPlaceBridge.contextID(for: place) ?? place.id.uuidString)
+                                    viewModel.selectPlace(place, enrichPhoto: false)
+                                }
+                            } else {
+                                PlaceMapPin(place: place, isSelected: viewModel.selectedPlace?.id == place.id,
+                                            position: numberedPlacePositions[place.id]) {
+                                    viewModel.selectPlace(place)
+                                }
+                            }
+#else
                             PlaceMapPin(
                                 place: place,
                                 isSelected: viewModel.selectedPlace?.id == place.id,
@@ -318,13 +390,15 @@ struct MapView: View {
                             ) {
                                 viewModel.selectPlace(place)
                             }
+#endif
                         }
                     }
 
                     if showsAuxiliaryPins {
                         ForEach(viewModel.reviewCandidatesOnMap) { candidate in
                             if let coordinate = candidate.coordinate {
-                                Annotation("", coordinate: coordinate) {
+                                #if SAVVY_CITY_MVP
+Annotation("", coordinate: coordinate, anchor: CityMVPStatePin.annotationAnchor) {
                                     ReviewCandidateMapPin(
                                         candidate: candidate,
                                         isSelected: viewModel.selectedReviewCandidate?.id == candidate.id
@@ -332,11 +406,22 @@ struct MapView: View {
                                         viewModel.selectReviewCandidate(candidate)
                                     }
                                 }
+#else
+Annotation("", coordinate: coordinate) {
+                                    ReviewCandidateMapPin(
+                                        candidate: candidate,
+                                        isSelected: viewModel.selectedReviewCandidate?.id == candidate.id
+                                    ) {
+                                        viewModel.selectReviewCandidate(candidate)
+                                    }
+                                }
+#endif
                             }
                         }
 
                         ForEach(viewModel.visibleMapCandidates.filter(showsNativeCandidatePin)) { candidate in
-                            Annotation("", coordinate: candidate.coordinate) {
+                            #if SAVVY_CITY_MVP
+Annotation("", coordinate: candidate.coordinate, anchor: CityMVPStatePin.annotationAnchor) {
                                 UnsavedMapCandidatePin(
                                     candidate: candidate,
                                     isSelected: viewModel.selectedMapCandidate?.id == candidate.id
@@ -344,10 +429,21 @@ struct MapView: View {
                                     viewModel.selectMapCandidate(candidate)
                                 }
                             }
+#else
+Annotation("", coordinate: candidate.coordinate) {
+                                UnsavedMapCandidatePin(
+                                    candidate: candidate,
+                                    isSelected: viewModel.selectedMapCandidate?.id == candidate.id
+                                ) {
+                                    viewModel.selectMapCandidate(candidate)
+                                }
+                            }
+#endif
                         }
 
                         ForEach(viewModel.visibleSocialPlaces) { place in
-                            Annotation("", coordinate: place.coordinate) {
+                            #if SAVVY_CITY_MVP
+Annotation("", coordinate: place.coordinate, anchor: CityMVPStatePin.annotationAnchor) {
                                 SocialPlaceMapPin(
                                     place: place,
                                     isSelected: viewModel.selectedSocialPlace?.id == place.id
@@ -355,6 +451,16 @@ struct MapView: View {
                                     viewModel.selectSocialPlace(place)
                                 }
                             }
+#else
+Annotation("", coordinate: place.coordinate) {
+                                SocialPlaceMapPin(
+                                    place: place,
+                                    isSelected: viewModel.selectedSocialPlace?.id == place.id
+                                ) {
+                                    viewModel.selectSocialPlace(place)
+                                }
+                            }
+#endif
                         }
                     }
 
@@ -400,7 +506,10 @@ struct MapView: View {
                 }
                 .mapFeatureSelectionDisabled { feature in
 #if SAVVY_CITY_MVP
-                    feature.kind != .pointOfInterest || (displayedPlaces == nil && cityMVPRenderFrame?.showsStreetDetail == true)
+                    // Invisible native POIs must not replace a scene pin during
+                    // gestures on the opaque authored district.
+                    feature.kind != .pointOfInterest || (displayedPlaces == nil && cityMVPSceneReady
+                        && (cityMVPRenderFrame?.opacity ?? 0) > 0.5)
 #else
                     feature.kind != .pointOfInterest
 #endif
@@ -432,6 +541,17 @@ struct MapView: View {
                     viewModel.updateVisibleMapRegion(context.region)
                 }
 #if SAVVY_CITY_MVP
+                .accessibilityHidden(!cityMVPMapIsVisible)
+                .onAppear {
+                    CityMVPLatencyObservation.note(.mount)
+                    guard let proxy,
+                          let camera = cityMVPObservedCamera ?? viewModel.cameraPosition.camera else { return }
+                    // A pushed capture/review can disappear without changing
+                    // MapKit's camera. Reproject with this mount's native proxy;
+                    // never wait for a drag or reuse the previous fitted frame.
+                    cityMVPObservedCamera = camera
+                    sampleCityMVPCamera(camera, proxy: proxy, viewport: geo.size, canRefresh: true)
+                }
                 .onMapCameraChange(frequency: .onEnd) { context in
                     guard let proxy else { return }
                     observeCityMVPCamera(context.camera, settled: true, proxy: proxy, viewport: geo.size)
@@ -453,7 +573,11 @@ struct MapView: View {
                     guard let proxy else { return }
                     cityMVPFrame = nil
                     refreshCityMVPCamera(proxy: proxy, viewport: geo.size)
+                    updateCityMVPLabelPolicy()
                 }
+                .onChange(of: cityMVPSceneReady) { _, _ in updateCityMVPLabelPolicy() }
+                .onChange(of: cityMVPFrame?.projection != nil) { _, _ in updateCityMVPLabelPolicy() }
+                .onChange(of: cityMVPStyle) { _, _ in updateCityMVPLabelPolicy() }
                 .onChange(of: geo.size) { _, size in
                     guard let proxy else { return }
                     cityMVPFrame = nil
@@ -469,15 +593,18 @@ struct MapView: View {
                 }
                 .onDisappear {
                     guard proxy != nil else { return }
+                    CityMVPLatencyObservation.note(.disappear)
                     cityMVPRegionUpdate?.cancel()
                     cityMVPProjectionRefresh?.cancel()
                     cancelCityMVPDestination()
-                    cityMVPObservedCamera = nil
+                    // Keep only the last observed native camera for remount.
+                    // Its projected frame is always invalidated and rebuilt.
                     cityMVPFrame = nil
                 }
 #endif
                 .accessibilityIdentifier("map.liveSurface")
                 .overlay(alignment: .bottomTrailing) {
+                    if showsLegacyLocationControl {
                     CurrentLocationButton(
                         isLocating: viewModel.isLocatingUser,
                         action: {
@@ -494,6 +621,7 @@ struct MapView: View {
 #else
                     .padding(.bottom, bottomChromeInset)
 #endif
+                    }
                 }
                 .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 
@@ -744,6 +872,26 @@ struct PlaceMapPin: View {
     let onTap: () -> Void
 
     var body: some View {
+#if SAVVY_CITY_MVP
+        Button {
+            SaveHaptics.select()
+            onTap()
+        } label: {
+            if let position {
+                TripMapOrderMarker(position: position)
+            } else {
+                CityPinArtwork(id: CityMVPPlaceBridge.contextID(for: place), title: place.name,
+                    symbol: place.category.mapMarkerSymbol, saved: true, selected: isSelected,
+                    visited: place.status == .visited)
+            }
+        }
+        .buttonStyle(.plain)
+        .zIndex(isSelected ? 10 : 0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(languageSettings.localized(english: "\(place.name) Map Stamp", traditionalChinese: "\(place.name) 地圖章"))
+        .accessibilityValue(place.status == .visited ? "Saved · visited" : "Saved · want to go")
+        .accessibilityIdentifier("map.pin.saved.\(place.id.uuidString)")
+#else
         Button {
             SaveHaptics.select()
             onTap()
@@ -777,6 +925,7 @@ struct PlaceMapPin: View {
         .zIndex(isSelected ? 10 : 0)
         .accessibilityLabel(languageSettings.localized(english: "\(place.name) Map Stamp", traditionalChinese: "\(place.name) 地圖章"))
         .accessibilityIdentifier("map.pin.saved.\(place.id.uuidString)")
+#endif
     }
 }
 
@@ -791,14 +940,22 @@ private struct SocialPlaceMapPin: View {
             SaveHaptics.select()
             onTap()
         } label: {
+#if SAVVY_CITY_MVP
+            CityMVPStatePin(title: place.name, symbol: place.category.mapMarkerSymbol,
+                            state: .shared, selected: isSelected)
+#else
             DefaultPOIMarker(
                 systemName: "person.2.fill",
                 tint: place.category.mapMarkerTint,
                 state: .shared,
                 isSelected: isSelected
             )
+#endif
         }
         .buttonStyle(.plain)
+#if SAVVY_CITY_MVP
+        .accessibilityElement(children: .ignore)
+#endif
         .accessibilityLabel(languageSettings.localized(english: "\(place.name) social place", traditionalChinese: "\(place.name) 社交地點"))
         .accessibilityHint(place.socialSignal?.displayText ?? languageSettings.localized(english: "Opens a place from your social map", traditionalChinese: "打開社交地圖裡的地點"))
         .accessibilityIdentifier("map.pin.social.\(place.id.uuidString)")
@@ -816,14 +973,22 @@ struct ReviewCandidateMapPin: View {
             SaveHaptics.select()
             onTap()
         } label: {
+#if SAVVY_CITY_MVP
+            CityMVPStatePin(title: candidate.name, symbol: candidate.inferredCategory.iconName,
+                            state: .review, selected: isSelected)
+#else
             DefaultPOIMarker(
                 systemName: candidate.inferredCategory.iconName,
                 tint: SaveAtlasPalette.forest,
                 state: .review,
                 isSelected: isSelected
             )
+#endif
         }
         .buttonStyle(.plain)
+#if SAVVY_CITY_MVP
+        .accessibilityElement(children: .ignore)
+#endif
         .accessibilityLabel(languageSettings.localized(english: "\(candidate.name) Review Candidate", traditionalChinese: "\(candidate.name) 待確認地點"))
         .accessibilityHint(languageSettings.localized(english: "Opens the Review Candidate before saving it as a Map Stamp", traditionalChinese: "先打開待確認地點，再存成地圖章"))
         .accessibilityIdentifier("map.pin.review.\(candidate.id.uuidString)")
@@ -841,6 +1006,10 @@ struct UnsavedMapCandidatePin: View {
             SaveHaptics.select()
             onTap()
         } label: {
+#if SAVVY_CITY_MVP
+            CityMVPStatePin(title: candidate.title, symbol: candidate.category?.mapMarkerSymbol ?? "mappin",
+                            state: .search, selected: isSelected)
+#else
             DefaultPOIMarker(
                 systemName: candidate.category?.mapMarkerSymbol ?? "mappin",
                 tint: candidate.category?.mapMarkerTint ?? .saveCocoa,
@@ -849,9 +1018,13 @@ struct UnsavedMapCandidatePin: View {
             )
             .scaleEffect(isSelected ? 1.18 : 1)
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)
+#endif
         }
         .buttonStyle(.plain)
         .zIndex(isSelected ? 10 : 0)
+#if SAVVY_CITY_MVP
+        .accessibilityElement(children: .ignore)
+#endif
         .accessibilityLabel(languageSettings.localized(english: "\(candidate.title) Unsaved Candidate", traditionalChinese: "\(candidate.title) 未保存候選地點"))
         .accessibilityHint(languageSettings.localized(english: "Opens this visible map place before saving it as a Map Stamp", traditionalChinese: "打開這個地圖候選地點，確認後再存成地圖章"))
         .accessibilityIdentifier("map.pin.unsaved.\(candidate.id)")
@@ -979,3 +1152,82 @@ extension PlaceReviewCandidate {
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
+
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+/// Explicit layout fixture. It never creates a view model/store or saves a place.
+struct CityNativePinStateProbe: View {
+    @State private var selected = ""
+    @State private var callbackCount = 0
+    @State private var night = false
+    private let saved = Place(id: UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
+        name: "收藏範例", address: "Synthetic layout fixture", latitude: 25.036, longitude: 121.562,
+        category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date(timeIntervalSince1970: 0))
+    private let review = PlaceReviewCandidate(id: UUID(uuidString: "00000000-0000-0000-0000-000000000102")!,
+        captureId: nil, name: "待確認咖啡", address: "Synthetic layout fixture", city: "Taipei",
+        latitude: 25.036, longitude: 121.568, evidence: ["Synthetic layout fixture"], confidence: nil,
+        missingInfo: [], status: "needs_confirmation", createdAt: Date(timeIntervalSince1970: 0))
+    private let search = SaveMapCandidate(id: "layout-search", title: "A very long cafe name near City Hall",
+        subtitle: "Synthetic layout fixture", latitude: 25.031, longitude: 121.562, category: .cafe)
+    private let shared = Place(id: UUID(uuidString: "00000000-0000-0000-0000-000000000103")!,
+        name: "朋友分享範例", address: "Synthetic layout fixture", latitude: 25.031, longitude: 121.568,
+        category: .food, status: .wantToGo, sourcePlatform: .other, createdAt: Date(timeIntervalSince1970: 0))
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Pin layout · fixtures").font(.headline)
+                    Text("Synthetic markers · not My places").font(.caption).foregroundStyle(CityMVPStyle.muted)
+                }
+                Spacer()
+                Button { night.toggle() } label: {
+                    Image(systemName: night ? "sun.max" : "moon")
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(night ? "Use day palette" : "Use night palette")
+                .accessibilityIdentifier("cityMVP.pinState.lighting")
+                .accessibilityValue(night ? "night" : "day")
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            Map(initialPosition: .camera(MapCamera(centerCoordinate: .init(latitude: 25.0335, longitude: 121.565),
+                                                  distance: 5_000, heading: 0, pitch: 0))) {
+                Annotation("", coordinate: saved.coordinate, anchor: .bottom) {
+                    PlaceMapPin(place: saved, isSelected: selected == "saved") { choose("saved") }
+                }
+                Annotation("", coordinate: CLLocationCoordinate2D(latitude: 25.036, longitude: 121.568),
+                           anchor: CityMVPStatePin.annotationAnchor) {
+                    ReviewCandidateMapPin(candidate: review, isSelected: selected == "review") { choose("review") }
+                }
+                Annotation("", coordinate: search.coordinate, anchor: CityMVPStatePin.annotationAnchor) {
+                    UnsavedMapCandidatePin(candidate: search, isSelected: selected == "search") { choose("search") }
+                }
+                Annotation("", coordinate: shared.coordinate, anchor: CityMVPStatePin.annotationAnchor) {
+                    SocialPlaceMapPin(place: shared, isSelected: selected == "shared") { choose("shared") }
+                }
+            }
+            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
+            .mapControls { }
+            .accessibilityIdentifier("cityMVP.pinState.map")
+            VStack(spacing: 6) {
+                Text("Selected: " + (selected.isEmpty ? "none" : selected))
+                    .accessibilityIdentifier("cityMVP.pinState.selection")
+                    .accessibilityValue(selected.isEmpty ? "none" : selected)
+                Text("Callbacks: \(callbackCount)")
+                    .accessibilityIdentifier("cityMVP.pinState.callbacks")
+                Text("Layout fixture only · no save action")
+                    .font(.caption).foregroundStyle(CityMVPStyle.muted)
+            }
+            .font(.subheadline).padding(12)
+        }
+        .foregroundStyle(CityMVPStyle.ink)
+        .background(CityMVPStyle.canvas)
+        .preferredColorScheme(night ? .dark : .light)
+    }
+
+    private func choose(_ identity: String) {
+        selected = identity
+        callbackCount += 1
+    }
+}
+#endif

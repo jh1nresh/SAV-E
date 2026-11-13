@@ -3,7 +3,7 @@ import Foundation
 enum SAVEProductionConfig {
     // Existing App Store identifiers stay on com.wanderly until a separate app migration is planned.
     static let legacyProductionBundleID = "com.wanderly.app"
-#if SAVVY_CITY_MVP
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
     nonisolated static let appGroupSuiteName = "group.local.savvy.city-mvp"
 #else
     nonisolated static let appGroupSuiteName = "group.com.wanderly.app"
@@ -16,7 +16,7 @@ enum SAVEProductionConfig {
     static let defaultPlaceShareBaseURL = "https://sav-e-app.vercel.app/p"
     static let defaultTripShareBaseURL = "https://sav-e-app.vercel.app/trip"
     static let defaultListShareBaseURL = "https://sav-e-app.vercel.app/list"
-#if SAVVY_CITY_MVP
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
     static let defaultAPIBaseURL = "http://127.0.0.1:9"
 #else
     static let defaultAPIBaseURL = "https://save-backend-production.up.railway.app"
@@ -44,7 +44,7 @@ enum SAVEProductionConfig {
     }
 
     static func configValue(for keys: [String], bundle: Bundle = .main) -> String? {
-#if SAVVY_CITY_MVP
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
         // This separately built local app never imports production secrets or env overrides.
         return nil
 #else

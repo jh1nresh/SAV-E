@@ -2,6 +2,44 @@
 import SwiftUI
 import UIKit
 
+private struct CityMVPMapVisibilityKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    var cityMVPMapIsVisible: Bool {
+        get { self[CityMVPMapVisibilityKey.self] }
+        set { self[CityMVPMapVisibilityKey.self] = newValue }
+    }
+}
+
+private struct CityMVPOpenFriendsKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
+private struct CityMVPOpenGuideKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
+private struct CityMVPOpenSavedKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
+extension EnvironmentValues {
+    var cityMVPOpenFriends: (() -> Void)? {
+        get { self[CityMVPOpenFriendsKey.self] }
+        set { self[CityMVPOpenFriendsKey.self] = newValue }
+    }
+    var cityMVPOpenGuide: (() -> Void)? {
+        get { self[CityMVPOpenGuideKey.self] }
+        set { self[CityMVPOpenGuideKey.self] = newValue }
+    }
+    var cityMVPOpenSaved: (() -> Void)? {
+        get { self[CityMVPOpenSavedKey.self] }
+        set { self[CityMVPOpenSavedKey.self] = newValue }
+    }
+}
+
+/// The map publishes only chrome placement, never a new camera or pin anchor.
+/// Reading the preference directly keeps the dock and card in one layout pass.
+struct CityMVPDockInsetKey: PreferenceKey {
+    static var defaultValue: CGFloat { CityMVPBottomBar.bottomClearance }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 enum CityMVPStyle {
     static let nightPreference = "cityMVP.night"
 

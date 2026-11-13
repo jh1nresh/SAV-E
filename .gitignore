@@ -80,3 +80,7 @@ specs/save-campaign-screenshots/
 # Generated local city MVP project (not a shipping target)
 /SavvyCityMVP.xcodeproj/
 /project-city-mvp.generated.yml
+
+# Task-owned main integration cache and exclusive owner lock
+/Prototypes/CityMVP/.build-main/
+/Prototypes/CityMVP/.build-main-lock/

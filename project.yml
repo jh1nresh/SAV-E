@@ -8,6 +8,7 @@ options:
     iOS: "17.0"
   xcodeVersion: "16.0"
   generateEmptyDirectories: false
+  postGenCommand: python3 scripts/preserve-storekit-scheme.py
 
 settings:
   base:
@@ -47,6 +48,11 @@ targets:
       - path: Prototypes/AtlasPostcard/Legacy/Sources
         excludes:
           - AtlasPostcardApp.swift
+      - path: Prototypes/CityMVP/Sources
+      - path: Prototypes/CityMVP/Resources
+        excludes:
+          - Amap.local.plist
+        buildPhase: resources
     postBuildScripts:
       - name: Package App Secrets.plist
         script: '"${SRCROOT}/scripts/package-google-places-secrets.sh"'
@@ -93,6 +99,8 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSLocationWhenInUseUsageDescription: "Savvy needs your location to show nearby places on the map."
+        NSLocationTemporaryUsageDescriptionDictionary:
+          SaveInkCheckIn: "只在你按「我到了」時確認你在店裡，不會在背景追蹤，也不保存你的座標。"
         NSMicrophoneUsageDescription: "Savvy uses the microphone when you talk to the command drawer."
         NSSpeechRecognitionUsageDescription: "Savvy uses speech recognition to turn your voice into a place search or planning command."
         ITSAppUsesNonExemptEncryption: false
@@ -109,8 +117,9 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: Apple Development
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SAVVY_CITY_MVP SAVVY_MAIN_APP"
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: SAV-E/SAV-E.entitlements
       configs:
@@ -126,7 +135,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.core
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
@@ -141,7 +150,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.touch
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
@@ -157,7 +166,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.ui
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
@@ -192,7 +201,7 @@ targets:
         INFOPLIST_KEY_LSApplicationQueriesSchemes:
           - savvy
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: SAV-EClip/SAV-EClip.entitlements
         GENERATE_INFOPLIST_FILE: true
@@ -264,7 +273,7 @@ targets:
         CODE_SIGN_IDENTITY: Apple Development
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.ShareExtension
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: SAV-EShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: SAV-EShareExtension/SAV-EShareExtension.entitlements
@@ -281,7 +290,7 @@ targets:
         CODE_SIGN_IDENTITY: Apple Development
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.iMessage
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "110"
+        CURRENT_PROJECT_VERSION: "145"
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: SAV-EiMessage/Info.plist
         CODE_SIGN_ENTITLEMENTS: SAV-EiMessage/SAV-EiMessage.entitlements
@@ -291,6 +300,10 @@ targets:
     platform: iOS
     sources:
       - path: Tests/SocialPlacePipelineTests
+      - path: Prototypes/CityMVP/Tests
+      # Preserve helper membership that previously existed only in the generated project.
+      - path: SAV-EClip/ClipListSavePlanner.swift
+      - path: SAV-EiMessage/MessagesVaultReader.swift
     dependencies:
       - target: SAVE
       - package: ZIPFoundation
@@ -330,6 +343,7 @@ schemes:
         SAVEUITests: [test]
     run:
       config: Debug
+      storeKitConfiguration: SAV-E/Resources/SAVEPro.storekit
     test:
       targets:
         - SAVETests
@@ -345,6 +359,7 @@ schemes:
         SAVEUITests: [test]
     run:
       config: Debug
+      storeKitConfiguration: SAV-E/Resources/SAVEPro.storekit
     test:
       targets:
         - SAVETests

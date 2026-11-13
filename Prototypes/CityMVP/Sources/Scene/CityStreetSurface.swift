@@ -53,7 +53,147 @@ enum CityStreetSurface {
         }
     }
 
+    /// Public source geometry only; the atlas rectangle carries no ownership.
+    /// Closed City Hall sidewalk 373794831 bounds its known civic forecourt.
+    nonisolated struct GroundOwnership: Sendable {
+        let polygons: [[CGPoint]]
+        let corridors: [Road]
+    }
+
+    /// One immutable world-space alpha field is sampled by every ground atlas.
+    nonisolated struct GroundCoverage: Sendable {
+        let image: CGImage
+        let extent: CGRect
+        let feather: CGFloat
+    }
+
+    static func groundOwnership(elements: [[String: Any]]) -> GroundOwnership {
+        var polygons: [[CGPoint]] = []
+        var corridors: [Road] = []
+        for element in elements {
+            guard let tags = element["tags"] as? [String: String],
+                  let geometry = element["geometry"] as? [[String: Double]] else { continue }
+            let points = groundPath(geometry)
+            guard points.count == geometry.count, points.count >= 2 else { continue }
+            let id = element["id"] as? Int
+            let closed = points.count >= 4 && points.first == points.last
+            let building = tags["building"] != nil && tags["building"] != "no"
+            let publicArea = ["park", "garden"].contains(tags["leisure"] ?? "")
+                || (tags["area"] == "yes" && tags["highway"] == "pedestrian")
+                || id == 373794831
+            if closed && (building || (publicArea && isGround(tags))) { polygons.append(points) }
+            if let style = groundRoadStyle(tags) {
+                // Exactly the detailed atlas's 5 m sidewalk on either side.
+                // Footpaths use their mapped/illustrative width, not a road-size buffer.
+                let width = style.width + (style.kind == .arterial || style.kind == .local ? 10 : 0)
+                corridors.append(Road(id: id ?? 0, name: tags["name"] ?? "", path: points, width: width))
+            }
+        }
+        // Reuse existing authored, source-documented public-space outlines.
+        // They are geometry detail, not new navigation/entrance claims.
+        polygons.append(contentsOf: CityCivicLandscape.forecourtPolygons)
+        polygons.append(CityCivicLandscape.surfaceParkingPolygon)
+        return GroundOwnership(polygons: polygons, corridors: corridors)
+    }
+
+    @concurrent nonisolated static func prepareGroundCoverage(_ ownership: GroundOwnership) async throws -> GroundCoverage? {
+        try Task.checkCancellation()
+        let coverage = rasterizeGroundCoverage(ownership)
+        try Task.checkCancellation()
+        return coverage
+    }
+
+    nonisolated static func rasterizeGroundCoverage(_ ownership: GroundOwnership) -> GroundCoverage? {
+        // Include every known feature plus padding: storage edges cannot turn
+        // into an invented district boundary. 1 px/m is shared by all atlases.
+        var extent = districtExtent
+        for polygon in ownership.polygons {
+            for p in polygon { extent = extent.union(CGRect(x: p.x, y: p.y, width: 1, height: 1)) }
+        }
+        for road in ownership.corridors {
+            for p in road.path {
+                extent = extent.union(CGRect(x: p.x - road.width / 2, y: p.y - road.width / 2,
+                                              width: road.width, height: road.width))
+            }
+        }
+        let feather: CGFloat = 4
+        extent = extent.insetBy(dx: -feather - 2, dy: -feather - 2).integral
+        // Validate before converting to Int: finite but distant source coordinates
+        // must fail explicitly instead of overflowing or allocating unbounded memory.
+        guard extent.width.isFinite, extent.height.isFinite,
+              extent.width > 0, extent.height > 0,
+              extent.width <= 4096, extent.height <= 4096 else { return nil }
+        let width = Int(extent.width), height = Int(extent.height)
+        var bytes = [UInt8](repeating: 0, count: width * height)
+        let drawn = bytes.withUnsafeMutableBytes { storage -> Bool in
+            guard let g = CGContext(data: storage.baseAddress, width: width, height: height,
+                                    bitsPerComponent: 8, bytesPerRow: width,
+                                    space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            // Raw bitmap contexts use an upward y-axis; every existing atlas
+            // uses UIKit's downward y-axis / north-first image rows.
+            g.translateBy(x: 0, y: CGFloat(height))
+            g.scaleBy(x: 1, y: -1)
+            g.translateBy(x: -extent.minX, y: -extent.minY)
+            g.setShouldAntialias(false)
+            g.setFillColor(gray: 1, alpha: 1)
+            // Fill separately: opposite source windings cannot punch holes in a union.
+            for polygon in ownership.polygons {
+                g.addPath(polyline(polygon, closed: true)); g.fillPath()
+            }
+            for road in ownership.corridors {
+                g.addPath(polyline(road.path).copy(strokingWithWidth: road.width,
+                           lineCap: .round, lineJoin: .round, miterLimit: 2)); g.fillPath()
+            }
+            return true
+        }
+        guard drawn else { return nil }
+        // Distance to the UNION, not to each overlapping shape. Known surfaces
+        // stay fully opaque, including narrow footpaths. Only a bounded 4 m
+        // transition outside their actual edges fades; unknown lots stay clear.
+        var distance = bytes.map { $0 == 0 ? Float(feather) : Float(0) }
+        let diagonal: Float = 1.41421356
+        for y in 1..<height {
+            for x in 1..<(width - 1) {
+                let i = y * width + x
+                distance[i] = min(distance[i], distance[i - 1] + 1,
+                                  distance[i - width] + 1,
+                                  min(distance[i - width - 1], distance[i - width + 1]) + diagonal)
+            }
+        }
+        for y in stride(from: height - 2, through: 0, by: -1) {
+            for x in stride(from: width - 2, through: 1, by: -1) {
+                let i = y * width + x
+                distance[i] = min(distance[i], distance[i + 1] + 1,
+                                  distance[i + width] + 1,
+                                  min(distance[i + width - 1], distance[i + width + 1]) + diagonal)
+            }
+        }
+        for i in bytes.indices {
+            let t = 1 - min(1, max(0, distance[i] / Float(feather)))
+            bytes[i] = UInt8((255 * t * t * (3 - 2 * t)).rounded())
+        }
+        // Premultiplied white RGBA carries actual alpha (not grayscale luminance).
+        var rgba = [UInt8](repeating: 0, count: bytes.count * 4)
+        for i in bytes.indices { for channel in 0..<4 { rgba[i * 4 + channel] = bytes[i] } }
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData),
+              let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                                  bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                  provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
+        return GroundCoverage(image: image, extent: extent, feather: feather)
+    }
+
+    nonisolated static func applyGroundCoverage(_ coverage: GroundCoverage, to g: CGContext) {
+        g.saveGState()
+        g.setBlendMode(.destinationIn)
+        // The shared image contains every atlas extent, including transparent
+        // unknown land, so destination-in clears the entire complement too.
+        UIImage(cgImage: coverage.image).draw(in: coverage.extent, blendMode: .destinationIn, alpha: 1)
+        g.restoreGState()
+    }
+
     nonisolated struct DistrictGround: Sendable {
+        let coverage: GroundCoverage?
         fileprivate let parks: [[CGPoint]]
         fileprivate let roads: [(id: Int?, path: [CGPoint], kind: GroundRoadKind, width: CGFloat)]
     }
@@ -95,7 +235,7 @@ enum CityStreetSurface {
         """]
     }
 
-    static func districtGround(elements: [[String: Any]]) -> DistrictGround {
+    static func districtGround(elements: [[String: Any]], coverage: GroundCoverage? = nil) -> DistrictGround {
         var parks: [[CGPoint]] = []
         var roads: [(id: Int?, path: [CGPoint], kind: GroundRoadKind, width: CGFloat)] = []
         for element in elements {
@@ -111,7 +251,7 @@ enum CityStreetSurface {
             }
         }
 
-        return DistrictGround(parks: parks, roads: roads)
+        return DistrictGround(coverage: coverage, parks: parks, roads: roads)
     }
 
     nonisolated private static func drawDistrictGround(_ g: CGContext, ground: DistrictGround, extent: CGRect) {
@@ -155,8 +295,11 @@ enum CityStreetSurface {
                              feather: feather, returnsAfterJunction: !east)
         }
         g.restoreGState()
-        fadeNorthernCoverage(g)
-        fadeBoundary(g, bounds: extent, horizontal: feather, vertical: feather)
+        if let coverage = ground.coverage { applyGroundCoverage(coverage, to: g) }
+        else {
+            fadeNorthernCoverage(g)
+            fadeBoundary(g, bounds: extent, horizontal: feather, vertical: feather)
+        }
     }
 
     nonisolated private static func revealNativeRoad(_ g: CGContext, end: CGPoint, inside: CGPoint,
@@ -450,14 +593,14 @@ enum CityStreetSurface {
     // Transfer immutable bitmaps. Scene nodes and the untyped source
     // dataset stay on MainActor.
     @concurrent nonisolated static func prepareRoadTexture(roads: [Road], crossings: [Road],
-                                                           cycleway: [CGPoint]) async throws -> RoadTextures? {
+                                                           cycleway: [CGPoint], coverage: GroundCoverage? = nil) async throws -> RoadTextures? {
         try Task.checkCancellation()
-        let textures = rasterizeRoadTexture(roads: roads, crossings: crossings, cycleway: cycleway)
+        let textures = rasterizeRoadTexture(roads: roads, crossings: crossings, cycleway: cycleway, coverage: coverage)
         try Task.checkCancellation()
         return textures
     }
 
-    nonisolated static func rasterizeRoadTexture(roads: [Road], crossings: [Road], cycleway: [CGPoint]) -> RoadTextures? {
+    nonisolated static func rasterizeRoadTexture(roads: [Road], crossings: [Road], cycleway: [CGPoint], coverage: GroundCoverage? = nil) -> RoadTextures? {
         guard !roads.isEmpty else { return nil }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -501,8 +644,11 @@ enum CityStreetSurface {
             g.restoreGState()
             drawCycleway(g, path: cycleway)
             drawSidewalkDetails(g)
-            fadeNorthernCoverage(g)
-            fadeBoundary(g, bounds: bounds, horizontal: 20, vertical: 16)
+            if let coverage { applyGroundCoverage(coverage, to: g) }
+            else {
+                fadeNorthernCoverage(g)
+                fadeBoundary(g, bounds: bounds, horizontal: 20, vertical: 16)
+            }
         }.cgImage
         guard let surface else { return nil }
         var names: [String: CGImage] = [:]

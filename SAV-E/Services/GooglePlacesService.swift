@@ -535,7 +535,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
         apiBaseURL: String? = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
         accessTokenProvider: @escaping () async throws -> String = { try await PrivyAuthService.shared.accessToken() }
     ) {
-#if SAVVY_CITY_MVP
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
         self.apiKey = nil
 #else
         self.apiKey = Self.normalizedAPIKey(

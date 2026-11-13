@@ -6,10 +6,17 @@ import UIKit
 struct CityPinArtwork: View {
     static let height: CGFloat = 72
     static let selectedTitleClearance: CGFloat = 32
+    static var nativeSelectedHeight: CGFloat { height + selectedTitleClearance }
+    static var nativeSelectedAnchor: UnitPoint { .init(x: 0.5, y: height / nativeSelectedHeight) }
     static let photoDiameter: CGFloat = 42
     static let expandedPhotoDiameter: CGFloat = 58
 
     static let selectedPhotoDiameter: CGFloat = 62
+    static let categoryDiameter: CGFloat = 36
+
+    static func headDiameter(hasPhoto: Bool, selected: Bool, browseDiameter: CGFloat) -> CGFloat {
+        selected ? selectedPhotoDiameter : hasPhoto ? browseDiameter : categoryDiameter
+    }
 
     // Camera sampling drives the zoom size directly. The spring only affects
     // the local head on arrival or selection, never its projected position.
@@ -45,19 +52,34 @@ struct CityPinArtwork: View {
 
     static func photo(for id: String?) -> Photo? { id.flatMap { photos[$0] } }
 
+    static func savedBadgeSymbol(saved: Bool, visited: Bool) -> String? {
+        saved ? (visited ? "checkmark" : "bookmark.fill") : nil
+    }
+
+    static func stateDescription(saved: Bool, visited: Bool) -> String {
+        saved ? (visited ? "Map Stamp · visited" : "Map Stamp · want to go") : "Unsaved place"
+    }
+
     let id: String?
     let title: String
     let symbol: String
     let saved: Bool
     let selected: Bool
+    var visited = false
     var contactOpacity: Double = 0
     var browsePhotoDiameter = Self.photoDiameter
     var zoomReveal = 1.0
     var titleOpacity = 1.0
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var environmentReduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @State private var settled = false
+    // Offscreen textures have no onAppear lifecycle; preserve the final head size.
+    var rendersStaticFrame = false
+    // ImageRenderer has no installed accessibility environment. Supply only
+    // its raster preference explicitly; ordinary views keep the system value.
+    var rasterReduceMotion: Bool? = nil
+    private var reduceMotion: Bool { rasterReduceMotion ?? environmentReduceMotion }
 
     static let photoSpring = Spring(response: 0.36, dampingRatio: 0.64)
 
@@ -70,7 +92,6 @@ struct CityPinArtwork: View {
 
     var body: some View {
         let photo = Self.photo(for: id)?.image
-        let diameter: CGFloat = photo == nil ? 32 : Self.photoDiameter
         ZStack(alignment: .bottom) {
             Ellipse().fill(.black.opacity(selected ? 0.17 : 0.10))
                 .frame(width: selected ? 13 : 6, height: 2)
@@ -84,28 +105,7 @@ struct CityPinArtwork: View {
             .offset(y: 2.5)
             .opacity(contactOpacity)
             .accessibilityHidden(true)
-            Group {
-                if let photo {
-                    photoFace(photo)
-                } else if selected {
-                    selectedFace(nil)
-                        .scaleEffect(glyphEntranceScale, anchor: .bottom)
-                        .animation(glyphEntranceAnimation, value: settled)
-                } else {
-                    ZStack {
-                        Circle().fill(rim)
-                            .shadow(color: .black.opacity(0.22), radius: 3, y: 2.5)
-                        face(nil, diameter: diameter - 3.8)
-                    }
-                    .frame(width: diameter, height: diameter)
-                    .overlay(alignment: .bottom) {
-                        CityPinTip().fill(rim).frame(width: 7, height: 4).offset(y: 2.8)
-                    }
-                    .padding(.bottom, 6 - 2 * contactOpacity)
-                    .scaleEffect(glyphEntranceScale, anchor: .bottom)
-                    .animation(glyphEntranceAnimation, value: settled)
-                }
-            }
+            circularFace(photo)
             .scaleEffect(Self.visibleScale(reveal: zoomReveal, reduceMotion: reduceMotion), anchor: .bottom)
             .animation(reduceMotion ? nil : .spring(Self.photoSpring), value: selected)
             if !selected {
@@ -122,21 +122,22 @@ struct CityPinArtwork: View {
         .onAppear { settled = true }
     }
 
-    private var glyphEntranceScale: CGFloat { !reduceMotion && !settled ? 0.82 : 1 }
-
-    private var glyphEntranceAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.76)
-    }
-
     private func hitDiameter(hasPhoto: Bool) -> CGFloat {
         if selected { return 64 }
         guard hasPhoto else { return 44 }
         return max(44, browsePhotoDiameter + 4)
     }
 
-    private func photoFace(_ photo: UIImage) -> some View {
-        let diameter = selected ? Self.selectedPhotoDiameter : browsePhotoDiameter
-        let entrance: CGFloat = reduceMotion || settled ? 1 : selected ? browsePhotoDiameter / diameter : 0.68
+    var transparentControl: some View {
+        Color.clear.frame(width: selected ? 140 : 94, height: Self.height)
+            .contentShape(CityPinHitArea(diameter: hitDiameter(hasPhoto: Self.photo(for: id) != nil), selected: selected))
+    }
+
+    private func circularFace(_ photo: UIImage?) -> some View {
+        let diameter = Self.headDiameter(hasPhoto: photo != nil, selected: selected, browseDiameter: browsePhotoDiameter)
+        // An already selected photo can mount when ownership returns from
+        // SceneKit. Only actual selection changes animate its diameter below.
+        let entrance: CGFloat = reduceMotion || settled || rendersStaticFrame || selected ? 1 : 0.68
         let border = selected ? accent : rim
         return ZStack {
             Circle().fill(border)
@@ -184,24 +185,6 @@ struct CityPinArtwork: View {
         }
     }
 
-    private func selectedFace(_ photo: UIImage?) -> some View {
-        ZStack(alignment: .top) {
-            // A shallow extrusion keeps the selected place distinct from saved state.
-            CityPinBadge().fill(Color(red: 0.29, green: 0.60, blue: 0.80))
-                .offset(y: 2.6)
-                .shadow(color: .black.opacity(0.22), radius: 4, y: 3)
-            CityPinBadge().fill(accent)
-            CityPinBadge().stroke(LinearGradient(colors: [.white.opacity(0.60), .white.opacity(0.10)],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-                .padding(1.4)
-            face(photo, diameter: 44)
-                .overlay(Circle().strokeBorder(.white.opacity(0.65), lineWidth: 1.2))
-                .padding(.top, 7)
-        }
-        .frame(width: 60, height: 64)
-        .padding(.bottom, 4 - 3 * contactOpacity)
-    }
-
     private func face(_ photo: UIImage?, diameter: CGFloat) -> some View {
         Group {
             if let photo {
@@ -211,7 +194,7 @@ struct CityPinArtwork: View {
                                startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay {
                         Image(systemName: id == "way/142113976" ? "building.columns.fill" : symbol)
-                            .font(.system(size: selected ? 22 : 15, weight: .medium))
+                            .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(CityMVPStyle.ink.opacity(0.80))
                     }
             }
@@ -219,8 +202,8 @@ struct CityPinArtwork: View {
         .frame(width: diameter, height: diameter).clipShape(Circle())
         .overlay(Circle().strokeBorder(.black.opacity(0.10), lineWidth: 0.5))
         .overlay(alignment: .bottomTrailing) {
-            if saved {
-                Image(systemName: "bookmark.fill")
+            if let symbol = Self.savedBadgeSymbol(saved: saved, visited: visited) {
+                Image(systemName: symbol)
                     .font(.system(size: 7, weight: .bold)).foregroundStyle(.white)
                     .frame(width: 13, height: 13).background(Color(red: 0.13, green: 0.35, blue: 0.83), in: Circle())
                     .overlay(Circle().strokeBorder(rim, lineWidth: 1.3)).offset(x: 1, y: 1)

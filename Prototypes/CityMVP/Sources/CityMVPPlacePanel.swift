@@ -107,9 +107,6 @@ struct CityMVPPlacePanel: View {
                     }
                 }.disabled(saving)
             }
-            if photoCredit != nil || candidate?.sourceURL != nil {
-                sourceLinks
-            }
         }
         .padding(16)
         .foregroundStyle(CityMVPStyle.ink)
@@ -133,26 +130,6 @@ struct CityMVPPlacePanel: View {
         .overlay(Circle().strokeBorder(CityMVPStyle.rim, lineWidth: 2))
         .shadow(color: .black.opacity(0.16), radius: 3, y: 2)
         .accessibilityHidden(true)
-    }
-
-    private var sourceLinks: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if let rawURL = candidate?.sourceURL, let url = URL(string: rawURL), url.scheme == "https" {
-                Link(destination: url) {
-                    Text(t("View source", "查看來源"))
-                        .frame(maxWidth: .infinity, minHeight: Self.controlHeight, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-            }
-            if let photoCredit {
-                Link(destination: photoCredit.source) {
-                    Text(t("Photo: \(photoCredit.author)", "照片：\(photoCredit.author)"))
-                        .frame(maxWidth: .infinity, minHeight: Self.controlHeight, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-            }
-        }
-        .font(.caption.weight(.semibold))
     }
 
     private func action(_ title: String, symbol: String, run: @escaping () -> Void) -> some View {

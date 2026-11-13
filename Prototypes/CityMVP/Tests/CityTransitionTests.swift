@@ -2,7 +2,11 @@ import XCTest
 import MapKit
 import simd
 import SwiftUI
+#if canImport(SAVE)
+@testable import SAVE
+#else
 @testable import SavvyCityMVP
+#endif
 
 @MainActor
 final class CityTransitionTests: XCTestCase {
@@ -233,6 +237,123 @@ final class CityTransitionTests: XCTestCase {
         XCTAssertTrue(sample(mapCamera(distance: 5_300), project: screenPoint).cloudPatches.isEmpty)
     }
 
+    func testCloudBanksArriveBeforeScenePreparationAndSurvivePreparation() throws {
+        let far = CityDistrictCamera(camera: mapCamera(distance: 9_500), registration: registration,
+                                     viewport: viewport, cloudHandoff: true, project: screenPoint)
+        XCTAssertFalse(far.shouldPrewarm)
+        XCTAssertNil(far.projection)
+        XCTAssertGreaterThan(far.cloudOpacity, 0)
+        XCTAssertEqual(far.cloudPatches.count, 8)
+        XCTAssertEqual(far.withSceneReadiness(false).cloudOpacity, far.cloudOpacity)
+        let prepared = CityDistrictCamera(camera: mapCamera(distance: 8_500), registration: registration,
+                                          viewport: viewport, cloudHandoff: true, project: screenPoint)
+        XCTAssertTrue(prepared.shouldPrewarm)
+        XCTAssertNotNil(prepared.projection)
+        XCTAssertGreaterThan(prepared.cloudOpacity, far.cloudOpacity)
+        XCTAssertEqual(prepared.opacity, 0, "Earlier geometry must not retime the existing pin-placement curve")
+    }
+
+    func testCloudHandoffRefreshesUnavailableNativeCoordinatesOutsideModelPreparation() {
+        let camera = mapCamera(distance: 9_500)
+        let pin = CityDistrictCamera.Pin(id: "landmark-101", coordinate: camera.centerCoordinate)
+        let pending = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                        selectedPin: pin, cloudHandoff: true) { _ in nil }
+        XCTAssertFalse(pending.shouldPrewarm)
+        XCTAssertNil(pending.projection)
+        XCTAssertNil(pending.selectedPlacement(for: pin))
+        XCTAssertTrue(pending.needsProjectionRefresh,
+                      "Missing native cloud/pin samples need the single layout retry even without model preparation")
+        let settled = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                        selectedPin: pin, cloudHandoff: true, project: screenPoint)
+        XCTAssertFalse(settled.needsProjectionRefresh)
+        XCTAssertNotNil(settled.selectedPlacement(for: pin))
+        XCTAssertFalse(settled.cloudPatches.isEmpty)
+    }
+
+    func testCloudHandoffRefreshesEachPartiallyUnavailableBoundaryBank() {
+        let camera = mapCamera(distance: 9_500)
+        let complete = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                         cloudHandoff: true, project: screenPoint)
+        XCTAssertFalse(complete.shouldPrewarm)
+        XCTAssertEqual(complete.cloudPatches.count, 8)
+        XCTAssertFalse(complete.needsProjectionRefresh)
+        // Each missing center independently exercises compactMap's partial-drop
+        // path. No selected/context pin is missing and no model fit is requested.
+        for missingBank in complete.cloudPatches {
+            let partial = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                            cloudHandoff: true) { coordinate in
+                let point = self.screenPoint(coordinate)
+                return hypot(point.x - missingBank.center.x, point.y - missingBank.center.y) < 0.001 ? nil : point
+            }
+            XCTAssertNil(partial.projection)
+            XCTAssertEqual(partial.cloudPatches.count, 7)
+            XCTAssertTrue(partial.needsProjectionRefresh,
+                          "A single missing boundary bank must request the existing one-shot layout refresh")
+        }
+        let restored = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                         cloudHandoff: true, project: screenPoint)
+        XCTAssertEqual(restored.cloudPatches, complete.cloudPatches)
+        XCTAssertFalse(restored.needsProjectionRefresh)
+    }
+
+    func testCloudBanksClearAtStreetScaleAndKeepLegacyPinCoordinates() {
+        let pin = CityDistrictCamera.Pin(id: "landmark-101", coordinate: mapCamera().centerCoordinate,
+                                        modelContact: CityLandmark101.pinContact)
+        var previous = 1.0
+        for distance in [8_000.0, 7_500, 5_000, 4_150, 2_900, 1_450] {
+            let camera = mapCamera(distance: distance)
+            let current = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                             selectedPin: pin, cloudHandoff: true, project: screenPoint)
+            let legacy = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                            selectedPin: pin, cloudHandoff: false, project: screenPoint)
+            XCTAssertLessThanOrEqual(current.cloudOpacity, previous)
+            previous = current.cloudOpacity
+            XCTAssertEqual(current.selectedPlacement(for: pin), legacy.selectedPlacement(for: pin))
+            XCTAssertEqual(current.opacity, legacy.opacity)
+        }
+        XCTAssertEqual(previous, 0)
+        XCTAssertEqual(CityDistrictCamera.cloudHandoffTone(distance: 9_000), 0)
+        XCTAssertEqual(CityDistrictCamera.cloudHandoffTone(distance: 4_500), 1)
+    }
+
+    func testCloudBankPositionsFollowNativePanAndRotation() throws {
+        let camera = mapCamera(distance: 8_000)
+        let base = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                     cloudHandoff: true, project: screenPoint)
+        let moved = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                      cloudHandoff: true) { coordinate in
+            let point = self.screenPoint(coordinate)
+            return CGPoint(x: point.x - 40, y: point.y + 20)
+        }
+        let rotated = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                        cloudHandoff: true) { coordinate in
+            let point = self.screenPoint(coordinate)
+            return CGPoint(x: -point.y, y: point.x)
+        }
+        let a = try XCTUnwrap(base.cloudPatches.first)
+        let b = try XCTUnwrap(moved.cloudPatches.first)
+        let c = try XCTUnwrap(rotated.cloudPatches.first)
+        XCTAssertEqual(b.center.x, a.center.x - 40, accuracy: 0.001)
+        XCTAssertEqual(b.center.y, a.center.y + 20, accuracy: 0.001)
+        XCTAssertEqual(c.east.dx, -a.east.dy, accuracy: 0.001)
+        XCTAssertEqual(c.east.dy, a.east.dx, accuracy: 0.001)
+    }
+
+    func testCloudHandoffStillExcludesGlobeAndUnregisteredMap() {
+        let camera = mapCamera(distance: 8_000)
+        for (style, anchor) in [(CityDistrictMapStyle.globe, Optional(registration)), (.city, nil)] {
+            let frame = CityDistrictCamera(camera: camera, registration: anchor, style: style, viewport: viewport,
+                                           cloudHandoff: true) { _ in
+                XCTFail("No district projection without a registered city map")
+                return nil
+            }
+            XCTAssertFalse(frame.shouldPrewarm)
+            XCTAssertNil(frame.projection)
+            XCTAssertEqual(frame.cloudOpacity, 0)
+            XCTAssertTrue(frame.cloudPatches.isEmpty)
+        }
+    }
+
     func testCloudPatchesFollowRotationInsteadOfFacingTheScreen() throws {
         let camera = mapCamera(distance: 3_900)
         let baseline = sample(camera, project: screenPoint)
@@ -389,7 +510,7 @@ final class CityTransitionTests: XCTestCase {
     }
 
     func testCityHallPinUsesTheModeledRoofWithTheSameGeographicIdentity() throws {
-        let place = try XCTUnwrap(CityMVPPlaceBridge.cityHallPlace(in: []))
+        let place = try XCTUnwrap(CityMVPPlaceBridge.context.first { $0.id == CityMVPPlaceBridge.cityHallID })
         XCTAssertEqual(place.id, "way/142113976")
         XCTAssertEqual(place.x, -5.1, accuracy: 0.1)
         XCTAssertEqual(place.z, -397.5, accuracy: 0.1)
@@ -398,7 +519,7 @@ final class CityTransitionTests: XCTestCase {
         XCTAssertFalse(CityMVPPlaceBridge.showsContextPin(place.id, in: flat))
         XCTAssertNil(flat.cityHallOverlayPoint(for: pin))
         let overview = sample(mapCamera(distance: CityDistrictCamera.overviewDistance), cityHall: pin, project: screenPoint)
-        XCTAssertTrue(CityMVPPlaceBridge.showsContextPin(place.id, in: overview))
+        XCTAssertFalse(CityMVPPlaceBridge.showsContextPin(place.id, in: overview), "Public City Hall is an ordinary sourced label, while its selected roof contact remains valid")
         let contact = try XCTUnwrap(pin.modelContact)
         XCTAssertEqual(contact.y, 38.4, accuracy: 0.001)
         XCTAssertEqual(overview.cityHallOverlayPoint(for: pin), try XCTUnwrap(overview.projection).point(at: contact))
@@ -498,6 +619,49 @@ final class CityTransitionTests: XCTestCase {
             return CGPoint(x: 201 + 500 * direction * point.x / depth,
                            y: 380 + 500 * direction * cos(pitch) * point.z / depth)
         }
+    }
+
+    func testRegistrationObservationIsOptInAndDoesNotChangeTheFrame() throws {
+        let camera = mapCamera()
+        var ordinaryCalls = 0
+        let ordinary = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport) {
+            ordinaryCalls += 1; return self.screenPoint($0)
+        }
+        var inspectedCalls = 0
+        let inspected = CityDistrictCamera(camera: camera, registration: registration, viewport: viewport,
+                                          inspectRegistration: true) {
+            inspectedCalls += 1; return self.screenPoint($0)
+        }
+        XCTAssertNil(ordinary.registrationInspection)
+        let observation = try XCTUnwrap(inspected.registrationInspection)
+        XCTAssertEqual(inspectedCalls, ordinaryCalls + 2)
+        XCTAssertEqual(observation.latitudeOffset, registration.latitudeOffset)
+        XCTAssertEqual(observation.longitudeOffset, registration.longitudeOffset)
+        XCTAssertEqual(observation.provenance, "live-search")
+        let source = CityDistrictCamera.coordinate(x: 0, z: 0)
+        XCTAssertEqual(observation.sourcePoint, screenPoint(source))
+        XCTAssertEqual(observation.registeredPoint, screenPoint(registration.mapCoordinate(source)))
+        XCTAssertNotEqual(observation.sourcePoint, observation.registeredPoint)
+        XCTAssertEqual(inspected.projection, ordinary.projection)
+        XCTAssertEqual(inspected.opacity, ordinary.opacity)
+        XCTAssertEqual(inspected.cloudPatches, ordinary.cloudPatches)
+        XCTAssertEqual(inspected.mapCamera, ordinary.mapCamera)
+    }
+
+    func testRegistrationObservationPreservesUnavailableAndOffscreenNativePoints() throws {
+        let origin = CityDistrictCamera.coordinate(x: 0, z: 0)
+        let frame = CityDistrictCamera(camera: mapCamera(), registration: registration, viewport: viewport,
+                                       inspectRegistration: true) { coordinate in
+            self.isSame(coordinate, origin) ? CGPoint(x: CGFloat.infinity, y: 2) : CGPoint(x: -500, y: 2_000)
+        }
+        let observation = try XCTUnwrap(frame.registrationInspection)
+        XCTAssertNil(observation.sourcePoint)
+        XCTAssertEqual(observation.registeredPoint, CGPoint(x: -500, y: 2_000))
+        var calls = 0
+        let unresolved = CityDistrictCamera(camera: mapCamera(), registration: nil, viewport: viewport,
+                                            inspectRegistration: true) { _ in calls += 1; return nil }
+        XCTAssertNil(unresolved.registrationInspection)
+        XCTAssertEqual(calls, 0)
     }
 
     private func mapCamera(x: Double = 0, distance: Double = 1_450) -> MapCamera {

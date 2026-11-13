@@ -1,0 +1,74 @@
+Public Taipei context labels — © OpenStreetMap contributors; ODbL 1.0.
+https://www.openstreetmap.org/copyright
+https://opendatacommons.org/licenses/odbl/1-0/
+
+Derived from existing public OSM API 0.6 map replies, retrieved 2026-11-11 UTC.
+Source endpoint: https://api.openstreetmap.org/api/0.6/map
+42 existing gzip sources: 12 north (attempt5), 30 south (attempt6).
+All compressed hashes checked against attempt6/source-manifest.json.
+Each XML source streamed under a 16 MiB decoded cap; no plain XML persisted.
+
+4070 public-context identities: 3507 nodes and 563 building ways.
+All explicit access=private/no records excluded (7). Missing access is unverified.
+Context only: no saved memory, Map Stamp, recommendation or confirmed entrance.
+Node coordinates are original horizontal positions. Way coordinates are mean
+footprint vertices excluding the closing vertex, not guaranteed interior points.
+±1500 m around latitude 25.033968, longitude 121.564468; scales 111195/100850.
+Names are original name/name:zh/name:zh-Hant/name:en in that order.
+English names are only original name:en tags. Outer whitespace is trimmed.
+No translations, addresses, contact tags, photos or user data are included.
+Type/id identity is retained; same-name branches are not merged.
+Relation-only POIs and named non-building ways are not added by this derivative.
+Labels/categories do not prove current operation, public access or English authority.
+
+Resource SHA256: a0f1c35e116a9ae2e58101c29a611de2912711a34ead217cf12a7a8a46b04ae6
+Extraction script SHA256: ae4a2a368c80cc5cbc8ebf09a4414521d190d780c1ed7d6927ace5a5b0e62f86
+Script: PreviewEvidence/context-labels-20261112/data-prep/extract-context-labels.py
+Validation: PreviewEvidence/context-labels-20261112/data-prep/validation.json
+
+Original compressed source SHA256 (aliases retain original receipts):
+north/tile-00 9462f5082333b89d58dfeec41205132e3d47f10a77189544bcaa2ca059f6a50c
+north/tile-01 144c8e0ca0be574d6d7fbcb70cbaebc61a9af031360ccdd8fd5f13d2a0faa59d
+north/tile-02 978926c25aeea8bc5766a73ea54091d0fe87cc5603f826ff275ab6e1ffaead80
+north/tile-03 cdc7bd2f1d86ac581340d1a8a3c341ea21a638a6055fbaf26ef7e4efc62e7e67
+north/tile-04 aa6081a9cf6094e5dec7a2cd07a698a4b150432d82a4079c3bd93ab6a5c2140c
+north/tile-05 56bf755ff94abaaa3247f78b3d463a836931b0cd716c0bfd6c5fb6b044dad9b1
+north/tile-06 4ac6c8d016a33727de765f62d33f18754f58b2acc0350554dbb185638dadb10e
+north/tile-07 d1fb63d5fd0dd015c9f5ff5d08638d772343d5aa95a12aa7fced193d9e7994e0
+north/tile-08 b5fe2b70d9884b9207dc2532aa0cff41bafa0c8994141b03d65bda6f3f8eebbf
+north/tile-09 b3ece3a1f48b35e60f935bc06b84d8a342d8cff12a41e50d5ac455d00dcb7fea
+north/tile-10 9705b616d5b7edba771591da0b2f33986bf01c3ae4ae32356ca0a6d82d9c9293
+north/tile-11 2c30ecec2c75114f2229eaa2606c6b4121f4a57d97942d21c9464e5a01beb4bc
+south/tile-00 d9eb763642bd191e5c5fc1a286ea73b39583cf477b136943496eb9d514418b44
+south/tile-01 5fb8ffa73f28e379b591679cac32033339090511e4bfb30972b13b83ab9f8706
+south/tile-02 fd3fd016f78edba91739dc1a36cbc341f5e2fdeffe83c22b242ae65344748741
+south/tile-03 0dc856d897016714578758c398a27adaae4e3400c5f0a1fdba65b0b0efdf8885
+south/tile-04 383cac2cde9ac7ac4ae74bc5e3c79eda38d7ac2b5f9f9773f3e124dc60f3fbe8
+south/tile-05 96193ffc42a5802c55352450f2b8d535aa4be9acf1d09641f95c31e20281afc8
+south/tile-06 9820196f3d7da048ae88b6fd99e97bd65df68bc40a36979bb498520a7d9035cf
+south/tile-07 2c17a6ecd208fa5bd8201fa91ea024df4e8a4ebfcf2550aee383cf5f64791997
+south/tile-08 9d603dfd862e96d26a8fdaadf65bc695fd6cd14b7f48fcc51afd4cac6e707cf3
+south/tile-09 180eb8b48d4fbc1e108e2edb84eb9b08d916c86afd354afa04c39d33a94462ba
+south/tile-10 00a2378b1c5acc1d2926af747b3c2ded78a9ae50564a97407cdaa2afccafa559
+south/tile-11 2fcde0668b7832126fca91011917bd390e02cbb7e4b4d6396f87155392282f91
+south/tile-12 cf77b8cde7353a5d3cd58b644c73a63a973297d52fa4dfd010425303d1b71470
+south/tile-13 1630b0ab766bdab6e272799d29883a261fa2d55d05c87019fbcd5baa8c3d47ca
+south/tile-14 b645724950e1394fd73a1046b82140c6c57fe62bcba33dcb71155b7d4c32fbe4
+south/tile-15 5f54c2b32bd50adf99490796d9d57b4296f2df3a7cf1a9da5836bfdba678ea3f
+south/tile-16 ded528beae5354e5d5a161273ae8ee317df5365a8311fe210e4df8ebc8759dc6
+south/tile-17 a22b9d806be8548a1e0c3a7049747379499afd0c22a6d9e9ba0b0d0e64272939
+south/tile-18 5012221143c1ebf9768d5220c90948e8aa049237dc03d576e3c4eaae46f3d90d
+south/tile-19 1a7fa158f157b66590b1045796a7ebdcc81fe7563e1e8844436c7d2f16e94b27
+south/tile-20 13421f2299e12ae48e42c60ad8c6c6099d82c438fc51d3488bef62a725dfdf3a
+south/tile-21 01d669ac6080c60a2082e41f534888e8e71d7b3827fccfb98760a72d17b1128c
+south/tile-22 dcfc1997448dc0e6196b3c42bf8060506b865ecdc2626e6ea1d22ada3e0452e4
+south/tile-23 f2e08839590764fca212c96df1dafef3d91a226f341e80894b02e30ac9dd0e9e
+south/tile-24 b61a5132b5b5375d3c8bee5172efd47ade99b7e2cc66c7eda22ab5e5255a1a65
+south/tile-25 b98fd7041a67dae404a996b04096e07a3466d302e61cf425f86392b606f9c470
+south/tile-26 cfa0d47984d2414eaa300ed8547acc222c570f2b9bb4b808cd5f3965e6f066bd
+south/tile-27 55826cea0a796dafa190f040b560c8ac7417724feebd354c922b59b59f1009bf
+south/tile-28 7b0de7e2d135d36d0e95900ff4c46ffec272185e91f1c7462a29c494e6a4ec8a
+south/tile-29 60fd9abddd6b8064e2bcacb2952810df26200120b32665db5726a53d062a7fd4
+
+north/tile-NN -> PreviewEvidence/context-ring-draft-20261112/attempt5/tile-NN.xml.gz
+south/tile-NN -> PreviewEvidence/context-ring-draft-20261112/attempt6/tile-NN.xml.gz

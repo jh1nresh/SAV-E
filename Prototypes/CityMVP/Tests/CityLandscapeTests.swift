@@ -1,7 +1,11 @@
 import XCTest
 import UIKit
 import SceneKit
+#if canImport(SAVE)
+@testable import SAVE
+#else
 @testable import SavvyCityMVP
+#endif
 
 @MainActor
 final class CityLandscapeTests: XCTestCase {
@@ -11,7 +15,7 @@ final class CityLandscapeTests: XCTestCase {
             var images = Set<ObjectIdentifier>(), bytes = 0
             scene.rootNode.enumerateChildNodes { node, _ in
                 for material in node.geometry?.materials ?? [] {
-                    for property in [material.diffuse, material.emission] {
+                    for property in [material.diffuse, material.emission] + CityRetailFacadeMaterial.textureProperties(in: material) {
                         if let image = property.contents as? UIImage, let cg = image.cgImage,
                            images.insert(ObjectIdentifier(image)).inserted {
                             bytes += cg.bytesPerRow * cg.height
@@ -20,8 +24,18 @@ final class CityLandscapeTests: XCTestCase {
                 }
             }
             let batches = scene.rootNode.childNodes.filter { $0.name?.hasPrefix("xinyi-facade-batch-") == true }
+            let materialIDs = Set(batches.flatMap { $0.geometry?.materials ?? [] }.map(ObjectIdentifier.init))
+            let receipt: [String: Int] = ["facadeBatches": batches.count, "facadeMaterials": materialIDs.count,
+                                         "textureImages": images.count, "textureBytes": bytes]
+            if let data = try? JSONSerialization.data(withJSONObject: receipt, options: [.sortedKeys]) {
+                let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.json")
+                attachment.name = "district-facade-resource-budget"
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
             XCTAssertFalse(batches.isEmpty)
             XCTAssertLessThanOrEqual(batches.count, 24)
+            XCTAssertLessThanOrEqual(materialIDs.count, 24)
             XCTAssertLessThan(bytes, 150 * 1_024 * 1_024, "Per-wall textures would exceed the phone budget")
             XCTAssertNotNil(scene.rootNode.childNode(withName: "xinyi-raised-walkways", recursively: false))
             let lights = scene.rootNode.childNode(withName: CityStreetSurface.nightLightsName, recursively: false)

@@ -4,11 +4,6 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>en</string>
-		<string>zh-Hant</string>
-	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Savvy</string>
 	<key>CFBundleExecutable</key>
@@ -17,6 +12,11 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hant</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -43,17 +43,23 @@
 	<array>
 		<string>comgooglemaps</string>
 	</array>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Savvy needs your location to show nearby places on the map.</string>
 	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
 	<dict>
 		<key>SaveInkCheckIn</key>
 		<string>只在你按「我到了」時確認你在店裡，不會在背景追蹤，也不保存你的座標。</string>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Savvy needs your location to show nearby places on the map.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Savvy uses the microphone when you talk to the command drawer.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Savvy uses speech recognition to turn your voice into a place search or planning command.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>DisplayFont/Caveat-SemiBold.ttf</string>
+		<string>DisplayFont/Iansui-SavvySubset.ttf</string>
+		<string>DisplayFont/Iansui-Ink.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -61,12 +67,6 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>UIAppFonts</key>
-	<array>
-		<string>DisplayFont/Caveat-SemiBold.ttf</string>
-		<string>DisplayFont/Iansui-SavvySubset.ttf</string>
-		<string>DisplayFont/Iansui-Ink.ttf</string>
-	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

@@ -1,7 +1,11 @@
 import XCTest
 import UIKit
 import SceneKit
+#if canImport(SAVE)
+@testable import SAVE
+#else
 @testable import SavvyCityMVP
+#endif
 
 @MainActor
 final class CityLandmarkTests: XCTestCase {

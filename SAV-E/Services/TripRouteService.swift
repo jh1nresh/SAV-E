@@ -51,7 +51,7 @@ final class GoogleTripRouteService: TripRouteServiceProtocol {
         session: URLSession? = nil,
         bundleIdentifier: String? = Bundle.main.bundleIdentifier
     ) {
-#if SAVVY_CITY_MVP
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
         self.apiKey = nil
 #else
         self.apiKey = Self.normalizedAPIKey(

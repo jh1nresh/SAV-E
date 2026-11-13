@@ -2,11 +2,41 @@
 """Generate a separate local target; never rewrite SAV-E.xcodeproj/project.yml."""
 from pathlib import Path
 import copy
+import argparse
+import json
 import subprocess
+from urllib.parse import urlsplit
 import yaml
 
 root = Path(__file__).resolve().parents[2]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--guide-config', type=Path, help='Explicit local Guide endpoint configuration; no credentials')
+args = parser.parse_args()
+guide = None
+if args.guide_config:
+    try:
+        raw = args.guide_config.read_bytes()
+        if len(raw) > 4096:
+            raise ValueError()
+        guide = json.loads(raw)
+        if not isinstance(guide, dict) or set(guide) != {'allowRequests', 'apiBaseURL'} or type(guide['allowRequests']) is not bool or not isinstance(guide['apiBaseURL'], str):
+            raise ValueError()
+        endpoint = guide['apiBaseURL']
+        if endpoint:
+            url = urlsplit(endpoint)
+            if url.port is not None and not 1 <= url.port <= 65535:
+                raise ValueError()
+            if any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in endpoint) or not url.hostname or url.username is not None or url.password is not None or url.query or url.fragment or url.path not in ('', '/'):
+                raise ValueError()
+            if url.scheme != 'https' and not (url.scheme == 'http' and url.hostname in ('127.0.0.1', 'localhost', '::1')):
+                raise ValueError()
+        elif guide['allowRequests']:
+            raise ValueError()
+    except (OSError, ValueError, TypeError, KeyError):
+        parser.error('Guide config must contain only allowRequests (boolean) and apiBaseURL (HTTPS root or localhost HTTP), with no credentials.')
 base = yaml.safe_load((root / 'project.yml').read_text())
+# The archived separate harness must never post-process main app schemes.
+base.get('options', {}).pop('postGenCommand', None)
 app = copy.deepcopy(base['targets']['SAVE'])
 app['sources'] += [
     {'path': 'Prototypes/CityMVP/Sources'},
@@ -43,6 +73,9 @@ app['info'] = {
         'NSLocationWhenInUseUsageDescription': 'Only if requested, show your location on the Apple Maps comparison.',
     }
 }
+if guide is not None:
+    app['info']['properties']['CITY_MVP_GUIDE_ALLOW_REQUESTS'] = guide['allowRequests']
+    app['info']['properties']['CITY_MVP_GUIDE_API_URL'] = guide['apiBaseURL'].rstrip('/')
 base['name'] = 'SavvyCityMVP'
 base['targets'] = {}
 base['targets']['SavvyCityMVP'] = app

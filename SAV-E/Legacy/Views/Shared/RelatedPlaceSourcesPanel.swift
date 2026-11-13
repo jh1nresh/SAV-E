@@ -154,7 +154,7 @@ struct RelatedPlaceSourcesPanel: View {
             stateContent
         }
         .padding(14)
-        .saveAtlasPaper(radius: 16)
+        .relatedSourcesSurface(radius: 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.saved.relatedSources")
         .task(id: loadRequestID) {
@@ -172,7 +172,7 @@ struct RelatedPlaceSourcesPanel: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "magnifyingglass.circle.fill")
                 .font(.title3)
-                .foregroundColor(.saveCocoa)
+                .foregroundColor(RelatedSourcesStyle.cocoa)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(languageSettings.localized(
@@ -180,14 +180,14 @@ struct RelatedPlaceSourcesPanel: View {
                     traditionalChinese: "相關公開來源"
                 ))
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundColor(RelatedSourcesStyle.ink)
 
                 Text(languageSettings.localized(
                     english: "Public-index candidates; verify before using.",
                     traditionalChinese: "這些是公開索引候選，使用前請再次確認。"
                 ))
                 .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.78))
+                .foregroundColor(RelatedSourcesStyle.cocoa.opacity(0.78))
                 .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -209,7 +209,7 @@ struct RelatedPlaceSourcesPanel: View {
                     traditionalChinese: "在七個支援平台搜尋這個已確認地點；結果不會改動地圖章或行程。"
                 ))
                 .font(.caption)
-                .foregroundColor(.saveMutedText)
+                .foregroundColor(RelatedSourcesStyle.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
                 findButton(
@@ -226,13 +226,13 @@ struct RelatedPlaceSourcesPanel: View {
         case .loading:
             HStack(spacing: 10) {
                 ProgressView()
-                    .tint(.saveCocoa)
+                    .tint(RelatedSourcesStyle.cocoa)
                 Text(languageSettings.localized(
                     english: "Searching supported public sources…",
                     traditionalChinese: "正在搜尋支援的公開來源…"
                 ))
                 .font(.caption.weight(.semibold))
-                .foregroundColor(.saveCocoa)
+                .foregroundColor(RelatedSourcesStyle.cocoa)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 8)
@@ -256,11 +256,11 @@ struct RelatedPlaceSourcesPanel: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(emptyStateTitle(pack))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.saveInk)
+                    .foregroundColor(RelatedSourcesStyle.ink)
 
                     Text(emptyStateMessage(pack))
                     .font(.caption)
-                    .foregroundColor(.saveMutedText)
+                    .foregroundColor(RelatedSourcesStyle.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityIdentifier("drawer.saved.relatedSources.empty")
@@ -287,7 +287,7 @@ struct RelatedPlaceSourcesPanel: View {
                     ),
                     systemImage: "arrow.clockwise"
                 )
-                .saveOutlinedButton(fill: SaveAtlasPalette.paper)
+                .relatedSourcesSecondaryAction()
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("drawer.saved.relatedSources.refresh")
@@ -301,7 +301,7 @@ struct RelatedPlaceSourcesPanel: View {
                 traditionalChinese: "搜尋範圍收據"
             ))
             .font(.caption.weight(.bold))
-            .foregroundColor(.saveCocoa)
+            .foregroundColor(RelatedSourcesStyle.cocoa)
 
             FlowLayout(spacing: 6) {
                 ForEach(pack.coverage) { entry in
@@ -311,11 +311,11 @@ struct RelatedPlaceSourcesPanel: View {
 
             Text(receiptSummary(pack))
                 .font(.caption2.weight(.medium))
-                .foregroundColor(.saveMutedText)
+                .foregroundColor(RelatedSourcesStyle.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
-        .saveAtlasPaper(radius: 12)
+        .relatedSourcesSurface(radius: 12)
         .accessibilityIdentifier("drawer.saved.relatedSources.coverage")
     }
 
@@ -327,11 +327,11 @@ struct RelatedPlaceSourcesPanel: View {
                 Image(systemName: "exclamationmark.triangle.fill")
             }
             .font(.subheadline.weight(.bold))
-            .foregroundColor(.saveError)
+            .foregroundColor(RelatedSourcesStyle.error)
 
             Text(error.message(language: languageSettings.language))
                 .font(.caption)
-                .foregroundColor(.saveMutedText)
+                .foregroundColor(RelatedSourcesStyle.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             findButton(
@@ -349,7 +349,7 @@ struct RelatedPlaceSourcesPanel: View {
         } label: {
             Label(title, systemImage: systemImage)
         }
-        .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.coral, foreground: .white))
+        .buttonStyle(RelatedSourcesPrimaryStyle())
         .disabled(state == .loading || !hasGoogleIdentity)
         .accessibilityIdentifier("drawer.saved.relatedSources.find")
     }
@@ -372,7 +372,7 @@ struct RelatedPlaceSourcesPanel: View {
             Image(systemName: "checkmark.seal")
         }
         .font(.caption.weight(.semibold))
-        .foregroundColor(.saveCocoa)
+        .foregroundColor(RelatedSourcesStyle.cocoa)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("drawer.saved.relatedSources.identityRequired")
     }
@@ -421,7 +421,7 @@ struct RelatedPlaceSourcesPanel: View {
             Image(systemName: "clock.badge.exclamationmark")
         }
         .font(.caption.weight(.semibold))
-        .foregroundColor(.saveCocoa)
+        .foregroundColor(RelatedSourcesStyle.cocoa)
         .accessibilityIdentifier("drawer.saved.relatedSources.stale")
     }
 
@@ -488,40 +488,40 @@ private struct RelatedPlaceSourceRow: View {
                 HStack(spacing: 6) {
                     Text(source.platform.displayName)
                         .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .foregroundColor(RelatedSourcesStyle.ink)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(SaveAtlasPalette.kraft.opacity(0.55))
+                        .background(RelatedSourcesStyle.kraft.opacity(0.55))
                         .clipShape(Capsule())
 
                     Text(relationLabel)
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.saveCocoa)
+                        .foregroundColor(RelatedSourcesStyle.cocoa)
 
                     Spacer(minLength: 0)
 
                     Image(systemName: "arrow.up.right")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.saveCocoa)
+                        .foregroundColor(RelatedSourcesStyle.cocoa)
                 }
 
                 Text(source.title)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.saveInk)
+                    .foregroundColor(RelatedSourcesStyle.ink)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
 
                 if let snippet = source.snippet, !snippet.isEmpty {
                     Text(snippet)
                         .font(.caption)
-                        .foregroundColor(.saveMutedText)
+                        .foregroundColor(RelatedSourcesStyle.muted)
                         .multilineTextAlignment(.leading)
                         .lineLimit(3)
                 }
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .saveAtlasPaper(radius: 12)
+            .relatedSourcesSurface(radius: 12)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(source.platform.displayName), \(source.title), \(relationLabel)")
@@ -557,7 +557,7 @@ private struct RelatedSourceCoverageChip: View {
             Text("\(entry.platform.displayName) \(entry.resultCount)")
                 .font(.caption2.weight(.semibold))
         }
-        .foregroundColor(.saveInk)
+        .foregroundColor(RelatedSourcesStyle.ink)
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
         .background(statusColor.opacity(0.64))
@@ -576,9 +576,69 @@ private struct RelatedSourceCoverageChip: View {
 
     private var statusColor: Color {
         switch entry.status {
-        case .searched: return SaveAtlasPalette.mint
-        case .partial: return SaveAtlasPalette.honey
-        case .failed: return .saveError.opacity(0.38)
+        case .searched: return RelatedSourcesStyle.mint
+        case .partial: return RelatedSourcesStyle.honey
+        case .failed: return RelatedSourcesStyle.error.opacity(0.38)
         }
+    }
+}
+
+// Presentation aliases keep the shipping source flow and its exact palette;
+// only the standalone City Lab uses the accepted neutral Form surfaces.
+private enum RelatedSourcesStyle {
+#if SAVVY_CITY_MVP
+    static let cocoa = CityMVPFormStyle.ink
+    static let ink = CityMVPFormStyle.ink
+    static let muted = CityMVPFormStyle.muted
+    static let paper = CityMVPFormStyle.canvas
+    static let kraft = CityMVPFormStyle.card
+    static let accent = CityMVPFormStyle.ink
+    static let mint = CityMVPFormStyle.card
+    static let honey = CityMVPFormStyle.card
+    static let error = Color.red
+#else
+    static let cocoa = Color.saveCocoa
+    static let ink = Color.saveInk
+    static let muted = Color.saveMutedText
+    static let paper = SaveAtlasPalette.paper
+    static let kraft = SaveAtlasPalette.kraft
+    static let accent = SaveAtlasPalette.coral
+    static let mint = SaveAtlasPalette.mint
+    static let honey = SaveAtlasPalette.honey
+    static let error = Color.saveError
+#endif
+}
+
+private extension View {
+    @ViewBuilder func relatedSourcesSurface(radius: CGFloat) -> some View {
+#if SAVVY_CITY_MVP
+        background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: radius + 8))
+#else
+        saveAtlasPaper(radius: radius)
+#endif
+    }
+    @ViewBuilder func relatedSourcesSecondaryAction() -> some View {
+#if SAVVY_CITY_MVP
+        font(.subheadline.weight(.semibold)).foregroundStyle(CityMVPFormStyle.ink)
+            .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 44)
+            .background(CityMVPFormStyle.canvas, in: Capsule())
+#else
+        saveOutlinedButton(fill: SaveAtlasPalette.paper)
+#endif
+    }
+}
+
+private struct RelatedSourcesPrimaryStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @ViewBuilder func makeBody(configuration: Configuration) -> some View {
+#if SAVVY_CITY_MVP
+        configuration.label.font(.subheadline.weight(.semibold))
+            .foregroundStyle(CityMVPFormStyle.canvas).padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .background(CityMVPFormStyle.ink, in: Capsule())
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.4)
+#else
+        SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.coral, foreground: .white).makeBody(configuration: configuration)
+#endif
     }
 }

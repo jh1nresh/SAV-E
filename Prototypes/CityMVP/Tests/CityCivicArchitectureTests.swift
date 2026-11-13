@@ -2,7 +2,11 @@ import XCTest
 import UIKit
 import SceneKit
 import CoreLocation
+#if canImport(SAVE)
+@testable import SAVE
+#else
 @testable import SavvyCityMVP
+#endif
 
 @MainActor
 final class CityCivicArchitectureTests: XCTestCase {

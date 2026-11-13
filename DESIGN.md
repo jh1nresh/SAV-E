@@ -1,24 +1,25 @@
 # Savvy Design System
 
-> Current main app: Ink notebook. Earlier main-app designs are archived in [Legacy design history](SAV-E/Legacy/DESIGN.md). The [App Clip contract](DESIGN-CLIP.md) applies to that separate target only.
+> Current main app direction: map-first Savvy. Earlier main-app designs are archived in [Legacy design history](SAV-E/Legacy/DESIGN.md). The [App Clip contract](DESIGN-CLIP.md) applies to that separate target only.
 
 ## Current product and root
 
 Savvy turns saved-place clues into user-confirmed place memory. A clue, a Review Candidate and a confirmed Map Stamp must remain distinguishable within five seconds.
 
-`SaveApp` owns onboarding, authentication and account verification. After verification the shipping root is `SaveInkNotebookRoot`: one home, no tab bar. Its current screens and chrome live in `SAV-E/Views/InkNotebook/`. Do not restore the five-tab shell, TileTown, Atlas, Doodle or cream-notebook settings styles by reusing archived views.
+`SaveApp` owns onboarding, authentication and account verification. After verification the main root is `SavvyMainMapRoot`, using the real production persistence and handoff bindings. The map is the primary surface with three destinations: Saved, Map (globe icon), and Passport. Search and Add remain map actions. Friends and SAV-E Guide are reachable within this structure; never invent friend endorsements or location sharing. Preserve the glowing switch-like tab selection and a mounted map across tab changes. Do not deliver a separate City Lab app. The existing main app identity remains `com.wanderly.app`.
 
-The current Ink root is not a fixture flag. Normal launches read the authenticated account's saved-place sources. Only explicit screenshot/suite launches may seed sample identities, shops, visits or friends.
+The accepted direction follows the supplied Anywhere references: a full-screen navigable map, round photo pins with responsive pop motion, rounded floating controls, clear hierarchy and adaptive day/night surfaces. Doodle paper, rough outlines and notebook styling are retired for new main surfaces. Existing account/settings compatibility routes retain their behavior until individually restyled; this is an explicit unfinished visual boundary, not fidelity approval.
+
+Use [the region blueprint](Prototypes/CityMVP/REGION-BLUEPRINT.md) for each new district. Taipei uses Apple MapKit with the authored Xinyi scene; Shanghai requests Amap and remains explicitly unavailable until its key and SDK are connected. Apple controls MapKit's regional data providers. An Amap attribution within Apple Maps does not identify an Amap SDK integration.
+
+The main root is not a fixture flag. Normal launches read the authenticated account's saved-place sources. Only explicit screenshot/suite launches may seed sample identities, shops, visits or friends.
 
 ## Visual authority
 
-- Main Ink palette, Iansui type and rough shape geometry are owned by `SaveInkPalette`, `SaveInkType` and the primitives in `SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift`. Use those existing values; do not approximate them with legacy theme names or copy a second palette into a new view.
-- The canvas is Ink paper; text and outlines use Ink ink or muted ink. Controls use the same rough circles and rounded rectangles as Home, place detail and the save sheet.
-- Iansui applies to the main notebook's headings, body and control labels. Preserve Dynamic Type scaling. A new control must not silently switch to Atlas system-font cards, dotted paper or colored selection badges.
-- Ordinary control selection is monochrome and has a shape/text state. The arrival action is the main UI accent. Brand artwork has its own supplied colors and must remain legible.
-- Names, user comments, notes and source content stay in their original language. Translate app-owned copy only, including error/status text and accessibility labels.
-
-Shared `Color+Theme.swift` definitions remain for compatibility and separate consumers; their presence does not authorize using a retired main-app style. New color decisions need a scoped design decision and matching source changes.
+- `Color+Theme.swift` owns the shared palette; `CityMVPStyle` and `CityMVPFormStyle` currently own the integrated map and neutral surface tokens. Their historical names do not imply a separate app.
+- Use adaptive cool surfaces, rounded system typography and readable contrast. No dotted paper or rough edges in new map/Saved/Passport surfaces. Day/night changes both chrome and authored scene lighting.
+- Names, user comments, notes and source content stay in their original language. Translate app-owned copy only, including errors/status and accessibility labels.
+- Confirmed saves, review candidates and unresolved clues have distinct symbols and text, never just different colors. Pins use stable geographic anchors; decorative scale/pop must not move the anchor.
 
 ## Branding, entry and loading
 
@@ -28,11 +29,13 @@ The sign-in/loading redesign owns its entry components and brand assets. Keep ac
 
 ## Language
 
-Welcome and Passport use `SaveInkLanguageSheet`, with Ink paper, Iansui, rough outlines, a monochrome selected radio and a complete tappable row. They must not instantiate the archived language/settings sheet.
+Language controls must preserve Follow iOS, English and 繁體中文 behavior. Existing account settings remain a compatibility route until their visual update is verified.
 
 Offer Follow iOS, English and 繁體中文. A fresh preference follows the ordered supported iOS language preferences; manual choices persist and can return to Follow iOS. Update the visible interface immediately, refresh on activation/locale changes, and keep SwiftUI locale consistent. A system option must not present the current manual choice as the iOS result.
 
 ## Saved places, Passport and identity
+
+Earlier name-only Ink saves and full visit metadata remain available through the owner-filtered, read-only Place history sheet. Do not invent UUIDs, save dates or coordinates to coerce them into native map records; do not erase their original stores.
 
 Passport is the account's place archive and control surface. It exposes confirmed saved places even when they have no visit record; a saved place opens its detail without adding a visit or stamp.
 
@@ -46,7 +49,7 @@ Passport is the account's place archive and control surface. It exposes confirme
 
 ## Maps and visits
 
-Normal Ink Home and place detail use Apple MapKit with the existing Ink pins, muted map emphasis and light paper overlay. Distances and walking time come from the current location/MapKit path. Fixture and screenshot launches keep the isolated drawn map.
+The main world and Taipei map use Apple MapKit. Authored 3D appears only within its sourced district envelope, with continuous camera/pin ownership, thinning cloud transition and no duplicate ground. Distances and walking time must come from actual location/route calculations; do not substitute illustrative times. Test fixtures stay isolated from real account records.
 
 Arrival verification remains a one-shot explicit action under the existing permission, precision, distance and freshness rules. Unlocated places may record an unverified visit through the explicit unverified action. No background tracking or coordinates are written into visit records by this UI.
 

@@ -14,7 +14,7 @@ struct PlaceBasicInfoPanel: View {
                     .font(.caption.weight(.bold))
                 Spacer()
             }
-            .foregroundColor(.saveCocoa)
+            .foregroundColor(PlaceInfoStyle.cocoa)
 
             VStack(spacing: 7) {
                 PlaceInfoRow(icon: "star", title: languageSettings.localized(english: "Rating", traditionalChinese: "評分"), value: ratingText)
@@ -32,8 +32,13 @@ struct PlaceBasicInfoPanel: View {
                 }
             }
         }
-        .padding(10)
+        .padding(PlaceInfoStyle.padding)
+#if SAVVY_CITY_MVP
+        .background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 24))
+        .accessibilityIdentifier("drawer.saved.basicInfo")
+#else
         .saveNotebookSurface(cornerRadius: 12, fill: .saveNotebookPage, opacity: 0.64)
+#endif
     }
 
     private var ratingText: String {
@@ -64,6 +69,10 @@ private struct PlaceInfoRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+#if SAVVY_CITY_MVP
+            Image(systemName: icon).font(.subheadline).foregroundStyle(CityMVPFormStyle.muted)
+                .frame(width: 22, height: 22)
+#else
             SaveIconTile(
                 systemName: icon,
                 size: 22,
@@ -73,20 +82,39 @@ private struct PlaceInfoRow: View {
                 strokeOpacity: 0.54
             )
             .padding(.top, 1)
+#endif
 
             Text(title)
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveCocoa)
-                .frame(width: 58, alignment: .leading)
+                .font(PlaceInfoStyle.labelFont)
+                .foregroundColor(PlaceInfoStyle.cocoa)
+                .frame(width: PlaceInfoStyle.titleWidth, alignment: .leading)
 
             Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.saveInk)
+                .font(PlaceInfoStyle.valueFont)
+                .foregroundColor(PlaceInfoStyle.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
     }
+}
+
+private enum PlaceInfoStyle {
+#if SAVVY_CITY_MVP
+    static let cocoa = CityMVPFormStyle.ink
+    static let ink = CityMVPFormStyle.ink
+    static let padding: CGFloat = 16
+    static let titleWidth: CGFloat = 74
+    static let labelFont = Font.subheadline.weight(.medium)
+    static let valueFont = Font.subheadline
+#else
+    static let cocoa = Color.saveCocoa
+    static let ink = Color.saveInk
+    static let padding: CGFloat = 10
+    static let titleWidth: CGFloat = 58
+    static let labelFont = Font.caption2.weight(.bold)
+    static let valueFont = Font.caption.weight(.semibold)
+#endif
 }
 
 private extension PlaceCategory {

@@ -4,6 +4,8 @@ import SceneKit
 /// Procedural illustration aligned to the bundled OpenStreetMap footprints.
 @MainActor
 enum CitySceneGeometry {
+    static let usesGroundOwnership = CityMVPPreviewConfiguration.enabled
+        || (CityDistrictTrace.enabled && ProcessInfo.processInfo.arguments.contains("--verify-ground-ownership"))
     private static let sunPosition = SIMD3<Float>(-700, 1_200, 500)
     private static let daySkyLight = UIColor(red: 0.89, green: 0.95, blue: 1, alpha: 1)
     private static let daySunLight = UIColor(red: 1, green: 0.95, blue: 0.85, alpha: 1)
@@ -84,7 +86,7 @@ enum CitySceneGeometry {
     }
 
     private enum Stage: String, CaseIterable {
-        case dataset, lighting, districtGround, roadPlan, civicGround, civicFixtures, buildings, facades
+        case dataset, lighting, districtGround, roadPlan, civicGround, civicFixtures, buildings, contextBuildings, facades
         case landmark, civicTrees, cornerFixtures, trees, shadows, streetTexture, streetLights, streetFixtures, traffic, audit
     }
 
@@ -105,6 +107,8 @@ enum CitySceneGeometry {
         private let scene = SCNScene()
         private let stages = Stage.allCases
         private var elements: [[String: Any]] = []
+        private var contextElements: [[String: Any]] = []
+        private var contextBuilder: CityContextBuildings.Builder?
         private var roads: [CityStreetSurface.Road] = []
         private var crossingRoads: [CityStreetSurface.Road] = []
         private var casters: [CityStreetDetail.Caster] = []
@@ -123,6 +127,8 @@ enum CitySceneGeometry {
         }
 
         private var preparedRaster: PreparedRaster?
+        private let usesGroundOwnership = CitySceneGeometry.usesGroundOwnership
+        private var groundCoverage: CityStreetSurface.GroundCoverage?
 
         var pendingRasterStage: Stage? {
             guard stageIndex < stages.count else { return nil }
@@ -144,7 +150,7 @@ enum CitySceneGeometry {
                 casters: casters + [.init(footprint: CityLandmark101.podiumFootprint,
                                           height: CityLandmark101.podiumHeight)],
                 trees: trees, offset: offset,
-                landmarkBands: CityLandmark101.shadowBands + CityNanShanArchitecture.shadowBands(in: scene.rootNode) + skywalkShadows
+                landmarkBands: CityLandmark101.shadowBands + CityNanShanArchitecture.shadowBands(in: scene.rootNode) + skywalkShadows, coverage: groundCoverage
             )
         }
 
@@ -152,11 +158,17 @@ enum CitySceneGeometry {
             let started: TimeInterval
             switch stage {
             case .districtGround:
-                let input = CityStreetSurface.districtGround(elements: elements)
+                if usesGroundOwnership && groundCoverage == nil {
+                    groundCoverage = try await CityStreetSurface.prepareGroundCoverage(
+                        CityStreetSurface.groundOwnership(elements: elements))
+                    // Never silently fall back to a rectangle in this experiment.
+                    guard groundCoverage != nil else { throw CocoaError(.coderInvalidValue) }
+                }
+                let input = CityStreetSurface.districtGround(elements: elements, coverage: groundCoverage)
                 started = ProcessInfo.processInfo.systemUptime
                 preparedRaster = .ground(try await CityStreetSurface.prepareDistrictGround(input))
             case .civicGround:
-                let input = CityCivicLandscape.publicPaving(elements: elements)
+                let input = CityCivicLandscape.publicPaving(elements: elements, coverage: groundCoverage)
                 started = ProcessInfo.processInfo.systemUptime
                 preparedRaster = .civicGround(try await CityCivicLandscape.preparePublicPaving(input))
             case .shadows:
@@ -167,7 +179,7 @@ enum CitySceneGeometry {
                 let cycleway = CityStreetSurface.cyclewayPath
                 started = ProcessInfo.processInfo.systemUptime
                 preparedRaster = .street(try await CityStreetSurface.prepareRoadTexture(
-                    roads: roads, crossings: crossingRoads, cycleway: cycleway
+                    roads: roads, crossings: crossingRoads, cycleway: cycleway, coverage: groundCoverage
                 ))
             default: return 0
             }
@@ -183,18 +195,28 @@ enum CitySceneGeometry {
             let stage = stages[stageIndex]
             let root = scene.rootNode
             switch stage {
-            case .dataset: elements = CitySceneData.elements ?? []
+            case .dataset:
+                elements = CitySceneData.elements ?? []
+                if CityContextBuildings.enabled {
+                    contextElements = CityContextBuildings.elements
+                    contextBuilder = CityContextBuildings.Builder(heroElements: elements)
+                }
             case .lighting:
                 scene.background.contents = UIColor.clear
                 scene.fogColor = CitySceneGeometry.hazeColor(night: false)
                 scene.fogDensityExponent = 1.7
                 CitySceneGeometry.addLights(to: root)
             case .districtGround:
+                if usesGroundOwnership && groundCoverage == nil {
+                    groundCoverage = CityStreetSurface.rasterizeGroundCoverage(
+                        CityStreetSurface.groundOwnership(elements: elements))
+                    precondition(groundCoverage != nil, "Ground ownership coverage unavailable")
+                }
                 if case .ground(let image) = preparedRaster {
                     CityStreetSurface.addDistrictGround(image, to: root)
                     preparedRaster = nil
                 } else if CitySceneData.elements != nil {
-                    let input = CityStreetSurface.districtGround(elements: elements)
+                    let input = CityStreetSurface.districtGround(elements: elements, coverage: groundCoverage)
                     CityStreetSurface.addDistrictGround(CityStreetSurface.rasterizeDistrictGround(input), to: root)
                 }
             case .roadPlan:
@@ -204,7 +226,7 @@ enum CitySceneGeometry {
                 let image = if case .civicGround(let prepared) = preparedRaster {
                     prepared
                 } else {
-                    CityCivicLandscape.rasterizePublicPaving(CityCivicLandscape.publicPaving(elements: elements))
+                    CityCivicLandscape.rasterizePublicPaving(CityCivicLandscape.publicPaving(elements: elements, coverage: groundCoverage))
                 }
                 CityCivicLandscape.addPublicSpaces(image, to: root)
                 preparedRaster = nil
@@ -217,6 +239,13 @@ enum CitySceneGeometry {
                     itemIndex += 1
                     return stage
                 }
+            case .contextBuildings:
+                if itemIndex < contextElements.count {
+                    contextBuilder?.append(contextElements[itemIndex])
+                    itemIndex += 1
+                    return stage
+                }
+                contextBuilder?.add(to: root)
             case .facades: facadeBatch.add(to: root)
             case .landmark: CityLandmark101.add(to: root)
             case .civicTrees:
@@ -254,7 +283,7 @@ enum CitySceneGeometry {
                     prepared
                 } else {
                     CityStreetSurface.rasterizeRoadTexture(
-                        roads: roads, crossings: crossingRoads, cycleway: CityStreetSurface.cyclewayPath
+                        roads: roads, crossings: crossingRoads, cycleway: CityStreetSurface.cyclewayPath, coverage: groundCoverage
                     )
                 }
                 CityStreetSurface.addRoadTexture(image, to: root, roads: roads)
@@ -300,7 +329,7 @@ enum CitySceneGeometry {
         root.enumerateChildNodes { node, _ in
             if node.geometry != nil { geometryNodes += 1 }
             for material in node.geometry?.materials ?? [] {
-                for property in [material.diffuse, material.emission] {
+                for property in [material.diffuse, material.emission] + CityRetailFacadeMaterial.textureProperties(in: material) {
                     if let image = property.contents as? UIImage, let cg = image.cgImage,
                        images.insert(ObjectIdentifier(image)).inserted {
                         imageBytes += cg.bytesPerRow * cg.height

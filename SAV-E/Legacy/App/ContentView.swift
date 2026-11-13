@@ -88,12 +88,19 @@ enum SaveRootRoute: Hashable {
 
 private enum SaveFullScreenRoute: Identifiable {
     case capture
+#if SAVVY_CITY_MVP
+    case guide(CityMVPGuideSession)
+#endif
     case placeDetail(MapDetailDrawerItem)
 
     var id: String {
         switch self {
         case .capture:
             return "capture"
+#if SAVVY_CITY_MVP
+        case .guide(let session):
+            return "guide-\(session.authGeneration)-\(session.mapGeneration)"
+#endif
         case .placeDetail(let item):
             switch item {
             case .savedPlace(let place):
@@ -109,11 +116,24 @@ private enum SaveFullScreenRoute: Identifiable {
     }
 }
 
+#if SAVVY_CITY_MVP
+private enum CityMVPAuxiliarySheet {
+    case history(String)
+    case friends
+    case information(String?, String?)
+}
+#endif
+
 private enum PendingChromePresentation {
     case rootSheet
     case passport
     case savedPlaceLimitPaywall
     case cover(SaveFullScreenRoute)
+#if SAVVY_CITY_MVP
+    case guidePlace(UUID, CityMVPGuideSession)
+    case accountSettings
+    case auxiliary(CityMVPAuxiliarySheet)
+#endif
     case mapDrawer(DrawerLaunchRequest)
     case plan
 
@@ -127,6 +147,14 @@ private enum PendingChromePresentation {
             return .savedPlaceLimitPaywall
         case .cover:
             return .cover
+#if SAVVY_CITY_MVP
+        case .guidePlace:
+            return .cover
+        case .accountSettings:
+            return .passport
+        case .auxiliary:
+            return .rootSheet
+#endif
         case .mapDrawer, .plan:
             return .none
         }
@@ -155,7 +183,11 @@ enum ContentStorageScope: Equatable {
     func makeMapViewModel() -> MapViewModel {
         switch self {
         case .production:
-            return MapViewModel()
+            let vm = MapViewModel()
+#if SAVVY_MAIN_APP
+            vm.cameraPosition = .camera(CityMVPCameras.world)
+#endif
+            return vm
         case .reviewerDemo:
 #if SAVVY_CITY_MVP
             return CityMVPStorage.makeMapViewModel()
@@ -190,11 +222,18 @@ struct ContentView: View {
     @Binding private var requiresListConfirmation: Bool
     @Binding private var pendingClipListSave: SaveCollaborativeList?
     @Binding private var pendingOnboardingClue: String
+#if SAVVY_CITY_MVP
+    @EnvironmentObject private var cityMVPCaptureDraftStore: CityMVPCaptureDraftStore
+    @State private var cityMVPAuxiliarySheet: CityMVPAuxiliarySheet?
+#endif
     private let storageScope: ContentStorageScope
+    private let rootOwner: String?
+    private let rootAuthGeneration: Int
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var isRootSheetPresented: Bool
     @State private var isPassportPresented = false
+    @State private var opensAccountSettings = false
     @State private var passportCollectionMode: SavePassportCollectionMode = .collection
     @State private var drawerDetent: PresentationDetent
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
@@ -248,6 +287,8 @@ struct ContentView: View {
         _pendingClipListSave = pendingClipListSave
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
+        rootOwner = PrivyAuthService.shared.currentUserId
+        rootAuthGeneration = PrivyAuthService.shared.sessionGeneration
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
         _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
@@ -374,9 +415,15 @@ struct ContentView: View {
         }
         .sheet(item: capturePresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
+#if SAVVY_CITY_MVP
+                .presentationDetents(cityMVPEntryDetents(for: route))
+                .presentationDragIndicator(.visible)
+                .presentationBackground(CityMVPFormStyle.canvas)
+#else
                 .presentationDetents([.height(430), .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SaveAtlasPalette.canvas)
+#endif
         }
         .fullScreenCover(item: detailPresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
@@ -409,7 +456,12 @@ struct ContentView: View {
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
             guard receiptID != nil else { return }
             invalidateExactSearchRequest()
+#if !SAVVY_CITY_MVP
             fullScreenRoute = nil
+#endif
+#if SAVVY_CITY_MVP
+            cityMVPAuxiliarySheet = nil
+#endif
             pendingReceiptMapDetail = nil
             mapDetailDrawerItem = nil
             mapVM.clearSelectedMapObject()
@@ -608,6 +660,7 @@ struct ContentView: View {
             },
             onOpenPlace: { openMapDetail(.savedPlace($0)) },
             isRootTab: isRootTab,
+            opensAccountSettings: opensAccountSettings,
             collectionMode: collectionMode,
             requestsConnections: $requestsSocialConnections
         )
@@ -634,12 +687,6 @@ struct ContentView: View {
             openDrawer(.addLink, tripID: nil)
             return
         }
-#if SAVVY_CITY_MVP
-        if selectedRootTab == .map, tab != .map,
-           mapVM.selectedMapCandidate?.id.hasPrefix("city-mvp:") == true {
-            mapVM.clearSelectedMapObject()
-        }
-#endif
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
         // children, so changing only the selection leaves the child visible.
@@ -658,9 +705,20 @@ struct ContentView: View {
 
     private var capturePresentation: Binding<SaveFullScreenRoute?> {
         Binding(
-            get: { if case .capture = fullScreenRoute { return fullScreenRoute }; return nil },
+            get: {
+#if SAVVY_CITY_MVP
+                if case .guide = fullScreenRoute { return fullScreenRoute }
+#endif
+                if case .capture = fullScreenRoute { return fullScreenRoute }; return nil
+            },
             set: { value in
+#if SAVVY_CITY_MVP
+                if case .guide = fullScreenRoute { fullScreenRoute = value }
+#endif
                 if case .capture = fullScreenRoute { fullScreenRoute = value }
+#if SAVVY_CITY_MVP
+                traceCityChrome(value == nil ? "capture-binding-cleared" : "capture-binding-set")
+#endif
             }
         )
     }
@@ -697,37 +755,69 @@ struct ContentView: View {
         NavigationStack(path: $rootPath) {
             Group {
 #if SAVVY_CITY_MVP
-            ReferenceViewport {
-                ZStack(alignment: .topLeading) {
-                    Group {
-                        switch selectedRootTab {
-                        case .home:
-                            CityMVPSavedPage(
-                                places: mapVM.places, onOpen: openCityMVPSavedPlace,
-                                onReview: { rootPath = [.saves] }, reviewCount: mapVM.reviewCandidates.count
-                            )
-                        case .map:
-                            MapView(viewModel: mapVM, shouldFocusOnUserLocationOnLaunch: false)
-                        case .profile, .friends:
-                            CityMVPMePage(savedCount: mapVM.places.count,
-                                          onTrips: { rootPath = [.trips] })
-                        case .capture:
-                            // Unreachable: `.capture` is a control, and
-                            // `selectRootTab` opens the cover instead of
-                            // committing the selection.
-                            Color.clear
-                        }
+            GeometryReader { canvas in
+              ZStack {
+                // Keep the native map and its prepared district alive. Hiding
+                // a destination must not recreate its camera or selection.
+                MapView(viewModel: mapVM, shouldFocusOnUserLocationOnLaunch: false)
+                    .environment(\.cityMVPMapIsVisible, selectedRootTab == .map)
+                    .environment(\.cityMVPOpenFriends, { openCityMVPAuxiliary(.friends) })
+                    .environment(\.cityMVPOpenGuide, openCityMVPGuide)
+                    .environment(\.cityMVPOpenSaved, { selectRootTab(.home) })
+                    .opacity(selectedRootTab == .map ? 1 : 0)
+                    .allowsHitTesting(selectedRootTab == .map)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityHidden(selectedRootTab != .map)
+                CityMVPSavedPage(
+                    places: mapVM.places, onOpen: { openMapDetail(.savedPlace($0)) },
+                    onReview: { rootPath = [.saves] }, reviewCount: mapVM.reviewCandidates.count,
+                    onAdd: { openDrawer(.addLink, tripID: nil) }, onAsk: openCityMVPGuide, isActive: selectedRootTab == .home,
+                    historyOwner: storageScope == .production ? rootOwner : nil,
+                    onHistory: {
+                        if let owner = rootOwner { openCityMVPAuxiliary(.history(owner)) }
                     }
-
+                )
+                .opacity(selectedRootTab == .home ? 1 : 0)
+                .allowsHitTesting(selectedRootTab == .home)
+                .accessibilityElement(children: .contain)
+                .accessibilityHidden(selectedRootTab != .home)
+                CityMVPMePage(savedCount: mapVM.places.count,
+                              onTrips: { rootPath = [.trips] }, onAsk: openCityMVPGuide,
+                              places: mapVM.places,
+                              onSaveFriendPlace: { try await mapVM.confirmFriendRecommendationPlace($0,
+                                  expectedOwner: rootOwner, expectedGeneration: rootAuthGeneration) },
+                              selectedPlaceTitle: mapVM.selectedPlace?.name ?? mapVM.selectedMapCandidate?.title,
+                              selectedPlaceSourceURL: mapVM.selectedPlace?.sourceUrl ?? mapVM.selectedMapCandidate?.sourceURL,
+                              historyOwner: storageScope == .production ? PrivyAuthService.shared.currentUserId : nil,
+                              isActive: selectedRootTab == .profile || selectedRootTab == .friends,
+                              onFriends: { openCityMVPAuxiliary(.friends) },
+                              onInformation: { openCityMVPAuxiliary(.information(
+                                  mapVM.selectedPlace?.name ?? mapVM.selectedMapCandidate?.title,
+                                  mapVM.selectedPlace?.sourceUrl ?? mapVM.selectedMapCandidate?.sourceURL)) },
+                              onAccount: storageScope == .production ? {
+                                  guard incomingPlaceReceipt == nil else { return }
+                                  presentAfterClearingExclusiveChrome(.accountSettings)
+                              } : nil)
+                    .opacity(selectedRootTab == .profile || selectedRootTab == .friends ? 1 : 0)
+                    .allowsHitTesting(selectedRootTab == .profile || selectedRootTab == .friends)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityHidden(selectedRootTab != .profile && selectedRootTab != .friends)
+              }
+              .frame(width: canvas.size.width, height: canvas.size.height)
+            // Use actual device points for MapProxy, SceneKit and photo pins.
+            // Scaling a reference viewport gives the three different units.
+            .overlayPreferenceValue(CityMVPDockInsetKey.self) { bottomInset in
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
                     CityMVPBottomBar(selection: selectedRootTab, onSelect: selectRootTab,
-                                     onSearch: { selectRootTab(.map); openMapSearch() },
-                                     onCapture: { openDrawer(.addLink, tripID: nil) })
-                        .placed(x: CityMVPBottomBar.horizontalInset,
-                                y: AtlasMetrics.height - CityMVPBottomBar.height - CityMVPBottomBar.bottomClearance,
-                                width: AtlasMetrics.width - CityMVPBottomBar.horizontalInset * 2,
-                                height: CityMVPBottomBar.height)
+                                 onSearch: { selectRootTab(.map); openMapSearch() },
+                                 onCapture: { openDrawer(.addLink, tripID: nil) })
+                    .padding(.horizontal, CityMVPBottomBar.horizontalInset)
+                    .padding(.bottom, bottomInset)
                 }
             }
+            }
+            .ignoresSafeArea()
 #else
             GeometryReader { safeArea in
                 // Root pages reflow in device points. Fitting the 402x874
@@ -1043,7 +1133,25 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         } else {
+#if SAVVY_CITY_MVP
+            if let cityMVPAuxiliarySheet {
+                switch cityMVPAuxiliarySheet {
+                case .history(let owner):
+                    SavvyPlaceHistorySheet(ownerSubject: owner, places: mapVM.places)
+                case .friends:
+                    CityMVPFriendExchangeSheet(places: mapVM.places) {
+                        try await mapVM.confirmFriendRecommendationPlace($0,
+                            expectedOwner: rootOwner, expectedGeneration: rootAuthGeneration)
+                    }
+                case .information(let title, let source):
+                    CityMVPMapInformation(selectedPlaceTitle: title, selectedPlaceSourceURL: source)
+                }
+            } else {
+                presentedDrawerView
+            }
+#else
             presentedDrawerView
+#endif
         }
     }
 
@@ -1053,9 +1161,16 @@ struct ContentView: View {
         case .capture:
             SaveCaptureFlowView(
                 tripName: captureTripName,
-                initialText: pendingOnboardingClue,
+                initialText: captureEditorDraft,
                 existingPlaces: mapVM.places,
-                onDraftChange: { pendingOnboardingClue = $0 },
+                onDraftChange: {
+#if SAVVY_CITY_MVP
+                    if !pendingOnboardingClue.isEmpty { pendingOnboardingClue = $0 }
+                    _ = cityMVPCaptureDraftStore.update($0)
+#else
+                    pendingOnboardingClue = $0
+#endif
+                },
                 onImport: { sharedText in
                     try await mapVM.importSharedTextAsReviewCandidates(sharedText)
                 },
@@ -1063,6 +1178,9 @@ struct ContentView: View {
                     try await mapVM.saveImportedPlaces(drafts)
                 },
                 onComplete: { candidateIDs in
+#if SAVVY_CITY_MVP
+                    _ = cityMVPCaptureDraftStore.update("")
+#endif
                     pendingOnboardingClue = ""
                     selectedRootTab = .home
                     rootPath = [.captureResults(candidateIDs)]
@@ -1089,6 +1207,17 @@ struct ContentView: View {
             )
             .environment(\.appLanguageSettings, languageSettings)
 
+#if SAVVY_CITY_MVP
+        case .guide(let session):
+            CityMVPAgentSheet(places: mapVM.places, onOpen: { place in
+                guard session.resolve(placeID: place.id,
+                    currentAuthGeneration: PrivyAuthService.shared.sessionGeneration,
+                    currentMapGeneration: mapVM.sessionGeneration,
+                    hasIncomingReceipt: incomingPlaceReceipt != nil, places: mapVM.places) != nil else { return }
+                presentAfterClearingExclusiveChrome(.guidePlace(place.id, session))
+            }, dismissOnOpen: false, opensSavedDetail: true)
+            .environment(\.appLanguageSettings, languageSettings)
+#endif
         case .placeDetail(let item):
             MapDetailDrawerView(
                 item: item,
@@ -1132,15 +1261,32 @@ struct ContentView: View {
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
-            .background(SaveDottedBackground().ignoresSafeArea())
+            .background {
+#if SAVVY_CITY_MVP
+                CityMVPFormStyle.canvas.ignoresSafeArea()
+#else
+                SaveDottedBackground().ignoresSafeArea()
+#endif
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 if case .reviewCandidate(let candidate) = item,
                    case .captureResults(let ids) = rootPath.last,
                    ids.contains(candidate.id) {
+#if SAVVY_CITY_MVP
+                    Label(languageSettings.localized(
+                        english: ids.count == 1 ? "Found 1 clue · Review before saving" : "Found \(ids.count) clues · Review before saving",
+                        traditionalChinese: "找到 \(ids.count) 個地點線索 · 確認後再儲存"), systemImage: "magnifyingglass")
+                        .font(.subheadline).foregroundStyle(CityMVPFormStyle.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20).padding(.vertical, 10)
+                        .background(CityMVPFormStyle.canvas)
+                        .accessibilityIdentifier("capture.results.notice")
+#else
                     SaveCaptureResultNotice(count: ids.count)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 8)
                         .background(SaveAtlasPalette.canvas)
+#endif
                 }
             }
             .alert(
@@ -1369,6 +1515,9 @@ struct ContentView: View {
         initialQuery: String? = nil,
         focusesSearch: Bool = true
     ) {
+#if SAVVY_CITY_MVP
+        traceCityChrome("drawer-tapped")
+#endif
         guard incomingPlaceReceipt == nil else { return }
         invalidateExactSearchRequest()
         pendingCaptureTripID = tripID
@@ -1401,6 +1550,7 @@ struct ContentView: View {
     private func openPassport(collectionMode: SavePassportCollectionMode) {
         guard !isPassportPresented else { return }
         passportCollectionMode = collectionMode
+        opensAccountSettings = false
         SaveHaptics.tap()
 
         if isMapPanelExpanded {
@@ -1421,12 +1571,34 @@ struct ContentView: View {
         )
     }
 
+#if SAVVY_CITY_MVP
+    private func openCityMVPAuxiliary(_ route: CityMVPAuxiliarySheet) {
+        guard incomingPlaceReceipt == nil else { return }
+        presentAfterClearingExclusiveChrome(.auxiliary(route))
+    }
+
+    private func openCityMVPGuide() {
+        guard incomingPlaceReceipt == nil else { return }
+        let session = CityMVPGuideSession(authGeneration: PrivyAuthService.shared.sessionGeneration,
+                                          mapGeneration: mapVM.sessionGeneration)
+        presentExclusiveCover(.guide(session))
+    }
+
+    private func cityMVPEntryDetents(for route: SaveFullScreenRoute) -> Set<PresentationDetent> {
+        if case .guide = route { return [.large] }
+        return [.height(430), .large]
+    }
+#endif
+
     private func presentExclusiveCover(_ route: SaveFullScreenRoute) {
         if fullScreenRoute?.id == route.id { return }
         presentAfterClearingExclusiveChrome(.cover(route))
     }
 
     private func presentExclusiveRootSheet() {
+#if SAVVY_CITY_MVP
+        cityMVPAuxiliarySheet = nil
+#endif
         if isRootSheetPresented { return }
         presentAfterClearingExclusiveChrome(.rootSheet)
     }
@@ -1434,6 +1606,9 @@ struct ContentView: View {
     /// UIKit aborts when a second sheet or cover is presented over one that
     /// is still up. Queue the replacement until SwiftUI confirms dismissal.
     private func presentAfterClearingExclusiveChrome(_ presentation: PendingChromePresentation) {
+#if SAVVY_CITY_MVP
+        traceCityChrome("presentation-requested")
+#endif
         if suppressChromeDismissSideEffects {
             pendingChromePresentation = presentation
             return
@@ -1469,6 +1644,26 @@ struct ContentView: View {
             showSavedPlaceLimitPaywall = true
         case .cover(let route):
             fullScreenRoute = route
+#if SAVVY_CITY_MVP
+            traceCityChrome("cover-activated")
+#endif
+#if SAVVY_CITY_MVP
+        case .auxiliary(let route):
+            guard incomingPlaceReceipt == nil else { return }
+            cityMVPAuxiliarySheet = route
+            isRootSheetPresented = true
+        case .accountSettings:
+            opensAccountSettings = true
+            isPassportPresented = true
+        case .guidePlace(let id, let session):
+            guard incomingPlaceReceipt == nil,
+                  let current = session.resolve(placeID: id,
+                    currentAuthGeneration: PrivyAuthService.shared.sessionGeneration,
+                    currentMapGeneration: mapVM.sessionGeneration,
+                    hasIncomingReceipt: incomingPlaceReceipt != nil, places: mapVM.places) else { return }
+            fullScreenRoute = .placeDetail(.savedPlace(current))
+            traceCityChrome("guide-place-activated")
+#endif
         case .plan:
             rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
         case .mapDrawer(let request):
@@ -1486,9 +1681,16 @@ struct ContentView: View {
 
         self.pendingChromePresentation = nil
         Task { @MainActor in
+#if SAVVY_CITY_MVP
+            let next = await CityMVPChromeResume.next(initial: pendingChromePresentation,
+                latest: { self.pendingChromePresentation }, clear: { self.pendingChromePresentation = nil })
+            suppressChromeDismissSideEffects = false
+            activateChromePresentation(next)
+#else
             await Task.yield()
             suppressChromeDismissSideEffects = false
             activateChromePresentation(pendingChromePresentation)
+#endif
         }
     }
 
@@ -1811,6 +2013,9 @@ struct ContentView: View {
     private var debugQARefreshToken: DebugQARefreshToken {
         let fullScreenKind: String? = switch fullScreenRoute {
         case .capture: "capture"
+#if SAVVY_CITY_MVP
+        case .guide: "guide"
+#endif
         case .placeDetail: "placeDetail"
         case nil: nil
         }
@@ -2105,10 +2310,17 @@ struct ContentView: View {
     }
 
     private func handleRootSheetDismiss() {
+#if SAVVY_CITY_MVP
+        let wasAuxiliary = cityMVPAuxiliarySheet != nil
+        cityMVPAuxiliarySheet = nil
+#endif
         if suppressChromeDismissSideEffects {
             handleExclusiveChromeDismiss()
             return
         }
+#if SAVVY_CITY_MVP
+        if wasAuxiliary { return }
+#endif
         let pendingDetail = pendingReceiptMapDetail
         pendingReceiptMapDetail = nil
         incomingPlaceReceipt = nil
@@ -2135,12 +2347,28 @@ struct ContentView: View {
     }
 
     private func handleFullScreenDismiss() {
+#if SAVVY_CITY_MVP
+        traceCityChrome("cover-dismissed")
+#endif
         if suppressChromeDismissSideEffects {
             handleExclusiveChromeDismiss()
             return
         }
         resumePendingOnboardingCaptureIfNeeded()
     }
+
+#if SAVVY_CITY_MVP
+    private func traceCityChrome(_ event: String) {
+        let route: String
+        switch fullScreenRoute {
+        case .capture: route = "capture"
+        case .guide: route = "guide"
+        case .placeDetail: route = "detail"
+        case nil: route = "none"
+        }
+        CityDistrictTrace.write("chrome\t\(event)\t\(route)\t\(occupyingExclusiveChrome)\t\(suppressChromeDismissSideEffects)\t\(pendingChromePresentation != nil)\t\(isRootSheetPresented)\t\(isPassportPresented)")
+    }
+#endif
 
     private func resumePendingOnboardingCaptureIfNeeded() {
         guard !suppressPendingOnboardingCaptureResume,
@@ -2167,6 +2395,14 @@ struct ContentView: View {
     private var captureTripName: String? {
         guard let pendingCaptureTripID else { return nil }
         return tripStore.trips.first(where: { $0.id == pendingCaptureTripID })?.name
+    }
+
+    private var captureEditorDraft: String {
+#if SAVVY_CITY_MVP
+        pendingOnboardingClue.isEmpty ? cityMVPCaptureDraftStore.text : pendingOnboardingClue
+#else
+        pendingOnboardingClue
+#endif
     }
 
     private func requestTripAssignment(for place: Place) {

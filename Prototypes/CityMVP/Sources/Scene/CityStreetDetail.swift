@@ -902,6 +902,7 @@ enum CityStreetDetail {
         let trees: [CityCivicLandscape.TreePosition]
         let offset: CGPoint
         let landmarkBands: [[SIMD3<Float>]]
+        var coverage: CityStreetSurface.GroundCoverage? = nil
     }
 
     nonisolated private static let shadowBounds = CGRect(x: -550, y: -695, width: 1_100, height: 1_050)
@@ -965,20 +966,28 @@ enum CityStreetDetail {
                 cg.fillEllipse(in: CGRect(x: p.x - r, y: p.y - r * 0.63, width: r * 2, height: r * 1.3))
                 cg.restoreGState()
             }
-            // Fade the finite texture at its boundary.
-            cg.setBlendMode(.destinationOut)
-            let clear = UIColor.black.withAlphaComponent(0).cgColor
-            let solid = UIColor.black.cgColor
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                         colors: [solid, clear] as CFArray, locations: [0, 1]) {
-                for (start, end) in [(CGPoint.zero, CGPoint(x: 90, y: 0)),
-                                     (CGPoint(x: size.width, y: 0), CGPoint(x: size.width - 90, y: 0)),
-                                     (CGPoint.zero, CGPoint(x: 0, y: 90)),
-                                     (CGPoint(x: 0, y: size.height), CGPoint(x: 0, y: size.height - 90))] {
-                    cg.drawLinearGradient(gradient, start: start, end: end, options: [])
+            if let coverage = input.coverage {
+                cg.saveGState()
+                cg.scaleBy(x: 2, y: 2)
+                cg.translateBy(x: -bounds.minX, y: -bounds.minY)
+                CityStreetSurface.applyGroundCoverage(coverage, to: cg)
+                cg.restoreGState()
+            } else {
+                // Fade the finite texture at its boundary.
+                cg.setBlendMode(.destinationOut)
+                let clear = UIColor.black.withAlphaComponent(0).cgColor
+                let solid = UIColor.black.cgColor
+                if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                             colors: [solid, clear] as CFArray, locations: [0, 1]) {
+                    for (start, end) in [(CGPoint.zero, CGPoint(x: 90, y: 0)),
+                                         (CGPoint(x: size.width, y: 0), CGPoint(x: size.width - 90, y: 0)),
+                                         (CGPoint.zero, CGPoint(x: 0, y: 90)),
+                                         (CGPoint(x: 0, y: size.height), CGPoint(x: 0, y: size.height - 90))] {
+                        cg.drawLinearGradient(gradient, start: start, end: end, options: [])
+                    }
                 }
+                CityStreetSurface.fadeNorthernCoverage(cg, scale: 2, offset: -bounds.minY * 2)
             }
-            CityStreetSurface.fadeNorthernCoverage(cg, scale: 2, offset: -bounds.minY * 2)
         }.cgImage
     }
 

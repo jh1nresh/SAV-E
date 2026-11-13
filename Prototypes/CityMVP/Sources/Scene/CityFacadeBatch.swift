@@ -9,6 +9,7 @@ final class CityFacadeBatch {
         var vertices: [SCNVector3] = []
         var normals: [SCNVector3] = []
         var coordinates: [CGPoint] = []
+        var variants: [CGPoint] = []
         var indices: [Int32] = []
         let material: SCNMaterial
     }
@@ -19,11 +20,13 @@ final class CityFacadeBatch {
         guard ring.count > 2 else { return }
         let pairs = Array(zip(ring, ring.dropFirst() + [ring[0]]))
         let area = pairs.reduce(CGFloat.zero) { $0 + $1.0.y * $1.1.x - $1.0.x * $1.1.y }
-        let key = "\(finish)-\(seed % 4)"
+        let key = finish == .retail ? "retail-merged" : "\(finish)-\(seed % 4)"
         var mesh: Mesh
         if let existing = groups[key] {
             mesh = existing
             groups[key] = nil // Keep array storage uniquely owned while appending.
+        } else if finish == .retail {
+            mesh = Mesh(material: CityRetailFacadeMaterial.make())
         } else {
             let textures = CityStreetDetail.repeatedFacade(finish: finish, variant: seed % 4)
             let material = SCNMaterial()
@@ -58,6 +61,9 @@ final class CityFacadeBatch {
             let top = phase.y + CGFloat(floors) / 2
             mesh.coordinates += [phase, .init(x: right, y: phase.y),
                                  .init(x: right, y: top), .init(x: phase.x, y: top)]
+            if finish == .retail {
+                mesh.variants += Array(repeating: CGPoint(x: seed % 4, y: 0), count: 4)
+            }
             mesh.indices += (area > 0 ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3]).map { base + Int32($0) }
         }
         groups[key] = mesh
@@ -65,8 +71,10 @@ final class CityFacadeBatch {
 
     func add(to root: SCNNode) {
         for (key, mesh) in groups where !mesh.indices.isEmpty {
-            let geometry = SCNGeometry(sources: [.init(vertices: mesh.vertices), .init(normals: mesh.normals),
-                                                 .init(textureCoordinates: mesh.coordinates)],
+            var sources: [SCNGeometrySource] = [.init(vertices: mesh.vertices), .init(normals: mesh.normals),
+                                               .init(textureCoordinates: mesh.coordinates)]
+            if !mesh.variants.isEmpty { sources.append(.init(textureCoordinates: mesh.variants)) }
+            let geometry = SCNGeometry(sources: sources,
                                        elements: [SCNGeometryElement(indices: mesh.indices, primitiveType: .triangles)])
             geometry.materials = [mesh.material]
             let node = SCNNode(geometry: geometry); node.name = "xinyi-facade-batch-\(key)"

@@ -2065,7 +2065,21 @@ final class MapViewModel: ObservableObject {
         }
 
         if !usesRemotePersistence {
+#if SAVVY_CITY_MVP
+            var place = Place.from(candidate, refinedMatch: nil, nameOverride: nameOverride)
+            // A fresh review candidate contains source statements, never a
+            // user-authored private note. Preserve unclassified source prose
+            // as evidence before it reaches Saved or merges into a real save.
+            // Do not reinterpret or migrate any existing place's private note.
+            if let sourceProse = place.note {
+                for line in sourceProse.components(separatedBy: .newlines) {
+                    place = place.appendingAdditionalEvidence(line)
+                }
+                place.note = nil
+            }
+#else
             let place = Place.from(candidate, refinedMatch: nil, nameOverride: nameOverride)
+#endif
             guard place.hasValidCoordinate else {
                 throw ReviewCandidateError.needsReliableCoordinates
             }
@@ -3583,6 +3597,50 @@ final class MapViewModel: ObservableObject {
             revealImportedPlaces(revealed)
         }
     }
+
+#if SAVVY_CITY_MVP
+    func confirmFriendRecommendationPlace(_ incoming: Place, expectedOwner: String?,
+                                          expectedGeneration: Int) async throws -> Place {
+        try Task.checkCancellation()
+        guard authService.currentUserId == expectedOwner,
+              authService.sessionGeneration == expectedGeneration else { throw CancellationError() }
+        if !usesRemotePersistence { return try confirmCityMVPFriendPlace(incoming) }
+        try Self.validateFriendRecommendation(incoming)
+        let outcome = try await saveSharedPlaceReceipt(
+            .embedded(SharedPlaceData.from(place: incoming).strippingSenderMemory()),
+            requiringAuthenticatedSession: true)
+        return outcome.place
+    }
+
+    static func validateFriendRecommendation(_ incoming: Place) throws {
+        guard incoming.hasValidCoordinate, incoming.status == .wantToGo,
+              incoming.userFacingNote == nil, incoming.recommender == nil,
+              incoming.sourceImageUrl == nil, incoming.businessPhotoURLStrings.isEmpty,
+              incoming.rating == nil, incoming.googleRating == nil else {
+            throw CocoaError(.validationMissingMandatoryProperty)
+        }
+    }
+
+    /// Explicit local snapshot confirmation. Never invokes a hosted saver or
+    /// imports sender memory. Shared/production callers retain their own paths.
+    func confirmCityMVPFriendPlace(_ incoming: Place) throws -> Place {
+        guard !usesRemotePersistence, incoming.hasValidCoordinate,
+              incoming.status == .wantToGo, incoming.userFacingNote == nil,
+              incoming.recommender == nil, incoming.sourceImageUrl == nil,
+              incoming.businessPhotoURLStrings.isEmpty,
+              incoming.rating == nil, incoming.googleRating == nil else {
+            throw CocoaError(.validationMissingMandatoryProperty)
+        }
+        if let existing = existingSavedPlace(matching: incoming) { return existing }
+        if isOverFreeSavedPlaceLimit {
+            try parkPlaceInUnplacedInbox(incoming)
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
+        try saveLocalVaultService.saveConfirmedPlace(incoming)
+        places.insert(incoming, at: 0)
+        return incoming
+    }
+#endif
 
     @discardableResult
     func saveListItemAsPlace(_ item: SaveListItem, includeSenderMemory: Bool = true) async throws -> Place {
@@ -5309,7 +5367,17 @@ final class MapViewModel: ObservableObject {
                         throw error
                     }
                 } else {
+#if SAVVY_CITY_MVP
+                    // The local-only path has no hosted persistence fallback. A failed
+                    // write must not be acknowledged as a completed import.
+                    guard authService.currentUserId == remoteUserId,
+                          authService.sessionGeneration == importGeneration else {
+                        throw ReviewCandidateError.sessionChangedAfterCommit
+                    }
+                    _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: remoteUserId)
+#else
                     try mirrorToLocalVault(place, startedBy: remoteUserId, generation: importGeneration)
+#endif
                 }
             },
             didPersist: { place in

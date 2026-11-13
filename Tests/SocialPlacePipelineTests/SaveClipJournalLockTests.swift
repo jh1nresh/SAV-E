@@ -507,8 +507,20 @@ final class SaveClipJournalLockTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertNotNil(project)
-        XCTAssertFalse((project ?? "").contains("DisplayFont in SAVEClip Resources"))
-        XCTAssertTrue((project ?? "").contains("Caveat-SemiBold.ttf in SAVEClip Resources"))
+        let projectText = try XCTUnwrap(project)
+        func capture(_ pattern: String, in text: String) throws -> String {
+            let regex = try NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
+            let match = try XCTUnwrap(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)))
+            return String(text[try XCTUnwrap(Range(match.range(at: 1), in: text))])
+        }
+        let clipTarget = try capture(#"/\* SAVEClip \*/ = \{\s*isa = PBXNativeTarget;(.+?)\n\t\t\};"#, in: projectText)
+        let resourcesID = try capture(#"(\w+) /\* Resources \*/"#, in: clipTarget)
+        let clipResources = try capture(resourcesID + #" /\* Resources \*/ = \{(.+?)\n\t\t\};"#, in: projectText)
+        XCTAssertFalse(clipResources.contains("DisplayFont"))
+        XCTAssertFalse(clipResources.contains("Iansui-SavvySubset"))
+        XCTAssertFalse(clipResources.contains("Iansui-Ink"))
+        XCTAssertTrue(clipResources.contains("Caveat-SemiBold.ttf"))
+        XCTAssertTrue(clipResources.contains("Iansui-ClipTitles.ttf"))
         XCTAssertTrue((project ?? "").contains("\"Caveat-SemiBold.ttf\""))
         XCTAssertTrue((project ?? "").contains("Iansui-ClipTitles.ttf"))
         XCTAssertTrue((project ?? "").contains("ClipSaveService.swift"))
