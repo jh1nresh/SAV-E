@@ -51,6 +51,7 @@ struct ProfileView: View {
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
+    var opensAccountSettings = false
     var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
@@ -103,7 +104,14 @@ struct ProfileView: View {
     /// outer stack and replaces the Atlas tab bar.
     private var passportRoot: some View {
         Group {
-            if opensCollected {
+            if opensAccountSettings {
+                settingsPage
+                    .toolbar { ToolbarItem(placement: .cancellationAction) {
+                        Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) { dismiss() }
+                            .frame(minWidth: 44, minHeight: 44)
+                            .accessibilityIdentifier("main.account.done")
+                    } }
+            } else if opensCollected {
                 collectedPage
             } else {
                 passportContent
@@ -242,6 +250,25 @@ struct ProfileView: View {
 
     private var settingsContent: some View {
         VStack(spacing: 20) {
+#if SAVVY_MAIN_APP
+            Button { editIdentity() } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "person.crop.circle").font(.title2)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(languageSettings.localized(english: "Edit profile", traditionalChinese: "編輯個人資料"))
+                            .font(.headline)
+                        Text(viewModel.profile.displayName).font(.subheadline)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(CityMVPFormStyle.ink).padding(20)
+                .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                .background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 24))
+                .contentShape(RoundedRectangle(cornerRadius: 24))
+            }.buttonStyle(.plain).disabled(PrivyAuthService.shared.isReviewerDemo)
+                .padding(.horizontal, 20).accessibilityIdentifier("profile.edit")
+#endif
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                 DisclosureGroup {
                     SettingsRow(

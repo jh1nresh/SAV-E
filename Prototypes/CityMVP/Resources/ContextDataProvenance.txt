@@ -1,0 +1,18 @@
+Outer Xinyi building footprints: © OpenStreetMap contributors, ODbL 1.0.
+https://www.openstreetmap.org/copyright
+https://opendatacommons.org/licenses/odbl/1-0/
+
+Derived from the public OSM API 0.6 map endpoint, retrieved 2026-11-11 UTC.
+42 planned cells cover a 3 x 3 km query around 25.033968,121.564468.
+7602 unique building ways; duplicate IDs are removed in the source export.
+Only id, geometry and rendering tags are retained in this bundled derivative.
+No photos, user data, POI identity, confirmed memories or entrances are added.
+Height/levels are unverified map tags; missing values use illustrative heights.
+Relations/multipolygon holes and complete real-world coverage are not asserted.
+
+Full request receipts, original compressed API replies, source hashes and the
+coverage validation are retained locally under:
+PreviewEvidence/context-ring-draft-20261112/attempt6/
+Full export SHA256: 3a05f1dbb5d106fac0dc595b133447eafedda21324a6dc8c93b8775965ed4156
+Bundled derivative SHA256: 1f7c4905ca2fbb56c966c2efeff14c601245d00fac95887543b2c37c5db4b01a
+Raised minimum-level/height and bridge tags are retained for exclusion.

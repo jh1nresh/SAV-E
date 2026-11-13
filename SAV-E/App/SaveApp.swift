@@ -64,7 +64,9 @@ private struct UITestWindowAppearanceSetter: UIViewRepresentable {
 }
 #endif
 
+#if !SAVVY_CITY_MVP || SAVVY_MAIN_APP
 @main
+#endif
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings(userDefaults: SaveInkLaunch.defaults)
@@ -235,7 +237,9 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if photoAttributionEvidenceActive {
+        if mainMapPreviewEnabled {
+            mainMapPreview
+        } else if photoAttributionEvidenceActive {
             GooglePlacesPhotoAttributionEvidenceView()
         } else if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
@@ -265,6 +269,24 @@ struct SaveApp: App {
         productRoot
 #endif
     }
+
+#if DEBUG
+    private var mainMapPreviewEnabled: Bool {
+#if SAVVY_MAIN_APP
+        SavvyMainMapPreview.isRequested
+#else
+        false
+#endif
+    }
+    @ViewBuilder
+    private var mainMapPreview: some View {
+#if SAVVY_MAIN_APP
+        SavvyMainMapPreview()
+#else
+        EmptyView()
+#endif
+    }
+#endif
 
     @ViewBuilder
     private var productRoot: some View {
@@ -306,6 +328,10 @@ struct SaveApp: App {
                     sessionOrigin: authService.sessionOrigin,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
+                    pendingClipListSave: $pendingClipListSave,
                     onVerificationChanged: updateVerifiedAccount
                 )
                     .environmentObject(authService)
@@ -730,6 +756,10 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
+    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var requiresShareConfirmation: Bool
+    @Binding var requiresListConfirmation: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
 
     @State private var isRebindConfirmationPresented = false
@@ -778,9 +808,41 @@ private struct AuthenticatedRootView: View {
         }
     }
 
+    @ViewBuilder
     private var verifiedAccountContent: some View {
+#if SAVVY_MAIN_APP
+        if let owner = authService.currentUserId {
+            SavvyMainMapRoot(ownerSubject: owner, sessionGeneration: sessionGeneration,
+                incomingPlaceReceipt: $incomingPlaceReceipt,
+                requiresShareConfirmation: $requiresShareConfirmation,
+                requiresListConfirmation: $requiresListConfirmation,
+                pendingClipListSave: $pendingClipListSave,
+                pendingOnboardingClue: accountOnboardingClue)
+                .id("main-map-\(owner)-\(sessionGeneration)")
+                .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+        } else {
+            AuthLoadingView()
+        }
+#else
         SaveInkNotebookRoot()
             .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+#endif
+    }
+
+    private var accountOnboardingClue: Binding<String> {
+        Binding(get: {
+            PendingOnboardingClueAccess.isAvailable(text: pendingOnboardingClue,
+                ownerUserID: pendingOnboardingClueOwnerID, currentUserID: authService.currentUserId)
+                ? pendingOnboardingClue : ""
+        }, set: { value in
+            guard authService.sessionGeneration == sessionGeneration,
+                  let owner = authService.currentUserId,
+                  PendingOnboardingClueAccess.canMutate(ownerUserID: pendingOnboardingClueOwnerID,
+                    currentUserID: owner) else { return }
+            pendingOnboardingClue = value
+            pendingOnboardingClueOwnerID = PendingOnboardingClueAccess.ownerAfterMutation(
+                newText: value, ownerUserID: pendingOnboardingClueOwnerID, currentUserID: owner)
+        })
     }
 
     private func claimPendingOnboardingClueIfNeeded() {

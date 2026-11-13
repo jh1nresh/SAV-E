@@ -9,6 +9,9 @@ import ImageIO
 /// raised-medium (+40pt) / `.large`. Cards stay ungrained.
 struct SaveCaptureFlowView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+#if SAVVY_CITY_MVP
+    @EnvironmentObject private var cityMVPDraftStore: CityMVPCaptureDraftStore
+#endif
     let tripName: String?
     let initialText: String
     let existingPlaces: [Place]
@@ -51,7 +54,11 @@ struct SaveCaptureFlowView: View {
         .interactiveDismissDisabled(isAnalyzing)
         .presentationDetents([Self.raisedMediumDetent, .large], selection: $detent)
         .presentationDragIndicator(.visible)
+#if SAVVY_CITY_MVP
+        .presentationBackground(CityMVPFormStyle.canvas)
+#else
         .presentationBackground(SaveAtlasPalette.paper)
+#endif
         // Keep capture.flow on the cover root. Without `.contain`, the
         // identifier collapses this Group and hides takeout.import.root
         // after the in-sheet swap. Do not remount Postal Import.
@@ -75,6 +82,27 @@ struct SaveCaptureFlowView: View {
     }
 
     private var captureStack: some View {
+#if SAVVY_CITY_MVP
+        CityMVPFormCapture(
+            text: $sharedText, focus: $isInputFocused, tripName: tripName,
+            isBusy: isBusy, isAnalyzing: isAnalyzing, isReadingPhoto: isReadingPhoto,
+            errorMessage: errorMessage ?? cityMVPDraftStore.failure?.message(english: languageSettings.language != .traditionalChinese),
+            isQuotaExhausted: isAIQuotaExhausted,
+            canSubmit: canSubmitDraft, savedCountText: savedCountText, recentSavedPlace: recentSavedPlace,
+            onPhoto: {
+                isInputFocused = false
+                selectedPhoto = nil
+                isPhotoPickerPresented = true
+            }, onSearch: {
+                isInputFocused = false
+                onSearchNearby()
+            }, onImportFile: {
+                isInputFocused = false
+                detent = .large
+                isGoogleTakeoutPresented = true
+            }, onSubmit: analyze, onCancel: onCancel
+        )
+#else
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -135,6 +163,7 @@ struct SaveCaptureFlowView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
+#endif
     }
 
     private var captureSaveBar: some View {
@@ -391,8 +420,14 @@ struct SaveCaptureFlowView: View {
     /// Exhausted AI assist is a neutral hint on this surface. It never
     /// opens `paywall.root` — Pro is sold for unlimited saved places only.
     private var isAIQuotaExhausted: Bool {
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
+        // City Lab imports through the local parser/vault; on-device OCR and
+        // text clues do not spend remote model allowance.
+        return false
+#else
         if forcesQuotaExhausted { return true }
         return entitlements.decideAIAssist().isRefusal
+#endif
     }
 
     /// Links stay capturable after AI quota exhaustion. Metered analysis

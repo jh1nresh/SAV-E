@@ -1,0 +1,14 @@
+.build/
+.build-lock/
+*.log
+*.xcresult/
+Amap.local.plist
+build-receipt.json
+Info.generated.plist
+devices.local.json
+__pycache__/
+runtime-state.local.json
+runtime-stop.local
+
+MCP/.bin/
+PreviewEvidence/

@@ -3680,8 +3680,11 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("try await mergeSavedSources(place, into: match) {\n                _ = try parkIfServerSavedPlaceLimit("),
             "friend-share and list merges must park the incoming place on PATCH cap"
         )
-        let offlineStart = try XCTUnwrap(map.range(of: "if !usesRemotePersistence {\n            let place = Place.from(candidate, refinedMatch: nil, nameOverride: nameOverride)"))
-        let offline = String(map[offlineStart.lowerBound...].prefix(700))
+        let reviewStart = try XCTUnwrap(map.range(of: "func saveReviewCandidateAsPlace("))
+        let reviewSource = String(map[reviewStart.lowerBound...])
+        let offlineStart = try XCTUnwrap(reviewSource.range(of: "if !usesRemotePersistence {"))
+        let authBoundary = try XCTUnwrap(reviewSource.range(of: "guard let userId = authService.currentUserId else"))
+        let offline = String(reviewSource[offlineStart.lowerBound..<authBoundary.lowerBound])
         XCTAssertTrue(
             offline.contains("let existing = try await mergeSavedSources(place, into: match)"),
             "local-only Review merge never hits the PATCH guard"

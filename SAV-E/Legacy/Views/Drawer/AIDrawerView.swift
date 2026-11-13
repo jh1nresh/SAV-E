@@ -491,6 +491,7 @@ struct AIDrawerView: View {
             .accessibilityLabel(languageSettings.localized(english: "Ask Savvy", traditionalChinese: "詢問 Savvy"))
             .accessibilityIdentifier("drawer.submitCommand")
         } else {
+#if !SAVVY_CITY_MVP || SAVVY_MAIN_APP
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
                     .font(.subheadline.weight(.bold))
@@ -508,6 +509,7 @@ struct AIDrawerView: View {
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(voiceQuery.isListening ? "Stop talking to Savvy" : "Talk to Savvy")
+#endif
 
             PassportDrawerButton(
                 fill: commandIconFill,
@@ -1620,13 +1622,24 @@ struct MapDetailDrawerView: View {
                 VStack(spacing: 0) {
                     expandedHeader
                     Divider()
+#if SAVVY_CITY_MVP
+                        .overlay(CityMVPFormStyle.card)
+#else
                         .overlay(SaveAtlasPalette.line.opacity(0.28))
+#endif
                         .padding(.horizontal, 18)
                     expandedContent
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background {
+#if SAVVY_CITY_MVP
+                    switch item {
+                    case .reviewCandidate, .savedPlace: CityMVPFormStyle.canvas
+                    default: AtlasPostcardDrawerBackground(colorScheme: colorScheme)
+                    }
+#else
                     AtlasPostcardDrawerBackground(colorScheme: colorScheme)
+#endif
                 }
             }
         }
@@ -1640,13 +1653,47 @@ struct MapDetailDrawerView: View {
     private var expandedHeader: some View {
         switch item {
         case .savedPlace(let place):
+#if SAVVY_CITY_MVP
+            prototypeDetailHeader(title: languageSettings.localized(english: "Saved place", traditionalChinese: "收藏地點"))
+                .accessibilityIdentifier("drawer.saved.header")
+#else
             liftedPostcardHeader(place)
+#endif
         case .reviewCandidate(let candidate):
+#if SAVVY_CITY_MVP
+            prototypeReviewHeader
+#else
             reviewPostcardHeader(candidate)
+#endif
         case .unsavedCandidate, .socialPlace:
             compactHeader
         }
     }
+
+#if SAVVY_CITY_MVP
+    private var prototypeReviewHeader: some View {
+        prototypeDetailHeader(title: languageSettings.localized(english: "Check this place", traditionalChinese: "確認這個地點"))
+            .accessibilityIdentifier("drawer.review.header")
+    }
+
+    private func prototypeDetailHeader(title: String) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.headline).frame(maxWidth: .infinity, alignment: .leading)
+            SavePlaceShareButton(content: item.shareContent) {
+                Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44)
+                    .background(CityMVPFormStyle.card, in: Circle())
+            }.accessibilityLabel(languageSettings.localized(english: "Share \(item.presentation.title)", traditionalChinese: "分享 \(item.presentation.title)"))
+            Button(action: onClose) {
+                Image(systemName: "xmark").frame(width: 44, height: 44)
+                    .background(CityMVPFormStyle.card, in: Circle())
+            }.accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
+                .accessibilityIdentifier("drawer.place.close")
+        }.foregroundStyle(CityMVPFormStyle.ink).buttonStyle(.plain)
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .accessibilityElement(children: .contain)
+    }
+#endif
 
     private func liftedPostcardHeader(_ place: Place) -> some View {
         ZStack(alignment: .bottomTrailing) {
@@ -2427,6 +2474,9 @@ private struct SavedMapDetailDrawerContent: View {
     @State private var isSavingPlaceEdit = false
     @State private var editName = ""
     @State private var editAddress = ""
+#if SAVVY_CITY_MVP
+    @State private var editPrivateNote = ""
+#endif
     @State private var editError: String?
     @State private var isEnrichingBusinessDetails = false
     @State private var localStatus: PlaceStatus?
@@ -2455,6 +2505,206 @@ private struct SavedMapDetailDrawerContent: View {
     }
 
     var body: some View {
+        savedPresentation
+        .onChange(of: place.status) { _, status in
+            localStatus = status
+        }
+        .confirmationDialog(
+            languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(languageSettings.localized(english: "Delete Place", traditionalChinese: "刪除地點"), role: .destructive) {
+                Task { await deletePlace() }
+            }
+            Button(languageSettings.text(.cancel), role: .cancel) {}
+        } message: {
+            Text(languageSettings.localized(english: "This removes the Map Stamp from Savvy.", traditionalChinese: "這會從 Savvy 移除這個地圖章。"))
+        }
+        .task(id: place.id) {
+            await enrichBusinessDetails()
+        }
+    }
+
+    @ViewBuilder
+    private var savedPresentation: some View {
+#if SAVVY_CITY_MVP
+        prototypeBody
+#else
+        legacyBody
+#endif
+    }
+
+#if SAVVY_CITY_MVP
+    private var prototypeBody: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            prototypeIdentity
+            VStack(spacing: 10) {
+                Button(action: onShowOnMap) {
+                    prototypeActionLabel(languageSettings.localized(english: "View on map", traditionalChinese: "在地圖上查看"),
+                                         symbol: "map", primary: true)
+                }.accessibilityIdentifier("home.row.showOnMap")
+                HStack(spacing: 10) {
+                    Button {
+                        if let providerURL = detailPlace.providerMapDestinationURL { openURL(providerURL) }
+                        else { NavigationService.navigate(to: detailPlace.coordinate, name: detailPlace.name) }
+                    } label: {
+                        prototypeActionLabel(languageSettings.localized(english: "Directions", traditionalChinese: "導航"),
+                                             symbol: "arrow.turn.up.right")
+                    }
+                    if let sourceURL = detailPlace.primarySourceURL {
+                        Button { openURL(sourceURL) } label: {
+                            prototypeActionLabel(languageSettings.localized(english: "Original source", traditionalChinese: "原始來源"), symbol: "link")
+                        }
+                    }
+                }
+            }.buttonStyle(.plain)
+            SaveVisitIntentChooser(status: detailPlace.status, language: languageSettings.language,
+                isDisabled: isUpdatingVisitIntent || isSavingPlaceEdit) { intent in
+                    Task { await updateVisitIntent(intent) }
+                }
+            if let visitIntentError { Text(visitIntentError).font(.footnote).foregroundStyle(.red) }
+            if showsBusinessPhotoCarousel {
+                PlaceBusinessPhotoCarousel(imageURLs: detailPlace.businessPhotoURLStrings,
+                    isSearching: isEnrichingBusinessDetails, googlePlaceId: detailPlace.googlePlaceId)
+                    .accessibilityIdentifier("drawer.saved.photoCarousel")
+            }
+            prototypePrivateMemory
+            if isEditingPlace { prototypePlaceEditor }
+            HStack(spacing: 10) {
+                Button(action: beginPlaceEdit) {
+                    prototypeActionLabel(languageSettings.text(.edit), symbol: "pencil")
+                }.accessibilityIdentifier("drawer.saved.edit")
+                Button(role: .destructive) { showDeleteConfirmation = true } label: {
+                    prototypeActionLabel(languageSettings.localized(english: "Delete", traditionalChinese: "刪除"), symbol: "trash", destructive: true)
+                }.accessibilityIdentifier("drawer.saved.delete")
+            }.buttonStyle(.plain).disabled(isSavingPlaceEdit || isDeleting)
+            PlaceBasicInfoPanel(place: detailPlace)
+            if !prototypeSourceLines.isEmpty {
+                DisclosureGroup(languageSettings.localized(english: "Saved source details", traditionalChinese: "已保存的來源內容")) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(prototypeSourceLines.enumerated()), id: \.offset) { _, line in
+                            Text(line).font(.subheadline).textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }.padding(.top, 12)
+                }.font(.subheadline.weight(.semibold)).padding(16)
+                    .background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 24))
+                    .accessibilityIdentifier("drawer.saved.sourceDetails")
+            }
+            VStack(spacing: 10) {
+                Button(action: onAddToTrip) {
+                    prototypeActionLabel(languageSettings.localized(english: "Add to Trip", traditionalChinese: "加入行程"), symbol: "suitcase.rolling")
+                }.accessibilityIdentifier("drawer.saved.addToTrip")
+                Button(action: onPlanAroundPlace) {
+                    prototypeActionLabel(languageSettings.localized(english: "Plan around this", traditionalChinese: "用這裡規劃"), symbol: "point.topleft.down.curvedto.point.bottomright.up")
+                }.accessibilityIdentifier("drawer.saved.planAround")
+            }.buttonStyle(.plain)
+            RelatedPlaceSourcesPanel(place: detailPlace, discover: onFindRelatedSources)
+            if let deleteError { Text(deleteError).font(.footnote).foregroundStyle(.red) }
+            if let editError { Text(editError).font(.footnote).foregroundStyle(.red) }
+        }.foregroundStyle(CityMVPFormStyle.ink)
+            .accessibilityElement(children: .contain).accessibilityIdentifier("drawer.saved.prototypeBody")
+    }
+
+    private var prototypeIdentity: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Group {
+                if let photo = CityPinArtwork.photo(for: CityMVPPlaceBridge.contextID(for: detailPlace)) {
+                    Image(uiImage: photo.image).resizable().scaledToFill()
+                        .frame(width: 80, height: 80).clipShape(Circle())
+                        .accessibilityHidden(true)
+                } else if !detailPlace.businessPhotoURLStrings.isEmpty {
+                    SavedPostcardPhoto(imageURLs: detailPlace.businessPhotoURLStrings, isSearching: isEnrichingBusinessDetails)
+                } else {
+                    Image(systemName: "bookmark.fill").font(.title2).frame(width: 64, height: 64)
+                        .background(CityMVPFormStyle.card, in: Circle())
+                        .accessibilityHidden(true)
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(languageSettings.localized(english: "Map Stamp · Saved", traditionalChinese: "Map Stamp · 已收藏"))
+                    .font(.caption.weight(.semibold)).foregroundStyle(CityMVPFormStyle.muted)
+                    .accessibilityIdentifier("drawer.saved.state")
+                Text(detailPlace.name).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("drawer.saved.name")
+                if !detailPlace.address.isEmpty {
+                    Text(detailPlace.address).font(.subheadline).foregroundStyle(CityMVPFormStyle.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("drawer.saved.address")
+                }
+                Text(detailPlace.category.displayName(language: languageSettings.language))
+                    .font(.subheadline).foregroundStyle(CityMVPFormStyle.muted)
+                Text(savedDateLabel).font(.caption).foregroundStyle(CityMVPFormStyle.muted)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(.vertical, 4)
+    }
+
+    private var prototypePrivateMemory: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(languageSettings.localized(english: "Your private note", traditionalChinese: "你的私人筆記"), systemImage: "lock")
+                .font(.subheadline.weight(.semibold))
+            if let note = detailPlace.userFacingNote, !note.isEmpty {
+                Text(note).font(.body).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(languageSettings.localized(english: "No private note yet.", traditionalChinese: "還沒有私人筆記。"))
+                    .font(.subheadline).foregroundStyle(CityMVPFormStyle.muted)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
+            .background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 24))
+            .accessibilityIdentifier("drawer.saved.privateMemory")
+    }
+
+    private var prototypeSourceLines: [String] {
+        detailPlace.savedAdditionalSourceEvidence + detailPlace.savedPlaceHighlights
+            + detailPlace.savedRecommendedItems.map(\.displayText) + detailPlace.savedVibeTags + detailPlace.savedAccessNotes
+    }
+
+    private func prototypeActionLabel(_ title: String, symbol: String, primary: Bool = false, destructive: Bool = false) -> some View {
+        Label(title, systemImage: symbol).font(.subheadline.weight(.semibold))
+            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, minHeight: 50).padding(.horizontal, 12)
+            .foregroundStyle(primary ? CityMVPFormStyle.canvas : destructive ? .red : CityMVPFormStyle.ink)
+            .background(primary ? CityMVPFormStyle.ink : CityMVPFormStyle.card, in: Capsule())
+            .contentShape(Capsule())
+    }
+
+    private var prototypePlaceEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"), text: $editName)
+                .textInputAutocapitalization(.words).autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder).accessibilityIdentifier("drawer.saved.edit.name")
+            TextField(languageSettings.localized(english: "Address", traditionalChinese: "地址"), text: $editAddress)
+                .textInputAutocapitalization(.words).autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder).accessibilityIdentifier("drawer.saved.edit.address")
+            TextField(languageSettings.localized(english: "Your private note", traditionalChinese: "你的私人筆記"),
+                      text: $editPrivateNote, axis: .vertical)
+                .lineLimit(3...6).textInputAutocapitalization(.sentences).padding(12)
+                .background(CityMVPFormStyle.canvas, in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityIdentifier("drawer.saved.edit.note")
+                .toolbar { ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }.accessibilityIdentifier("drawer.saved.keyboardDone")
+                } }
+            Button(languageSettings.localized(english: "Clear note", traditionalChinese: "清空筆記")) { editPrivateNote = "" }
+                .frame(minHeight: 44).disabled(isSavingPlaceEdit || editPrivateNote.isEmpty)
+                .accessibilityIdentifier("drawer.saved.edit.clearNote")
+            HStack(spacing: 10) {
+                Button { isEditingPlace = false; editError = nil } label: {
+                    prototypeActionLabel(languageSettings.text(.cancel), symbol: "xmark")
+                }
+                Button(action: savePlaceEdit) {
+                    prototypeActionLabel(isSavingPlaceEdit ? languageSettings.text(.saving) : languageSettings.text(.save),
+                                         symbol: "checkmark", primary: true)
+                }.accessibilityIdentifier("drawer.saved.edit.save")
+            }.buttonStyle(.plain).disabled(isSavingPlaceEdit)
+        }.font(.body).padding(16).background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 24))
+    }
+#endif
+
+    private var legacyBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             postcardIdentity
 
@@ -2647,24 +2897,6 @@ private struct SavedMapDetailDrawerContent: View {
         .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.saved.postcardBody")
-        .onChange(of: place.status) { _, status in
-            localStatus = status
-        }
-        .confirmationDialog(
-            languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(languageSettings.localized(english: "Delete Place", traditionalChinese: "刪除地點"), role: .destructive) {
-                Task { await deletePlace() }
-            }
-            Button(languageSettings.text(.cancel), role: .cancel) {}
-        } message: {
-            Text(languageSettings.localized(english: "This removes the Map Stamp from Savvy.", traditionalChinese: "這會從 Savvy 移除這個地圖章。"))
-        }
-        .task(id: place.id) {
-            await enrichBusinessDetails()
-        }
     }
 
     private var postcardIdentity: some View {
@@ -2790,6 +3022,11 @@ private struct SavedMapDetailDrawerContent: View {
     }
 
     private func enrichBusinessDetails() async {
+#if SAVVY_CITY_MVP
+        // The local preview must not enrich or write a real authenticated
+        // account when opening a local saved-place detail.
+        return
+#else
         isEnrichingBusinessDetails = true
         defer { isEnrichingBusinessDetails = false }
         guard let updatedPlace = await PlaceBusinessEnricher.enrich(detailPlace) else { return }
@@ -2799,6 +3036,7 @@ private struct SavedMapDetailDrawerContent: View {
         // devices; previously they lived only in this view's state. Demo and
         // offline sessions simply skip the write.
         try? await SupabaseService.shared.updatePlace(updatedPlace, previous: detailPlace)
+#endif
     }
 
     private var placeEditor: some View {
@@ -2819,6 +3057,27 @@ private struct SavedMapDetailDrawerContent: View {
                 .background(SaveAtlasPalette.paper.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
+#if SAVVY_CITY_MVP
+            Button(languageSettings.localized(english: "Clear note", traditionalChinese: "清空筆記")) {
+                editPrivateNote = ""
+            }.frame(minHeight: 44).disabled(isSavingPlaceEdit || editPrivateNote.isEmpty)
+                .accessibilityIdentifier("drawer.saved.edit.clearNote")
+            TextField(languageSettings.localized(english: "Your private note", traditionalChinese: "你的私人筆記"),
+                      text: $editPrivateNote, axis: .vertical)
+                .lineLimit(3...6).textInputAutocapitalization(.sentences)
+                .padding(10).background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityIdentifier("drawer.saved.edit.note")
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                            to: nil, from: nil, for: nil)
+                        }.accessibilityIdentifier("drawer.saved.keyboardDone")
+                    }
+                }
+#endif
+
             HStack(spacing: 8) {
                 Button {
                     isEditingPlace = false
@@ -2838,6 +3097,7 @@ private struct SavedMapDetailDrawerContent: View {
                     )
                 }
                 .disabled(isSavingPlaceEdit)
+                .accessibilityIdentifier("drawer.saved.edit.save")
             }
         }
         .padding(10)
@@ -2852,6 +3112,9 @@ private struct SavedMapDetailDrawerContent: View {
     private func beginPlaceEdit() {
         editName = detailPlace.name
         editAddress = detailPlace.address
+#if SAVVY_CITY_MVP
+        editPrivateNote = detailPlace.userFacingNote ?? ""
+#endif
         editError = nil
         isEditingPlace = true
     }
@@ -2889,6 +3152,9 @@ private struct SavedMapDetailDrawerContent: View {
         var updatedPlace = detailPlace
         updatedPlace.name = trimmedName
         updatedPlace.address = trimmedAddress.isEmpty ? detailPlace.address : trimmedAddress
+#if SAVVY_CITY_MVP
+        updatedPlace.note = editPrivateNote.isEmpty ? nil : editPrivateNote
+#endif
 
         Task {
             do {
@@ -2974,7 +3240,11 @@ struct SavedPostcardPhoto: View {
                             .scaledToFill()
                     case .empty:
                         ProgressView()
+#if SAVVY_CITY_MVP
+                            .tint(CityMVPFormStyle.ink)
+#else
                             .tint(SaveAtlasPalette.forest)
+#endif
                     case .failure:
                         fallback
                     @unknown default:
@@ -2986,6 +3256,10 @@ struct SavedPostcardPhoto: View {
             }
         }
         .frame(width: 104, height: 104)
+#if SAVVY_CITY_MVP
+        .background(CityMVPFormStyle.card)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+#else
         .background(SaveAtlasPalette.mint.opacity(0.46))
         .clipped()
         .padding(4)
@@ -2996,9 +3270,16 @@ struct SavedPostcardPhoto: View {
         }
         .rotationEffect(.degrees(-1.2))
         .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 3, y: 2)
+#endif
     }
 
     private var fallback: some View {
+#if SAVVY_CITY_MVP
+        Rectangle().fill(CityMVPFormStyle.card).overlay {
+            Image(systemName: isSearching ? "hourglass" : "photo")
+                .font(.system(size: 22, weight: .semibold)).foregroundStyle(CityMVPFormStyle.muted)
+        }
+#else
         Rectangle()
             .fill(SaveAtlasPalette.mint.opacity(0.48))
             .overlay {
@@ -3006,6 +3287,7 @@ struct SavedPostcardPhoto: View {
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(SaveAtlasPalette.forest.opacity(0.72))
             }
+#endif
     }
 }
 
@@ -3122,7 +3404,50 @@ private struct AddToListPanel: View {
     let onCreateList: () -> SaveCollaborativeList
     let onAddToList: (UUID) -> Void
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+#if SAVVY_CITY_MVP
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title).font(.subheadline.weight(.semibold))
+            if lists.isEmpty {
+                Button {
+                    let list = onCreateList()
+                    onAddToList(list.id)
+                } label: { prototypeListLabel(creating: true) }
+                    .buttonStyle(.plain).accessibilityIdentifier("drawer.saved.createList")
+            } else {
+                Menu {
+                    ForEach(lists) { list in
+                        Button(list.title) { onAddToList(list.id) }
+                    }
+                    Divider()
+                    Button(languageSettings.localized(english: "New list", traditionalChinese: "新清單")) {
+                        let list = onCreateList()
+                        onAddToList(list.id)
+                    }
+                } label: { prototypeListLabel(creating: false) }
+                    .accessibilityIdentifier("drawer.saved.chooseList")
+            }
+        }.foregroundStyle(CityMVPFormStyle.ink).padding(16)
+            .background(CityMVPFormStyle.card, in: RoundedRectangle(cornerRadius: 24))
+            .accessibilityIdentifier("drawer.saved.list")
+#else
+        legacyBody
+#endif
+    }
+
+#if SAVVY_CITY_MVP
+    private func prototypeListLabel(creating: Bool) -> some View {
+        Label(creating
+              ? languageSettings.localized(english: "Create list and add", traditionalChinese: "建立清單並加入")
+              : languageSettings.localized(english: "Choose list", traditionalChinese: "選擇清單"),
+              systemImage: creating ? "plus" : "list.bullet.rectangle")
+            .font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
+            .padding(.horizontal, 14).frame(maxWidth: .infinity, minHeight: 48)
+            .background(CityMVPFormStyle.canvas, in: Capsule()).contentShape(Capsule())
+    }
+#endif
+
+    private var legacyBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(title, systemImage: "person.2.wave.2.fill")
@@ -3401,6 +3726,18 @@ private struct ReviewCandidateDetailCard: View {
     }
 
     var body: some View {
+#if SAVVY_CITY_MVP
+        CityMVPReviewCandidateCard(candidate: candidate, tripName: captureTripName, displayName: $displayNameDraft,
+            primaryTitle: primaryActionTitle, primarySymbol: primaryAction.systemImage,
+            canConfirm: primaryAction.confirmsMapStamp, isWorking: isWorking,
+            onPrimary: performPrimaryAction,
+            onSearch: primaryAction.confirmsMapStamp ? onFindExactPlace : (onAddClue ?? onFindExactPlace),
+            onOpenMap: {
+                if candidate.hasReliableCoordinates { (onFocusOnMap ?? onFindExactPlace)() }
+                else { onFindExactPlace() }
+            },
+            onReject: onReject, onKeepSource: onSaveSourceOnly, onInvestigate: onInvestigateMore)
+#else
         PostcardDetailPaper(
             tint: candidate.hasSavableLocation ? SaveAtlasPalette.sky : SaveAtlasPalette.coral,
             accessibilityIdentifier: "drawer.review.postcardBody"
@@ -3528,6 +3865,7 @@ private struct ReviewCandidateDetailCard: View {
             }
         }
         .opacity(isWorking ? 0.65 : 1)
+#endif
     }
 
     private var presentation: SavePlaceDrawerPresentation {

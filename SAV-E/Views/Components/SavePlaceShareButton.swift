@@ -193,7 +193,11 @@ struct SavePlaceShareButton<Label: View>: View {
         }
         .task(id: content.stateKey) {
             resetForCurrentContent(content.stateKey)
+#if !SAVVY_CITY_MVP || SAVVY_MAIN_APP
+            // The local City Lab keeps the immediate, local share payload.
+            // Mounting its preview must never create a hosted share record.
             await prepareShortLink()
+#endif
         }
         .onChange(of: content.stateKey) { _, newKey in
             resetForCurrentContent(newKey)

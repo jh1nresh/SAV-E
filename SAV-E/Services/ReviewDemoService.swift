@@ -34,7 +34,9 @@ enum ReviewDemo {
     /// launch flag is DEBUG-only so App Review and production sessions keep
     /// their existing behavior.
     static var isOfflineUITestMode: Bool {
-#if DEBUG
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
+        true
+#elseif DEBUG
         ProcessInfo.processInfo.arguments.contains("--uitest-review-demo-offline")
 #else
         false
@@ -45,7 +47,9 @@ enum ReviewDemo {
     /// normal reviewer-demo vault. Only a conservative filename-safe subset is
     /// accepted so an environment value cannot escape the demo directory.
     static var uiTestStorageIdentifier: String? {
-#if DEBUG
+#if SAVVY_CITY_MVP && !SAVVY_MAIN_APP
+        "city-mvp-local"
+#elseif DEBUG
         guard isOfflineUITestMode,
               let value = ProcessInfo.processInfo.environment["SAVE_UI_TEST_STORAGE_ID"]
         else { return nil }

@@ -26,10 +26,10 @@
             buildForRunning = "NO"
             buildForProfiling = "NO"
             buildForArchiving = "NO"
-            buildForAnalyzing = "YES">
+            buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C1A00000000000000000000C"
+               BlueprintIdentifier = "ADA9783F7E591D40F4071856"
                BuildableName = "SAVEClipUITests.xctest"
                BlueprintName = "SAVEClipUITests"
                ReferencedContainer = "container:SAV-E.xcodeproj">
@@ -58,13 +58,15 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "C1A00000000000000000000C"
+               BlueprintIdentifier = "ADA9783F7E591D40F4071856"
                BuildableName = "SAVEClipUITests.xctest"
                BlueprintName = "SAVEClipUITests"
                ReferencedContainer = "container:SAV-E.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -86,6 +88,8 @@
             ReferencedContainer = "container:SAV-E.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <CommandLineArguments>
+      </CommandLineArguments>
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "_XCAppClipURL"
@@ -93,8 +97,6 @@
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

@@ -360,6 +360,9 @@ final class ProfileViewModel: ObservableObject {
         }
         try saveLocalVaultService.purgeAccountDeletionRecords(intentID: intent.id)
         try avatarStore.remove(for: intent.owner)
+#if SAVVY_MAIN_APP
+        try SavvyMainMapNamespace.purgeAccountSidecars(ownerSubject: intent.owner)
+#endif
         try saveLocalVaultService.completeAccountDeletionCleanup(intentID: intent.id)
     }
 
