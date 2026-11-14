@@ -57,6 +57,7 @@ Passport is the account's place archive and control surface. It exposes confirme
 
 - Clues retain their source and uncertainty. They are not saved Map Stamps. Source-only clues without reliable coordinates do not become map pins.
 - Review Candidates are possible matches and need the existing explicit confirmation before becoming user truth.
+- The branded collection keeps a separate To review section for current pending clues. A capture batch filters only this section and can return to all pending clues; confirmed-place counts and saved-status filters never absorb or hide pending clues. Opening a row resolves its current ID before presenting the canonical review. Exact-place correction uses a visible search sheet and returns to it after an unconfirmed result is closed.
 - Map Stamps are confirmed saved places. Saved/unvisited, visited, location-verified visits and unverified visits remain separate, explicitly labeled states.
 - Never turn a self-marked or legacy Visited status into verified arrival, receipt/photo proof, purchase or physical-delivery evidence.
 - Normal Passport identity comes from the authenticated account and its account-scoped local avatar. It never displays a fixture name/city as the user. A backend canonical profile ID may differ from its Privy subject; freshness belongs to the requested owner/session.

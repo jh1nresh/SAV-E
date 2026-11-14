@@ -240,6 +240,7 @@
 		A5269FE0607830F038B6AD35 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BF2F96FC1EA2FD6AEF8E767 /* ShareViewController.swift */; };
 		A5AEBFCAD88FB6051DC955EC /* CityNativeLabelPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7409684796F808543435D61 /* CityNativeLabelPolicy.swift */; };
 		A79C0C28EE4C6EA585709B84 /* DebugBridgeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93BE5688461A7A72B54A9574 /* DebugBridgeManager.swift */; };
+		A82DD53704364025964468AC /* LivePlanningLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B41EC678E6A603670FC872 /* LivePlanningLibraryTests.swift */; };
 		A8DDA49755FA36EC93063383 /* CityNativeOverlayProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505607B14FEDA9D0B8F2DD44 /* CityNativeOverlayProbe.swift */; };
 		A9D90C0B0183C09C537BC135 /* CityNanShanArchitecture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F86320D90530BCD079D1B03 /* CityNanShanArchitecture.swift */; };
 		AA7B357F99DBE67E83B98108 /* taipei101-pin.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 1B34F28AA4282EC08A3BAC8D /* taipei101-pin.jpg */; };
@@ -697,6 +698,7 @@
 		819FAFAC9494AB7FFEE8C0FD /* EvidenceLinkList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvidenceLinkList.swift; sourceTree = "<group>"; };
 		81A98C2E4AE6FC2ADD4E59E2 /* ReviewDemoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewDemoTests.swift; sourceTree = "<group>"; };
 		82B04498A61BB7C182195E5A /* DeterministicTripPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTripPlanner.swift; sourceTree = "<group>"; };
+		82B41EC678E6A603670FC872 /* LivePlanningLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePlanningLibraryTests.swift; sourceTree = "<group>"; };
 		82D939838A1CBF35DB08422A /* SaveChromePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveChromePresentation.swift; sourceTree = "<group>"; };
 		82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEProductionConfig.swift; sourceTree = "<group>"; };
 		83480638F69DB37FA2F3EC3B /* LiveOutingModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveOutingModelTests.swift; sourceTree = "<group>"; };
@@ -1555,6 +1557,7 @@
 				83480638F69DB37FA2F3EC3B /* LiveOutingModelTests.swift */,
 				20F67BE3996DEC6799EF0C56 /* LivePlaceInformationTests.swift */,
 				B59D2C474AAEDE7A80F05D60 /* LivePlaceNativeProbeTests.swift */,
+				82B41EC678E6A603670FC872 /* LivePlanningLibraryTests.swift */,
 				748039CC84BB9BBD8D13F021 /* LivePlanningSurfaceTests.swift */,
 				3493C1788C251ADA1D9EF02E /* LivePublicDiscoveryDataTests.swift */,
 				4B2E55F1FFD7A5166FE74539 /* LivePublicDiscoveryModelTests.swift */,
@@ -2270,6 +2273,7 @@
 				B02E50BC0BE1BD8AE64373A9 /* LiveOutingModelTests.swift in Sources */,
 				E8A12D557EBD818E19338D25 /* LivePlaceInformationTests.swift in Sources */,
 				EEB4F393C6B31647D689480E /* LivePlaceNativeProbeTests.swift in Sources */,
+				A82DD53704364025964468AC /* LivePlanningLibraryTests.swift in Sources */,
 				85F5FF787FF1A5A8CC783B32 /* LivePlanningSurfaceTests.swift in Sources */,
 				D0360D4320AA7D239B7B4786 /* LivePublicDiscoveryDataTests.swift in Sources */,
 				2221B95260F14217AB58A1D9 /* LivePublicDiscoveryModelTests.swift in Sources */,

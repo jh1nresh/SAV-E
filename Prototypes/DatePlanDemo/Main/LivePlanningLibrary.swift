@@ -7,16 +7,30 @@ struct LivePlanningLibraryView: View {
     let isLoading: Bool
     let onOpen: (Place) -> Void
     let onCapture: () -> Void
+    let reviewCandidates: [PlaceReviewCandidate]
+    let reviewBatchIDs: [UUID]?
+    let onOpenReview: (UUID) -> Void
+    let onClearReviewBatch: () -> Void
     @Environment(\.appLanguageSettings) private var language
     @State private var query = ""
     @State private var filter: LiveLibraryFilter = .all
 
     init(places: [Place], isLoading: Bool, onOpen: @escaping (Place) -> Void,
-         onCapture: @escaping () -> Void) {
+         onCapture: @escaping () -> Void, reviewCandidates: [PlaceReviewCandidate] = [],
+         reviewBatchIDs: [UUID]? = nil, onOpenReview: @escaping (UUID) -> Void = { _ in },
+         onClearReviewBatch: @escaping () -> Void = {}) {
         self.places = places
         self.isLoading = isLoading
         self.onOpen = onOpen
         self.onCapture = onCapture
+        self.reviewCandidates = reviewCandidates
+        self.reviewBatchIDs = reviewBatchIDs
+        self.onOpenReview = onOpenReview
+        self.onClearReviewBatch = onClearReviewBatch
+    }
+
+    private var review: LiveLibraryReviewProjection {
+        LiveLibraryReviewProjection(candidates: reviewCandidates, batchIDs: reviewBatchIDs, query: query)
     }
 
     private var matches: [Place] {
@@ -52,23 +66,13 @@ struct LivePlanningLibraryView: View {
             .padding(.leading, 16).padding(.trailing, 4).frame(minHeight: 52)
             .modifier(LiveLibraryCard())
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(LiveLibraryFilter.allCases, id: \.self) { value in
-                        Button { filter = value } label: {
-                            Text(filterTitle(value)).font(.system(.subheadline, design: .rounded, weight: .semibold))
-                                .padding(.horizontal, 16).frame(minHeight: 44)
-                                .foregroundStyle(filter == value ? DateTheme.actionInk : DateTheme.ink)
-                                .background(filter == value ? DateTheme.action : DateTheme.surface, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(filter == value ? .isSelected : [])
-                    }
-                }
-            }.scrollIndicators(.hidden)
-
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
+                    reviewSection
+                    Text(copy("Saved places", "已收藏地點"))
+                        .font(.system(.headline, design: .rounded))
+                        .padding(.top, 12).accessibilityAddTraits(.isHeader)
+                    savedFilters
                     if isLoading {
                         ProgressView(copy("Loading saved places…", "載入收藏…"))
                             .font(.system(.subheadline, design: .rounded)).padding(.vertical, 16)
@@ -100,6 +104,75 @@ struct LivePlanningLibraryView: View {
         }
         .foregroundStyle(DateTheme.ink)
         .accessibilityIdentifier("live.library")
+    }
+
+    private var savedFilters: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(LiveLibraryFilter.allCases, id: \.self) { value in
+                    Button { filter = value } label: {
+                        Text(filterTitle(value)).font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            .padding(.horizontal, 16).frame(minHeight: 44)
+                            .foregroundStyle(filter == value ? DateTheme.actionInk : DateTheme.ink)
+                            .background(filter == value ? DateTheme.action : DateTheme.surface, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(filter == value ? .isSelected : [])
+                    .accessibilityIdentifier("live.library.savedFilter.\(String(describing: value))")
+                }
+            }
+        }.scrollIndicators(.hidden)
+    }
+
+    private var reviewSection: some View {
+        let projection = review
+        return VStack(alignment: .leading, spacing: 10) {
+            Text(copy("To review", "待確認"))
+                .font(.system(.headline, design: .rounded)).accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("live.library.review.heading")
+            if reviewBatchIDs != nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(copy("This capture · review before saving", "本次線索 · 確認後才會收藏"), systemImage: "magnifyingglass")
+                        .font(.system(.subheadline, design: .rounded)).foregroundStyle(DateTheme.muted)
+                    Button(copy("Show all to review", "顯示全部待確認"), action: onClearReviewBatch)
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .frame(minHeight: 44).foregroundStyle(DateTheme.blue)
+                        .accessibilityIdentifier("live.library.review.showAll")
+                }.accessibilityIdentifier("live.library.review.batch")
+            }
+            if projection.matches.isEmpty {
+                Text(isLoading ? copy("Loading clues…", "載入線索…") : reviewEmptyCopy(projection.emptyState))
+                    .font(.system(.subheadline, design: .rounded)).foregroundStyle(DateTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("live.library.review.empty")
+                if projection.emptyState == .noSearchMatches {
+                    Button(copy("Clear search", "清除搜尋")) { query = "" }
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                        .frame(minHeight: 44).foregroundStyle(DateTheme.blue)
+                        .accessibilityIdentifier("live.library.review.clearSearch")
+                }
+            } else {
+                ForEach(projection.matches) { candidate in
+                    let id = candidate.id
+                    Button { onOpenReview(id) } label: { LiveLibraryReviewRow(candidate: candidate) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(copy("Open this clue to check it before saving", "打開線索，確認後才會收藏"))
+                        .accessibilityIdentifier("live.library.review.\(id.uuidString)")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("live.library.review")
+    }
+
+    private func reviewEmptyCopy(_ state: LiveLibraryReviewProjection.EmptyState?) -> String {
+        switch state {
+        case .nonePending: copy("No clues waiting for review.", "目前沒有待確認的線索。")
+        case .batchReviewed: copy("No clues from this capture are waiting for review.", "這次線索目前沒有待確認項目。")
+        case .noSearchMatches: copy("No matching clues. Try another name or address.", "沒有符合的線索，試試其他名稱或地址。")
+        case nil: ""
+        }
     }
 
     private var emptyState: some View {
@@ -134,6 +207,94 @@ struct LivePlanningLibraryView: View {
 
     private func copy(_ english: String, _ chinese: String) -> String {
         language.localized(english: english, traditionalChinese: chinese)
+    }
+}
+
+/// Read-only projection, shared with focused tests. Saved status filters never enter this path.
+@MainActor
+struct LiveLibraryReviewProjection {
+    enum EmptyState: Equatable { case nonePending, batchReviewed, noSearchMatches }
+    let eligible: [PlaceReviewCandidate]
+    let matches: [PlaceReviewCandidate]
+    let emptyState: EmptyState?
+
+    init(candidates: [PlaceReviewCandidate], batchIDs: [UUID]?, query: String) {
+        eligible = candidates.filter(Self.isPending).sorted(by: PlaceReviewCandidate.newestFirst)
+        let ids = batchIDs.map { Set($0) }
+        let scoped = eligible.filter { ids?.contains($0.id) ?? true }
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        matches = scoped.filter {
+            text.isEmpty || $0.name.localizedStandardContains(text) || $0.address.localizedStandardContains(text)
+        }
+        if scoped.isEmpty { emptyState = batchIDs == nil ? .nonePending : .batchReviewed }
+        else { emptyState = matches.isEmpty ? .noSearchMatches : nil }
+    }
+
+    static func isPending(_ candidate: PlaceReviewCandidate) -> Bool {
+        ["review", "needs_more_evidence", "source_only"].contains(candidate.status)
+            && candidate.replacementCandidateIDs.isEmpty
+    }
+}
+
+@MainActor
+enum LiveLibraryReviewState: Equatable {
+    case analysisPending, sourceClue, possiblePlace, unplaced
+
+    init(_ candidate: PlaceReviewCandidate) {
+        if candidate.isUnplacedInbox { self = .unplaced }
+        else if candidate.isAnalysisPending { self = .analysisPending }
+        else if candidate.status == "source_only" || !candidate.hasSavableLocation { self = .sourceClue }
+        else { self = .possiblePlace }
+    }
+
+    var symbol: String {
+        switch self {
+        case .analysisPending: "clock"
+        case .sourceClue: "link"
+        case .possiblePlace: "mappin.and.ellipse"
+        case .unplaced: "tray"
+        }
+    }
+
+    @MainActor func title(_ language: AppLanguageSettings) -> String {
+        switch self {
+        case .analysisPending: language.localized(english: "Analysis pending", traditionalChinese: "分析待完成")
+        case .sourceClue: language.localized(english: "Source clue · exact place needed", traditionalChinese: "來源線索 · 尚待找出地點")
+        case .possiblePlace: language.localized(english: "Possible place · review before saving", traditionalChinese: "可能的地點 · 確認後才會收藏")
+        case .unplaced: language.localized(english: "Unplaced · not on your map yet", traditionalChinese: "暫未放入 · 尚未加入你的地圖")
+        }
+    }
+}
+
+@MainActor
+private struct LiveLibraryReviewRow: View {
+    let candidate: PlaceReviewCandidate
+    @Environment(\.appLanguageSettings) private var language
+    private var state: LiveLibraryReviewState { LiveLibraryReviewState(candidate) }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: state.symbol).font(.system(.title3, design: .rounded))
+                .foregroundStyle(DateTheme.blue).frame(width: 44, height: 44)
+                .background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 14)).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(candidate.name.isEmpty ? language.localized(english: "Untitled clue", traditionalChinese: "未命名線索") : candidate.name)
+                    .font(.system(.headline, design: .rounded))
+                Text(state.title(language)).font(.system(.caption, design: .rounded, weight: .medium))
+                    .foregroundStyle(DateTheme.blue)
+                if !candidate.address.isEmpty {
+                    Text(candidate.address).font(.system(.subheadline, design: .rounded)).foregroundStyle(DateTheme.muted)
+                }
+                if let handle = SaveSourceHandle.resolved(candidate.sourceHandle) {
+                    Text(handle).font(.system(.caption, design: .rounded)).foregroundStyle(DateTheme.muted)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
+            Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold))
+                .foregroundStyle(DateTheme.muted).padding(.top, 4).accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .padding(16).modifier(LiveLibraryCard()).contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 

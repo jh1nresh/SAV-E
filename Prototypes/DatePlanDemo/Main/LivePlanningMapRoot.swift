@@ -6,6 +6,12 @@ enum LiveMapMode: String, CaseIterable {
     case explore = "探索", outing = "朋友", personal = "我的"
 }
 
+/// A navigation request carries IDs only; MapViewModel remains the source of truth.
+struct LiveReviewInboxRequest: Equatable {
+    let id = UUID()
+    let candidateIDs: [UUID]
+}
+
 /// A child of the existing verified account root. The parent owns loading and persistence.
 @MainActor
 struct LivePlanningMapRoot: View {
@@ -15,6 +21,9 @@ struct LivePlanningMapRoot: View {
     let onOpenSaved: (Place) -> Void
     let onOpenAccount: () -> Void
     let onCapture: () -> Void
+    let reviewInboxRequest: LiveReviewInboxRequest?
+    let onOpenReview: (UUID) -> Void
+    let onClearReviewBatch: () -> Void
     @StateObject private var outing: LiveOutingModel
     @StateObject private var plan: LiveRoutePlan
     @StateObject private var discovery: LivePublicDiscoveryModel
@@ -52,9 +61,15 @@ struct LivePlanningMapRoot: View {
 
     init(mapVM: MapViewModel, ownerSubject: String, sessionGeneration: Int,
          onOpenSaved: @escaping (Place) -> Void, onOpenAccount: @escaping () -> Void,
-         onCapture: @escaping () -> Void) {
+         onCapture: @escaping () -> Void,
+         reviewInboxRequest: LiveReviewInboxRequest? = nil,
+         onOpenReview: @escaping (UUID) -> Void = { _ in },
+         onClearReviewBatch: @escaping () -> Void = {}) {
         self.mapVM = mapVM; self.ownerSubject = ownerSubject; self.sessionGeneration = sessionGeneration
         self.onOpenSaved = onOpenSaved; self.onOpenAccount = onOpenAccount; self.onCapture = onCapture
+        self.reviewInboxRequest = reviewInboxRequest
+        self.onOpenReview = onOpenReview
+        self.onClearReviewBatch = onClearReviewBatch
         _outing = StateObject(wrappedValue: LiveOutingModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
         _plan = StateObject(wrappedValue: LiveRoutePlan(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
         _discovery = StateObject(wrappedValue: LivePublicDiscoveryModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
@@ -160,6 +175,12 @@ struct LivePlanningMapRoot: View {
             }
         }
         .onChange(of: saved.map(\.id)) { _, _ in fitSavedIfNeeded() }
+        .onChange(of: reviewInboxRequest?.id, initial: true) { _, requestID in
+            guard requestID != nil else { return }
+            selected = nil
+            searchPresented = false
+            destination = .saved
+        }
         .onChange(of: mode) { _, next in
             lifecycleRevision &+= 1
             guideAccess.invalidate()
@@ -340,7 +361,12 @@ struct LivePlanningMapRoot: View {
         LivePlanningLibraryView(places: mapVM.places, isLoading: mapVM.isLoading, onOpen: { place in
             if let pin = LiveMapPlace.saved(place) { selected = pin }
             else { onOpenSaved(place) }
-        }, onCapture: onCapture)
+        }, onCapture: onCapture, reviewCandidates: mapVM.reviewCandidates,
+            reviewBatchIDs: reviewInboxRequest?.candidateIDs,
+            onOpenReview: { id in
+                guard sessionIsCurrent else { return }
+                onOpenReview(id)
+            }, onClearReviewBatch: onClearReviewBatch)
     }
 
     private var passport: some View {

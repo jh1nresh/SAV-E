@@ -244,6 +244,10 @@ struct ContentView: View {
     @State private var selectedRootTab: SaveRootTab
     @State private var requestsSocialConnections = false
     @State private var rootPath: [SaveRootRoute]
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @State private var liveReviewInboxRequest: LiveReviewInboxRequest?
+    @State private var liveExactSearchReturnRequest: DrawerLaunchRequest?
+#endif
     @State private var fullScreenRoute: SaveFullScreenRoute?
     @State private var fullScreenCandidateActionID: UUID?
     @State private var fullScreenMapCandidateActionID: String?
@@ -400,13 +404,46 @@ struct ContentView: View {
                 mapVM: mapVM, ownerSubject: owner, sessionGeneration: rootAuthGeneration,
                 onOpenSaved: { openMapDetail(.savedPlace($0)) },
                 onOpenAccount: { isPassportPresented = true },
-                onCapture: { openDrawer(.addLink, tripID: nil) }
+                onCapture: { openDrawer(.addLink, tripID: nil) },
+                reviewInboxRequest: liveReviewInboxRequest,
+                onOpenReview: { id in
+                    guard isLivePreviewSessionCurrent,
+                          let candidate = mapVM.reviewCandidates.first(where: { $0.id == id }),
+                          LiveLibraryReviewProjection.isPending(candidate) else { return }
+                    openReviewCandidate(candidate, tripID:
+                        liveReviewInboxRequest?.candidateIDs.contains(id) == true ? pendingCaptureTripID : nil)
+                },
+                onClearReviewBatch: {
+                    liveReviewInboxRequest = nil
+                    rootPath.removeAll()
+                    pendingCaptureTripID = nil
+                }
             )
         } else {
             rootScaffold
         }
 #else
         rootScaffold
+#endif
+    }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var usesLivePlanningPreview: Bool { storageScope == .production && rootOwner != nil }
+
+    private var isLivePreviewSessionCurrent: Bool {
+        let auth = PrivyAuthService.shared
+        guard case .authenticated = auth.authState else { return false }
+        return usesLivePlanningPreview && auth.currentUserId == rootOwner
+            && auth.sessionGeneration == rootAuthGeneration
+    }
+#endif
+
+    private func showCaptureResults(_ ids: [UUID]) {
+        rootPath = [.captureResults(ids)]
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if isLivePreviewSessionCurrent {
+            liveReviewInboxRequest = LiveReviewInboxRequest(candidateIDs: ids)
+        }
 #endif
     }
 
@@ -1167,6 +1204,20 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         } else {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            if usesLivePlanningPreview, drawerLaunchRequest.target == .ask, mapDetailDrawerItem == nil {
+                livePlanningSearchSheet
+            } else {
+                rootDrawerOrAuxiliarySheet
+            }
+#else
+            rootDrawerOrAuxiliarySheet
+#endif
+        }
+    }
+
+    @ViewBuilder
+    private var rootDrawerOrAuxiliarySheet: some View {
 #if SAVVY_CITY_MVP
             if let cityMVPAuxiliarySheet {
                 switch cityMVPAuxiliarySheet {
@@ -1186,8 +1237,37 @@ struct ContentView: View {
 #else
             presentedDrawerView
 #endif
-        }
     }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var livePlanningSearchSheet: some View {
+        SaveMapSearchContent(
+            mapViewModel: mapVM,
+            initialQuery: drawerLaunchRequest.initialQuery ?? "",
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: isExactSearchSessionActive || exactSearchClueID != nil,
+            onClose: {
+                endCanceledExactSearchCorrection()
+                isRootSheetPresented = false
+            },
+            onOpenPlace: openSavedPlaceFromMapSearch,
+            onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
+        )
+        .id(drawerLaunchRequest.id)
+        .environment(\.appLanguageSettings, languageSettings)
+        .modifier(MapDrawerActionErrorAlert(
+            title: languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+            okTitle: languageSettings.text(.ok),
+            isEnabled: fullScreenRoute == nil,
+            message: Binding(get: { mapDrawerPresentedActionError },
+                             set: { if $0 == nil { clearMapDrawerActionError() } })
+        ))
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(DateTheme.canvas)
+        .accessibilityIdentifier("live.review.search")
+    }
+#endif
 
     @ViewBuilder
     private func fullScreenContent(for route: SaveFullScreenRoute) -> some View {
@@ -1217,7 +1297,7 @@ struct ContentView: View {
 #endif
                     pendingOnboardingClue = ""
                     selectedRootTab = .home
-                    rootPath = [.captureResults(candidateIDs)]
+                    showCaptureResults(candidateIDs)
                     if candidateIDs.count == 1,
                        let candidate = mapVM.reviewCandidates.first(where: { $0.id == candidateIDs[0] }) {
                         // Let the existing chrome coordinator dismiss capture
@@ -1489,6 +1569,17 @@ struct ContentView: View {
 
     private func openMapDetail(_ item: MapDetailDrawerItem) {
         guard incomingPlaceReceipt == nil else { return }
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if usesLivePlanningPreview {
+            guard isLivePreviewSessionCurrent else { return }
+            if case .unsavedCandidate = item, isRootSheetPresented,
+               isExactSearchSessionActive, drawerLaunchRequest.target == .ask {
+                liveExactSearchReturnRequest = drawerLaunchRequest
+            }
+            presentExclusiveCover(.placeDetail(item))
+            return
+        }
+#endif
         if pendingCaptureTripID == nil {
             pendingCaptureTripID = activeTripID
         }
@@ -1703,6 +1794,15 @@ struct ContentView: View {
         case .mapDrawer(let request):
             drawerLaunchRequest = request
             drawerDetent = request.focusesSearch ? .large : .medium
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            if usesLivePlanningPreview {
+                guard isLivePreviewSessionCurrent else { return }
+                liveExactSearchReturnRequest = nil
+                isMapPanelExpanded = false
+                isRootSheetPresented = true
+                return
+            }
+#endif
             isMapPanelExpanded = true
         }
     }
@@ -1812,7 +1912,7 @@ struct ContentView: View {
                 let ids = try await mapVM.reanalyzeReviewSource(candidate)
                 guard !ids.isEmpty else { throw ReviewCandidateError.sourceStillUnresolved }
                 fullScreenRoute = nil
-                rootPath = [.captureResults(ids)]
+                showCaptureResults(ids)
             } else {
                 try await mapVM.investigateReviewCandidateMore(candidate)
                 openExactSearch(candidate)
@@ -1929,7 +2029,13 @@ struct ContentView: View {
             )
             return
         }
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        // A real modal search replaces this cover in the preview. Keep its
+        // occupancy until the coordinator observes the dismissal callback.
+        if !usesLivePlanningPreview { fullScreenRoute = nil }
+#else
         fullScreenRoute = nil
+#endif
         rootPath.removeAll()
         activateExactSearchSession(for: candidate)
         showMapTab()
@@ -2355,6 +2461,11 @@ struct ContentView: View {
 #if SAVVY_CITY_MVP
         if wasAuxiliary { return }
 #endif
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if usesLivePlanningPreview, drawerLaunchRequest.target == .ask, mapDetailDrawerItem == nil {
+            endCanceledExactSearchCorrection()
+        }
+#endif
         let pendingDetail = pendingReceiptMapDetail
         pendingReceiptMapDetail = nil
         incomingPlaceReceipt = nil
@@ -2388,6 +2499,19 @@ struct ContentView: View {
             handleExclusiveChromeDismiss()
             return
         }
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if let request = liveExactSearchReturnRequest {
+            liveExactSearchReturnRequest = nil
+            if isLivePreviewSessionCurrent, isExactSearchSessionActive,
+               let clueID = exactSearchClueID,
+               let clue = mapVM.reviewCandidates.first(where: { $0.id == clueID }),
+               LiveLibraryReviewProjection.isPending(clue), incomingPlaceReceipt == nil {
+                presentAfterClearingExclusiveChrome(.mapDrawer(request))
+                return
+            }
+            if isLivePreviewSessionCurrent { endCanceledExactSearchCorrection() }
+        }
+#endif
         resumePendingOnboardingCaptureIfNeeded()
     }
 

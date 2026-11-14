@@ -95,6 +95,26 @@ final class LivePlanningSurfaceTests: XCTestCase {
         }
     }
 
+    func testPendingLibraryBatchLightAndDark() async throws {
+        let source = PlaceReviewCandidate(id: UUID(), captureId: nil, name: "貼文裡的咖啡店",
+            address: "尚未確認地址", city: nil, latitude: nil, longitude: nil,
+            evidence: [], confidence: nil, missingInfo: [], status: "source_only", createdAt: Date())
+        let possible = PlaceReviewCandidate(id: UUID(), captureId: nil, name: "信義區午餐線索",
+            address: "台北市信義區 · 請確認店址", city: "台北", latitude: 25.033,
+            longitude: 121.565, evidence: [], confidence: nil, missingInfo: [],
+            status: "review", createdAt: Date())
+        func library() -> some View {
+            LivePlanningLibraryView(places: Array(fixtures.prefix(1)), isLoading: false,
+                onOpen: { _ in XCTFail("Rendering must not open saved detail") },
+                onCapture: { XCTFail("Rendering must not start capture") },
+                reviewCandidates: [source, possible], reviewBatchIDs: [source.id, possible.id],
+                onOpenReview: { _ in XCTFail("Rendering must not confirm or open a clue") },
+                onClearReviewBatch: { XCTFail("Rendering must not clear the current batch") })
+        }
+        try await recordComponent("library-review-batch") { library() }
+        try await recordComponent("library-review-batch-AX", dynamicTypeSize: .accessibility3) { library() }
+    }
+
     func testPassportComponentLightAndDark() async throws {
         try await recordComponent("passport") {
             LivePlanningPassportView(places: fixtures,
@@ -157,7 +177,8 @@ final class LivePlanningSurfaceTests: XCTestCase {
     }
 
     private func recordComponent<Content: View>(
-        _ name: String, beforeCapture: (@MainActor () async throws -> Void)? = nil,
+        _ name: String, dynamicTypeSize: DynamicTypeSize = .large,
+        beforeCapture: (@MainActor () async throws -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) async throws {
 #if targetEnvironment(simulator)
@@ -189,7 +210,7 @@ final class LivePlanningSurfaceTests: XCTestCase {
             .frame(width: size.width, height: size.height)
             .environment(\.appLanguageSettings, language)
             .environment(\.locale, Locale(identifier: "zh-Hant"))
-            .environment(\.dynamicTypeSize, .large)
+            .environment(\.dynamicTypeSize, dynamicTypeSize)
             .environment(\.colorScheme, scheme)
             .preferredColorScheme(scheme)
             let host = UIHostingController(rootView: root)
