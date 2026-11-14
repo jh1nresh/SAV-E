@@ -3,7 +3,7 @@ import SwiftUI
 import MapKit
 
 enum LiveMapMode: String, CaseIterable {
-    case personal = "個人", outing = "朋友出遊"
+    case explore = "探索", outing = "朋友", personal = "我的"
 }
 
 /// A child of the existing verified account root. The parent owns loading and persistence.
@@ -17,8 +17,10 @@ struct LivePlanningMapRoot: View {
     let onCapture: () -> Void
     @StateObject private var outing: LiveOutingModel
     @StateObject private var plan: LiveRoutePlan
+    @StateObject private var discovery: LivePublicDiscoveryModel
     @State private var destination = DemoDestination.map
-    @State private var mode: LiveMapMode = .personal
+    @State private var mode: LiveMapMode = .explore
+    @State private var discoveryReload = 0
     @State private var camera = MapCameraPosition.region(MKCoordinateRegion(
         center: .init(latitude: 25.04, longitude: 121.54), span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07)))
     @State private var searchRegion = MKCoordinateRegion(center: .init(latitude: 25.04, longitude: 121.54),
@@ -53,6 +55,7 @@ struct LivePlanningMapRoot: View {
         self.onOpenSaved = onOpenSaved; self.onOpenAccount = onOpenAccount; self.onCapture = onCapture
         _outing = StateObject(wrappedValue: LiveOutingModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
         _plan = StateObject(wrappedValue: LiveRoutePlan(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
+        _discovery = StateObject(wrappedValue: LivePublicDiscoveryModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
     }
 
     private var saved: [LiveMapPlace] { mapVM.places.compactMap(LiveMapPlace.saved) }
@@ -66,8 +69,13 @@ struct LivePlanningMapRoot: View {
     }
     private var friendPlaces: [LiveMapPlace] { LiveFriendMapPlace.groupedByVenue(friendEntries).compactMap { $0.first?.pin } }
     private var pins: [LiveMapPlace] {
-        let values = mode == .personal ? saved : friendPlaces + groupPlaces.filter { groupPin in
-            !friendPlaces.contains { $0.place.matches(groupPin.place) }
+        let values: [LiveMapPlace]
+        switch mode {
+        case .personal: values = saved
+        case .explore: values = discovery.page?.venues.compactMap(LiveMapPlace.discovery) ?? []
+        case .outing: values = friendPlaces + groupPlaces.filter { groupPin in
+                !friendPlaces.contains { $0.place.matches(groupPin.place) }
+            }
         }
         return values + [searchPin].compactMap { $0 }.filter { pin in !values.contains(where: { $0.id == pin.id }) }
     }
@@ -77,6 +85,21 @@ struct LivePlanningMapRoot: View {
         return auth.currentUserId == ownerSubject && auth.sessionGeneration == sessionGeneration
     }
     private var shouldRefreshOuting: Bool { isMounted && scenePhase == .active && mode == .outing }
+    private var discoveryViewport: LivePublicDiscoveryViewport? {
+        let span = searchRegion.span
+        let center = searchRegion.center
+        func longitude(_ value: Double) -> Double { (value + 540).truncatingRemainder(dividingBy: 360) - 180 }
+        return try? LivePublicDiscoveryViewport(
+            west: span.longitudeDelta >= 360 ? -180 : longitude(center.longitude - span.longitudeDelta / 2),
+            south: max(-90, center.latitude - span.latitudeDelta / 2),
+            east: span.longitudeDelta >= 360 ? 180 : longitude(center.longitude + span.longitudeDelta / 2),
+            north: min(90, center.latitude + span.latitudeDelta / 2))
+    }
+    private var discoveryQuery: String {
+        guard isMounted, scenePhase == .active, destination == .map, mode == .explore,
+              let viewport = discoveryViewport else { return "inactive" }
+        return "\(viewport.queryValue):\(discoveryReload)"
+    }
     private var canShowPlan: Bool {
         shouldRefreshOuting && sessionIsCurrent && guideAccess.permits(plan: plan, outing: outing)
     }
@@ -103,6 +126,9 @@ struct LivePlanningMapRoot: View {
                                               : (canShowPlan
                                                  ? min(geometry.size.height * 0.64, max(0, geometry.size.height - 260))
                                                  : geometry.size.height * 0.51)).demoCard()
+                        } else if mode == .explore {
+                            LivePublicDiscoverySummary(model: discovery,
+                                onRetry: { discoveryReload &+= 1 }, onMore: { Task { await discovery.loadMore() } }).demoCard()
                         } else {
                             personalSummary.demoCard()
                         }
@@ -122,6 +148,7 @@ struct LivePlanningMapRoot: View {
                 || ProcessInfo.processInfo.arguments.contains("--preview-account") { destination = .passport }
             fitSavedIfNeeded()
             if ProcessInfo.processInfo.arguments.contains("--map-mode-group") { mode = .outing }
+            if ProcessInfo.processInfo.arguments.contains("--map-mode-personal") { mode = .personal }
         }
         .task {
             if ProcessInfo.processInfo.arguments.contains("--preview-account") {
@@ -136,7 +163,9 @@ struct LivePlanningMapRoot: View {
             guideAccess.invalidate()
             selected = nil; pendingSavedDetail = nil; searchPin = nil; selectedStops = []; stopSelectionListID = nil
             planOperation?.cancel(); plan.cancel(); outing.deactivate()
+            discovery.clear()
             if next == .outing { didFitFriends = false }
+            if next == .personal { fitSavedIfNeeded() }
         }
         .onChange(of: outing.snapshotRevision) { _, _ in
             reconcilePlan()
@@ -157,6 +186,15 @@ struct LivePlanningMapRoot: View {
             if phase != .active { suspendPlanning() }
         }
         .onDisappear { isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .task(id: discoveryQuery) {
+            guard discoveryQuery != "inactive", let viewport = discoveryViewport, sessionIsCurrent else {
+                discovery.clear(); return
+            }
+            await discovery.refresh(viewport)
+        }
+        .onChange(of: discovery.page?.indexRevision) { _, _ in
+            if selected?.origin == .publicPost { selected = nil }
+        }
         .task(id: shouldRefreshOuting) {
             guard shouldRefreshOuting, !Task.isCancelled, sessionIsCurrent else { return }
             outing.resumeAfterNavigation()
@@ -189,6 +227,7 @@ struct LivePlanningMapRoot: View {
         lifecycleRevision &+= 1
         guideAccess.invalidate()
         planOperation?.cancel(); plan.suspendForNavigation(); outing.suspendForNavigation()
+        discovery.clear()
         selected = nil; pendingSavedDetail = nil
     }
 
@@ -216,10 +255,12 @@ struct LivePlanningMapRoot: View {
     private var realMap: some View {
         LiveInteractiveMapSurface(
             position: $camera, pins: pins, routes: canShowPlan ? plan.routes : [], isInteractive: mapCanSelect,
-            activePinID: selected?.id, friends: mode == .outing ? friendEntries : [], ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
+            activePinID: selected?.id, friends: mode == .outing ? friendEntries : [],
+            publicVenues: mode == .explore ? (discovery.page?.venues ?? []) : [],
+            ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
             onSelect: { pin in
                 guard sessionIsCurrent, mapCanSelect else { return }
-                let resolved = pin.existingSavedProjection(in: mapVM.places) ?? pin
+                let resolved = pin.origin == .publicPost ? pin : (pin.existingSavedProjection(in: mapVM.places) ?? pin)
                 if resolved.origin == .search { searchPin = resolved }
                 selected = resolved
             },
@@ -244,7 +285,7 @@ struct LivePlanningMapRoot: View {
                 Button {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85)) { mode = value }
                 } label: {
-                    Label(modeTitle(value), systemImage: value == .personal ? "person.fill" : "person.2.fill")
+                    Label(modeTitle(value), systemImage: value == .explore ? "globe.asia.australia" : (value == .personal ? "bookmark.fill" : "person.2.fill"))
                         .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
                         .foregroundStyle(mode == value ? DateTheme.ink : DateTheme.muted)
                         .background {
@@ -253,7 +294,7 @@ struct LivePlanningMapRoot: View {
                                     .shadow(color: DateTheme.blue.opacity(0.12), radius: 6, y: 2)
                             }
                         }
-                }.buttonStyle(.plain).accessibilityIdentifier(value == .personal ? "live.mode.personal" : "live.mode.group")
+                }.buttonStyle(.plain).accessibilityIdentifier(value == .explore ? "live.mode.explore" : (value == .personal ? "live.mode.personal" : "live.mode.group"))
                     .accessibilityAddTraits(mode == value ? .isSelected : [])
             }
         }.padding(4).background(DateTheme.canvas.opacity(0.96), in: Capsule())
@@ -409,8 +450,19 @@ struct LivePlanningMapRoot: View {
         }.padding(.horizontal, 12)
     }
 
-    private func placeCard(_ pin: LiveMapPlace) -> some View {
-        LivePlaceDetail(
+    @ViewBuilder private func placeCard(_ pin: LiveMapPlace) -> some View {
+        if pin.origin == .publicPost,
+           let venue = discovery.page?.venues.first(where: { "public:\($0.id)" == pin.id }) {
+            LivePublicDiscoveryDetail(venue: venue, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
+                alreadySaved: pin.existingSavedProjection(in: mapVM.places) != nil,
+                isSaving: savingPinID != nil, saveError: saveError,
+                onSave: { save(pin) }, onDirections: {
+                    let item = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
+                    item.name = pin.place.name
+                    item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
+                }, onClose: { selected = nil })
+        } else if pin.origin != .publicPost {
+          LivePlaceDetail(
             pin: pin, isSaving: savingPinID != nil, saveError: saveError,
             ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
             onSave: pin.confirmationCandidate == nil ? nil : { save(pin) },
@@ -429,6 +481,7 @@ struct LivePlanningMapRoot: View {
             canAddToOuting: outing.canEditSelected && !outing.isWorking,
             onClose: { selected = nil }
         )
+        }
     }
 
     private func save(_ pin: LiveMapPlace) {
@@ -542,13 +595,18 @@ struct LivePlanningMapRoot: View {
         }
     }
     private func modeTitle(_ value: LiveMapMode) -> String {
-        value == .personal ? copy("Personal", "個人") : copy("Friends map", "朋友地圖")
+        switch value {
+        case .explore: copy("Explore", "探索")
+        case .personal: copy("Mine", "我的")
+        case .outing: copy("Friends", "朋友")
+        }
     }
     private func sourceTitle(_ pin: LiveMapPlace) -> String {
         switch pin.origin {
         case .saved: copy("Saved", "已收藏")
         case .search: copy("Search result · not saved", "搜尋結果候選")
         case .shared: pin.sourceLabel == "朋友已分享" ? copy("Shared by friends", "朋友已分享") : copy("Group candidate", "隊伍候選")
+        case .publicPost: copy("Public post · not saved", "公開貼文 · 尚未收藏")
         }
     }
 
@@ -558,7 +616,7 @@ struct LivePlanningMapRoot: View {
         else if selectedStops.count < 6 { selectedStops.append(id) }
     }
     private func fitSavedIfNeeded() {
-        guard !didFitSaved, !saved.isEmpty else { return }
+        guard mode == .personal, !didFitSaved, !saved.isEmpty else { return }
         didFitSaved = true
         if mode == .personal { fit(saved) }
     }

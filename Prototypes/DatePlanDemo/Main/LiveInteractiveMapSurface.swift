@@ -12,6 +12,7 @@ struct LiveInteractiveMapSurface: View {
     let routes: [MKRoute]
     let activePinID: String?
     let friends: [LiveFriendMapPlace]
+    let publicVenues: [LivePublicDiscoveryVenue]
     let ownerSubject: String
     let sessionGeneration: Int
     let onSelect: (LiveMapPlace) -> Void
@@ -28,7 +29,8 @@ struct LiveInteractiveMapSurface: View {
     @State private var isMounted = false
 
     init(position: Binding<MapCameraPosition>, pins: [LiveMapPlace], routes: [MKRoute], isInteractive: Bool = true,
-         activePinID: String?, friends: [LiveFriendMapPlace] = [], ownerSubject: String, sessionGeneration: Int,
+         activePinID: String?, friends: [LiveFriendMapPlace] = [], publicVenues: [LivePublicDiscoveryVenue] = [],
+         ownerSubject: String, sessionGeneration: Int,
          onSelect: @escaping (LiveMapPlace) -> Void,
          onCameraSettled: @escaping (MapCamera, MKCoordinateRegion) -> Void) {
         _position = position
@@ -37,6 +39,7 @@ struct LiveInteractiveMapSurface: View {
         self.routes = routes
         self.activePinID = activePinID
         self.friends = friends
+        self.publicVenues = publicVenues
         self.ownerSubject = ownerSubject
         self.sessionGeneration = sessionGeneration
         self.onSelect = onSelect
@@ -48,12 +51,14 @@ struct LiveInteractiveMapSurface: View {
         let friendsByPinID = Dictionary(uniqueKeysWithValues: LiveFriendMapPlace.groupedByVenue(friends).compactMap { group in
             group.first.map { ($0.pin.id, group) }
         })
+        let publicByPinID = Dictionary(uniqueKeysWithValues: publicVenues.map { ("public:\($0.id)", $0) })
         return Map(position: $position, interactionModes: .all, selection: $selectedFeature) {
             ForEach(pins) { pin in
                 Annotation(pin.place.name, coordinate: pin.coordinate, anchor: .bottom) {
                     LiveInteractivePinButton(pin: pin, showsDetails: cameraDistance < 20_000,
                                              isActive: activePinID == pin.id,
-                                             friends: friendsByPinID[pin.id] ?? []) {
+                                             friends: friendsByPinID[pin.id] ?? [], publicVenue: publicByPinID[pin.id],
+                                             ownerSubject: ownerSubject, sessionGeneration: sessionGeneration) {
                         guard isMounted, isInteractive, sessionIsCurrent else { return }
                         cancelRequest(clearSelection: true)
                         onSelect(pin)
@@ -181,6 +186,9 @@ private struct LiveInteractivePinButton: View {
     let showsDetails: Bool
     let isActive: Bool
     let friends: [LiveFriendMapPlace]
+    let publicVenue: LivePublicDiscoveryVenue?
+    let ownerSubject: String
+    let sessionGeneration: Int
     let onTap: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.appLanguageSettings) private var language
@@ -209,7 +217,29 @@ private struct LiveInteractivePinButton: View {
 
     private var artwork: some View {
         VStack(spacing: showsDetails ? 5 : 0) {
-            if !friends.isEmpty {
+            if let publicVenue {
+                if showsDetails {
+                    ZStack(alignment: .bottomTrailing) {
+                        if let post = publicVenue.posts.first(where: { $0.cover != nil }) {
+                            LivePublicPostCover(post: post, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
+                                .frame(width: 46, height: 46).clipped().clipShape(Circle())
+                        } else {
+                            Image(systemName: "text.bubble.fill").foregroundStyle(DateTheme.blue)
+                                .frame(width: 46, height: 46).background(DateTheme.soft, in: Circle())
+                        }
+                        Text("\(publicVenue.posts.count)").font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(DateTheme.actionInk).padding(4).background(DateTheme.action, in: Circle())
+                    }
+                    .overlay(Circle().stroke(DateTheme.surface, lineWidth: 2))
+                    Text(pin.place.name).font(.system(size: 11, weight: .semibold))
+                        .lineLimit(1).padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(DateTheme.surface, in: Capsule())
+                } else {
+                    Image(systemName: "text.bubble.fill").font(.system(size: 13))
+                        .frame(width: 28, height: 28).background(DateTheme.surface, in: Circle())
+                        .overlay(Circle().stroke(DateTheme.blue, lineWidth: 1.5))
+                }
+            } else if !friends.isEmpty {
                 LiveBusinessPhoto(place: pin.place)
                     .frame(width: 46, height: 46).clipShape(Circle())
                     .overlay(Circle().stroke(DateTheme.blue.opacity(isActive ? 1 : 0.55), lineWidth: 2))
@@ -259,6 +289,7 @@ private struct LiveInteractivePinButton: View {
         case .shared: pin.sourceLabel == "朋友已分享"
             ? language.localized(english: "Shared by friends", traditionalChinese: "朋友已分享")
             : language.localized(english: "Group candidate", traditionalChinese: "隊伍候選")
+        case .publicPost: language.localized(english: "Public post · not saved", traditionalChinese: "公開貼文 · 尚未收藏")
         }
     }
 }

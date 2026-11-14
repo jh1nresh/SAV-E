@@ -305,6 +305,8 @@ struct LivePlaceDetail: View {
                 : copy("Saved · Want to go", "已收藏・想去")
         case .search:
             return copy("Apple Maps result · Not saved", "Apple Maps 結果・尚未收藏")
+        case .publicPost:
+            return copy("Public post · Not saved", "公開貼文・尚未收藏")
         case .shared:
             return pin.sourceLabel == "朋友已分享"
                 ? copy("Shared by friends · Not saved", "朋友分享・尚未收藏")
@@ -317,6 +319,7 @@ struct LivePlaceDetail: View {
         case .saved: return "bookmark.fill"
         case .search: return "magnifyingglass"
         case .shared: return "person.2"
+        case .publicPost: return "text.bubble"
         }
     }
 

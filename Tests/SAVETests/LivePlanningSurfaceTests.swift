@@ -8,6 +8,30 @@ import XCTest
 /// Simulator-hosted component evidence, not a full-app UI or account integration test.
 @MainActor
 final class LivePlanningSurfaceTests: XCTestCase {
+    func testPublicDiscoverySummaryAndDetailLightAndDark() async throws {
+        let now = Date()
+        let raw = try LivePublicDiscoveryModelTests.page(now: now)
+        let page = try raw.validated(at: now)
+        let model = LivePublicDiscoveryModel(backend: DiscoveryComponentBackend(page: raw),
+                                            sessionIsCurrent: { true }, now: { now })
+        await model.refresh(try LivePublicDiscoveryModelTests.viewport())
+        XCTAssertEqual(model.page?.venues.count, 1)
+        try await recordComponent("public-discovery-summary") {
+            VStack { Spacer(); LivePublicDiscoverySummary(model: model,
+                onRetry: { XCTFail("Rendering must not reload") },
+                onMore: { XCTFail("Rendering must not paginate") }).demoCard() }
+        }
+        let venue = try XCTUnwrap(page.venues.first)
+        try await recordComponent("public-discovery-detail") {
+            LivePublicDiscoveryDetail(venue: venue, ownerSubject: "component-fixture", sessionGeneration: 0,
+                alreadySaved: false, isSaving: false, saveError: nil,
+                onSave: { XCTFail("Rendering must not save") },
+                onDirections: { XCTFail("Rendering must not navigate") },
+                onClose: { XCTFail("Rendering must not dismiss") })
+        }
+        model.clear()
+    }
+
     func testGuideReadyAndProgressComponentsLightAndDark() async throws {
         let model = LiveRoutePlan(ownerSubject: "component-fixture", sessionGeneration: 0,
                                   makeDirections: { _ in GuideComponentDirections() }, sessionIsCurrent: { true })
@@ -240,5 +264,11 @@ final class LivePlanningSurfaceTests: XCTestCase {
 private final class GuideComponentDirections: LiveWalkingDirections {
     func route() async throws -> MKRoute { MKRoute() }
     func cancel() {}
+}
+
+@MainActor
+private struct DiscoveryComponentBackend: LivePublicDiscoveryBackend {
+    let page: LivePublicDiscoveryPage
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage { page }
 }
 #endif

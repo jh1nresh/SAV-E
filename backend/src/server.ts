@@ -261,6 +261,7 @@ import {
 } from "./friendRatings.js";
 import { sharedPostBodyMaxBytes } from "./sharedPostPhotos.js";
 import { listSharedPosts, getSharedPostPhoto, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
+import { evaluatePublicDiscoveryRequest } from "./publicDiscoveryEndpoint.js";
 import {
   normalizeShareAnalyzeInput,
   normalizeShareInstallationId,
@@ -1120,6 +1121,14 @@ createServer(async (request, response) => {
     // revocable restricted token and never pass through resolveUserId().
     if (isV0 && resource === "share-extension") {
       return await handleShareExtension(request, response, segments.slice(1));
+    }
+
+    if (isV0 && resource === "discovery") {
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Authorization");
+      const result = await evaluatePublicDiscoveryRequest({ method: request.method,
+        authorization: request.headers.authorization, url, verifySubject: verifiedPrivyAccessSubject });
+      return sendJson(response, result.body, result.statusCode);
     }
 
     const userId = await resolveUserId(request);

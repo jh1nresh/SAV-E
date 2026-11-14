@@ -3,7 +3,7 @@ import Foundation
 import MapKit
 
 enum LiveMapOrigin: Equatable {
-    case saved, search, shared
+    case saved, search, shared, publicPost
 }
 
 /// An ephemeral venue projection. Only `.saved` represents the account's collection.
@@ -14,6 +14,8 @@ struct LiveMapPlace: Identifiable {
     let origin: LiveMapOrigin
     let sourceLabel: String
     var nativeMapItem: MKMapItem? = nil
+    var publicSourceURL: String? = nil
+    var publicSourcePlatform: SourcePlatform? = nil
     private let payload: SaveListItem
 
     var coordinate: CLLocationCoordinate2D { place.coordinate }
@@ -39,8 +41,8 @@ struct LiveMapPlace: Identifiable {
             id: id, title: place.name, subtitle: place.address,
             latitude: place.latitude, longitude: place.longitude,
             category: payload.category,
-            sourceURL: origin == .search ? components.url?.absoluteString : nil,
-            sourcePlatform: origin == .search ? .appleMaps : .other,
+            sourceURL: origin == .publicPost ? publicSourceURL : (origin == .search ? components.url?.absoluteString : nil),
+            sourcePlatform: origin == .publicPost ? (publicSourcePlatform ?? .other) : (origin == .search ? .appleMaps : .other),
             evidence: origin == .search ? ["Apple Maps POI"] : []
         )
     }
@@ -122,6 +124,21 @@ struct LiveMapPlace: Identifiable {
         // The author's status, caption, stars and identity are not recipient memory.
         return candidate(id: id, place: place, origin: .shared,
                          label: "朋友已分享", payload: payload)
+    }
+
+    static func discovery(_ venue: LivePublicDiscoveryVenue) -> LiveMapPlace? {
+        let value = venue.place
+        let id = "public:\(venue.id)"
+        let payload = venuePayload(id: id, source: .mapCandidate, sourceID: value.providerPlaceID,
+            name: value.name, address: value.address, latitude: value.latitude, longitude: value.longitude,
+            category: PlaceCategory(rawValue: value.category), coordinateSystem: .wgs84,
+            provider: PlaceMatchProvider(rawValue: value.provider), googleID: nil, addedAt: unknownCreationDate)
+        var place = candidatePlace(payload, markerID: id)
+        place.providerPlaceId = value.providerPlaceID
+        var pin = candidate(id: id, place: place, origin: .publicPost, label: "公開貼文 · 尚未收藏", payload: payload)
+        pin?.publicSourceURL = venue.posts.first?.sourceURL
+        pin?.publicSourcePlatform = venue.posts.first.flatMap { SourcePlatform(rawValue: $0.platform) }
+        return pin
     }
 
     private static func candidate(
