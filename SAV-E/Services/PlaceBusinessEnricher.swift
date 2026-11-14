@@ -37,6 +37,9 @@ enum PlaceBusinessEnricher {
         refreshPhotos: Bool = false,
         mapsPlatformAllowed: Bool = GoogleMapsPlatformAvailability.isAllowed()
     ) async -> Place? {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+        if LivePlanningReviewFixture.isRequested { return nil }
+#endif
         guard mapsPlatformAllowed else { return nil }
         guard refreshPhotos || needsEnrichment(place) else { return nil }
         guard let update = await businessDetails(for: place, service: service) else { return nil }
@@ -95,6 +98,9 @@ enum PlaceBusinessEnricher {
         service: GooglePlacesServiceProtocol = GooglePlacesService.shared,
         mapsPlatformAllowed: Bool = GoogleMapsPlatformAvailability.isAllowed()
     ) async -> SaveMapCandidate? {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+        if LivePlanningReviewFixture.isRequested { return nil }
+#endif
         guard mapsPlatformAllowed else { return nil }
         let coordinate = CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude)
         guard let match = await bestGoogleMatch(

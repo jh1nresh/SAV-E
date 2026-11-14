@@ -3,6 +3,21 @@ import Combine
 import MapKit
 import SwiftUI
 
+enum PlaceVisibilityUpdateError: LocalizedError {
+    case inProgress
+
+    func message(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            "This place's privacy setting is still updating. Wait for it to finish, then try again."
+        case .traditionalChinese:
+            "這個地點的隱私設定仍在更新，請等候完成後再試一次。"
+        }
+    }
+
+    var errorDescription: String? { message(language: .english) }
+}
+
 enum ReviewCandidateError: LocalizedError {
     case needsReliableCoordinates
     case alreadySavedMapStamp(String)
@@ -773,6 +788,12 @@ final class MapViewModel: ObservableObject {
     private var followedFriendsRequestGeneration = UUID()
     private let followedFriendsPageSize = 20
     private var routeCalculationID = UUID()
+    private struct VisibilityMutation {
+        let owner: String
+        let generation: Int
+        let id: UUID
+    }
+    private var visibilityMutations: [UUID: VisibilityMutation] = [:]
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
@@ -4276,7 +4297,17 @@ final class MapViewModel: ObservableObject {
         return friends.filter { seen.insert($0.id).inserted }
     }
 
-    private func refreshSocialSignals() async {
+    private func refreshSocialSignals(
+        expectedSession: (owner: String, generation: Int)? = nil,
+        isCurrentRequest: (() -> Bool)? = nil
+    ) async {
+        func sessionIsCurrent() -> Bool {
+            guard let expectedSession else { return true }
+            return !Task.isCancelled && authService.currentUserId == expectedSession.owner
+                && authService.sessionGeneration == expectedSession.generation
+                && (isCurrentRequest?() ?? true)
+        }
+        guard sessionIsCurrent() else { return }
         guard authService.currentUserId != nil else {
             socialPlaces = []
             return
@@ -4284,21 +4315,27 @@ final class MapViewModel: ObservableObject {
 
         do {
             let signals = try await supabaseService.fetchSocialSignals(lens: socialLens)
+            guard sessionIsCurrent() else { return }
             async let preferences = fetchOriginPreferences()
             async let outcomes = fetchOriginOutcomes()
+            let savedPlacesForRanking = places
             let unsavedSignals = signals.filter { seed in
-                !places.contains { saved in
+                !savedPlacesForRanking.contains { saved in
                     saved.matchesMapFeature(title: seed.name, coordinate: seed.coordinate) ||
                         saved.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame
                 }
             }
+            let loadedPreferences = await preferences
+            let loadedOutcomes = await outcomes
+            guard sessionIsCurrent() else { return }
             socialPlaces = SaveOriginPersonalization.rank(
                 candidates: unsavedSignals,
-                savedPlaces: places,
-                preferences: await preferences,
-                outcomes: await outcomes
+                savedPlaces: savedPlacesForRanking,
+                preferences: loadedPreferences,
+                outcomes: loadedOutcomes
             )
         } catch {
+            guard sessionIsCurrent() else { return }
             print("MapViewModel: failed to refresh social signals: \(error)")
             socialPlaces = socialPlaces.filter { seed in
                 !places.contains { saved in
@@ -5078,21 +5115,62 @@ final class MapViewModel: ObservableObject {
     }
 
     func updatePlaceVisibility(_ place: Place, visibility: PlaceVisibility) async throws {
+        try Task.checkCancellation()
         guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
-        let previousPlace = places[index]
-
-        places[index].visibility = visibility
-        if selectedPlace?.id == place.id {
-            selectedPlace = places[index]
+        guard let owner = authService.currentUserId else { throw SupabaseError.notAuthenticated }
+        let generation = authService.sessionGeneration
+        let placeID = place.id
+        if let pending = visibilityMutations[placeID], pending.owner == owner, pending.generation == generation {
+            // A second optimistic snapshot could contain this request's uncommitted
+            // visibility. Reject it before mutation or I/O rather than treating that
+            // intermediate value as a rollback baseline if both writes fail.
+            throw PlaceVisibilityUpdateError.inProgress
+        }
+        let previousVisibility = places[index].visibility
+        let previousSelectedVisibility = selectedPlace?.id == placeID ? selectedPlace?.visibility : previousVisibility
+        let mutationID = UUID()
+        visibilityMutations[placeID] = VisibilityMutation(owner: owner, generation: generation, id: mutationID)
+        defer {
+            if visibilityMutations[placeID]?.id == mutationID {
+                visibilityMutations.removeValue(forKey: placeID)
+            }
+        }
+        func requestIsCurrent() -> Bool {
+            authService.currentUserId == owner && authService.sessionGeneration == generation
+                && visibilityMutations[placeID]?.id == mutationID
         }
 
+        places[index].visibility = visibility
+        if selectedPlace?.id == placeID {
+            selectedPlace?.visibility = visibility
+        }
+
+        var committed = false
         do {
-            try await supabaseService.updatePlaceVisibility(visibility, for: place.id)
-            await refreshSocialSignals()
+            try await SAVEPendingImportSessionScope.$current.withValue((generation: generation, owner: owner)) {
+                try Task.checkCancellation()
+                guard requestIsCurrent() else { throw CancellationError() }
+                try await supabaseService.updatePlaceVisibility(visibility, for: placeID)
+                committed = true
+                try Task.checkCancellation()
+                guard requestIsCurrent(), places.contains(where: { $0.id == placeID }) else {
+                    throw CancellationError()
+                }
+                await refreshSocialSignals(expectedSession: (owner: owner, generation: generation),
+                                           isCurrentRequest: requestIsCurrent)
+                try Task.checkCancellation()
+                guard requestIsCurrent() else { throw CancellationError() }
+            }
         } catch {
-            places[index] = previousPlace
-            if selectedPlace?.id == place.id {
-                selectedPlace = previousPlace
+            guard requestIsCurrent(), !committed else { throw error }
+            // The collection may have been removed, reordered, or edited during
+            // suspension. Restore only this request's still-optimistic field.
+            if let currentIndex = places.firstIndex(where: { $0.id == placeID }),
+               places[currentIndex].visibility == visibility {
+                places[currentIndex].visibility = previousVisibility
+            }
+            if selectedPlace?.id == placeID, selectedPlace?.visibility == visibility {
+                selectedPlace?.visibility = previousSelectedVisibility
             }
             throw error
         }

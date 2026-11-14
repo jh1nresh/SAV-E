@@ -2,6 +2,60 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+private struct CompactProfileAppearanceKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var compactProfileAppearance: Bool {
+        get { self[CompactProfileAppearanceKey.self] }
+        set { self[CompactProfileAppearanceKey.self] = newValue }
+    }
+}
+
+private extension View {
+    func compactProfileCard() -> some View {
+        padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(DateTheme.ink.opacity(0.06)))
+    }
+}
+
+private struct CompactProfileRow: View {
+    let icon: String
+    let title: String
+    var detail: String? = nil
+    var destructive = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(destructive ? Color.red : DateTheme.blue)
+                .frame(width: 38, height: 38)
+                .background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.weight(.semibold))
+                    .foregroundStyle(destructive ? Color.red : DateTheme.ink)
+                if let detail {
+                    Text(detail).font(.caption).foregroundStyle(DateTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                .foregroundStyle(DateTheme.muted).accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+    }
+}
+#endif
+
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -52,6 +106,7 @@ struct ProfileView: View {
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
     var opensAccountSettings = false
+    var compactAccountOnly = false
     var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
@@ -123,7 +178,7 @@ struct ProfileView: View {
             settingsPage
         }
         .navigationDestination(isPresented: $opensConnections) {
-            connectionsDestination
+            if !compactAccountOnly { connectionsDestination }
         }
     }
 
@@ -149,7 +204,24 @@ struct ProfileView: View {
             .refreshable { await posts.refresh(.mine) }
     }
 
+    private var usesCompactAccountAppearance: Bool {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        opensAccountSettings && compactAccountOnly
+#else
+        false
+#endif
+    }
+
+    @ViewBuilder
     private var settingsPage: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if usesCompactAccountAppearance { compactAccountPage } else { legacySettingsPage }
+#else
+        legacySettingsPage
+#endif
+    }
+
+    private var legacySettingsPage: some View {
         ScrollView {
             VStack(spacing: 20) {
                 if SaveDoodlePassportFlags.showStampLedger {
@@ -166,6 +238,129 @@ struct ProfileView: View {
         .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
         .toolbar(.visible, for: .navigationBar)
     }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var compactAccountPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Button { editIdentity() } label: {
+                    HStack(spacing: 14) {
+                        ProfileAvatarView(avatarURLString: viewModel.profile.avatarUrl,
+                                          localAvatarData: viewModel.localAvatarData, size: 60)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(viewModel.identityOwnerID == nil
+                                 ? languageSettings.localized(english: "Account details", traditionalChinese: "帳號資料")
+                                 : viewModel.profile.displayName)
+                                .font(.title3.weight(.bold)).foregroundStyle(DateTheme.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(languageSettings.localized(english: "Edit profile", traditionalChinese: "編輯個人資料"))
+                                .font(.subheadline).foregroundStyle(DateTheme.blue)
+                        }
+                        Spacer(minLength: 4)
+                        if viewModel.isLoading { ProgressView() }
+                        else { Image(systemName: "chevron.right").foregroundStyle(DateTheme.muted) }
+                    }
+                    .compactProfileCard()
+                }
+                .buttonStyle(.plain).disabled(PrivyAuthService.shared.isReviewerDemo)
+                .accessibilityIdentifier("profile.edit")
+
+                if let error = viewModel.errorMessage {
+                    Label(error, systemImage: "exclamationmark.circle")
+                        .font(.subheadline).foregroundStyle(DateTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .compactProfileCard()
+                        .accessibilityIdentifier("profile.account.error")
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    compactHeading(languageSettings.localized(english: "Preferences", traditionalChinese: "偏好設定"))
+                    compactButton(icon: "globe", title: languageSettings.text(.language),
+                                  detail: languageSettings.preference.displayName(language: languageSettings.language),
+                                  identifier: "profile.language") {
+                        SaveHaptics.tap()
+                        showLanguageSettings = true
+                    }
+                    if !passportPlaces.isEmpty {
+                        Divider().overlay(DateTheme.ink.opacity(0.06))
+                        compactButton(icon: "sparkles", title: "Savvy Pro",
+                                      detail: languageSettings.localized(english: "Free: 50 places", traditionalChinese: "免費：50 個地點"),
+                                      identifier: "profile.pro") {
+                            SaveHaptics.tap()
+                            showProPaywall = true
+                        }
+                    }
+                }
+                .compactProfileCard()
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("profile.controlPocket")
+
+                VStack(alignment: .leading, spacing: 6) {
+                    compactHeading(languageSettings.localized(english: "Using Savvy", traditionalChinese: "使用 Savvy"))
+                    compactButton(icon: "book", title: languageSettings.localized(english: "How to use Savvy", traditionalChinese: "Savvy 使用教學"),
+                                  detail: languageSettings.localized(english: "From a clue to a confirmed place", traditionalChinese: "從線索到確認地點"),
+                                  identifier: "profile.tutorial") { showTutorial = true }
+                    Divider().overlay(DateTheme.ink.opacity(0.06))
+                    NavigationLink {
+                        SaveMemoryDebugView(localVaultService: PrivyAuthService.shared.isReviewerDemo
+                                            ? ReviewDemoStorage.localVaultService : .shared)
+                    } label: {
+                        CompactProfileRow(icon: "brain.head.profile",
+                                          title: languageSettings.localized(english: "Memory & Preferences", traditionalChinese: "記憶與偏好"),
+                                          detail: languageSettings.localized(english: "Control what Savvy remembers", traditionalChinese: "控制 Savvy 記住的內容"))
+                    }
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
+                    .accessibilityIdentifier("profile.memoryPreferences")
+                }.compactProfileCard()
+
+                PassportCountingRulesPanel(stats: passportStats)
+                PassportVisibilityPanel(places: visibilityPlaces, onUpdate: updatePlaceVisibility)
+                    .id("profile.sharingPrivacy")
+
+                VStack(alignment: .leading, spacing: 6) {
+                    compactHeading(languageSettings.localized(english: "Account", traditionalChinese: "帳號"))
+                    compactButton(icon: "arrow.right.square", title: languageSettings.text(.signOut),
+                                  identifier: "profile.signOut", destructive: true) {
+                        SaveHaptics.tap()
+                        Task { await viewModel.signOut() }
+                    }
+                    if !PrivyAuthService.shared.isReviewerDemo {
+                        Divider().overlay(DateTheme.ink.opacity(0.06))
+                        compactButton(icon: "trash", title: languageSettings.localized(english: "Delete Account", traditionalChinese: "刪除帳號"),
+                                      detail: languageSettings.localized(english: "Permanently delete your account and saved data", traditionalChinese: "永久刪除帳號與已儲存資料"),
+                                      identifier: "profile.deleteAccount", destructive: true) {
+                            SaveHaptics.tap()
+                            showDeleteAccountConfirmation = true
+                        }.disabled(viewModel.isDeletingAccount)
+                    }
+                    if viewModel.isDeletingAccount { ProgressView() }
+                }.compactProfileCard()
+            }
+            .padding(20)
+        }
+        .background(DateTheme.canvas.ignoresSafeArea())
+        .foregroundStyle(DateTheme.ink).tint(DateTheme.blue)
+        .navigationTitle(languageSettings.localized(english: "Account settings", traditionalChinese: "帳號設定"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(DateTheme.canvas, for: .navigationBar)
+        .accessibilityIdentifier("main.account.compact")
+    }
+
+    private func compactHeading(_ title: String) -> some View {
+        Text(title).font(.caption.weight(.semibold)).foregroundStyle(DateTheme.muted)
+            .padding(.bottom, 4)
+    }
+
+    private func compactButton(icon: String, title: String, detail: String? = nil,
+                               identifier: String, destructive: Bool = false,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            CompactProfileRow(icon: icon, title: title, detail: detail, destructive: destructive)
+        }.buttonStyle(.plain).accessibilityIdentifier(identifier)
+    }
+#endif
 
     @ViewBuilder
     private var missionsOverlay: some View {
@@ -344,6 +539,7 @@ struct ProfileView: View {
                 .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                 .accessibilityIdentifier("profile.memoryPreferences")
 
+                if !compactAccountOnly {
                 Button {
                     SaveHaptics.tap()
                     opensListsDirectly = false
@@ -375,6 +571,8 @@ struct ProfileView: View {
                     SaveHaptics.tap()
                     opensListsDirectly = true
                     opensConnections = true
+                }
+
                 }
 
                 SettingsRow(
@@ -490,16 +688,16 @@ struct ProfileView: View {
             }
         }
         .onChange(of: requestsConnections) { _, requested in
-            if requested { opensConnections = true; requestsConnections = false }
+            if requested { opensConnections = !compactAccountOnly; requestsConnections = false }
         }
         .onAppear {
-            if requestsConnections { opensConnections = true; requestsConnections = false }
+            if requestsConnections { opensConnections = !compactAccountOnly; requestsConnections = false }
             if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
         }
         .onChange(of: savedPlaces.count) { _, _ in
             localSavedPlaces = savedPlaces
         }
-        .task(id: posts.filter) { await posts.refresh(.mine) }
+        .task(id: posts.filter) { if !compactAccountOnly { await posts.refresh(.mine) } }
         .task(id: currentUserID) {
             viewModel.resetForCurrentSession()
             draftAvatarData = nil
@@ -507,12 +705,12 @@ struct ProfileView: View {
             localSavedPlaces = savedPlaces
             refreshFieldStreak()
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
-            inviteURLAvailable = await onLoadMyReferralURL() != nil
+            if !compactAccountOnly { inviteURLAvailable = await onLoadMyReferralURL() != nil }
             await viewModel.loadProfile()
-            await posts.refresh(.mine)
+            if !compactAccountOnly { await posts.refresh(.mine) }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refreshFieldStreak(); Task { await posts.refresh(.mine) } }
+            if phase == .active, !compactAccountOnly { refreshFieldStreak(); Task { await posts.refresh(.mine) } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             refreshFieldStreak()
@@ -583,6 +781,9 @@ struct ProfileView: View {
                 traditionalChinese: "這會刪除你的 Savvy 帳號與已儲存地點，而且無法復原。"
             ))
         }
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        .environment(\.compactProfileAppearance, usesCompactAccountAppearance)
+#endif
     }
 
     private var localMemoryTitle: String {
@@ -1799,6 +2000,9 @@ private struct ListManageView: View {
 
 private struct EditProfileSheet: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
     @Binding var displayName: String
     let avatarURLString: String?
     @Binding var selectedAvatarData: Data?
@@ -1812,6 +2016,92 @@ private struct EditProfileSheet: View {
     @State private var photoError: String?
 
     var body: some View {
+        Group {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            if compactAppearance { compactBody } else { legacyBody }
+#else
+            legacyBody
+#endif
+        }
+        .onAppear {
+            isNameFocused = true
+        }
+        .onChange(of: selectedPhotoItem) { _, item in
+            guard let item else { return }
+            Task { await loadSelectedPhoto(item) }
+        }
+    }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var compactBody: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(spacing: 16) {
+                        EditableProfileAvatar(avatarURLString: avatarURLString,
+                                              selectedAvatarData: selectedAvatarData,
+                                              localAvatarData: localAvatarData)
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            Label(languageSettings.localized(english: "Choose photo", traditionalChinese: "選擇照片"), systemImage: "camera")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.blue)
+                                .padding(.horizontal, 18).frame(minHeight: 44)
+                                .background(DateTheme.soft, in: Capsule())
+                        }
+                        .buttonStyle(.plain).disabled(isSaving)
+                        .accessibilityIdentifier("profile.editPhoto")
+                        Text(languageSettings.localized(
+                            english: "Your photo is saved for this account on this device.",
+                            traditionalChinese: "照片會保存在這台裝置，僅用於此帳號。"))
+                            .font(.caption).foregroundStyle(DateTheme.muted)
+                            .multilineTextAlignment(.center)
+                        if let photoError { Text(photoError).font(.caption).foregroundStyle(Color.red) }
+                    }
+                    .frame(maxWidth: .infinity).compactProfileCard()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(languageSettings.text(.passportName))
+                            .font(.caption.weight(.semibold)).foregroundStyle(DateTheme.muted)
+                        TextField(languageSettings.text(.name), text: $displayName)
+                            .font(.title3.weight(.semibold)).foregroundStyle(DateTheme.ink)
+                            .textInputAutocapitalization(.words).focused($isNameFocused)
+                            .padding(.horizontal, 14).frame(minHeight: 52)
+                            .background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 14))
+                            .accessibilityIdentifier("profile.editName")
+                        if let errorMessage {
+                            Text(errorMessage).font(.subheadline).foregroundStyle(Color.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } else {
+                            Text(languageSettings.text(.accountManagedByLogin))
+                                .font(.caption).foregroundStyle(DateTheme.muted)
+                        }
+                    }.compactProfileCard()
+                }.padding(20)
+            }
+            .background(DateTheme.canvas.ignoresSafeArea()).tint(DateTheme.blue)
+            .navigationTitle(languageSettings.localized(english: "Edit profile", traditionalChinese: "編輯個人資料"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消")) {
+                        SaveHaptics.tap()
+                        onCancel()
+                    }.frame(minWidth: 44, minHeight: 44).disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        SaveHaptics.stamp()
+                        Task { await onSave() }
+                    } label: {
+                        Text(isSaving ? languageSettings.text(.saving) : languageSettings.text(.save))
+                            .font(.subheadline.weight(.semibold)).frame(minWidth: 44, minHeight: 44)
+                    }.disabled(isSaving).accessibilityIdentifier("profile.editSave")
+                }
+            }
+        }
+    }
+#endif
+
+    private var legacyBody: some View {
         let photoTitle = languageSettings.localized(english: "Choose photo", traditionalChinese: "選擇照片")
         let inkColor = Color.saveInk
         let horizontalPadding = SaveTheme.Spacing.md
@@ -1937,13 +2227,6 @@ private struct EditProfileSheet: View {
             }
             .background(SaveDottedBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-        }
-        .onAppear {
-            isNameFocused = true
-        }
-        .onChange(of: selectedPhotoItem) { _, item in
-            guard let item else { return }
-            Task { await loadSelectedPhoto(item) }
         }
     }
 
@@ -2308,6 +2591,9 @@ private struct PassportIconButton: View {
 }
 
 private struct EditableProfileAvatar: View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
     let avatarURLString: String?
     let selectedAvatarData: Data?
     let localAvatarData: Data?
@@ -2324,20 +2610,44 @@ private struct EditableProfileAvatar: View {
 
             Image(systemName: "camera.fill")
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundColor(avatarInk)
                 .frame(width: 28, height: 28)
-                .background(SaveAtlasPalette.kraft)
-                .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.2))
+                .background(avatarFill)
+                .overlay(Circle().stroke(avatarRim, lineWidth: 1.2))
                 .clipShape(Circle())
                 .offset(x: 2, y: 2)
         }
         .frame(width: 92, height: 92)
         .clipShape(Circle())
-        .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 2))
+        .overlay(Circle().stroke(avatarRim, lineWidth: 2))
+    }
+
+    private var avatarInk: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.blue }
+#endif
+        return .saveInk
+    }
+
+    private var avatarFill: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.soft }
+#endif
+        return SaveAtlasPalette.kraft
+    }
+
+    private var avatarRim: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.surface }
+#endif
+        return SaveAtlasPalette.line
     }
 }
 
 private struct ProfileAvatarView: View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
     let avatarURLString: String?
     var localAvatarData: Data? = nil
     var size: CGFloat
@@ -2373,7 +2683,14 @@ private struct ProfileAvatarView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.6))
+        .overlay(Circle().stroke(avatarRim, lineWidth: 1.6))
+    }
+
+    private var avatarRim: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.ink.opacity(0.08) }
+#endif
+        return SaveAtlasPalette.line
     }
 
     private var remoteURL: URL? {
@@ -2490,9 +2807,28 @@ private struct PassportCityStrip: View {
 
 private struct PassportCountingRulesPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
     let stats: PassportStats
 
+    @ViewBuilder
     var body: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(title, systemImage: "info.circle")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.ink)
+                Text(cityRule).font(.caption).foregroundStyle(DateTheme.muted)
+                Text(visitedRule).font(.caption).foregroundStyle(DateTheme.muted)
+            }.compactProfileCard()
+        } else { legacyBody }
+#else
+        legacyBody
+#endif
+    }
+
+    private var legacyBody: some View {
         HStack(alignment: .top, spacing: 16) {
             SavePostcardPostmark()
                 .scaleEffect(0.82)
@@ -2548,11 +2884,46 @@ private struct PassportCountingRulesPanel: View {
 
 private struct PassportVisibilityPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
     let places: [Place]
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
     @State private var showsSharedRatings = false
 
+    @ViewBuilder
     var body: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { compactBody } else { legacyBody }
+#else
+        legacyBody
+#endif
+    }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var compactBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(languageSettings.localized(english: "Sharing & Privacy", traditionalChinese: "分享與隱私"), systemImage: "hand.raised")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.ink)
+            Button { showsSharedRatings = true } label: {
+                CompactProfileRow(icon: "star",
+                                  title: languageSettings.localized(english: "Shared restaurant ratings", traditionalChinese: "已分享的餐廳評分"))
+            }
+            .buttonStyle(.plain).accessibilityIdentifier("profile.sharedRatings")
+            .sheet(isPresented: $showsSharedRatings) { PassportSharedRatingsSheet(places: places) }
+            Text(places.isEmpty
+                 ? languageSettings.localized(english: "Save places first, then choose which memories stay private or become shareable links.", traditionalChinese: "先保存地點。私人只自己看；朋友、公開連結與分享推薦依每個地點設定。")
+                 : languageSettings.localized(english: "Each place keeps its own setting: private, friends, link, or Origin recommendation. Private notes stay private.", traditionalChinese: "每個地點各自設定：私人、朋友、公開連結或 Origin 推薦；私人筆記維持私密。"))
+                .font(.caption).foregroundStyle(DateTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(places.prefix(4)) { place in
+                PassportVisibilityRow(place: place, onUpdate: onUpdate)
+            }
+        }.compactProfileCard()
+    }
+#endif
+
+    private var legacyBody: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
             HStack(spacing: SaveTheme.Spacing.sm) {
                 SavePostcardPerforatedMedallion(
@@ -2634,6 +3005,37 @@ private struct PassportSharedRatingsSheet: View {
     @ObservedObject private var auth = PrivyAuthService.shared
     @StateObject private var model = SharedRestaurantRatingsViewModel()
     let places: [Place]
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
+
+    private var ratingsInk: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.ink }
+#endif
+        return SaveAtlasPalette.forest
+    }
+
+    private var ratingsSurface: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.surface }
+#endif
+        return SaveAtlasPalette.paper
+    }
+
+    private var ratingsCanvas: Color {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return DateTheme.canvas }
+#endif
+        return SaveAtlasPalette.canvas
+    }
+
+    private var ratingsControlHeight: CGFloat? {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { return 44 }
+#endif
+        return nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -2644,9 +3046,9 @@ private struct PassportSharedRatingsSheet: View {
                         traditionalChinese: "停止向朋友分享評分。你的已保存地點與個人評分仍會保留。"
                     ))
                     .font(SaveTheme.Typography.supporting)
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .foregroundStyle(ratingsInk)
                 }
-                .listRowBackground(SaveAtlasPalette.paper)
+                .listRowBackground(ratingsSurface)
 
                 if model.isLoading {
                     ProgressView()
@@ -2659,6 +3061,7 @@ private struct PassportSharedRatingsSheet: View {
                         Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
                             Task { await model.load() }
                         }
+                        .frame(minHeight: ratingsControlHeight)
                     }
                 } else if model.ratings.isEmpty {
                     Text(languageSettings.localized(
@@ -2685,25 +3088,27 @@ private struct PassportSharedRatingsSheet: View {
                                 Task { await model.stopSharing(rating.place_id) }
                             }
                             .buttonStyle(.bordered)
+                            .frame(minHeight: ratingsControlHeight)
                             .disabled(model.withdrawingID != nil || model.isLoading)
                             .accessibilityIdentifier("profile.sharedRatings.withdraw.\(rating.place_id.uuidString)")
                         }
                     }
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .listRowBackground(SaveAtlasPalette.paper)
+                    .foregroundStyle(ratingsInk)
+                    .listRowBackground(ratingsSurface)
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(SaveAtlasPalette.canvas)
+            .background(ratingsCanvas)
             .navigationTitle(languageSettings.localized(english: "Shared ratings", traditionalChinese: "已分享的評分"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) { dismiss() }
+                        .frame(minHeight: ratingsControlHeight)
                         .accessibilityIdentifier("profile.sharedRatings.done")
                 }
             }
-            .tint(SaveAtlasPalette.forest)
+            .tint(ratingsInk)
             .task { await model.load() }
             .onChange(of: auth.sessionGeneration) { _, _ in
                 model.invalidate()
@@ -2716,6 +3121,9 @@ private struct PassportSharedRatingsSheet: View {
 
 private struct PassportVisibilityRow: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
     let place: Place
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
     @State private var selectedVisibility: PlaceVisibility
@@ -2728,7 +3136,63 @@ private struct PassportVisibilityRow: View {
         _selectedVisibility = State(initialValue: place.effectiveVisibility)
     }
 
+    @ViewBuilder
     var body: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { compactBody } else { legacyBody }
+#else
+        legacyBody
+#endif
+    }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var compactBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(place.name).font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(errorMessage ?? selectedVisibility.detailText(language: languageSettings.language))
+                .font(.caption).foregroundStyle(errorMessage == nil ? DateTheme.muted : Color.red)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Menu {
+                    ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
+                        Button {
+                            Task { await update(visibility) }
+                        } label: {
+                            Label(visibility.displayName(language: languageSettings.language), systemImage: visibility.systemImage)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isUpdating { ProgressView().controlSize(.small) }
+                        else { Image(systemName: selectedVisibility.systemImage) }
+                        Text(selectedVisibility.displayName(language: languageSettings.language))
+                        Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.medium)).foregroundStyle(DateTheme.blue)
+                    .padding(.horizontal, 14).frame(minHeight: 44)
+                    .background(DateTheme.soft, in: Capsule())
+                }
+                .disabled(isUpdating).accessibilityIdentifier("profile.visibility.\(place.id)")
+                Spacer(minLength: 4)
+                SavePlaceShareButton(content: .place(place)) {
+                    Image(systemName: "square.and.arrow.up").font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(DateTheme.blue).frame(width: 44, height: 44)
+                        .background(DateTheme.soft, in: Circle())
+                }
+                .accessibilityLabel(languageSettings.localized(english: "Share \(place.name)", traditionalChinese: "分享 \(place.name)"))
+                .accessibilityIdentifier("profile.share.\(place.id)")
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) { Divider().overlay(DateTheme.ink.opacity(0.06)) }
+        .onChange(of: place.effectiveVisibility) { _, visibility in
+            selectedVisibility = visibility
+        }
+    }
+#endif
+
+    private var legacyBody: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
             SaveMemoryBadge(state: .saved(place.category), size: 34)
 
@@ -2820,7 +3284,11 @@ private struct PassportVisibilityRow: View {
             withAnimation(SaveTheme.Motion.standardSpring) {
                 selectedVisibility = previous
             }
-            errorMessage = error.localizedDescription
+            if let privacyError = error as? PlaceVisibilityUpdateError {
+                errorMessage = privacyError.message(language: languageSettings.language)
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
@@ -2915,8 +3383,72 @@ struct SettingsRow: View {
 private struct LegacyLanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.compactProfileAppearance) private var compactAppearance
+#endif
 
+    @ViewBuilder
     var body: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if compactAppearance { compactBody } else { legacyBody }
+#else
+        legacyBody
+#endif
+    }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var compactBody: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(languageSettings.text(.languageDescription))
+                        .font(.subheadline).foregroundStyle(DateTheme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(spacing: 8) {
+                        ForEach(AppLanguagePreference.allCases) { preference in
+                            Button {
+                                SaveHaptics.select()
+                                withAnimation(SaveTheme.Motion.standardSpring) {
+                                    languageSettings.preference = preference
+                                }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Text(preference.displayName(language: languageSettings.language))
+                                        .font(.body.weight(.medium)).foregroundStyle(DateTheme.ink)
+                                    Spacer(minLength: 8)
+                                    if languageSettings.preference == preference {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(DateTheme.blue)
+                                    }
+                                }
+                                .padding(.horizontal, 16).frame(minHeight: 52)
+                                .background(languageSettings.preference == preference ? DateTheme.soft : DateTheme.surface,
+                                            in: RoundedRectangle(cornerRadius: 16))
+                                .contentShape(RoundedRectangle(cornerRadius: 16))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(languageSettings.preference == preference ? .isSelected : [])
+                            .accessibilityIdentifier("profile.languageOption.\(preference.id)")
+                        }
+                    }.compactProfileCard()
+                }.padding(20)
+            }
+            .background(DateTheme.canvas.ignoresSafeArea()).tint(DateTheme.blue)
+            .navigationTitle(languageSettings.text(.chooseLanguage))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) {
+                        SaveHaptics.tap()
+                        dismiss()
+                    }.frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier("profile.language.close")
+                }
+            }
+        }
+    }
+#endif
+
+    private var legacyBody: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.lg) {
                 HStack(spacing: SaveTheme.Spacing.md) {

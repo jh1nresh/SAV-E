@@ -14,6 +14,22 @@ Use [the region blueprint](Prototypes/CityMVP/REGION-BLUEPRINT.md) for each new 
 
 The main root is not a fixture flag. Normal launches read the authenticated account's saved-place sources. Only explicit screenshot/suite launches may seed sample identities, shops, visits or friends.
 
+## Requested public discovery default — 2026-11-14
+
+The founder clarified that the default Map should reveal other people's public Instagram, Threads and Xiaohongshu posts associated with real places, without requiring the viewer to import those posts first. The local planning-preview code now defaults to Explore, retaining Mine and Friends. Installed phone152 remains the earlier personal-map baseline. Preserve Saved / Map / Passport and the separate personal/friends capabilities.
+
+Discovery pins represent attributed public posts or grouped posts for a place, not the viewer's saved Map Stamps. Eligible source covers are labeled as post imagery; venue/business photography remains separate. A venue opens the associated posts, their authors/platforms and original links; explicit collection and Guide actions remain separate from browsing. Require a reliable place association before showing a geographical pin. Discovery must preserve original-source attribution and withdrawal/access boundaries.
+
+The local preview's Plan with friends action opens an explicit shared-list chooser. Revalidate access and source expiry, add only a venue candidate to the chosen editable list, and never infer a personal save, visit, recommendation or post publication. Uncertain list writes permit read-only reconciliation, not automatic resubmission. Only verified presence enables a separate Open Guide action; it rereads that list in Friends for stop selection and planning rather than starting a route automatically.
+
+The existing follower-only shared-post feed is not public discovery. A public-link capability alone is not permission to list a record globally. Current opt-in trending signals are aggregated Savvy place signals, not a global social-post index. A separate read-only operator index now supplies a validated post/author/source contract to the local preview; unset, invalid or expired data remains visibly unavailable. External platform acquisition and real coverage remain unimplemented; do not label fixtures, friend shares or search candidates as everybody's public posts. This change does not authorize publicizing existing private records, production migrations/deployment, credentials or spending. Public-source acquisition must work before presenting this local interface as a working live default on the phone.
+
+## App icon alignment in the planning preview
+
+The founder requested that the new personal/shared-map phone preview match the actual coral-and-cream Savvy icon. `SaveBrandUI` in `Color+Theme.swift` owns this preview's adaptive palette: warm off-white surfaces, coral accents, warm charcoal text and dark surfaces. `DateTheme` aliases those values only in the main Debug preview. Existing production and 3D palettes are preserved until separately integrated.
+
+Keep clean, rounded cards and native readable typography. The brush wordmark belongs to branding; do not turn body text into handwriting or restore dotted paper, notebook decorations or rough borders. Saved, Map, Passport, search, place cards and compact account/edit/language/privacy routes share the palette. Retain the glowing three-tab selection, using the icon's coral accent. Photos must identify the actual business from a permitted source; source screenshots are not business photos and missing photos keep a category fallback. Opening a pin retains click-triggered pop/wobble with a stable bottom geographic anchor and Reduce Motion support. Map movement does not replay the click effect. Venue detail retains Savvy's icon-aligned palette, map/address and compact actions, with available Apple place metadata and eligible business/associated-website imagery. Apple's complete native card is a secondary information sheet. Show source links instead of generated or expanded note text; preserve original notes in storage and the canonical saved-place editor. New explicitly linked imports write only their source URL to note; post prose belongs to source evidence, never user-authored memory. Do not reinterpret Unplaced recovery or unclassified manual text as a new link import. Friend map pins show actual shared-post authors and their own marked-visited/shared status; sharing or rating is not an explicit recommendation.
+
 ## Visual authority
 
 - `Color+Theme.swift` owns the shared palette; `CityMVPStyle` and `CityMVPFormStyle` currently own the integrated map and neutral surface tokens. Their historical names do not imply a separate app.
@@ -41,6 +57,7 @@ Passport is the account's place archive and control surface. It exposes confirme
 
 - Clues retain their source and uncertainty. They are not saved Map Stamps. Source-only clues without reliable coordinates do not become map pins.
 - Review Candidates are possible matches and need the existing explicit confirmation before becoming user truth.
+- The branded collection keeps a separate To review section for current pending clues. A capture batch filters only this section and can return to all pending clues; confirmed-place counts and saved-status filters never absorb or hide pending clues. Opening a row resolves its current ID before presenting the canonical review. Exact-place correction uses a visible search sheet and returns to it after an unconfirmed result is closed.
 - Map Stamps are confirmed saved places. Saved/unvisited, visited, location-verified visits and unverified visits remain separate, explicitly labeled states.
 - Never turn a self-marked or legacy Visited status into verified arrival, receipt/photo proof, purchase or physical-delivery evidence.
 - Normal Passport identity comes from the authenticated account and its account-scoped local avatar. It never displays a fixture name/city as the user. A backend canonical profile ID may differ from its Privy subject; freshness belongs to the requested owner/session.

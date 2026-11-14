@@ -5116,9 +5116,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.googleRating, 4.6)
         XCTAssertEqual(place.sourceUrl, "https://maps.google.com/?q=Sushi+Gen")
         XCTAssertEqual(place.sourcePlatform, .googleMaps)
-        XCTAssertTrue(place.note?.contains("Visible on map") == true)
+        XCTAssertEqual(place.note, "https://maps.google.com/?q=Sushi+Gen")
         XCTAssertFalse(place.note?.contains("External reviews:") == true)
-        XCTAssertEqual(place.cleanMemoryNote, "Visible on map")
+        XCTAssertEqual(place.cleanMemoryNote, "https://maps.google.com/?q=Sushi+Gen")
+        XCTAssertTrue(place.savedAdditionalSourceEvidence.contains("Visible on map"))
         XCTAssertTrue(place.savedAdditionalSourceEvidence.contains("External reviews: 4100"))
     }
 
@@ -5143,8 +5144,8 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let place = try controller.makeSavedPlace(from: draft)
 
-        XCTAssertNil(place.cleanMemoryNote)
-        XCTAssertNil(place.note)
+        XCTAssertEqual(place.cleanMemoryNote, "https://maps.google.com/?q=Harbor+Oven")
+        XCTAssertEqual(place.note, "https://maps.google.com/?q=Harbor+Oven")
         XCTAssertEqual(
             place.savedAdditionalSourceEvidence,
             [
@@ -7961,6 +7962,497 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 }
 
+@MainActor
+final class MapPlaceVisibilityMutationTests: XCTestCase {
+    func testLateVisibilityFailureAfterReorderOnlyRollsBackItsField() async {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        service.visibilityHandler = { _, _ in await gate.suspend(); throw VisibilityFailure.failed }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        let other = place("Other")
+        map.places = [target, other]
+        map.selectedPlace = target
+        let request = Task { try await map.updatePlaceVisibility(target, visibility: .friends) }
+        await gate.waitUntilStarted()
+        var edited = map.places[0]
+        edited.name = "Edited while waiting"
+        edited.note = "New private note"
+        map.places = [other, edited]
+        map.selectedPlace = edited
+        gate.resume()
+        await expectFailure(request)
+
+        XCTAssertEqual(map.places.map(\.id), [other.id, target.id])
+        XCTAssertEqual(map.places[0], other)
+        XCTAssertEqual(map.places[1].visibility, .privateMemory)
+        XCTAssertEqual(map.places[1].name, edited.name)
+        XCTAssertEqual(map.places[1].note, edited.note)
+        XCTAssertEqual(map.selectedPlace?.name, edited.name)
+        XCTAssertEqual(map.selectedPlace?.note, edited.note)
+        XCTAssertEqual(map.selectedPlace?.visibility, .privateMemory)
+    }
+
+    func testLateVisibilityFailureAfterRemovalDoesNotRestoreOrCrash() async {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        service.visibilityHandler = { _, _ in await gate.suspend(); throw VisibilityFailure.failed }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        let survivor = place("Survivor")
+        map.places = [survivor, target]
+        map.selectedPlace = target
+        let request = Task { try await map.updatePlaceVisibility(target, visibility: .friends) }
+        await gate.waitUntilStarted()
+        map.places = [survivor]
+        map.selectedPlace = survivor
+        gate.resume()
+        await expectFailure(request)
+
+        XCTAssertEqual(map.places, [survivor])
+        XCTAssertEqual(map.selectedPlace, survivor)
+    }
+
+    func testLateVisibilityFailureCannotTouchAnotherOwnerWithSamePlaceID() async {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        service.visibilityHandler = { _, _ in await gate.suspend(); throw VisibilityFailure.failed }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let original = place("Original owner")
+        map.places = [original]
+        let request = Task { try await map.updatePlaceVisibility(original, visibility: .friends) }
+        await gate.waitUntilStarted()
+        PrivyAuthService.shared.applyRestoredAuthenticationForTests(userId: "visibility-other-owner")
+        var replacement = original
+        replacement.name = "Other owner's record"
+        replacement.note = "Other owner's private note"
+        replacement.visibility = .publicGuide
+        map.places = [replacement]
+        map.selectedPlace = replacement
+        gate.resume()
+        await expectFailure(request)
+
+        XCTAssertEqual(map.places, [replacement])
+        XCTAssertEqual(map.selectedPlace, replacement)
+    }
+
+    func testOldSessionFailureCannotClearNewSameOwnerMutationTicket() async {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let oldGate = ClipHandoffSuspension()
+        let newGate = ClipHandoffSuspension()
+        var calls = 0
+        service.visibilityHandler = { _, _ in
+            calls += 1
+            if calls == 1 { await oldGate.suspend() } else { await newGate.suspend() }
+            throw VisibilityFailure.failed
+        }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        map.places = [target]
+        let old = Task { try await map.updatePlaceVisibility(target, visibility: .friends) }
+        await oldGate.waitUntilStarted()
+        let auth = PrivyAuthService.shared
+        let oldGeneration = auth.sessionGeneration
+        auth.authState = .unauthenticated
+        auth.applyRestoredAuthenticationForTests(userId: "visibility-fixture-owner")
+        XCTAssertNotEqual(auth.sessionGeneration, oldGeneration)
+        map.places = [target]
+        let new = Task { try await map.updatePlaceVisibility(target, visibility: .publicLink) }
+        await newGate.waitUntilStarted()
+        oldGate.resume()
+        await expectFailure(old)
+        XCTAssertEqual(map.places.first?.visibility, .publicLink)
+        newGate.resume()
+        await expectFailure(new)
+        XCTAssertEqual(map.places.first?.visibility, .privateMemory,
+                       "The old completion must not remove the new request's rollback authority")
+    }
+
+    func testBusyVisibilityRequestsRequireExplicitRetryAfterFirstCompletes() async throws {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        var calls = 0
+        service.visibilityHandler = { _, _ in
+            calls += 1
+            if calls == 1 { await gate.suspend(); throw VisibilityFailure.failed }
+        }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        map.places = [target]
+        map.selectedPlace = target
+        let old = Task { try await map.updatePlaceVisibility(target, visibility: .friends) }
+        await gate.waitUntilStarted()
+        for visibility in [PlaceVisibility.publicLink, .friends] {
+            do {
+                try await map.updatePlaceVisibility(target, visibility: visibility)
+                XCTFail("A same-session request must not use an uncommitted rollback baseline")
+            } catch PlaceVisibilityUpdateError.inProgress {
+                // Busy is an explicit rejection, not a reported save or queued write.
+            }
+        }
+        XCTAssertEqual(calls, 1)
+        XCTAssertEqual(map.places.first?.visibility, .friends)
+        gate.resume()
+        await expectFailure(old)
+        XCTAssertEqual(map.places.first?.visibility, .privateMemory)
+
+        try await map.updatePlaceVisibility(target, visibility: .publicLink)
+        try await map.updatePlaceVisibility(target, visibility: .friends)
+
+        XCTAssertEqual(calls, 3)
+        XCTAssertEqual(map.places.first?.visibility, .friends)
+        XCTAssertEqual(map.selectedPlace?.visibility, .friends)
+    }
+
+    func testTwoKnownFailuresSerializeAndRestoreServerBaselineAfterReopenedSheet() async throws {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let firstGate = ClipHandoffSuspension()
+        let retryGate = ClipHandoffSuspension()
+        defer { firstGate.resume(); retryGate.resume() }
+        var calls = 0
+        var retryIsExplicit = false
+        service.visibilityHandler = { _, _ in
+            calls += 1
+            if calls == 1 { await firstGate.suspend() }
+            else if retryIsExplicit { await retryGate.suspend() }
+            throw VisibilityFailure.failed
+        }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        var serverPlace = place("Server public-link setting")
+        serverPlace.visibility = .publicLink
+        map.places = [serverPlace]
+        map.selectedPlace = serverPlace
+        let first = Task { try await map.updatePlaceVisibility(serverPlace, visibility: .privateMemory) }
+        await firstGate.waitUntilStarted()
+        let reopenedSheetPlace = try XCTUnwrap(map.places.first)
+        XCTAssertEqual(reopenedSheetPlace.visibility, .privateMemory)
+
+        do {
+            try await map.updatePlaceVisibility(reopenedSheetPlace, visibility: .friends)
+            XCTFail("Reopening the sheet must not bypass the in-flight mutation")
+        } catch PlaceVisibilityUpdateError.inProgress {}
+        catch { XCTFail("Expected a busy rejection before a second backend write: \(error)") }
+        XCTAssertEqual(calls, 1)
+        XCTAssertEqual(map.places.first?.visibility, .privateMemory)
+        firstGate.resume()
+        await expectFailure(first)
+        XCTAssertEqual(map.places.first?.visibility, .publicLink)
+
+        // Retrying is a new explicit tap, using the now-restored server baseline.
+        retryIsExplicit = true
+        let retry = Task { try await map.updatePlaceVisibility(reopenedSheetPlace, visibility: .friends) }
+        await retryGate.waitUntilStarted()
+        XCTAssertEqual(map.places.first?.visibility, .friends)
+        retryGate.resume()
+        await expectFailure(retry)
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(map.places.first?.visibility, .publicLink)
+        XCTAssertEqual(map.selectedPlace?.visibility, .publicLink)
+    }
+
+    func testDifferentPlacesCanUpdateIndependentlyInTheSameSession() async throws {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        defer { gate.resume() }
+        let firstPlace = place("First place")
+        let otherPlace = place("Other place")
+        var writes: [UUID] = []
+        service.visibilityHandler = { _, id in
+            writes.append(id)
+            if id == firstPlace.id { await gate.suspend(); throw VisibilityFailure.failed }
+        }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        map.places = [firstPlace, otherPlace]
+        let pending = Task { try await map.updatePlaceVisibility(firstPlace, visibility: .friends) }
+        await gate.waitUntilStarted()
+        try await map.updatePlaceVisibility(otherPlace, visibility: .publicLink)
+        XCTAssertEqual(writes, [firstPlace.id, otherPlace.id])
+        gate.resume()
+        await expectFailure(pending)
+        XCTAssertEqual(map.places.first?.visibility, .privateMemory)
+        XCTAssertEqual(map.places.last?.visibility, .publicLink)
+    }
+
+    func testPrivacyBusyFeedbackSupportsEnglishAndTraditionalChinese() {
+        let error = PlaceVisibilityUpdateError.inProgress
+        XCTAssertTrue(error.message(language: .english).contains("try again"))
+        XCTAssertTrue(error.message(language: .traditionalChinese).contains("再試一次"))
+    }
+
+    func testPrivacyRequestAndItsSocialReadsCarryOwnerSessionScope() async throws {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let owner = PrivyAuthService.shared.currentUserId
+        let generation = PrivyAuthService.shared.sessionGeneration
+        var writeScope: (String?, Int?)?
+        var readScope: (String?, Int?)?
+        service.visibilityHandler = { _, _ in
+            writeScope = (SAVEPendingImportSessionScope.current?.owner, SAVEPendingImportSessionScope.current?.generation)
+        }
+        service.socialSignalsHandler = { _ in
+            readScope = (SAVEPendingImportSessionScope.current?.owner, SAVEPendingImportSessionScope.current?.generation)
+            return []
+        }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        map.places = [target]
+
+        try await map.updatePlaceVisibility(target, visibility: .friends)
+
+        XCTAssertEqual(writeScope?.0, owner)
+        XCTAssertEqual(writeScope?.1, generation)
+        XCTAssertEqual(readScope?.0, owner)
+        XCTAssertEqual(readScope?.1, generation)
+        XCTAssertEqual(map.places.first?.visibility, .friends)
+    }
+
+    func testLateSocialRankingAfterSessionChangeCannotPublishOldOwnerSignals() async {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        let oldSignal = place("Old shared recommendation")
+        let newSignal = place("New owner's shared recommendation")
+        service.socialSignalsHandler = { _ in [oldSignal] }
+        service.memoryPreferencesHandler = { await gate.suspend(); return [] }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        map.places = [target]
+        let request = Task { try await map.updatePlaceVisibility(target, visibility: .friends) }
+        await gate.waitUntilStarted()
+        PrivyAuthService.shared.applyRestoredAuthenticationForTests(userId: "visibility-other-owner")
+        map.places = []
+        map.socialPlaces = [newSignal]
+        gate.resume()
+        do { try await request.value; XCTFail("Changed session must not complete the old UI operation") }
+        catch {}
+
+        XCTAssertEqual(map.socialPlaces, [newSignal])
+        XCTAssertTrue(map.places.isEmpty)
+    }
+
+    func testCancellationDuringSocialRefreshDoesNotUndoAcknowledgedPrivacyWrite() async {
+        let previous = authenticate()
+        defer { PrivyAuthService.shared.authState = previous }
+        let service = RecordingSupabaseService()
+        let gate = ClipHandoffSuspension()
+        service.memoryPreferencesHandler = { await gate.suspend(); return [] }
+        let map = MapViewModel(supabaseService: service, usesRemotePersistence: false)
+        let target = place("Target")
+        map.places = [target]
+        let request = Task { try await map.updatePlaceVisibility(target, visibility: .friends) }
+        await gate.waitUntilStarted()
+        request.cancel()
+        gate.resume()
+        do { try await request.value; XCTFail("Expected cancellation") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(map.places.first?.visibility, .friends)
+    }
+
+    private func authenticate() -> AuthState {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        auth.applyRestoredAuthenticationForTests(userId: "visibility-fixture-owner")
+        return previous
+    }
+
+    private func place(_ name: String) -> Place {
+        Place(id: UUID(), name: name, address: "Redacted fixture address", latitude: 25.03, longitude: 121.54,
+              category: .cafe, status: .wantToGo, sourcePlatform: .other,
+              createdAt: Date(timeIntervalSince1970: 1_700_000_000), visibility: .privateMemory)
+    }
+
+    private func expectFailure(_ task: Task<Void, Error>, file: StaticString = #filePath, line: UInt = #line) async {
+        do { try await task.value; XCTFail("Expected fixture failure", file: file, line: line) }
+        catch { XCTAssertTrue(error is VisibilityFailure, "Original error must be preserved: \(error)", file: file, line: line) }
+    }
+
+    private enum VisibilityFailure: Error { case failed }
+}
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+@MainActor
+final class LiveMapConfirmationTests: XCTestCase {
+    func testOrdinarySaveHeldTokenRejectsOwnerAndGenerationChangesBeforePlacesPOST() async throws {
+        for changesOwner in [true, false] {
+            let auth = PrivyAuthService.shared
+            let previous = auth.authState
+            let owner = "did:privy:live-confirmation-fixture"
+            auth.applyRestoredAuthenticationForTests(userId: owner)
+            let generation = auth.sessionGeneration
+            defer { auth.authState = previous }
+            let fixture = makeTransportFixture()
+            defer { fixture.cleanup() }
+            let pending = Task {
+                try await LiveMapConfirmation.save(self.candidate, using: fixture.map,
+                    ownerSubject: owner, sessionGeneration: generation)
+            }
+            guard await waitForToken(fixture.gate) else {
+                pending.cancel(); fixture.gate.resume()
+                XCTFail("Ordinary save did not carry its session into the actual token provider")
+                return
+            }
+            XCTAssertTrue(mutations.isEmpty)
+            if changesOwner {
+                auth.applyRestoredAuthenticationForTests(userId: "did:privy:live-other-fixture")
+            } else {
+                auth.authState = .unknown
+                auth.applyRestoredAuthenticationForTests(userId: owner)
+                XCTAssertNotEqual(auth.sessionGeneration, generation)
+            }
+            fixture.gate.resume()
+            do { _ = try await pending.value; XCTFail("Changed session must not confirm a place") }
+            catch ReviewCandidateError.sessionChangedAfterCommit {}
+
+            XCTAssertTrue(mutations.isEmpty, "No /places POST may leave after a held token resumes in another session")
+            XCTAssertTrue(fixture.map.places.isEmpty)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.vaultURL.path),
+                           "A stale ordinary save must not fall back to a local stamp")
+            XCTAssertFalse(fixture.gate.scopes.isEmpty)
+            XCTAssertTrue(fixture.gate.scopes.allSatisfy { $0.owner == owner && $0.generation == generation })
+        }
+    }
+
+    func testOrdinarySaveSuccessUsesScopedRealURLSessionPOSTAndCanonicalStamp() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        let owner = "did:privy:live-confirmation-fixture"
+        auth.applyRestoredAuthenticationForTests(userId: owner)
+        let generation = auth.sessionGeneration
+        defer { auth.authState = previous }
+        let fixture = makeTransportFixture()
+        defer { fixture.cleanup() }
+        let pending = Task {
+            try await LiveMapConfirmation.save(self.candidate, using: fixture.map,
+                ownerSubject: owner, sessionGeneration: generation)
+        }
+        guard await waitForToken(fixture.gate) else {
+            pending.cancel(); fixture.gate.resume()
+            XCTFail("Expected a scoped save token request")
+            return
+        }
+        XCTAssertTrue(mutations.isEmpty)
+        fixture.gate.resume()
+        let saved = try await pending.value
+
+        XCTAssertEqual(mutations.count, 1)
+        let request = try XCTUnwrap(mutations.first)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/places")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer owner-token")
+        let body = try XCTUnwrap(request.httpBody)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(payload["name"] as? String, candidate.title)
+        XCTAssertEqual(saved.name, candidate.title)
+        XCTAssertEqual(fixture.map.places.map(\.id), [saved.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.vaultURL.path))
+        XCTAssertFalse(fixture.gate.scopes.isEmpty)
+        XCTAssertTrue(fixture.gate.scopes.allSatisfy { $0.owner == owner && $0.generation == generation })
+    }
+
+    func testInvalidSessionAndCancellationRejectBeforeCanonicalSaveStarts() async {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        defer { auth.authState = previous }
+        var saves = 0
+        let map = MapViewModel(supabaseService: RecordingSupabaseService(),
+            mapCandidatePlaceSaver: { _, _ in saves += 1 }, usesRemotePersistence: false)
+        auth.authState = .unauthenticated
+        do {
+            _ = try await LiveMapConfirmation.save(candidate, using: map, ownerSubject: "fixture-owner",
+                                                   sessionGeneration: auth.sessionGeneration)
+            XCTFail("Sign-in is required")
+        } catch ReviewCandidateError.signInRequired {} catch { XCTFail("Unexpected error: \(error)") }
+        auth.applyRestoredAuthenticationForTests(userId: "fixture-owner")
+        do {
+            _ = try await LiveMapConfirmation.save(candidate, using: map, ownerSubject: "other-owner",
+                                                   sessionGeneration: auth.sessionGeneration)
+            XCTFail("Wrong owner must be rejected")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {} catch { XCTFail("Unexpected error: \(error)") }
+        do {
+            _ = try await LiveMapConfirmation.save(candidate, using: map, ownerSubject: "fixture-owner",
+                                                   sessionGeneration: auth.sessionGeneration - 1)
+            XCTFail("Old generation must be rejected")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {} catch { XCTFail("Unexpected error: \(error)") }
+        let generation = auth.sessionGeneration
+        let cancelled = Task {
+            try await LiveMapConfirmation.save(self.candidate, using: map, ownerSubject: "fixture-owner",
+                                               sessionGeneration: generation)
+        }
+        cancelled.cancel()
+        do { _ = try await cancelled.value; XCTFail("Cancelled confirmation must not start") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(saves, 0)
+        XCTAssertTrue(map.places.isEmpty)
+    }
+
+    private var candidate: SaveMapCandidate {
+        SaveMapCandidate(id: "ordinary-live-candidate", title: "Redacted fixture cafe", subtitle: "Fixture address",
+                         latitude: 25.03, longitude: 121.54, category: .cafe)
+    }
+
+    private var mutations: [URLRequest] {
+        ExactSearchRequestURLProtocol.requests.filter { $0.httpMethod != "GET" }
+    }
+
+    private func waitForToken(_ gate: ExactSearchTokenGate) async -> Bool {
+        for _ in 0..<500 where !gate.isSuspended {
+            do { try await Task.sleep(nanoseconds: 10_000_000) } catch { return false }
+        }
+        return gate.isSuspended
+    }
+
+    @MainActor
+    private struct TransportFixture {
+        let map: MapViewModel
+        let gate: ExactSearchTokenGate
+        let session: URLSession
+        let vaultURL: URL
+        let eventsURL: URL
+
+        func cleanup() {
+            gate.resume()
+            session.invalidateAndCancel()
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+            ExactSearchRequestURLProtocol.reset()
+        }
+    }
+
+    private func makeTransportFixture() -> TransportFixture {
+        ExactSearchRequestURLProtocol.reset()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ExactSearchRequestURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let gate = ExactSearchTokenGate(suspendedCall: 1)
+        let service = SupabaseService(apiBaseURL: "https://live-map-confirmation.test", session: session,
+                                      accessTokenProvider: { await gate.token() })
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("live-confirmation-\(UUID()).json")
+        let eventsURL = FileManager.default.temporaryDirectory.appendingPathComponent("live-confirmation-events-\(UUID()).json")
+        let map = MapViewModel(supabaseService: service,
+            mapCandidatePlaceSaver: { place, owner in try await service.savePlace(place, userId: owner) },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL), usesRemotePersistence: true)
+        return TransportFixture(map: map, gate: gate, session: session, vaultURL: vaultURL, eventsURL: eventsURL)
+    }
+}
+#endif
+
 private final class RecordingSupabaseService: SupabaseServiceProtocol {
     var isConfigured: Bool { true }
     private(set) var updatedPlaces: [Place] = []
@@ -7982,6 +8474,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     private var committedDecisionBodies: [UUID: Data] = [:]
     private(set) var updatePlaceStarted = 0
     var updatePlaceError: Error?
+    var visibilityHandler: (@MainActor (PlaceVisibility, UUID) async throws -> Void)?
+    var socialSignalsHandler: (@MainActor (SaveSocialLens) async throws -> [Place])?
+    var memoryPreferencesHandler: (@MainActor () async throws -> [SaveMemoryPreference])?
     var failingUpdatePlaceCalls: Set<Int> = []
     var heldUpdatePlaceCalls: Set<Int> = []
     var recordDecisionError: Error?
@@ -8180,8 +8675,13 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile {
         throw SupabaseError.notConfigured
     }
-    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] { [] }
-    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {}
+    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] {
+        if let socialSignalsHandler { return try await socialSignalsHandler(lens) }
+        return []
+    }
+    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {
+        try await visibilityHandler?(visibility, placeId)
+    }
     func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?, noteConsentVersion: Int?) async throws -> URL {
         throw SupabaseError.notConfigured
     }
@@ -8202,7 +8702,10 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt {
         throw SupabaseError.notConfigured
     }
-    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference] { [] }
+    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference] {
+        if let memoryPreferencesHandler { return try await memoryPreferencesHandler() }
+        return []
+    }
     func fetchRecommendationOutcomes() async throws -> [SaveRecommendationOutcome] { [] }
     func recordRecommendationOutcome(_ draft: SaveRecommendationOutcomeDraft) async throws {}
     func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {

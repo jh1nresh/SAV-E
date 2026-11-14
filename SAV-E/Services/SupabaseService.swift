@@ -1015,6 +1015,20 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
     }
 
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage {
+        var components = URLComponents()
+        components.path = "/v0/discovery/posts"
+        components.queryItems = [URLQueryItem(name: "bbox", value: viewport.queryValue),
+                                 URLQueryItem(name: "limit", value: "30")]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        guard let path = components.string else { throw SupabaseError.invalidResponse("Invalid map bounds") }
+        let data = try await request(path: path)
+        guard data.count <= 6 * 1_024 * 1_024 else { throw SupabaseError.invalidResponse("Discovery response too large") }
+        return try JSONDecoder().decode(LivePublicDiscoveryPage.self, from: data)
+    }
+#endif
+
     // Explicit follower posts, independent of the owner's private place memory.
     func fetchSharedPosts(mine: Bool, filter: SharedPostFilter, cursor: String?) async throws -> SharedPlacePostsPage {
         let path = Self.sharedPostsPath(base: mine ? "/v0/shared-posts/mine" : "/v0/shared-posts", filter: filter, cursor: cursor)
@@ -1325,7 +1339,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         baseURLOverride: String? = nil,
         accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> (Data, HTTPURLResponse) {
-        let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
+        let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers", "/v0/discovery/posts"].contains { path.hasPrefix($0) }
         let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
             || path.hasPrefix("/v0/entitlements/") || path == "/v0/usage/quota"
         let friendSession: (Int, String?)?
