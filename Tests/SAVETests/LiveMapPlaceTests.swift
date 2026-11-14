@@ -26,6 +26,64 @@ final class LiveMapPlaceTests: XCTestCase {
         XCTAssertEqual(first.listPayload.sourceID, original.id.uuidString)
     }
 
+    func testSavedProjectionCannotCreateASecondConfirmationCandidate() throws {
+        XCTAssertNil(try XCTUnwrap(LiveMapPlace.saved(savedFixture())).confirmationCandidate)
+    }
+
+    func testNativeCandidateConfirmationKeepsExactVenueWithoutInventedMemory() throws {
+        let projection = try XCTUnwrap(LiveMapPlace.search(searchFixture()))
+        let candidate = try XCTUnwrap(projection.confirmationCandidate)
+        XCTAssertEqual(candidate.id, projection.id)
+        XCTAssertEqual(candidate.title, projection.place.name)
+        XCTAssertEqual(candidate.subtitle, projection.place.address)
+        XCTAssertEqual(candidate.latitude, projection.coordinate.latitude)
+        XCTAssertEqual(candidate.longitude, projection.coordinate.longitude)
+        XCTAssertEqual(candidate.sourcePlatform, .appleMaps)
+        XCTAssertEqual(URLComponents(string: try XCTUnwrap(candidate.sourceURL))?.host, "maps.apple.com")
+        XCTAssertNil(candidate.photoURL)
+        XCTAssertNil(candidate.businessPhotoURLs)
+        XCTAssertNil(candidate.rating)
+        XCTAssertNil(candidate.reviewCount)
+    }
+
+    func testSharedConfirmationDoesNotReproduceSenderPhotosRatingOrSource() throws {
+        let projection = try XCTUnwrap(LiveMapPlace.shared(teamFixture(), listID: listID))
+        let candidate = try XCTUnwrap(projection.confirmationCandidate)
+        XCTAssertEqual(candidate.title, projection.place.name)
+        XCTAssertEqual(candidate.sourcePlatform, .other)
+        XCTAssertNil(candidate.sourceURL)
+        XCTAssertNil(candidate.photoURL)
+        XCTAssertNil(candidate.businessPhotoURLs)
+        XCTAssertNil(candidate.rating)
+        XCTAssertNil(candidate.reviewCount)
+        XCTAssertFalse(candidate.evidence.joined().contains("PRIVATE"))
+    }
+
+    func testNativeDuplicateResolvesToActualSavedIdentityAndMemory() throws {
+        var owned = savedFixture()
+        let item = searchFixture()
+        owned.name = try XCTUnwrap(item.name)
+        owned.latitude = item.placemark.coordinate.latitude
+        owned.longitude = item.placemark.coordinate.longitude
+        let candidate = try XCTUnwrap(LiveMapPlace.search(item))
+        let resolved = try XCTUnwrap(candidate.existingSavedProjection(in: [owned]))
+        XCTAssertEqual(resolved.origin, .saved)
+        XCTAssertEqual(resolved.place, owned)
+        XCTAssertEqual(resolved.place.status, .visited)
+        XCTAssertEqual(resolved.place.note, "PRIVATE_NOTE_SENTINEL")
+        XCTAssertNil(resolved.confirmationCandidate)
+    }
+
+    func testNativePlaceDoesNotAdoptNearbyDifferentBusinessMemory() throws {
+        var owned = savedFixture()
+        let item = searchFixture()
+        owned.name = "A different venue"
+        owned.latitude = item.placemark.coordinate.latitude
+        owned.longitude = item.placemark.coordinate.longitude
+        let candidate = try XCTUnwrap(LiveMapPlace.search(item))
+        XCTAssertNil(candidate.existingSavedProjection(in: [owned]))
+    }
+
     func testSavedRejectsInvalidCoordinatesAndNonWGS84() {
         for (latitude, longitude) in invalidCoordinates {
             var place = savedFixture()

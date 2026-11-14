@@ -3,15 +3,17 @@ import SwiftUI
 
 enum DateTheme {
 #if SAVVY_MAIN_APP
-    static let ink = CityMVPStyle.ink
-    static let muted = CityMVPStyle.muted
-    static let canvas = CityMVPStyle.canvas
-    static let surface = CityMVPStyle.surface
-    static let soft = CityMVPStyle.panel
-    static let blue = CityMVPStyle.blue
-    static let coral = CityMVPStyle.blue
-    static let green = CityMVPStyle.blue
-    static let action = CityMVPStyle.actionFill
+    static let ink = SaveBrandUI.ink
+    static let muted = SaveBrandUI.muted
+    static let canvas = SaveBrandUI.canvas
+    static let surface = SaveBrandUI.surface
+    static let soft = SaveBrandUI.soft
+    static let blue = SaveBrandUI.accent
+    static let coral = SaveBrandUI.accent
+    static let green = SaveBrandUI.accent
+    static let glow = SaveBrandUI.brand
+    static let action = SaveBrandUI.action
+    static let actionInk = SaveBrandUI.actionInk
 #else
     static let ink = Color(red: 0.065, green: 0.075, blue: 0.10)
     static let muted = Color(red: 0.42, green: 0.43, blue: 0.46)
@@ -22,6 +24,8 @@ enum DateTheme {
     static let green = Color(red: 0.24, green: 0.44, blue: 0.34)
     static let surface = Color.white
     static let action = ink
+    static let actionInk = Color.white
+    static let glow = blue
 #endif
 }
 
@@ -53,7 +57,7 @@ struct DemoPrimaryButton: View {
                     .frame(width: 30, height: 30).background(.white.opacity(0.15), in: Circle())
             }
             .padding(.horizontal, 18).frame(minHeight: 52)
-            .foregroundStyle(.white)
+            .foregroundStyle(DateTheme.actionInk)
             .background(enabled ? DateTheme.action : DateTheme.muted.opacity(0.45), in: Capsule())
         }
         .buttonStyle(.plain).disabled(!enabled)

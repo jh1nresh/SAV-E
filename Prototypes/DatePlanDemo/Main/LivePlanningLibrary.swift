@@ -35,7 +35,9 @@ struct LivePlanningLibraryView: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(DateTheme.muted)
-                TextField(copy("Search name or address", "搜尋名稱或地址"), text: $query)
+                TextField(copy("Search name or address", "搜尋名稱或地址"), text: $query,
+                          prompt: Text(copy("Search name or address", "搜尋名稱或地址"))
+                    .foregroundColor(DateTheme.muted))
                     .font(.system(.body, design: .rounded))
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                     .submitLabel(.search).accessibilityIdentifier("live.library.search")
@@ -56,7 +58,7 @@ struct LivePlanningLibraryView: View {
                         Button { filter = value } label: {
                             Text(filterTitle(value)).font(.system(.subheadline, design: .rounded, weight: .semibold))
                                 .padding(.horizontal, 16).frame(minHeight: 44)
-                                .foregroundStyle(filter == value ? Color.white : DateTheme.ink)
+                                .foregroundStyle(filter == value ? DateTheme.actionInk : DateTheme.ink)
                                 .background(filter == value ? DateTheme.action : DateTheme.surface, in: Capsule())
                         }
                         .buttonStyle(.plain)
@@ -92,7 +94,7 @@ struct LivePlanningLibraryView: View {
                     .font(.system(.body, design: .rounded, weight: .semibold))
                     .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 52)
                     .padding(.horizontal, 16).padding(.vertical, 4)
-                    .foregroundStyle(Color.white).background(DateTheme.action, in: Capsule())
+                    .foregroundStyle(DateTheme.actionInk).background(DateTheme.action, in: Capsule())
             }
             .buttonStyle(.plain).accessibilityIdentifier("live.library.add")
         }
@@ -231,23 +233,9 @@ private struct LiveLibraryPlaceRow: View {
     let place: Place
     @Environment(\.appLanguageSettings) private var language
 
-    private var photoURL: URL? {
-        place.businessPhotoURLStrings.lazy.compactMap(URL.init(string:)).compactMap { (url: URL) -> URL? in
-            guard ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return nil }
-            return GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(url)
-        }.first
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Group {
-                if let url = photoURL {
-                    CachedAsyncImage(url: url) { phase in
-                        if case .success(let image) = phase { image.resizable().scaledToFill() }
-                        else { fallback }
-                    }
-                } else { fallback }
-            }
+            LiveBusinessPhoto(place: place)
             .frame(width: 58, height: 58).background(DateTheme.soft)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .accessibilityHidden(true)
@@ -272,11 +260,7 @@ private struct LiveLibraryPlaceRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var fallback: some View {
-        Image(systemName: place.category.iconName)
-            .font(.system(.title2, design: .rounded, weight: .medium))
-            .foregroundStyle(DateTheme.blue).frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+
 }
 
 private struct LiveLibraryCard: ViewModifier {

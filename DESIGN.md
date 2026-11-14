@@ -14,6 +14,12 @@ Use [the region blueprint](Prototypes/CityMVP/REGION-BLUEPRINT.md) for each new 
 
 The main root is not a fixture flag. Normal launches read the authenticated account's saved-place sources. Only explicit screenshot/suite launches may seed sample identities, shops, visits or friends.
 
+## App icon alignment in the planning preview
+
+The founder requested that the new personal/shared-map phone preview match the actual coral-and-cream Savvy icon. `SaveBrandUI` in `Color+Theme.swift` owns this preview's adaptive palette: warm off-white surfaces, coral accents, warm charcoal text and dark surfaces. `DateTheme` aliases those values only in the main Debug preview. Existing production and 3D palettes are preserved until separately integrated.
+
+Keep clean, rounded cards and native readable typography. The brush wordmark belongs to branding; do not turn body text into handwriting or restore dotted paper, notebook decorations or rough borders. Saved, Map, Passport, search, place cards and compact account/edit/language/privacy routes share the palette. Retain the glowing three-tab selection, using the icon's coral accent. Photos must identify the actual business from a permitted source; source screenshots are not business photos and missing photos keep a category fallback. Opening a pin retains click-triggered pop/wobble with a stable bottom geographic anchor and Reduce Motion support. Map movement does not replay the click effect. Venue detail prioritizes a native mini-map, address and compact actions; original notes stay literal and expandable.
+
 ## Visual authority
 
 - `Color+Theme.swift` owns the shared palette; `CityMVPStyle` and `CityMVPFormStyle` currently own the integrated map and neutral surface tokens. Their historical names do not imply a separate app.

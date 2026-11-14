@@ -1,55 +1,24 @@
 # Savvy · 個人地圖與朋友出遊預覽
 
-這個目錄保留兩套情境：**主 Savvy 的真實帳號預覽（148 候選）**，以及**獨立的虛構雙人約會 demo**。兩者共用部分視覺元件，但資料、入口與驗證證據必須分開。
+主 Savvy 的真實帳號 Debug 預覽與獨立的虛構雙人約會 demo 共存。兩者資料、入口與證據分開；本次只交付主 Savvy，不交付 City Lab。
 
-目前手機已更新到 **147 真實帳號版**，已確認預設個人模式並讀到原有 85 筆收藏。**148 UI 調整版已完成簽署編譯，安裝與新畫面仍待手機解鎖後驗證**。25 項 native tests 已通過；這不代表真人共同出遊或定位權限流程已實測。
+## 150：互動地圖與地點卡
 
-## 148：主帳號版
+保留正常 SaveApp／登入／帳號驗證，使用同一個 production MapViewModel 的真實收藏。預設個人地圖；朋友出遊明確切換，讀取實際授權共同清單和分享，沒有虛構朋友或票數。
 
-預覽保留正常 `SaveApp` 入口、登入與帳號驗證 gate。驗證後由 `ContentView` 將同一個 production `MapViewModel` 傳入 `LivePlanningMapRoot`，讀取該帳號原有收藏；不是另外開假帳號或 fixture store。
+- 原生 Apple Maps 店家點使用 MapFeature → MKMapItemRequest；收藏／候選照片 pin 也可開卡。已有收藏使用實際 saved identity。只有明確按「收藏」才走既有儲存流程。
+- 點開 pin 保留彈出、輕晃、回彈；底部地理錨點固定，移動地圖不重播動畫，Reduce Motion 關閉這些動效。
+- 地點卡加入 Apple 小地圖、地址和精簡操作。原始筆記可展開，不改寫。照片只讀既有合適的商家照片；缺少時保留分類圖示，不用來源截圖冒充。
+- 收藏、Passport、搜尋、地點卡和 compact 帳號／編輯／語言／隱私頁對齊圖示的橘、奶油色及深炭色；保留 navbar 發光切換。更深層的舊頁面仍有待處理。
+- 定位需主動點擊；不做背景定位或朋友定位。共同清單只傳地點資訊，私人筆記／照片不分享。
 
-- **預設個人地圖**：顯示自己的真實收藏及來源標籤，保留收藏／地圖／Passport。
-- **朋友出遊明確切換**：讀取既有服務端 ACL 允許的共同清單、地點、實際成員與朋友分享 feed。沒資料就呈現空狀態，不補小安、示範好友或預設票數。
-- **真實 Apple Maps**：標準原生底圖與 POI，加上真實收藏／候選 annotations；搜尋使用 `MKLocalSearch`。只有合法、非零 WGS84 座標能成為自有 pin，GCJ-02／BD-09 不假裝轉換。無法定位的資料仍保留在原收藏／清單。
-- **來源狀態分開**：「已收藏」「搜尋結果候選」「隊伍候選」「朋友已分享」不互相替代。朋友的想去／到訪不等於自己收藏、到訪或推薦票。
-- **帳號管理仍可用**：Passport 開啟既有 compact account settings，保留個人資料、登出與確認刪帳號，不顯示舊 Profile 共同清單入口。
+Guide 使用 MKDirections 真實步行路線與手動進度；每站60分鐘是明示假設。菜單、營業時間、預算與備案尚未查證，沒有遠端 AI／MCP。背景離開目前會取消暫時行程，導航返回的連續性仍待完成。
 
-朋友模式用綁定目前 owner/session 的 `LiveOutingModel` 直接讀現有授權 API，不依賴 `MapViewModel.collaborativeLists` 或舊全域清單 cache。帳號切換、取消、模式離開或權限撤回時，舊投影／非同步結果需失效；沒有新增帳號系統或伺服器。
+完整範圍、狀態和驗證界線見 [BRIEF.md](BRIEF.md)。149 的一般主 App build、簽署 build 及安裝通過；全單元測試1923項／1920通過／3預期略過／0失敗。149 的帳號頁畫面未驗證。150 的一般主 App build、測試版 test-build 與簽署 build 已通過；全單元測試1932項／1929通過／3預期略過／0失敗。六張明暗元件圖已檢查，模擬器已關閉。主 Savvy150 已安裝並正常啟動，metadata 確認版本；實機點擊、晃動手感、筆記展開與定位尚未驗證，不能由原始碼或元件圖推定。
 
-## 明確操作與分享邊界
+Main UI 完整 guard：`DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW`。一般 Debug／Release 不選此預覽；保留既有 com.wanderly.app、extensions 和資料，不解除安裝或重設帳號。
 
-選擇清單、建立清單、輸入邀請碼加入、加入地點、產生及分享邀請，都是分開的使用者操作。編輯及邀請受實際 ACL 角色限制。這些操作透過既有服務寫入共同清單；**看 pin、選路線或切模式不會自動新增個人收藏或到訪**。
-
-`LiveMapPlace.listPayload` 只傳店名、地址、座標、分類與必要的型別化來源識別，清除私人筆記、評分、來源 URL、照片與分享者記憶，不複製完整 saved Place。這不是即時投票、朋友定位、出席狀態或所有成員同意的證明。
-
-## Guide：真實路線，未知資訊照實呈現
-
-朋友模式可選 2–6 個共同清單地點，按選取順序向 `MKDirections` 取得步行路線與預估時間，畫出回傳路線。每站目前明示預留 60 分鐘；這是規劃假設，不是店家營業或停留時間資料。取不到路線會顯示錯誤，不補虛構移動時間。
-
-可設定出發時間，手動開始與推進下一站；不自動記錄到訪，也不是即時導航。地點卡另有 Apple Maps 步行導航入口。菜單、價格、總預算、營業時間、訂位與備案尚未查證，不套用 mock 示範數字，也不把未知價格當免費。沒有接遠端 AI、MCP 或攻略服務。
-
-## 編譯與交付狀態
-
-`Main/` 真實 UI 與新增 native tests 的完整 guard：
-
-```swift
-#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
-```
-
-只有此主 App Debug 條件會選用新地圖。一般主 App Debug／Release 不選此 UI；獨立 fixture app 不取代主 App 的 `@main`。Release 沒有預期行為變更，仍須以正常主 App build 驗證。
-
-148 保留既有 `com.wanderly.app`、圖示、extensions、entitlements 和容器。安裝由本次授權的單一 controller 進行，不先解除安裝、不清帳號、不重設資料；沿用 repo 的裝置／快取獨占、10 GiB runtime 空間底線及簽署檢查。
-
-**PR #343 保持 Draft，接在 #342 後面。GitHub Actions 維持停用，required hosted CI 未通過，不是 merge-ready。** 不 merge、不部署 backend／schema、不發佈 App Store 或 TestFlight。
-
-新增 25 個 native test methods 位於 `Tests/SAVETests`：
-
-- `LiveMapPlaceTests`：11 個，檢查真實型別的座標、穩定 ID、來源狀態與分享白名單。
-- `LiveOutingModelTests`：14 個，檢查 ACL、session、取消、失效結果及寫入確認／重試邊界。
-
-25 項 native tests 已在 iOS26.5 執行通過（0 failures），模擬器已關閉。148 UI 的簽署編譯已通過；安裝、新版畫面和定位互動仍需分別驗證。測試 fixtures 不證明真實服務覆蓋，也不授權為了收證自動對使用者帳號建立、加入、分享或刪除資料。
-
-Receipts、截圖與影片留在本機忽略的 `Evidence/` 或工作專用證據路徑，不包含在 clone／PR 中；不提交實際帳號內容。source、靜態檢查、native tests、hosted CI、安裝、啟動與畫面證據分開報告。
+**PR #343 維持 Draft，Actions 停用，required hosted CI 未通過，不是 merge-ready。** 不 merge、不部署 backend/schema、不發佈 App Store/TestFlight。真實帳號證據留在忽略的 Evidence，不提交私人內容。
 
 ## 獨立 mock demo
 
@@ -81,8 +50,8 @@ swiftc -parse-as-library Core/*.swift Checks/ModelChecks.swift -o .host-checks
 - `Main/LiveOutingModel.swift`：目前帳號的 ACL 清單、成員、feed 與明確寫入。
 - `Main/LiveRoutePlan.swift`：Apple 步行路線、時間線與手動進度。
 - `Core/`、`Sources/`、`Checks/`、`UITests/`：獨立 fixture demo 與檢查；部分視覺元件供 Debug 預覽復用。
-- `PROMPT.md`：原始 mock scaffold prompt，不代表 147 真實資料契約。
-- `BRIEF.md`：147 範圍、驗收與交付邊界。
+- `PROMPT.md`：原始 mock scaffold prompt，不代表 148 真實資料契約。
+- `BRIEF.md`：148 範圍、驗收與交付邊界。
 
 ## 148 介面調整
 

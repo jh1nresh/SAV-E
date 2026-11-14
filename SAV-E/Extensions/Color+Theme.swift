@@ -196,6 +196,19 @@ extension Color {
     }
 }
 
+/// Main planning preview: the existing icon's coral, cream and warm charcoal.
+enum SaveBrandUI {
+    static let brand = SaveAtlasPalette.brandCoral
+    static let ink = Color(light: "2F2C27", dark: "F7EFE2")
+    static let muted = Color(light: "6A6057", dark: "C8BDAF")
+    static let canvas = Color(light: "FAF5ED", dark: "191715")
+    static let surface = Color(light: "FFFCF7", dark: "28231F")
+    static let soft = Color(light: "F8E6DA", dark: "3B2B24")
+    static let accent = Color(light: "B33F2B", dark: "F0A084")
+    static let action = Color(light: "BC462F", dark: "ED9478")
+    static let actionInk = Color(light: "FFFCF7", dark: "241B17")
+}
+
 enum SaveAtlasPalette {
     /// Doodle journal lock 2026-10-19. Warm paper, warm charcoal dark.
     /// Landing / Atlas cream. Canvas and paper light columns use this hex.

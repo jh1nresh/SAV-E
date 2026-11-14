@@ -18,6 +18,29 @@ struct LiveMapPlace: Identifiable {
     var coordinate: CLLocationCoordinate2D { place.coordinate }
     var listPayload: SaveListItem { payload }
 
+    /// Reuse the canonical venue identity rule; preserve the account's real ID,
+    /// note and visit state instead of relabeling a native duplicate as unsaved.
+    func existingSavedProjection(in places: [Place]) -> LiveMapPlace? {
+        places.first(where: { $0.matches(place) }).flatMap(Self.saved)
+    }
+
+    /// User confirmation input only. A projection does not become a saved place until
+    /// the canonical MapViewModel save completes; no sender memory becomes evidence.
+    var confirmationCandidate: SaveMapCandidate? {
+        guard origin != .saved, place.isMapKitMappable else { return nil }
+        var components = URLComponents(string: "https://maps.apple.com/")!
+        components.queryItems = [URLQueryItem(name: "q", value: place.name),
+                                 URLQueryItem(name: "ll", value: "\(place.latitude),\(place.longitude)")]
+        return SaveMapCandidate(
+            id: id, title: place.name, subtitle: place.address,
+            latitude: place.latitude, longitude: place.longitude,
+            category: payload.category,
+            sourceURL: origin == .search ? components.url?.absoluteString : nil,
+            sourcePlatform: origin == .search ? .appleMaps : .other,
+            evidence: [origin == .search ? "Selected Apple Maps place" : "Selected shared venue"]
+        )
+    }
+
     static func saved(_ place: Place) -> LiveMapPlace? {
         guard place.isMapKitMappable else { return nil }
         let id = "saved:\(place.id.uuidString)"

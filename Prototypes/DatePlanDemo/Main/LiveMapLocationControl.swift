@@ -13,6 +13,7 @@ struct LiveMapLocationControl: View {
     @ObservedObject private var auth = PrivyAuthService.shared
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @Environment(\.appLanguageSettings) private var language
     @State private var requestTask: Task<Void, Never>?
     @State private var requestID = UUID()
     @State private var isLoading = false
@@ -44,27 +45,32 @@ struct LiveMapLocationControl: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading || scenePhase != .active || !sessionIsCurrent)
-        .accessibilityLabel(isLoading ? "正在定位" : "顯示我的位置")
-        .accessibilityHint("點擊後取得目前位置，僅移動地圖，不會分享位置。")
+        .accessibilityLabel(isLoading
+            ? language.localized(english: "Finding your location", traditionalChinese: "正在定位")
+            : language.localized(english: "Show my location", traditionalChinese: "顯示我的位置"))
+        .accessibilityHint(language.localized(
+            english: "Gets your current location when tapped to center the map. Your location is not shared.",
+            traditionalChinese: "點擊後取得目前位置，僅移動地圖，不會分享位置。"))
         .accessibilityIdentifier("live.map.locate")
-        .alert(failure?.title ?? "定位", isPresented: Binding(
+        .alert(failure?.title(language: language)
+            ?? language.localized(english: "Location", traditionalChinese: "定位"), isPresented: Binding(
             get: { failure != nil },
             set: { if !$0 { failure = nil } }
         ), presenting: failure) { failure in
             switch failure {
             case .permission:
-                Button("開啟設定") {
+                Button(language.localized(english: "Open Settings", traditionalChinese: "開啟設定")) {
                     guard sessionIsCurrent, scenePhase == .active,
                           let url = URL(string: UIApplication.openSettingsURLString) else { return }
                     openURL(url)
                 }
-                Button("取消", role: .cancel) {}
+                Button(language.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
             case .unavailable:
-                Button("重試", action: locate)
-                Button("取消", role: .cancel) {}
+                Button(language.localized(english: "Retry", traditionalChinese: "重試"), action: locate)
+                Button(language.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
             }
         } message: { failure in
-            Text(failure.message)
+            Text(failure.message(language: language))
         }
         .onAppear { activityPhase = scenePhase }
         .onDisappear(perform: cancelRequest)
@@ -206,19 +212,25 @@ struct LiveMapLocationControl: View {
     private enum LocationFailure {
         case permission, unavailable
 
-        var title: String {
+        func title(language: AppLanguageSettings) -> String {
             switch self {
-            case .permission: return "定位權限未開啟"
-            case .unavailable: return "無法取得目前位置"
+            case .permission:
+                return language.localized(english: "Location access is off", traditionalChinese: "定位權限未開啟")
+            case .unavailable:
+                return language.localized(english: "Couldn't get your location", traditionalChinese: "無法取得目前位置")
             }
         }
 
-        var message: String {
+        func message(language: AppLanguageSettings) -> String {
             switch self {
             case .permission:
-                return "請在設定中允許 Savvy 使用定位。若權限受裝置管理限制，請聯絡管理者；仍可手動瀏覽地圖。"
+                return language.localized(
+                    english: "Allow Savvy to use your location in Settings. If access is restricted by device management, contact your administrator. You can still browse the map manually.",
+                    traditionalChinese: "請在設定中允許 Savvy 使用定位。若權限受裝置管理限制，請聯絡管理者；仍可手動瀏覽地圖。")
             case .unavailable:
-                return "尚未取得有效的新位置，地圖保持原位。請稍後重試。"
+                return language.localized(
+                    english: "No valid, recent location was received. The map hasn't moved. Please try again shortly.",
+                    traditionalChinese: "尚未取得有效的新位置，地圖保持原位。請稍後重試。")
             }
         }
     }

@@ -449,7 +449,11 @@ struct ContentView: View {
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             if storageScope == .production {
-                ProfileView(savedPlaces: mapVM.places, currentUserID: rootOwner,
+                ProfileView(savedPlaces: mapVM.places,
+                            onUpdatePlaceVisibility: { place, visibility in
+                                try await mapVM.updatePlaceVisibility(place, visibility: visibility)
+                            },
+                            currentUserID: rootOwner,
                             opensAccountSettings: true, compactAccountOnly: true,
                             requestsConnections: .constant(false))
                     .environment(\.appLanguageSettings, languageSettings)

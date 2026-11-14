@@ -156,6 +156,9 @@ struct DemoDock: View {
     @Binding var selection: DemoDestination
     @Namespace private var highlight
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+#if SAVVY_MAIN_APP
+    @Environment(\.appLanguageSettings) private var language
+#endif
     var body: some View {
         HStack(spacing: 0) {
             ForEach(DemoDestination.allCases, id: \.self) { tab in
@@ -164,23 +167,36 @@ struct DemoDock: View {
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: tab.symbol).font(.system(size: 21, weight: .medium))
-                        Text(tab.rawValue).font(.system(size: 10, weight: .semibold))
+                        Text(label(for: tab)).font(.system(size: 10, weight: .semibold))
                     }.frame(maxWidth: .infinity).frame(height: 58)
                         .foregroundStyle(selection == tab ? DateTheme.ink : DateTheme.muted)
                         .background {
                             if selection == tab {
                                 Capsule().fill(DateTheme.surface)
-                                    .overlay(Capsule().stroke(DateTheme.blue.opacity(0.22), lineWidth: 2))
-                                    .shadow(color: DateTheme.blue.opacity(0.27), radius: 10)
+                                    .overlay(Capsule().stroke(DateTheme.glow.opacity(0.22), lineWidth: 2))
+                                    .shadow(color: DateTheme.glow.opacity(0.27), radius: 10)
                                     .matchedGeometryEffect(id: "selection", in: highlight)
                             }
                         }
                 }.buttonStyle(.plain).accessibilityIdentifier("demo.tab.\(tab.key)")
+                    .accessibilityLabel(label(for: tab))
                     .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
         }.padding(5).background(DateTheme.canvas.opacity(0.96), in: Capsule())
             .overlay(Capsule().stroke(DateTheme.ink.opacity(0.06), lineWidth: 1))
             .shadow(color: .black.opacity(0.09), radius: 18, y: 6)
+    }
+
+    private func label(for tab: DemoDestination) -> String {
+#if SAVVY_MAIN_APP
+        switch tab {
+        case .saved: language.localized(english: "Saved", traditionalChinese: "收藏")
+        case .map: language.localized(english: "Map", traditionalChinese: "地圖")
+        case .passport: language.localized(english: "Passport", traditionalChinese: "Passport")
+        }
+#else
+        tab.rawValue
+#endif
     }
 }
 
