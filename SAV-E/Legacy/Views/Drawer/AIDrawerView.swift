@@ -1892,7 +1892,8 @@ struct MapDetailDrawerView: View {
             .frame(maxWidth: .infinity)
 
             shareAction
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
 
             if let onOpenInbox {
                 Button(action: onOpenInbox) {
@@ -1901,7 +1902,8 @@ struct MapDetailDrawerView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
                 .accessibilityIdentifier("drawer.openReview")
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
 
             Button(action: onClose) {
@@ -1910,7 +1912,8 @@ struct MapDetailDrawerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
             .accessibilityIdentifier("drawer.place.close")
-            .frame(width: 38, height: 38)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 76)
@@ -1930,8 +1933,10 @@ struct MapDetailDrawerView: View {
         .padding(.horizontal, 14)
         .padding(.top, 9)
         .padding(.bottom, 10)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.postcard.ticketHeader")
     }
+
 
     @ViewBuilder
     private var shareAction: some View {

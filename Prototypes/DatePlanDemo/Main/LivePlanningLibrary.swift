@@ -103,6 +103,7 @@ struct LivePlanningLibraryView: View {
             .buttonStyle(.plain).accessibilityIdentifier("live.library.add")
         }
         .foregroundStyle(DateTheme.ink)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("live.library")
     }
 
@@ -138,7 +139,9 @@ struct LivePlanningLibraryView: View {
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                         .frame(minHeight: 44).foregroundStyle(DateTheme.blue)
                         .accessibilityIdentifier("live.library.review.showAll")
-                }.accessibilityIdentifier("live.library.review.batch")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("live.library.review.batch")
             }
             if projection.matches.isEmpty {
                 Text(isLoading ? copy("Loading clues…", "載入線索…") : reviewEmptyCopy(projection.emptyState))

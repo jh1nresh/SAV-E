@@ -120,7 +120,14 @@ final class PrivyAuthService: ObservableObject {
         self.appId = appId
         self.clientId = clientId
 
-        if ReviewDemo.isOfflineUITestMode {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+        // A malformed isolated UI request must fail before SDK/session restore,
+        // not merely show an unavailable screen after restoring an account.
+        let isolatedReviewIntent = LivePlanningReviewFixture.hasLaunchIntent(arguments: ProcessInfo.processInfo.arguments)
+#else
+        let isolatedReviewIntent = false
+#endif
+        if ReviewDemo.isOfflineUITestMode || isolatedReviewIntent {
             self.privy = nil
             self.authState = .unauthenticated
             return

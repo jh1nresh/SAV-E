@@ -178,6 +178,9 @@ private struct DebugQARefreshToken: Equatable {
 enum ContentStorageScope: Equatable {
     case production
     case reviewerDemo
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+    case livePlanningReviewFixture
+#endif
 
     @MainActor
     func makeMapViewModel() -> MapViewModel {
@@ -194,6 +197,10 @@ enum ContentStorageScope: Equatable {
 #else
             return ReviewDemoStorage.makeMapViewModel()
 #endif
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+        case .livePlanningReviewFixture:
+            return LivePlanningReviewFixture.shared.mapViewModel
+#endif
         }
     }
 
@@ -207,6 +214,10 @@ enum ContentStorageScope: Equatable {
             )
         case .reviewerDemo:
             return .reviewerDemo()
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+        case .livePlanningReviewFixture:
+            return .reviewerDemo()
+#endif
         }
     }
 }
@@ -291,8 +302,18 @@ struct ContentView: View {
         _pendingClipListSave = pendingClipListSave
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_CITY_MVP && targetEnvironment(simulator)
+        if storageScope == .livePlanningReviewFixture {
+            rootOwner = LivePlanningReviewFixture.shared.ownerSubject
+            rootAuthGeneration = LivePlanningReviewFixture.shared.sessionGeneration
+        } else {
+            rootOwner = PrivyAuthService.shared.currentUserId
+            rootAuthGeneration = PrivyAuthService.shared.sessionGeneration
+        }
+#else
         rootOwner = PrivyAuthService.shared.currentUserId
         rootAuthGeneration = PrivyAuthService.shared.sessionGeneration
+#endif
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
         _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
@@ -399,11 +420,14 @@ struct ContentView: View {
     @ViewBuilder
     private var currentMapScaffold: some View {
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
-        if storageScope == .production, let owner = rootOwner {
+        if usesLivePlanningPreview, let owner = rootOwner {
             LivePlanningMapRoot(
                 mapVM: mapVM, ownerSubject: owner, sessionGeneration: rootAuthGeneration,
                 onOpenSaved: { openMapDetail(.savedPlace($0)) },
-                onOpenAccount: { isPassportPresented = true },
+                onOpenAccount: {
+                    guard !usesLiveReviewFixture else { return }
+                    isPassportPresented = true
+                },
                 onCapture: { openDrawer(.addLink, tripID: nil) },
                 reviewInboxRequest: liveReviewInboxRequest,
                 onOpenReview: { id in
@@ -417,7 +441,7 @@ struct ContentView: View {
                     liveReviewInboxRequest = nil
                     rootPath.removeAll()
                     pendingCaptureTripID = nil
-                }
+                }, dependencies: livePlanningDependencies
             )
         } else {
             rootScaffold
@@ -428,9 +452,29 @@ struct ContentView: View {
     }
 
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
-    private var usesLivePlanningPreview: Bool { storageScope == .production && rootOwner != nil }
+    private var usesLiveReviewFixture: Bool {
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+        storageScope == .livePlanningReviewFixture
+#else
+        false
+#endif
+    }
+
+    private var usesLivePlanningPreview: Bool {
+        (storageScope == .production || usesLiveReviewFixture) && rootOwner != nil
+    }
+
+    private var livePlanningDependencies: LivePlanningDependencies? {
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+        if usesLiveReviewFixture { return LivePlanningReviewFixture.shared.dependencies }
+#endif
+        return nil
+    }
 
     private var isLivePreviewSessionCurrent: Bool {
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+        if usesLiveReviewFixture { return LivePlanningReviewFixture.shared.isCurrent }
+#endif
         let auth = PrivyAuthService.shared
         guard case .authenticated = auth.authState else { return false }
         return usesLivePlanningPreview && auth.currentUserId == rootOwner
@@ -485,7 +529,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
-            if storageScope == .production {
+            if usesLiveReviewFixture {
+                Text("Account actions are unavailable in this isolated UI fixture.")
+                    .padding().accessibilityIdentifier("live.fixture.accountUnavailable")
+            } else if storageScope == .production {
                 ProfileView(savedPlaces: mapVM.places,
                             onUpdatePlaceVisibility: { place, visibility in
                                 try await mapVM.updatePlaceVisibility(place, visibility: visibility)
@@ -503,6 +550,9 @@ struct ContentView: View {
 #endif
         }
         .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            guard !usesLiveReviewFixture else { return }
+#endif
             mapVM.acknowledgeSavedPlaceLimitPaywall()
             handleExclusiveChromeDismiss()
         }) {
@@ -576,6 +626,9 @@ struct ContentView: View {
             mapVM.reloadCollaborativeLists()
         }
         .onReceive(NotificationCenter.default.publisher(for: .saveMemoryPreferencesDidChange)) { _ in
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            guard !usesLiveReviewFixture else { return }
+#endif
             Task { await drawerVM.loadMemoryPreferences() }
         }
         .onReceive(NotificationCenter.default.publisher(for: SavePlaceLimitHandoff.paywallRequestedNotification)) { _ in
@@ -643,11 +696,17 @@ struct ContentView: View {
     }
 
     private func presentSavedPlaceLimitPaywall() {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        guard !usesLiveReviewFixture else { return }
+#endif
         guard !showSavedPlaceLimitPaywall else { return }
         presentAfterClearingExclusiveChrome(.savedPlaceLimitPaywall)
     }
 
     private func presentSavedPlaceLimitPaywallIfNeeded() {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        guard !usesLiveReviewFixture else { return }
+#endif
         if mapVM.consumePendingSavedPlaceLimitPaywall() {
             presentSavedPlaceLimitPaywall()
         }
@@ -1669,6 +1728,9 @@ struct ContentView: View {
     }
 
     private func openPassport() {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        guard !usesLiveReviewFixture else { return }
+#endif
         openPassport(collectionMode: .collection)
     }
 

@@ -12,6 +12,16 @@ struct LiveReviewInboxRequest: Equatable {
     let candidateIDs: [UUID]
 }
 
+/// Runtime boundaries can be replaced by isolated simulator fixtures without
+/// changing authentication or reimplementing the root's presentation flow.
+@MainActor
+struct LivePlanningDependencies {
+    let outing: LiveOutingModel
+    let plan: LiveRoutePlan
+    let discovery: LivePublicDiscoveryModel
+    let sessionIsCurrent: @MainActor () -> Bool
+}
+
 /// A child of the existing verified account root. The parent owns loading and persistence.
 @MainActor
 struct LivePlanningMapRoot: View {
@@ -24,6 +34,7 @@ struct LivePlanningMapRoot: View {
     let reviewInboxRequest: LiveReviewInboxRequest?
     let onOpenReview: (UUID) -> Void
     let onClearReviewBatch: () -> Void
+    private let currentSession: @MainActor () -> Bool
     @StateObject private var outing: LiveOutingModel
     @StateObject private var plan: LiveRoutePlan
     @StateObject private var discovery: LivePublicDiscoveryModel
@@ -64,15 +75,28 @@ struct LivePlanningMapRoot: View {
          onCapture: @escaping () -> Void,
          reviewInboxRequest: LiveReviewInboxRequest? = nil,
          onOpenReview: @escaping (UUID) -> Void = { _ in },
-         onClearReviewBatch: @escaping () -> Void = {}) {
+         onClearReviewBatch: @escaping () -> Void = {},
+         dependencies: LivePlanningDependencies? = nil) {
         self.mapVM = mapVM; self.ownerSubject = ownerSubject; self.sessionGeneration = sessionGeneration
         self.onOpenSaved = onOpenSaved; self.onOpenAccount = onOpenAccount; self.onCapture = onCapture
         self.reviewInboxRequest = reviewInboxRequest
         self.onOpenReview = onOpenReview
         self.onClearReviewBatch = onClearReviewBatch
-        _outing = StateObject(wrappedValue: LiveOutingModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
-        _plan = StateObject(wrappedValue: LiveRoutePlan(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
-        _discovery = StateObject(wrappedValue: LivePublicDiscoveryModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
+        _outing = StateObject(wrappedValue: dependencies?.outing
+            ?? LiveOutingModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
+        _plan = StateObject(wrappedValue: dependencies?.plan
+            ?? LiveRoutePlan(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
+        _discovery = StateObject(wrappedValue: dependencies?.discovery
+            ?? LivePublicDiscoveryModel(ownerSubject: ownerSubject, sessionGeneration: sessionGeneration))
+        if let dependencies {
+            currentSession = dependencies.sessionIsCurrent
+        } else {
+            currentSession = { @MainActor in
+                let auth = PrivyAuthService.shared
+                guard case .authenticated = auth.authState else { return false }
+                return auth.currentUserId == ownerSubject && auth.sessionGeneration == sessionGeneration
+            }
+        }
     }
 
     private var saved: [LiveMapPlace] { mapVM.places.compactMap(LiveMapPlace.saved) }
@@ -97,9 +121,7 @@ struct LivePlanningMapRoot: View {
         return values + [searchPin].compactMap { $0 }.filter { pin in !values.contains(where: { $0.id == pin.id }) }
     }
     private var sessionIsCurrent: Bool {
-        let auth = PrivyAuthService.shared
-        guard case .authenticated = auth.authState else { return false }
-        return auth.currentUserId == ownerSubject && auth.sessionGeneration == sessionGeneration
+        currentSession()
     }
     private var shouldRefreshOuting: Bool { isMounted && scenePhase == .active && mode == .outing }
     private var discoveryViewport: LivePublicDiscoveryViewport? {
