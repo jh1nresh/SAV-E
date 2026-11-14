@@ -2,12 +2,14 @@
 import SwiftUI
 import MapKit
 
+#if !SAVVY_MAIN_APP
 @main
 struct SavvyDateDemoApp: App {
     var body: some Scene {
         WindowGroup { DateDemoRoot().preferredColorScheme(.light) }
     }
 }
+#endif
 
 enum DemoDestination: String, CaseIterable {
     case saved = "收藏", map = "地圖", passport = "Passport"
@@ -167,7 +169,7 @@ struct DemoDock: View {
                         .foregroundStyle(selection == tab ? DateTheme.ink : DateTheme.muted)
                         .background {
                             if selection == tab {
-                                Capsule().fill(.white)
+                                Capsule().fill(DateTheme.surface)
                                     .overlay(Capsule().stroke(DateTheme.blue.opacity(0.22), lineWidth: 2))
                                     .shadow(color: DateTheme.blue.opacity(0.27), radius: 10)
                                     .matchedGeometryEffect(id: "selection", in: highlight)
@@ -176,8 +178,8 @@ struct DemoDock: View {
                 }.buttonStyle(.plain).accessibilityIdentifier("demo.tab.\(tab.key)")
                     .accessibilityAddTraits(selection == tab ? .isSelected : [])
             }
-        }.padding(5).background(.white.opacity(0.96), in: Capsule())
-            .overlay(Capsule().stroke(.white, lineWidth: 1.5))
+        }.padding(5).background(DateTheme.canvas.opacity(0.96), in: Capsule())
+            .overlay(Capsule().stroke(DateTheme.ink.opacity(0.06), lineWidth: 1))
             .shadow(color: .black.opacity(0.09), radius: 18, y: 6)
     }
 }

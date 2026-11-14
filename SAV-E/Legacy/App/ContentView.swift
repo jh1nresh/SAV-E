@@ -392,10 +392,28 @@ struct ContentView: View {
 #endif
     }
 
+    @ViewBuilder
+    private var currentMapScaffold: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if storageScope == .production, let owner = rootOwner {
+            LivePlanningMapRoot(
+                mapVM: mapVM, ownerSubject: owner, sessionGeneration: rootAuthGeneration,
+                onOpenSaved: { openMapDetail(.savedPlace($0)) },
+                onOpenAccount: { isPassportPresented = true },
+                onCapture: { openDrawer(.addLink, tripID: nil) }
+            )
+        } else {
+            rootScaffold
+        }
+#else
+        rootScaffold
+#endif
+    }
+
     var body: some View {
         // Split from the alert/sheet chain: one flat modifier expression here
         // pushes the type checker past its time budget.
-        rootScaffold
+        currentMapScaffold
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
             isPresented: Binding(
@@ -429,7 +447,19 @@ struct ContentView: View {
             fullScreenContent(for: route)
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            if storageScope == .production {
+                ProfileView(savedPlaces: mapVM.places, currentUserID: rootOwner,
+                            opensAccountSettings: true, compactAccountOnly: true,
+                            requestsConnections: .constant(false))
+                    .environment(\.appLanguageSettings, languageSettings)
+                    .environmentObject(doodleSession)
+            } else {
+                passportView(isRootTab: false, collectionMode: passportCollectionMode)
+            }
+#else
             passportView(isRootTab: false, collectionMode: passportCollectionMode)
+#endif
         }
         .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
             mapVM.acknowledgeSavedPlaceLimitPaywall()

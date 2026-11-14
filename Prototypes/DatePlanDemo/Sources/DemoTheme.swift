@@ -2,6 +2,17 @@
 import SwiftUI
 
 enum DateTheme {
+#if SAVVY_MAIN_APP
+    static let ink = CityMVPStyle.ink
+    static let muted = CityMVPStyle.muted
+    static let canvas = CityMVPStyle.canvas
+    static let surface = CityMVPStyle.surface
+    static let soft = CityMVPStyle.panel
+    static let blue = CityMVPStyle.blue
+    static let coral = CityMVPStyle.blue
+    static let green = CityMVPStyle.blue
+    static let action = CityMVPStyle.actionFill
+#else
     static let ink = Color(red: 0.065, green: 0.075, blue: 0.10)
     static let muted = Color(red: 0.42, green: 0.43, blue: 0.46)
     static let canvas = Color(red: 0.965, green: 0.963, blue: 0.950)
@@ -9,6 +20,9 @@ enum DateTheme {
     static let coral = Color(red: 0.953, green: 0.31, blue: 0.18)
     static let blue = Color(red: 0.20, green: 0.46, blue: 0.87)
     static let green = Color(red: 0.24, green: 0.44, blue: 0.34)
+    static let surface = Color.white
+    static let action = ink
+#endif
 }
 
 struct DemoAvatar: View {
@@ -40,7 +54,7 @@ struct DemoPrimaryButton: View {
             }
             .padding(.horizontal, 18).frame(minHeight: 52)
             .foregroundStyle(.white)
-            .background(enabled ? DateTheme.ink : DateTheme.muted.opacity(0.45), in: Capsule())
+            .background(enabled ? DateTheme.action : DateTheme.muted.opacity(0.45), in: Capsule())
         }
         .buttonStyle(.plain).disabled(!enabled)
     }
@@ -69,8 +83,8 @@ struct DemoPill: View {
 
 extension View {
     func demoCard() -> some View {
-        padding(18).background(.white, in: RoundedRectangle(cornerRadius: 28))
-            .overlay(RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.8)))
+        padding(18).background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+            .overlay(RoundedRectangle(cornerRadius: 24).stroke(DateTheme.ink.opacity(0.04)))
             .shadow(color: .black.opacity(0.075), radius: 18, x: 0, y: 6)
     }
 }

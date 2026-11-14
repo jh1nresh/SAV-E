@@ -52,6 +52,7 @@ struct ProfileView: View {
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
     var opensAccountSettings = false
+    var compactAccountOnly = false
     var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
@@ -123,7 +124,7 @@ struct ProfileView: View {
             settingsPage
         }
         .navigationDestination(isPresented: $opensConnections) {
-            connectionsDestination
+            if !compactAccountOnly { connectionsDestination }
         }
     }
 
@@ -344,6 +345,7 @@ struct ProfileView: View {
                 .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                 .accessibilityIdentifier("profile.memoryPreferences")
 
+                if !compactAccountOnly {
                 Button {
                     SaveHaptics.tap()
                     opensListsDirectly = false
@@ -375,6 +377,8 @@ struct ProfileView: View {
                     SaveHaptics.tap()
                     opensListsDirectly = true
                     opensConnections = true
+                }
+
                 }
 
                 SettingsRow(
@@ -490,16 +494,16 @@ struct ProfileView: View {
             }
         }
         .onChange(of: requestsConnections) { _, requested in
-            if requested { opensConnections = true; requestsConnections = false }
+            if requested { opensConnections = !compactAccountOnly; requestsConnections = false }
         }
         .onAppear {
-            if requestsConnections { opensConnections = true; requestsConnections = false }
+            if requestsConnections { opensConnections = !compactAccountOnly; requestsConnections = false }
             if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
         }
         .onChange(of: savedPlaces.count) { _, _ in
             localSavedPlaces = savedPlaces
         }
-        .task(id: posts.filter) { await posts.refresh(.mine) }
+        .task(id: posts.filter) { if !compactAccountOnly { await posts.refresh(.mine) } }
         .task(id: currentUserID) {
             viewModel.resetForCurrentSession()
             draftAvatarData = nil
@@ -507,12 +511,12 @@ struct ProfileView: View {
             localSavedPlaces = savedPlaces
             refreshFieldStreak()
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
-            inviteURLAvailable = await onLoadMyReferralURL() != nil
+            if !compactAccountOnly { inviteURLAvailable = await onLoadMyReferralURL() != nil }
             await viewModel.loadProfile()
-            await posts.refresh(.mine)
+            if !compactAccountOnly { await posts.refresh(.mine) }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refreshFieldStreak(); Task { await posts.refresh(.mine) } }
+            if phase == .active, !compactAccountOnly { refreshFieldStreak(); Task { await posts.refresh(.mine) } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             refreshFieldStreak()
