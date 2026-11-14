@@ -64,7 +64,7 @@ private struct UITestWindowAppearanceSetter: UIViewRepresentable {
 }
 #endif
 
-#if !SAVVY_CITY_MVP || SAVVY_MAIN_APP
+#if (!SAVVY_CITY_MVP || SAVVY_MAIN_APP) && !(DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW)
 @main
 #endif
 struct SaveApp: App {
