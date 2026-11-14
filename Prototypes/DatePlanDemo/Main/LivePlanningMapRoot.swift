@@ -31,6 +31,8 @@ struct LivePlanningMapRoot: View {
     @State private var searchPresented = false
     @State private var selected: LiveMapPlace?
     @State private var pendingSavedDetail: UUID?
+    @State private var pendingGuideDestination: LivePublicGuideDestination?
+    @State private var guideListToOpen: UUID?
     @State private var savingPinID: String?
     @State private var saveError: String?
     @State private var saveOperation: Task<Void, Never>?
@@ -165,6 +167,7 @@ struct LivePlanningMapRoot: View {
             planOperation?.cancel(); plan.cancel(); outing.deactivate()
             discovery.clear()
             if next == .outing { didFitFriends = false }
+            else { guideListToOpen = nil }
             if next == .personal { fitSavedIfNeeded() }
         }
         .onChange(of: outing.snapshotRevision) { _, _ in
@@ -199,7 +202,12 @@ struct LivePlanningMapRoot: View {
             guard shouldRefreshOuting, !Task.isCancelled, sessionIsCurrent else { return }
             outing.resumeAfterNavigation()
             let previousSnapshot = outing.snapshotRevision
-            await outing.refresh()
+            if let listID = guideListToOpen {
+                guideListToOpen = nil
+                await outing.selectList(listID)
+            } else {
+                await outing.refresh()
+            }
             guard !Task.isCancelled, shouldRefreshOuting, sessionIsCurrent else { return }
             if outing.snapshotRevision == previousSnapshot { plan.cancel(); selectedStops = [] }
         }
@@ -212,7 +220,7 @@ struct LivePlanningMapRoot: View {
                 camera = .region(.init(center: pin.coordinate, span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012)))
             }.presentationDetents([.large]).presentationBackground(DateTheme.canvas)
         }
-        .sheet(item: $selected, onDismiss: openPendingSavedDetail) { pin in
+        .sheet(item: $selected, onDismiss: finishPlaceDismissal) { pin in
             placeCard(pin).presentationDetents([.fraction(0.58), .large]).presentationDragIndicator(.visible).presentationBackground(DateTheme.canvas)
         }
         .onChange(of: selected?.id) { _, _ in saveError = nil }
@@ -229,6 +237,7 @@ struct LivePlanningMapRoot: View {
         planOperation?.cancel(); plan.suspendForNavigation(); outing.suspendForNavigation()
         discovery.clear()
         selected = nil; pendingSavedDetail = nil
+        pendingGuideDestination = nil; guideListToOpen = nil
     }
 
     private func performOutingAction(_ action: @escaping @MainActor () async -> Void,
@@ -460,7 +469,12 @@ struct LivePlanningMapRoot: View {
                     let item = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
                     item.name = pin.place.name
                     item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
-                }, onClose: { selected = nil })
+                }, onClose: { selected = nil }, discoveryExpiresAt: discovery.page?.expiresAt,
+                onGuideDestination: { target in
+                    guard sessionIsCurrent, scenePhase == .active else { return }
+                    pendingGuideDestination = target
+                    selected = nil
+                })
         } else if pin.origin != .publicPost {
           LivePlaceDetail(
             pin: pin, isSaving: savingPinID != nil, saveError: saveError,
@@ -513,7 +527,18 @@ struct LivePlanningMapRoot: View {
         }
     }
 
-    private func openPendingSavedDetail() {
+    private func finishPlaceDismissal() {
+        if let target = pendingGuideDestination {
+            pendingGuideDestination = nil
+            guard sessionIsCurrent, scenePhase == .active else { return }
+            destination = .map
+            switch target {
+            case .list(let id): guideListToOpen = id
+            case .manageLists: teamPresented = true
+            }
+            mode = .outing
+            return
+        }
         guard let id = pendingSavedDetail else { return }
         pendingSavedDetail = nil
         guard sessionIsCurrent, scenePhase == .active,

@@ -60,6 +60,9 @@ struct LivePublicDiscoveryDetail: View {
     let onSave: () -> Void
     let onDirections: () -> Void
     let onClose: () -> Void
+    var discoveryExpiresAt: Date? = nil
+    var onGuideDestination: ((LivePublicGuideDestination) -> Void)? = nil
+    @State private var guidePresented = false
     @Environment(\.appLanguageSettings) private var language
 
     var body: some View {
@@ -86,6 +89,13 @@ struct LivePublicDiscoveryDetail: View {
                             Image(systemName: "arrow.turn.up.right").frame(width: 48, height: 48)
                         }.buttonStyle(.plain).background(DateTheme.soft, in: Circle())
                             .accessibilityLabel(copy("Walking directions", "步行導航"))
+                    }
+                    if onGuideDestination != nil, discoveryExpiresAt != nil {
+                        Button { guidePresented = true } label: {
+                            Label(copy("Plan with friends", "和朋友一起安排"), systemImage: "person.2")
+                                .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 48)
+                        }.buttonStyle(.plain).background(DateTheme.soft, in: Capsule())
+                            .disabled(isSaving).accessibilityIdentifier("live.discovery.guide")
                     }
                     if isSaving { ProgressView(copy("Saving…", "正在收藏…")) }
                     if let saveError { Text(saveError).font(.caption).foregroundStyle(DateTheme.ink) }
@@ -123,6 +133,15 @@ struct LivePublicDiscoveryDetail: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Close", "關閉"), action: onClose) } }
         }.accessibilityIdentifier("live.discovery.detail")
+            .sheet(isPresented: $guidePresented) {
+                if let expiry = discoveryExpiresAt {
+                    LivePublicGuideChooser(venue: venue, expiresAt: expiry, ownerSubject: ownerSubject,
+                        sessionGeneration: sessionGeneration, onDestination: { target in
+                            guidePresented = false; onGuideDestination?(target)
+                        }, onClose: { guidePresented = false })
+                        .presentationDetents([.large]).presentationBackground(DateTheme.canvas)
+                }
+            }
     }
     private func copy(_ english: String, _ chinese: String) -> String { language.localized(english: english, traditionalChinese: chinese) }
 }

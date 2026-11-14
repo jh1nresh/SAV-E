@@ -3,11 +3,42 @@ import SwiftUI
 import MapKit
 import UIKit
 import XCTest
+import Combine
 @testable import SAVE
 
 /// Simulator-hosted component evidence, not a full-app UI or account integration test.
 @MainActor
 final class LivePlanningSurfaceTests: XCTestCase {
+    func testPublicGuideChooserLightAndDarkWithoutWriting() async throws {
+        let now = Date()
+        let page = try LivePublicDiscoveryModelTests.page(now: now).validated(at: now)
+        let venue = try XCTUnwrap(page.venues.first)
+        var renderedModels: [LivePublicGuideModel] = []
+        func freshChooser() -> LivePublicGuideChooser {
+            let model = LivePublicGuideModel(venue: venue, expiresAt: page.expiresAt,
+                ownerSubject: "component-fixture", sessionGeneration: 0, backend: PublicGuideComponentBackend(),
+                sessionIsCurrent: { true }, now: { now })
+            renderedModels.append(model)
+            return LivePublicGuideChooser(venue: venue, expiresAt: page.expiresAt, ownerSubject: "component-fixture",
+                sessionGeneration: 0, model: model,
+                onDestination: { _ in XCTFail("Rendering must not open Guide or manage lists") },
+                onClose: { XCTFail("Rendering must not dismiss") })
+        }
+        try await recordComponent("public-guide-chooser", beforeCapture: {
+            let model = try XCTUnwrap(renderedModels.last)
+            let ready = self.expectation(description: "Each theme mounts a fresh ready chooser")
+            let observation = model.$state.filter { $0 == .ready }.prefix(1).sink { _ in ready.fulfill() }
+            await self.fulfillment(of: [ready], timeout: 2)
+            XCTAssertEqual(model.state, .ready)
+            XCTAssertEqual(model.lists.count, 2)
+            XCTAssertFalse(model.attemptedWrite)
+            withExtendedLifetime(observation) {}
+        }) { freshChooser() }
+        XCTAssertEqual(renderedModels.count, 2)
+        XCTAssertTrue(renderedModels.allSatisfy { !$0.attemptedWrite })
+        renderedModels.forEach { $0.deactivate() }
+    }
+
     func testPublicDiscoverySummaryAndDetailLightAndDark() async throws {
         let now = Date()
         let raw = try LivePublicDiscoveryModelTests.page(now: now)
@@ -27,7 +58,8 @@ final class LivePlanningSurfaceTests: XCTestCase {
                 alreadySaved: false, isSaving: false, saveError: nil,
                 onSave: { XCTFail("Rendering must not save") },
                 onDirections: { XCTFail("Rendering must not navigate") },
-                onClose: { XCTFail("Rendering must not dismiss") })
+                onClose: { XCTFail("Rendering must not dismiss") }, discoveryExpiresAt: page.expiresAt,
+                onGuideDestination: { _ in XCTFail("Rendering must not navigate to a Guide") })
         }
         model.clear()
     }
@@ -125,7 +157,8 @@ final class LivePlanningSurfaceTests: XCTestCase {
     }
 
     private func recordComponent<Content: View>(
-        _ name: String, @ViewBuilder content: () -> Content
+        _ name: String, beforeCapture: (@MainActor () async throws -> Void)? = nil,
+        @ViewBuilder content: () -> Content
     ) async throws {
 #if targetEnvironment(simulator)
         let scene = try XCTUnwrap(
@@ -178,6 +211,7 @@ final class LivePlanningSurfaceTests: XCTestCase {
             host.view.layoutIfNeeded()
             // Yield to UIKit/SwiftUI so TextField and the lazy collection actually mount.
             try await Task.sleep(nanoseconds: ["place-detail", "friends-map"].contains(name) ? 1_000_000_000 : 150_000_000)
+            try await beforeCapture?()
             host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
             XCTAssertTrue(host.view.window === window)
@@ -270,5 +304,26 @@ private final class GuideComponentDirections: LiveWalkingDirections {
 private struct DiscoveryComponentBackend: LivePublicDiscoveryBackend {
     let page: LivePublicDiscoveryPage
     func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage { page }
+}
+
+@MainActor
+private struct PublicGuideComponentBackend: LiveOutingBackend {
+    let isConfigured = true
+    func fetchCollaborativeListRows() async throws -> [SaveCollaborativeListServerRow] {
+        [SaveCollaborativeListServerRow(id: "11111111-1111-4111-8111-111111111111", title: "週六午後・兩個人的半天約會",
+            owner_id: "fixture-owner", viewer_role: "editor", items: []),
+         SaveCollaborativeListServerRow(id: "22222222-2222-4222-8222-222222222222", title: "朋友的觀察清單",
+            owner_id: "fixture-other-owner", viewer_role: "viewer", items: [])]
+    }
+    func fetchListMembers(listID: UUID) async throws -> [SaveListMemberRow] { throw unexpected() }
+    func fetchSharedPosts(mine: Bool, filter: SharedPostFilter, cursor: String?) async throws -> SharedPlacePostsPage { throw unexpected() }
+    func createCollaborativeListRow(id: UUID, title: String, note: String?) async throws { throw unexpected() }
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow { throw unexpected() }
+    func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL) { throw unexpected() }
+    func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws { throw unexpected() }
+    private func unexpected() -> Error {
+        XCTFail("Read-only chooser rendering must not access feeds, members or mutations")
+        return CocoaError(.userCancelled)
+    }
 }
 #endif
