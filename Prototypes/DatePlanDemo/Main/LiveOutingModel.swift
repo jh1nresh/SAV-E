@@ -46,12 +46,15 @@ final class LiveOutingModel: ObservableObject {
     @Published private(set) var isWorking = false
     @Published private(set) var error: String?
     @Published private(set) var shareURL: URL?
+    /// Advances only after a complete ACL-verified list snapshot is published.
+    @Published private(set) var snapshotRevision: UInt64 = 0
 
     private let ownerSubject: String
     private let sessionGeneration: Int
     private let service: any LiveOutingBackend
     private let currentSession: @MainActor () -> Bool
     private var revision: UInt64 = 0
+    private var isSuspended = false
     private var requestedListID: UUID?
     private var activeMutation: UUID?
     private var acknowledgedRevision: UInt64?
@@ -117,6 +120,7 @@ final class LiveOutingModel: ObservableObject {
     }
 
     func selectList(_ id: UUID?) async {
+        guard !isSuspended else { return }
         if id != requestedListID { pendingReloadListID = nil }
         requestedListID = id
         await run(working: false) { ticket in
@@ -218,14 +222,30 @@ final class LiveOutingModel: ObservableObject {
     /// authority immediately; existing server mutations are not silently undone.
     func deactivate() {
         revision &+= 1
+        isSuspended = true
         requestedListID = nil
         pendingCreate = nil
         pendingReloadListID = nil
+        acknowledgedRevision = nil
         clearSharedData()
         isLoading = false
         isWorking = false
         error = nil
         notice = nil
+    }
+
+    /// Discard all shared payloads while preserving only an in-memory list-selection intent.
+    /// Repeated inactive/disappear events preserve that same intent; no mutation is replayed.
+    func suspendForNavigation() {
+        let resumeListID = sessionIsCurrent ? (requestedListID ?? selectedListID) : nil
+        deactivate()
+        requestedListID = resumeListID
+    }
+
+    /// Called by the owning view's structured refresh task. This restores no payload or ACL.
+    func resumeAfterNavigation() {
+        guard sessionIsCurrent else { deactivate(); return }
+        isSuspended = false
     }
 
     private struct Snapshot {
@@ -243,13 +263,14 @@ final class LiveOutingModel: ObservableObject {
 
     private func check(_ ticket: UInt64) throws {
         try Task.checkCancellation()
-        guard ticket == revision, sessionIsCurrent else { throw CancellationError() }
+        guard !isSuspended, ticket == revision, sessionIsCurrent else { throw CancellationError() }
         guard service.isConfigured else {
             throw OutingError.message("共同清單服務尚未設定，目前無法連線。")
         }
     }
 
     private func run(working: Bool, operation: (UInt64) async throws -> Snapshot) async {
+        guard !isSuspended else { return }
         // Reads may supersede a pending write's UI, but cannot cause a second
         // mutation to overlap a request that has already reached the server.
         let mutation = working ? UUID() : nil
@@ -291,6 +312,7 @@ final class LiveOutingModel: ObservableObject {
             isLoading = false
             isWorking = false
             if let mutation, activeMutation == mutation { activeMutation = nil }
+            snapshotRevision &+= 1
             // Feed availability is independent of list/membership availability.
             // Publish the verified team before waiting for this optional read.
             await refreshFeed(ticket: ticket)

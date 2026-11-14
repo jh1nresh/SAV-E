@@ -14,6 +14,14 @@ Use [the region blueprint](Prototypes/CityMVP/REGION-BLUEPRINT.md) for each new 
 
 The main root is not a fixture flag. Normal launches read the authenticated account's saved-place sources. Only explicit screenshot/suite launches may seed sample identities, shops, visits or friends.
 
+## Requested public discovery default — 2026-11-14
+
+The founder clarified that the default Map should reveal other people's public Instagram, Threads and Xiaohongshu posts associated with real places, without requiring the viewer to import those posts first. This is the next requested direction; the current planning preview still defaults to its personal map. Preserve Saved / Map / Passport and the separate personal/friends capabilities while adding the public exploration lens.
+
+Discovery pins represent attributed public posts or grouped posts for a place, not the viewer's saved Map Stamps. Eligible source covers are labeled as post imagery; venue/business photography remains separate. A venue opens the associated posts, their authors/platforms and original links; explicit collection and Guide actions remain separate from browsing. Require a reliable place association before showing a geographical pin. Discovery must preserve original-source attribution and withdrawal/access boundaries.
+
+The existing follower-only shared-post feed is not public discovery. A public-link capability alone is not permission to list a record globally. Current opt-in trending signals are aggregated Savvy place signals, not a global social-post index. External platform acquisition, complete post/author/source contracts and actual coverage remain unimplemented; do not label fixtures, friend shares or search candidates as everybody's public posts. This change does not authorize publicizing existing private records, production migrations/deployment, credentials or spending.
+
 ## App icon alignment in the planning preview
 
 The founder requested that the new personal/shared-map phone preview match the actual coral-and-cream Savvy icon. `SaveBrandUI` in `Color+Theme.swift` owns this preview's adaptive palette: warm off-white surfaces, coral accents, warm charcoal text and dark surfaces. `DateTheme` aliases those values only in the main Debug preview. Existing production and 3D palettes are preserved until separately integrated.

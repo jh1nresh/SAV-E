@@ -50,6 +50,7 @@
 		243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */; };
 		2539F12E0DC643027B79F609 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8FD3003DB82E8C295FC8BF7 /* ContentView.swift */; };
 		273395F9C8DC563C5CDC3D27 /* SaveProPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ED95BBF2529E667C277ECA3 /* SaveProPaywallView.swift */; };
+		28C8E4BF53414D10190A410A /* LiveRoutePlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09DA7A6269C85BE62A167E60 /* LiveRoutePlanTests.swift */; };
 		2958419CA220F8464A1432FE /* LiveMapPlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38421B34261F8429EEB09CBC /* LiveMapPlaceTests.swift */; };
 		2A4EDBE6CD5C9C4F8FABD6C6 /* CityContextPlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54DB3E5C18530E153A9A9A4B /* CityContextPlace.swift */; };
 		2B8AB19487D2C9824C6F46D2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C84069DBCF7887D8E65D10D /* Theme.swift */; };
@@ -502,6 +503,7 @@
 		074CF2EDDD154B4AD955A324 /* CitySolidRevealPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitySolidRevealPreview.swift; sourceTree = "<group>"; };
 		087079BA81CF1E30FDEDEA1D /* SAVEUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEUITestCase.swift; sourceTree = "<group>"; };
 		088DFD7077650B834811C66B /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
+		09DA7A6269C85BE62A167E60 /* LiveRoutePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRoutePlanTests.swift; sourceTree = "<group>"; };
 		0AAF9E6607563838C61A8B10 /* CitySceneClouds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitySceneClouds.swift; sourceTree = "<group>"; };
 		0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceCorrectionEventTests.swift; sourceTree = "<group>"; };
 		0ACE06FC14D8484E4FECB5AF /* CityMVPLatencyObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CityMVPLatencyObservation.swift; sourceTree = "<group>"; };
@@ -1533,6 +1535,7 @@
 				20F67BE3996DEC6799EF0C56 /* LivePlaceInformationTests.swift */,
 				B59D2C474AAEDE7A80F05D60 /* LivePlaceNativeProbeTests.swift */,
 				748039CC84BB9BBD8D13F021 /* LivePlanningSurfaceTests.swift */,
+				09DA7A6269C85BE62A167E60 /* LiveRoutePlanTests.swift */,
 			);
 			name = SAVETests;
 			path = Tests/SAVETests;
@@ -2244,6 +2247,7 @@
 				E8A12D557EBD818E19338D25 /* LivePlaceInformationTests.swift in Sources */,
 				EEB4F393C6B31647D689480E /* LivePlaceNativeProbeTests.swift in Sources */,
 				85F5FF787FF1A5A8CC783B32 /* LivePlanningSurfaceTests.swift in Sources */,
+				28C8E4BF53414D10190A410A /* LiveRoutePlanTests.swift in Sources */,
 				9DFBB91700C07E8BC54C0656 /* MessagesVaultReader.swift in Sources */,
 				6D25496E2E4B1EA7B949E82E /* OnboardingSampleClueTests.swift in Sources */,
 				09632F369F1160CFB90764EB /* PendingShareStoreTests.swift in Sources */,
@@ -2656,7 +2660,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EClip/SAV-EClip.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
@@ -2810,7 +2814,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -2854,7 +2858,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -2877,7 +2881,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -2903,7 +2907,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2943,7 +2947,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -2968,7 +2972,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
@@ -2991,7 +2995,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EClip/SAV-EClip.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
@@ -3038,7 +3042,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3060,7 +3064,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EShareExtension/SAV-EShareExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EShareExtension/Info.plist";
@@ -3080,7 +3084,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -3126,7 +3130,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
@@ -3148,7 +3152,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EShareExtension/SAV-EShareExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EShareExtension/Info.plist";
@@ -3168,7 +3172,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 151;
+				CURRENT_PROJECT_VERSION = 152;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;

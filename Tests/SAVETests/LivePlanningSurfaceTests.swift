@@ -8,6 +8,29 @@ import XCTest
 /// Simulator-hosted component evidence, not a full-app UI or account integration test.
 @MainActor
 final class LivePlanningSurfaceTests: XCTestCase {
+    func testGuideReadyAndProgressComponentsLightAndDark() async throws {
+        let model = LiveRoutePlan(ownerSubject: "component-fixture", sessionGeneration: 0,
+                                  makeDirections: { _ in GuideComponentDirections() }, sessionIsCurrent: { true })
+        let stops = try fixtures.prefix(2).map { try XCTUnwrap(LiveMapPlace.saved($0)) }
+        model.beginsAt = Date(timeIntervalSince1970: 1_800_000_000)
+        await model.build(stops, listID: UUID())
+        XCTAssertTrue(model.isAccessValidated)
+        try await recordComponent("guide-ready") {
+            LiveGuidePanel(title: "週六下午", plan: model,
+                           onManage: { XCTFail("Rendering must not open team settings") },
+                           onSelect: { _ in XCTFail("Rendering must not open stop") })
+                .frame(height: 485).demoCard()
+        }
+        model.start(); model.advance()
+        try await recordComponent("guide-progress") {
+            LiveGuidePanel(title: "週六下午", plan: model,
+                           onManage: { XCTFail("Rendering must not open team settings") },
+                           onSelect: { _ in XCTFail("Rendering must not open stop") })
+                .frame(height: 485).demoCard()
+        }
+        XCTAssertEqual(model.currentIndex, 1)
+    }
+
     func testLibraryComponentLightAndDark() async throws {
         try await recordComponent("library") {
             LivePlanningLibraryView(places: fixtures, isLoading: false,
@@ -211,5 +234,11 @@ final class LivePlanningSurfaceTests: XCTestCase {
                   createdAt: Date(timeIntervalSince1970: 1_700_000_000))
         }
     }
+}
+
+@MainActor
+private final class GuideComponentDirections: LiveWalkingDirections {
+    func route() async throws -> MKRoute { MKRoute() }
+    func cancel() {}
 }
 #endif

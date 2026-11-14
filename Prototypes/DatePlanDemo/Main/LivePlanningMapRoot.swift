@@ -34,6 +34,11 @@ struct LivePlanningMapRoot: View {
     @State private var saveOperation: Task<Void, Never>?
     @State private var searchPin: LiveMapPlace?
     @State private var selectedStops: [String] = []
+    @State private var stopSelectionListID: UUID?
+    @State private var isMounted = false
+    @State private var planOperation: Task<Void, Never>?
+    @State private var lifecycleRevision: UInt64 = 0
+    @State private var guideAccess = LiveGuideAccess()
     @State private var teamPresented = false
     @State private var newListTitle = ""
     @State private var joinCode = ""
@@ -71,6 +76,10 @@ struct LivePlanningMapRoot: View {
         guard case .authenticated = auth.authState else { return false }
         return auth.currentUserId == ownerSubject && auth.sessionGeneration == sessionGeneration
     }
+    private var shouldRefreshOuting: Bool { isMounted && scenePhase == .active && mode == .outing }
+    private var canShowPlan: Bool {
+        shouldRefreshOuting && sessionIsCurrent && guideAccess.permits(plan: plan, outing: outing)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -89,9 +98,11 @@ struct LivePlanningMapRoot: View {
                                                    sessionGeneration: sessionGeneration)
                         }
                         if mode == .outing {
-                            outingPanel.frame(maxHeight: (groupPlaces.isEmpty && plan.stops.isEmpty)
+                            outingPanel.frame(maxHeight: (groupPlaces.isEmpty && !canShowPlan)
                                               ? min(240, geometry.size.height * 0.35)
-                                              : geometry.size.height * 0.51).demoCard()
+                                              : (canShowPlan
+                                                 ? min(geometry.size.height * 0.64, max(0, geometry.size.height - 260))
+                                                 : geometry.size.height * 0.51)).demoCard()
                         } else {
                             personalSummary.demoCard()
                         }
@@ -105,6 +116,7 @@ struct LivePlanningMapRoot: View {
             }.foregroundStyle(DateTheme.ink)
         }
         .onAppear {
+            isMounted = true
             if ProcessInfo.processInfo.arguments.contains("--preview-tab-saved") { destination = .saved }
             if ProcessInfo.processInfo.arguments.contains("--preview-tab-passport")
                 || ProcessInfo.processInfo.arguments.contains("--preview-account") { destination = .passport }
@@ -120,14 +132,19 @@ struct LivePlanningMapRoot: View {
         }
         .onChange(of: saved.map(\.id)) { _, _ in fitSavedIfNeeded() }
         .onChange(of: mode) { _, next in
-            selected = nil; pendingSavedDetail = nil; searchPin = nil; selectedStops = []; plan.cancel()
-            if next == .outing { didFitFriends = false; Task { await outing.refresh() } }
-            else { outing.deactivate() }
+            lifecycleRevision &+= 1
+            guideAccess.invalidate()
+            selected = nil; pendingSavedDetail = nil; searchPin = nil; selectedStops = []; stopSelectionListID = nil
+            planOperation?.cancel(); plan.cancel(); outing.deactivate()
+            if next == .outing { didFitFriends = false }
         }
-        .onChange(of: outing.items.map(\.id)) { _, _ in
-            selectedStops = []; plan.cancel()
+        .onChange(of: outing.snapshotRevision) { _, _ in
+            reconcilePlan()
             if selected?.origin == .shared { selected = nil }
             if !groupPlaces.isEmpty { fit(groupPlaces) }
+        }
+        .onChange(of: outing.error) { _, value in
+            if value != nil, shouldRefreshOuting, outing.selectedListID == nil { plan.cancel() }
         }
         .onChange(of: outing.posts) { _, _ in
             if selected?.origin == .shared { selected = nil }
@@ -137,10 +154,17 @@ struct LivePlanningMapRoot: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, mode == .outing { Task { await outing.refresh() } }
-            else if phase != .active { outing.deactivate(); plan.cancel(); selected = nil }
+            if phase != .active { suspendPlanning() }
         }
-        .onDisappear { outing.deactivate(); plan.cancel(); saveOperation?.cancel() }
+        .onDisappear { isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .task(id: shouldRefreshOuting) {
+            guard shouldRefreshOuting, !Task.isCancelled, sessionIsCurrent else { return }
+            outing.resumeAfterNavigation()
+            let previousSnapshot = outing.snapshotRevision
+            await outing.refresh()
+            guard !Task.isCancelled, shouldRefreshOuting, sessionIsCurrent else { return }
+            if outing.snapshotRevision == previousSnapshot { plan.cancel(); selectedStops = [] }
+        }
         .tint(DateTheme.blue)
         .sheet(isPresented: $searchPresented) {
             LiveMapSearch(region: searchRegion) { pin in
@@ -158,12 +182,40 @@ struct LivePlanningMapRoot: View {
     }
 
     private var mapCanSelect: Bool {
-        destination == .map && !searchPresented && !teamPresented && selected == nil
+        isMounted && scenePhase == .active && destination == .map && !searchPresented && !teamPresented && selected == nil
+    }
+
+    private func suspendPlanning() {
+        lifecycleRevision &+= 1
+        guideAccess.invalidate()
+        planOperation?.cancel(); plan.suspendForNavigation(); outing.suspendForNavigation()
+        selected = nil; pendingSavedDetail = nil
+    }
+
+    private func performOutingAction(_ action: @escaping @MainActor () async -> Void,
+                                    after: (@MainActor () -> Void)? = nil) {
+        let ticket = lifecycleRevision
+        Task {
+            guard ticket == lifecycleRevision, shouldRefreshOuting, sessionIsCurrent, !Task.isCancelled else { return }
+            await action()
+            guard ticket == lifecycleRevision, shouldRefreshOuting, sessionIsCurrent, !Task.isCancelled else { return }
+            if outing.selectedListID == nil && !outing.isLoading && !outing.isWorking { plan.cancel() }
+            after?()
+        }
+    }
+
+    private func reconcilePlan() {
+        guard shouldRefreshOuting, sessionIsCurrent else { return }
+        if stopSelectionListID != outing.selectedListID {
+            selectedStops = []; stopSelectionListID = outing.selectedListID
+        }
+        selectedStops = selectedStops.filter { id in groupPlaces.contains { $0.id == id } }
+        guideAccess.reconcile(plan: plan, outing: outing, places: groupPlaces)
     }
 
     private var realMap: some View {
         LiveInteractiveMapSurface(
-            position: $camera, pins: pins, routes: mode == .outing ? plan.routes : [], isInteractive: mapCanSelect,
+            position: $camera, pins: pins, routes: canShowPlan ? plan.routes : [], isInteractive: mapCanSelect,
             activePinID: selected?.id, friends: mode == .outing ? friendEntries : [], ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
             onSelect: { pin in
                 guard sessionIsCurrent, mapCanSelect else { return }
@@ -248,51 +300,54 @@ struct LivePlanningMapRoot: View {
 
     private var outingPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(outing.selectedListID == nil ? copy("Plan together", "一起出遊") : outing.selectedTitle).font(.system(size: 21, weight: .bold))
-                    Text(outing.selectedListID == nil ? copy("Choose a shared list and invite friends to add places.", "選擇共同清單，邀朋友一起加入地點。") : copy("\(outing.members.count) members · \(outing.items.count) places", "\(outing.members.count) 位實際加入成員 · \(outing.items.count) 個地點"))
-                        .font(.system(size: 11)).foregroundStyle(DateTheme.muted)
-                }
-                Spacer()
-                Button { teamPresented = true } label: { Image(systemName: "person.badge.plus").frame(width: 44, height: 44) }
-                    .accessibilityLabel(copy("Shared lists and members", "共同清單與成員")).accessibilityIdentifier("live.team")
+            if canShowPlan {
+                LiveGuidePanel(title: outing.selectedTitle, plan: plan,
+                               onManage: { teamPresented = true }, onSelect: selectGuideStop)
             }
-            HStack(spacing: 8) {
-                ForEach([false, true], id: \.self) { visitedOnly in
-                    Button { friendsVisitedOnly = visitedOnly } label: {
-                        Label(visitedOnly ? copy("Visited", "朋友去過") : copy("Shared", "朋友分享"),
-                              systemImage: visitedOnly ? "checkmark.seal" : "person.2")
-                            .font(.caption.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .foregroundStyle(friendsVisitedOnly == visitedOnly ? DateTheme.actionInk : DateTheme.ink)
-                            .background(friendsVisitedOnly == visitedOnly ? DateTheme.action : DateTheme.soft,
-                                        in: RoundedRectangle(cornerRadius: 12))
-                    }.buttonStyle(.plain)
-                        .accessibilityAddTraits(friendsVisitedOnly == visitedOnly ? .isSelected : [])
-                }
-            }
-            if outing.isLoading || outing.isWorking { ProgressView(copy("Loading shared lists…", "連線共同清單…")) }
-            if let error = outing.error {
-                Text(copy("Couldn’t complete this outing action. Try again.", error)).font(.caption).foregroundStyle(DateTheme.coral)
-                Button(copy("Try again", "重新載入")) { Task { await outing.refresh() } }.frame(minHeight: 44)
-            }
-            if let notice = outing.notice {
-                Text(copy("Your change was submitted. Reload the shared list to confirm it.", notice)).font(.caption).foregroundStyle(DateTheme.muted)
-                Button(copy("Reload shared list", "重新讀取共同清單")) { Task { await outing.refresh() } }
-                    .disabled(outing.isLoading || outing.isWorking).frame(minHeight: 44)
-            }
-            if outing.selectedListID == nil, let error = outing.feedError {
-                Text(copy("Couldn’t load friends’ shared places. Try again later.", error)).font(.caption).foregroundStyle(DateTheme.muted)
-            }
-            if outing.unmappedItemCount + outing.items.count - groupPlaces.count > 0 {
-                Text(copy("\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) places have no supported map coordinates and remain in the list.", "\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) 筆地點尚無可顯示的 Apple Maps 座標，仍保留於共同清單。"))
-                    .font(.caption).foregroundStyle(DateTheme.muted)
-            }
-            if let error = plan.error { Text(copy("Apple Maps couldn’t find walking routes. Try again or open directions.", error)).font(.caption).foregroundStyle(DateTheme.coral) }
-            if plan.isLoading { ProgressView(copy("Finding walking routes…", "向 Apple Maps 查詢步行路線…")) }
-            if !plan.stops.isEmpty { guideTimeline }
             else {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(outing.selectedListID == nil ? copy("Plan together", "一起出遊") : outing.selectedTitle).font(.system(size: 21, weight: .bold))
+                        Text(outing.selectedListID == nil ? copy("Choose a shared list and invite friends to add places.", "選擇共同清單，邀朋友一起加入地點。") : copy("\(outing.members.count) members · \(outing.items.count) places", "\(outing.members.count) 位實際加入成員 · \(outing.items.count) 個地點"))
+                            .font(.system(size: 11)).foregroundStyle(DateTheme.muted)
+                    }
+                    Spacer()
+                    Button { teamPresented = true } label: { Image(systemName: "person.badge.plus").frame(width: 44, height: 44) }
+                        .accessibilityLabel(copy("Shared lists and members", "共同清單與成員")).accessibilityIdentifier("live.team")
+                }
+                HStack(spacing: 8) {
+                    ForEach([false, true], id: \.self) { visitedOnly in
+                        Button { friendsVisitedOnly = visitedOnly } label: {
+                            Label(visitedOnly ? copy("Visited", "朋友去過") : copy("Shared", "朋友分享"),
+                                  systemImage: visitedOnly ? "checkmark.seal" : "person.2")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .foregroundStyle(friendsVisitedOnly == visitedOnly ? DateTheme.actionInk : DateTheme.ink)
+                                .background(friendsVisitedOnly == visitedOnly ? DateTheme.action : DateTheme.soft,
+                                            in: RoundedRectangle(cornerRadius: 12))
+                        }.buttonStyle(.plain)
+                            .accessibilityAddTraits(friendsVisitedOnly == visitedOnly ? .isSelected : [])
+                    }
+                }
+                if outing.isLoading || outing.isWorking { ProgressView(copy("Loading shared lists…", "連線共同清單…")) }
+                if let error = outing.error {
+                    Text(copy("Couldn’t complete this outing action. Try again.", error)).font(.caption).foregroundStyle(DateTheme.coral)
+                    Button(copy("Try again", "重新載入")) { performOutingAction { await outing.refresh() } }.frame(minHeight: 44)
+                }
+                if let notice = outing.notice {
+                    Text(copy("Your change was submitted. Reload the shared list to confirm it.", notice)).font(.caption).foregroundStyle(DateTheme.muted)
+                    Button(copy("Reload shared list", "重新讀取共同清單")) { performOutingAction { await outing.refresh() } }
+                        .disabled(outing.isLoading || outing.isWorking).frame(minHeight: 44)
+                }
+                if outing.selectedListID == nil, let error = outing.feedError {
+                    Text(copy("Couldn’t load friends’ shared places. Try again later.", error)).font(.caption).foregroundStyle(DateTheme.muted)
+                }
+                if outing.unmappedItemCount + outing.items.count - groupPlaces.count > 0 {
+                    Text(copy("\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) places have no supported map coordinates and remain in the list.", "\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) 筆地點尚無可顯示的 Apple Maps 座標，仍保留於共同清單。"))
+                        .font(.caption).foregroundStyle(DateTheme.muted)
+                }
+                if let error = plan.error { Text(copy("Apple Maps couldn’t find walking routes. Try again or open directions.", error)).font(.caption).foregroundStyle(DateTheme.coral) }
+                if plan.isLoading { ProgressView(copy("Finding walking routes…", "向 Apple Maps 查詢步行路線…")) }
                 ScrollView {
                     VStack(spacing: 8) {
                         if outing.selectedListID == nil {
@@ -321,56 +376,27 @@ struct LivePlanningMapRoot: View {
                     }
                 }.scrollIndicators(.hidden)
             }
-            if plan.stops.isEmpty {
+            if plan.stops.isEmpty && !outing.isLoading && !outing.isWorking {
                 DemoPrimaryButton(title: selectedStops.isEmpty ? copy("Choose places · up to 6 stops", "選擇出遊地點 · 最多 6 站") : copy("Plan route · \(selectedStops.count) stops", "Guide 排路線 · \(selectedStops.count) 站"),
                                   enabled: selectedStops.count >= 2 && !plan.isLoading) {
+                    guard let listID = outing.selectedListID else { return }
                     let values = selectedStops.compactMap { id in groupPlaces.first { $0.id == id } }
-                    Task { await plan.build(values) }
+                    planOperation?.cancel()
+                    planOperation = Task {
+                        guard shouldRefreshOuting, !Task.isCancelled, sessionIsCurrent,
+                              outing.selectedListID == listID else { return }
+                        await plan.build(values, listID: listID)
+                        guard shouldRefreshOuting, !Task.isCancelled, sessionIsCurrent else { return }
+                        reconcilePlan()
+                    }
                 }
             }
         }
     }
 
-    private var guideTimeline: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("SAV-E GUIDE").font(.system(size: 10, weight: .bold)).tracking(1)
-                Spacer()
-                DatePicker(copy("Departure", "出發"), selection: $plan.beginsAt, displayedComponents: .hourAndMinute)
-                    .labelsHidden().disabled(plan.started)
-                Button(copy("Replan", "重排")) { plan.cancel() }.disabled(plan.started)
-            }
-            Text(copy("Walking routes · \(plan.dwellMinutes) min per stop · budget unconfirmed", "實際步行路線 · 每站預留 \(plan.dwellMinutes) 分 · 預算待確認"))
-                .font(.system(size: 11)).foregroundStyle(DateTheme.muted)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(plan.stops.enumerated()), id: \.element.id) { index, pin in
-                        Button { selected = pin } label: {
-                            HStack(alignment: .top, spacing: 12) {
-                                VStack {
-                                    Text(plan.arrival(at: index), style: .time).font(.system(size: 12, weight: .semibold))
-                                    Text("\(index + 1)").font(.system(size: 12, weight: .bold)).foregroundStyle(DateTheme.actionInk)
-                                        .frame(width: 24, height: 24).background(DateTheme.action, in: Circle())
-                                }
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(pin.place.name).font(.system(size: 15, weight: .semibold))
-                                    Text(pin.place.address).font(.system(size: 11)).lineLimit(2).foregroundStyle(DateTheme.muted)
-                                    if index > 0 {
-                                        Text(copy("About \(Int(ceil(plan.routes[index - 1].expectedTravelTime / 60))) min on foot", "步行約 \(Int(ceil(plan.routes[index - 1].expectedTravelTime / 60))) 分鐘"))
-                                            .font(.system(size: 11)).foregroundStyle(DateTheme.muted)
-                                    }
-                                }
-                                Spacer(minLength: 0)
-                            }.padding(12).background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 16))
-                        }.buttonStyle(.plain)
-                    }
-                }
-            }.scrollIndicators(.hidden)
-            if !plan.started { DemoPrimaryButton(title: copy("Start this outing", "開始照行程走")) { plan.start() } }
-            else if plan.currentIndex < plan.stops.count {
-                DemoPrimaryButton(title: copy("Next · \(plan.stops[plan.currentIndex].place.name)", "下一站 · \(plan.stops[plan.currentIndex].place.name)")) { plan.advance() }
-            } else { Label(copy("Outing complete", "這次行程已走完"), systemImage: "checkmark.circle.fill").font(.subheadline) }
-        }
+    private func selectGuideStop(_ pin: LiveMapPlace) {
+        guard canShowPlan, mapCanSelect else { return }
+        selected = pin
     }
 
     private var dock: some View {
@@ -398,7 +424,7 @@ struct LivePlanningMapRoot: View {
                 item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
             },
             onAddToOuting: mode == .outing && outing.selectedListID != nil ? {
-                Task { await outing.add(pin.listPayload); if sessionIsCurrent { selected = nil } }
+                performOutingAction({ await outing.add(pin.listPayload) }, after: { selected = nil })
             } : nil,
             canAddToOuting: outing.canEditSelected && !outing.isWorking,
             onClose: { selected = nil }
@@ -449,14 +475,14 @@ struct LivePlanningMapRoot: View {
                     ForEach(outing.lists) { list in
                         Button {
                             teamPresented = false
-                            Task { await outing.selectList(list.id) }
+                            performOutingAction { await outing.selectList(list.id) }
                         } label: { HStack { Text(list.title); Spacer(); Text(copy("\(list.itemCount) places", "\(list.itemCount) 個地點")).foregroundStyle(.secondary) } }
                     }
                     if outing.isLoading { ProgressView() }
                     if let error = outing.error { Text(copy("Couldn’t complete this outing action. Try again.", error)).foregroundStyle(DateTheme.coral) }
                     if let notice = outing.notice { Text(copy("Your change was submitted. Reload the shared list to confirm it.", notice)).foregroundStyle(.secondary) }
                     if outing.error != nil || outing.notice != nil {
-                        Button(copy("Reload shared list", "重新讀取共同清單")) { Task { await outing.refresh() } }
+                        Button(copy("Reload shared list", "重新讀取共同清單")) { performOutingAction { await outing.refresh() } }
                             .disabled(outing.isLoading || outing.isWorking)
                     }
                 }.listRowBackground(DateTheme.surface)
@@ -466,19 +492,19 @@ struct LivePlanningMapRoot: View {
                             Label(member.displayName, systemImage: member.role == .owner ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
                         }
                         if outing.canInviteSelected {
-                            Button(copy("Create an invite", "產生共同加店邀請")) { Task { await outing.makeInvite() } }.disabled(outing.isWorking)
+                            Button(copy("Create an invite", "產生共同加店邀請")) { performOutingAction { await outing.makeInvite() } }.disabled(outing.isWorking)
                         }
                         if let url = outing.shareURL { ShareLink(copy("Share invite link", "分享邀請連結"), item: url) }
                     }.listRowBackground(DateTheme.surface)
                 }
                 Section(copy("Create a shared list", "建立新的出遊清單")) {
                     TextField(copy("For example: Saturday afternoon", "例如：週六下午"), text: $newListTitle)
-                    Button(copy("Create list", "建立清單")) { Task { await outing.createList(title: newListTitle) } }
+                    Button(copy("Create list", "建立清單")) { performOutingAction { await outing.createList(title: newListTitle) } }
                         .disabled(newListTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || outing.isWorking)
                 }.listRowBackground(DateTheme.surface)
                 Section(copy("Join with an invite code", "用朋友給的邀請碼加入")) {
                     TextField(copy("Invite code", "邀請碼"), text: $joinCode).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button(copy("Join list", "加入清單")) { Task { await outing.join(code: joinCode) } }
+                    Button(copy("Join list", "加入清單")) { performOutingAction { await outing.join(code: joinCode) } }
                         .disabled(joinCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || outing.isWorking)
                 }.listRowBackground(DateTheme.surface)
                 Text(copy("Places sync to the shared list. You arrange this route; it does not cast votes for friends.", "共同清單會同步地點；此版本由你安排路線，不會代替朋友投票。"))
@@ -538,6 +564,113 @@ struct LivePlanningMapRoot: View {
     }
     private func fit(_ values: [LiveMapPlace]) {
         if let region = SaveInkMapCamera.region(around: values.map(\.coordinate), user: nil, focused: nil) { camera = .region(region) }
+    }
+}
+
+@MainActor
+struct LiveGuidePanel: View {
+    let title: String
+    @ObservedObject var plan: LiveRoutePlan
+    let onManage: () -> Void
+    let onSelect: (LiveMapPlace) -> Void
+    @Environment(\.appLanguageSettings) private var language
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Spacer()
+                Button(action: onManage) {
+                    Image(systemName: "person.2").frame(width: 44, height: 44)
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(language.localized(english: "Shared lists and members", traditionalChinese: "共同清單與成員"))
+                    .accessibilityIdentifier("live.team")
+            }
+            LiveGuideTimeline(plan: plan, onSelect: onSelect)
+        }
+    }
+}
+
+@MainActor
+struct LiveGuideTimeline: View {
+    @ObservedObject var plan: LiveRoutePlan
+    let onSelect: (LiveMapPlace) -> Void
+    @Environment(\.appLanguageSettings) private var language
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("SAV-E GUIDE").font(.caption.weight(.bold)).tracking(1)
+                Spacer()
+                if !plan.started {
+                    DatePicker(copy("Departure", "出發"), selection: $plan.beginsAt, displayedComponents: .hourAndMinute)
+                        .labelsHidden().accessibilityLabel(copy("Departure time", "出發時間"))
+                    Button(copy("Replan", "重排")) { plan.cancel() }.frame(minHeight: 44)
+                } else {
+                    Text(copy("\(min(plan.currentIndex + 1, plan.stops.count)) of \(plan.stops.count)",
+                              "第 \(min(plan.currentIndex + 1, plan.stops.count))／\(plan.stops.count) 站"))
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.blue)
+                }
+            }
+            Text(copy("Walking routes · \(plan.dwellMinutes) min at each place · budget unconfirmed",
+                      "步行路線 · 每站預留 \(plan.dwellMinutes) 分 · 預算待確認"))
+                .font(.caption).foregroundStyle(DateTheme.muted).fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(Array(plan.stops.enumerated()), id: \.element.id) { index, pin in
+                        Button { onSelect(pin) } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(spacing: 6) {
+                                    Text(plan.arrival(at: index), style: .time).font(.caption.weight(.semibold))
+                                    ZStack {
+                                        Circle().fill(plan.started && index == plan.currentIndex ? DateTheme.action : DateTheme.soft)
+                                        if plan.started && index < plan.currentIndex { Image(systemName: "checkmark") }
+                                        else { Text("\(index + 1)") }
+                                    }
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(plan.started && index == plan.currentIndex ? DateTheme.actionInk : DateTheme.blue)
+                                    .frame(width: 28, height: 28)
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(pin.place.name).font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.ink)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(pin.place.address).font(.caption).foregroundStyle(DateTheme.muted).lineLimit(2)
+                                    if index > 0, plan.routes.indices.contains(index - 1) {
+                                        Label(copy("About \(Int(ceil(plan.routes[index - 1].expectedTravelTime / 60))) min walk",
+                                                   "步行約 \(Int(ceil(plan.routes[index - 1].expectedTravelTime / 60))) 分鐘"), systemImage: "figure.walk")
+                                            .font(.caption).foregroundStyle(DateTheme.muted)
+                                    }
+                                    if plan.started && index == plan.currentIndex {
+                                        Text(copy("Current stop", "目前這站")).font(.caption.weight(.semibold)).foregroundStyle(DateTheme.blue)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(DateTheme.muted)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                            .background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(DateTheme.blue.opacity(plan.started && index == plan.currentIndex ? 0.6 : 0.08)))
+                            .contentShape(Rectangle())
+                        }.buttonStyle(.plain).disabled(!plan.isAccessValidated)
+                    }
+                }
+            }.scrollIndicators(.hidden)
+            if !plan.started {
+                DemoPrimaryButton(title: copy("Start this outing", "開始照行程走"), enabled: plan.isAccessValidated) { plan.start() }
+            } else if plan.stops.indices.contains(plan.currentIndex) {
+                DemoPrimaryButton(title: copy("Finish stop · \(plan.stops[plan.currentIndex].place.name)",
+                                              "完成這站 · \(plan.stops[plan.currentIndex].place.name)"), enabled: plan.isAccessValidated) { plan.advance() }
+            } else {
+                Label(copy("Outing complete", "這次行程已走完"), systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.blue)
+            }
+            Text(copy("Progress is manual. Your visited places stay unchanged.", "手動記錄這次進度，不會更改地點的去過紀錄。"))
+                .font(.caption).foregroundStyle(DateTheme.muted).fixedSize(horizontal: false, vertical: true)
+        }.foregroundStyle(DateTheme.ink)
+    }
+
+    private func copy(_ english: String, _ chinese: String) -> String {
+        language.localized(english: english, traditionalChinese: chinese)
     }
 }
 
