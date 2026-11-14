@@ -197,6 +197,17 @@ extension Color {
 }
 
 /// Main planning preview: the existing icon's coral, cream and warm charcoal.
+private struct SaveBrandDetailStyleKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var useSaveBrandDetailStyle: Bool {
+        get { self[SaveBrandDetailStyleKey.self] }
+        set { self[SaveBrandDetailStyleKey.self] = newValue }
+    }
+}
+
 enum SaveBrandUI {
     static let brand = SaveAtlasPalette.brandCoral
     static let ink = Color(light: "2F2C27", dark: "F7EFE2")

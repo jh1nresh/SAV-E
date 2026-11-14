@@ -1434,6 +1434,9 @@ struct ContentView: View {
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            .environment(\.useSaveBrandDetailStyle, usesLivePlanningPreview)
+#endif
             .background {
 #if SAVVY_CITY_MVP
                 CityMVPFormStyle.canvas.ignoresSafeArea()

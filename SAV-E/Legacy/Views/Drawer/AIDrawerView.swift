@@ -1579,6 +1579,7 @@ private struct LinkAnalysisStatusCard: View {
 
 struct MapDetailDrawerView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.useSaveBrandDetailStyle) private var useBrandDetailStyle
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
     let captureTripName: String?
@@ -1632,14 +1633,18 @@ struct MapDetailDrawerView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background {
+                    if usesBrandSearchResultStyle {
+                        SaveBrandUI.canvas
+                    } else {
 #if SAVVY_CITY_MVP
-                    switch item {
-                    case .reviewCandidate, .savedPlace: CityMVPFormStyle.canvas
-                    default: AtlasPostcardDrawerBackground(colorScheme: colorScheme)
-                    }
+                        switch item {
+                        case .reviewCandidate, .savedPlace: CityMVPFormStyle.canvas
+                        default: AtlasPostcardDrawerBackground(colorScheme: colorScheme)
+                        }
 #else
-                    AtlasPostcardDrawerBackground(colorScheme: colorScheme)
+                        AtlasPostcardDrawerBackground(colorScheme: colorScheme)
 #endif
+                    }
                 }
             }
         }
@@ -1666,7 +1671,8 @@ struct MapDetailDrawerView: View {
             reviewPostcardHeader(candidate)
 #endif
         case .unsavedCandidate, .socialPlace:
-            compactHeader
+            if usesBrandSearchResultStyle { brandSearchResultHeader }
+            else { compactHeader }
         }
     }
 
@@ -1865,6 +1871,50 @@ struct MapDetailDrawerView: View {
         return address.isEmpty
             ? languageSettings.localized(english: "Saved in your Savvy", traditionalChinese: "已收藏到 Savvy")
             : address
+    }
+
+    private var usesBrandSearchResultStyle: Bool {
+        guard useBrandDetailStyle else { return false }
+        if case .unsavedCandidate = item { return true }
+        return false
+    }
+
+    private var brandSearchResultHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Label(languageSettings.localized(english: "Map search result · Not saved", traditionalChinese: "地圖搜尋結果・尚未收藏"), systemImage: "mappin.circle")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(SaveBrandUI.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("drawer.unsaved.state")
+                Spacer(minLength: 0)
+                SavePlaceShareButton(content: item.shareContent) {
+                    Image(systemName: "square.and.arrow.up")
+                        .frame(width: 44, height: 44).background(SaveBrandUI.surface, in: Circle())
+                        .contentShape(Circle())
+                }.accessibilityLabel(languageSettings.localized(english: "Share \(item.presentation.title)", traditionalChinese: "分享 \(item.presentation.title)"))
+                if let onOpenInbox {
+                    Button(action: onOpenInbox) {
+                        Image(systemName: "tray.full.fill").frame(width: 44, height: 44)
+                            .background(SaveBrandUI.surface, in: Circle()).contentShape(Circle())
+                    }.accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
+                        .accessibilityIdentifier("drawer.openReview")
+                }
+                Button(action: onClose) {
+                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                        .background(SaveBrandUI.surface, in: Circle()).contentShape(Circle())
+                }.accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
+                    .accessibilityIdentifier("drawer.place.close")
+            }
+            Text(item.presentation.title)
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("drawer.unsaved.title")
+        }
+        .buttonStyle(.plain).foregroundStyle(SaveBrandUI.ink)
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.unsaved.header")
     }
 
     private var compactHeader: some View {
@@ -4345,6 +4395,7 @@ private struct ReviewCandidateNextStepPanel: View {
 
 private struct UnsavedMapCandidateCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.useSaveBrandDetailStyle) private var useBrandDetailStyle
     var candidate: SaveMapCandidate
     var isWorking: Bool
     var onSave: (SaveMapCandidate) -> Void
@@ -4367,6 +4418,15 @@ private struct UnsavedMapCandidateCard: View {
     }
 
     var body: some View {
+        Group {
+            if useBrandDetailStyle { brandContent }
+            else { legacyContent }
+        }
+        .opacity(isWorking ? 0.65 : 1)
+        .task(id: candidate.id) { await enrichCandidatePhotos() }
+    }
+
+    private var legacyContent: some View {
         PostcardDetailPaper(
             tint: SaveAtlasPalette.lavender,
             accessibilityIdentifier: "drawer.unsaved.postcardBody"
@@ -4451,10 +4511,56 @@ private struct UnsavedMapCandidateCard: View {
                 }
             }
         }
-        .opacity(isWorking ? 0.65 : 1)
-        .task(id: candidate.id) {
-            await enrichCandidatePhotos()
+    }
+
+    private var brandContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            PlaceBusinessPhotoCarousel(imageURLs: displayPhotoURLStrings, isSearching: isEnrichingPhoto,
+                googlePlaceId: UUID(uuidString: displayCandidate.id) == nil ? displayCandidate.id : nil)
+            VStack(alignment: .leading, spacing: 16) {
+                brandInfo("mappin.and.ellipse", languageSettings.localized(english: "Address", traditionalChinese: "地址"),
+                    displayCandidate.subtitle.isEmpty ? languageSettings.localized(english: "Address unavailable", traditionalChinese: "尚無地址") : displayCandidate.subtitle)
+                brandInfo("square.grid.2x2", languageSettings.localized(english: "Category", traditionalChinese: "分類"), categoryText)
+                if let ratingSummary { brandInfo("star", languageSettings.localized(english: "Rating", traditionalChinese: "評分"), ratingSummary) }
+                if let hoursText { brandInfo("clock", languageSettings.localized(english: "Hours", traditionalChinese: "營業時間"), hoursText) }
+                if let distance = displayCandidate.distanceLabel { brandInfo("location", languageSettings.localized(english: "Distance", traditionalChinese: "距離"), distance) }
+                brandInfo("map", languageSettings.localized(english: "Source", traditionalChinese: "來源"), sourceSummary)
+            }
+            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(SaveBrandUI.surface, in: RoundedRectangle(cornerRadius: 24))
+            Button { onSave(displayCandidate) } label: {
+                HStack {
+                    if isWorking { ProgressView().tint(SaveBrandUI.actionInk) }
+                    Text(isWorking ? languageSettings.localized(english: "Saving…", traditionalChinese: "收藏中…")
+                        : SaveSearchPrimaryAction.savePlace.displayName(language: languageSettings.language))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.headline).foregroundStyle(SaveBrandUI.actionInk)
+                .padding(16).frame(maxWidth: .infinity, minHeight: 54)
+                .background(SaveBrandUI.action, in: Capsule()).contentShape(Capsule())
+            }.buttonStyle(.plain).disabled(isWorking).accessibilityIdentifier("drawer.unsaved.primaryAction")
+            if let sourceURL = candidate.sourceURL, let url = URL(string: sourceURL) {
+                Link(destination: url) {
+                    Label(languageSettings.localized(english: "Open map source", traditionalChinese: "開啟地圖來源"), systemImage: "arrow.up.right.square")
+                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }.foregroundStyle(SaveBrandUI.accent)
+            }
         }
+        .foregroundStyle(SaveBrandUI.ink)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.unsaved.brandBody")
+    }
+
+    private func brandInfo(_ icon: String, _ title: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).frame(width: 24).foregroundStyle(SaveBrandUI.accent).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.caption).foregroundStyle(SaveBrandUI.muted)
+                Text(value).font(.body).fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }.accessibilityElement(children: .combine)
     }
 
     /// Fire-and-forget full enrichment (photos, rating, hours, address) so

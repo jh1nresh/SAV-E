@@ -537,6 +537,7 @@ private struct PlaceSummaryLine: View {
 
 struct PlaceBusinessPhotoCarousel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.useSaveBrandDetailStyle) private var useBrandStyle
     var imageURLs: [String]
     var isSearching = false
     var googlePlaceId: String? = nil
@@ -545,6 +546,41 @@ struct PlaceBusinessPhotoCarousel: View {
     @State private var expandedPhoto: PlacePhotoPage?
 
     var body: some View {
+        Group {
+            if useBrandStyle && photoPages.isEmpty {
+                compactEmptyState
+            } else {
+                carousel
+            }
+        }
+        .fullScreenCover(item: $expandedPhoto) { page in
+            GooglePlacesPhotoViewer(
+                page: page,
+                onClose: { expandedPhoto = nil }
+            )
+        }
+    }
+
+    private var compactEmptyState: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isSearching ? "hourglass" : "photo")
+                .font(.body).foregroundStyle(SaveBrandUI.muted)
+                .frame(width: 32, height: 32)
+                .background(SaveBrandUI.soft, in: Circle())
+                .accessibilityHidden(true)
+            Text(emptyPhotoLabel)
+                .font(.subheadline).foregroundStyle(SaveBrandUI.muted)
+                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(SaveBrandUI.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(SaveBrandUI.ink.opacity(0.08), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("place.photo.carousel.empty")
+    }
+
+    private var carousel: some View {
         ZStack(alignment: showsGoogleAttribution ? .topLeading : .bottomLeading) {
             if photoPages.isEmpty {
                 fallbackVisual
@@ -586,25 +622,22 @@ struct PlaceBusinessPhotoCarousel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
             }
-            .foregroundColor(.saveInk)
+            .foregroundColor(useBrandStyle ? SaveBrandUI.ink : .saveInk)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.saveNotebookPage.opacity(0.66))
-            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+            .background(useBrandStyle ? SaveBrandUI.surface.opacity(0.94) : Color.saveNotebookPage.opacity(0.66))
+            .overlay(Capsule().stroke(useBrandStyle ? SaveBrandUI.ink.opacity(0.1) : Color.saveNotebookLine, lineWidth: 1))
             .clipShape(Capsule())
             .padding(8)
+        }
+        .background {
+            if useBrandStyle { SaveBrandUI.surface }
         }
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(useBrandStyle ? SaveBrandUI.ink.opacity(0.08) : Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
-        .fullScreenCover(item: $expandedPhoto) { page in
-            GooglePlacesPhotoViewer(
-                page: page,
-                onClose: { expandedPhoto = nil }
-            )
-        }
     }
 
     private var photoPages: [PlacePhotoPage] {
@@ -636,11 +669,11 @@ struct PlaceBusinessPhotoCarousel: View {
 
     private var fallbackVisual: some View {
         Rectangle()
-            .fill(SaveAtlasPalette.coral)
+            .fill(useBrandStyle ? SaveBrandUI.soft : SaveAtlasPalette.coral)
             .overlay {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.title2.weight(.semibold))
-                    .foregroundColor(SaveTheme.Colors.cream)
+                    .foregroundColor(useBrandStyle ? SaveBrandUI.muted : SaveTheme.Colors.cream)
             }
     }
 

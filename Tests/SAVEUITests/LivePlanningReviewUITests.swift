@@ -10,6 +10,9 @@ final class LivePlanningReviewUITests: SAVEUITestCase {
     func testActualReviewRecoveryDark() throws { try verifyRecovery(dark: true) }
 
     @MainActor
+    func testActualReviewRecoveryLargeType() throws { try verifyRecovery(dark: false, largeType: true) }
+
+    @MainActor
     func testInvalidLaunchAndAccountActionsStayOutsideSharedDestinations() throws {
         let invalid = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-reset-account-gate"],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
@@ -33,11 +36,12 @@ final class LivePlanningReviewUITests: SAVEUITestCase {
     }
 
     @MainActor
-    private func verifyRecovery(dark: Bool) throws {
-        let theme = dark ? "dark" : "light"
+    private func verifyRecovery(dark: Bool, largeType: Bool = false) throws {
+        let theme = largeType ? "large-type" : (dark ? "dark" : "light")
         let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
             "--preview-tab-saved", "--map-mode-personal", "--uitest-location-denied",
-            dark ? "--uitest-force-dark" : "--uitest-force-light", "-save.appLanguage", "en"],
+            dark ? "--uitest-force-dark" : "--uitest-force-light", "-save.appLanguage", "en"]
+            + (largeType ? ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] : []),
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         addTeardownBlock { @MainActor in
             if (self.testRun?.failureCount ?? 0) > 0, app.state == .runningForeground {
@@ -88,6 +92,13 @@ final class LivePlanningReviewUITests: SAVEUITestCase {
         attach(app, name: "synthetic-live-review-\(theme)-canonical-search")
         tap(result, in: app)
         XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.staticTexts["drawer.unsaved.title"].label, "Harbor Oven Pizza — corrected branch")
+        XCTAssertEqual(app.staticTexts["drawer.unsaved.state"].label, "Map search result · Not saved")
+        XCTAssertFalse(app.staticTexts["Public discovery · Not saved yet"].exists,
+                       "A map-search candidate is not a public social post")
+        let saveAction = app.buttons["drawer.unsaved.primaryAction"]
+        reveal(saveAction, in: app)
+        XCTAssertTrue(saveAction.isHittable, "The unsaved result must retain a reachable Save action without saving")
         attach(app, name: "synthetic-live-review-\(theme)-unsaved-result")
         // Nil auth intentionally prevents a save-success claim. Exercise close/return only.
         let close = app.buttons["drawer.place.close"]
