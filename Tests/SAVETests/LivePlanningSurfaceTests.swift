@@ -1,5 +1,6 @@
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
 import SwiftUI
+import MapKit
 import UIKit
 import XCTest
 @testable import SAVE
@@ -26,6 +27,7 @@ final class LivePlanningSurfaceTests: XCTestCase {
     func testPlaceDetailComponentLightAndDark() async throws {
         var place = fixtures[0]
         place.note = "手寫筆記：想坐窗邊，先散步再來喝咖啡。\n這段原文必須保留。\n和朋友確認集合時間。\n備案留到下雨時使用。\n下一行應該可展開閱讀。"
+        place.sourceUrl = "https://example.invalid/posts/saved-place"
         let pin = try XCTUnwrap(LiveMapPlace.saved(place))
         try await recordComponent("place-detail") {
             LivePlaceDetail(pin: pin, isSaving: false, saveError: nil,
@@ -33,6 +35,45 @@ final class LivePlanningSurfaceTests: XCTestCase {
                 onDirections: { XCTFail("Render must not start navigation") },
                 onAddToOuting: nil, canAddToOuting: false,
                 onClose: { XCTFail("Render must not close detail") })
+        }
+    }
+
+    func testSourceLinkDoesNotPromotePrivateNoteURLs() throws {
+        var place = fixtures[0]
+        place.note = "Private note https://example.invalid/personal"
+        let pin = try XCTUnwrap(LiveMapPlace.saved(place))
+        XCTAssertNil(LivePlaceSourceLink.url(for: pin))
+        XCTAssertEqual(pin.place.note, place.note)
+    }
+
+    func testSourceLinksAcceptExplicitWebSourcesAndRejectCredentialsOrSchemes() throws {
+        var place = fixtures[0]
+        for value in ["javascript:alert(1)", "file:///private/note", "https://user:pass@example.invalid/source"] {
+            place.sourceUrl = value
+            XCTAssertNil(LivePlaceSourceLink.url(for: try XCTUnwrap(LiveMapPlace.saved(place))))
+        }
+        place.sourceUrl = " https://example.invalid/posts/saved-place "
+        XCTAssertEqual(LivePlaceSourceLink.url(for: try XCTUnwrap(LiveMapPlace.saved(place)))?.host, "example.invalid")
+    }
+
+    func testFriendsMapComponentLightAndDark() async throws {
+        let json = #"""
+        [{"id":"11111111-1111-4111-8111-111111111111","name":"測試咖啡店","address":"測試街1號","latitude":25.03,"longitude":121.54,"coordinate_system":"WGS84","location_provider":"apple_maps","category":"cafe","status":"visited","stars":null,"caption":null,"shared_at":"2026-11-14T10:00:00Z","author_id":"fixture-a","author_name":"名字非常長的測試朋友小安","author_handle":null,"author_avatar_url":null,"visible_to_followers":true},
+         {"id":"22222222-2222-4222-8222-222222222222","name":"測試咖啡店","address":"測試街1號","latitude":25.03,"longitude":121.54,"coordinate_system":"WGS84","location_provider":"apple_maps","category":"cafe","status":"wantToGo","stars":null,"caption":null,"shared_at":"2026-11-14T10:00:00Z","author_id":"fixture-b","author_name":"小明","author_handle":null,"author_avatar_url":null,"visible_to_followers":true}]
+        """#
+        let posts = try JSONDecoder().decode([SharedPlacePost].self, from: Data(json.utf8))
+        let friends = LiveFriendMapPlace.projections(posts: posts)
+        let pins = LiveFriendMapPlace.groupedByVenue(friends).compactMap { $0.first?.pin }
+        XCTAssertEqual(pins.count, 1)
+        XCTAssertEqual(friends.count, 2)
+        try await recordComponent("friends-map") {
+            LiveInteractiveMapSurface(
+                position: .constant(.region(MKCoordinateRegion(center: .init(latitude: 25.03, longitude: 121.54),
+                    span: .init(latitudeDelta: 0.008, longitudeDelta: 0.008)))),
+                pins: pins, routes: [], activePinID: nil, friends: friends,
+                ownerSubject: "component-fixture", sessionGeneration: 0,
+                onSelect: { _ in XCTFail("Rendering must not select a friend venue") },
+                onCameraSettled: { _, _ in })
         }
     }
 
@@ -89,7 +130,7 @@ final class LivePlanningSurfaceTests: XCTestCase {
             host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
             // Yield to UIKit/SwiftUI so TextField and the lazy collection actually mount.
-            try await Task.sleep(nanoseconds: name == "place-detail" ? 1_000_000_000 : 150_000_000)
+            try await Task.sleep(nanoseconds: ["place-detail", "friends-map"].contains(name) ? 1_000_000_000 : 150_000_000)
             host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
             XCTAssertTrue(host.view.window === window)

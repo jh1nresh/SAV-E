@@ -23,6 +23,8 @@ struct LivePlanningMapRoot: View {
         center: .init(latitude: 25.04, longitude: 121.54), span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07)))
     @State private var searchRegion = MKCoordinateRegion(center: .init(latitude: 25.04, longitude: 121.54),
                                                        span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07))
+    @State private var didFitFriends = false
+    @State private var friendsVisitedOnly = false
     @State private var didFitSaved = false
     @State private var searchPresented = false
     @State private var selected: LiveMapPlace?
@@ -53,9 +55,15 @@ struct LivePlanningMapRoot: View {
         guard let id = outing.selectedListID else { return [] }
         return outing.items.compactMap { LiveMapPlace.shared($0, listID: id) }
     }
-    private var friendPlaces: [LiveMapPlace] { outing.posts.compactMap(LiveMapPlace.sharedPost) }
+    private var friendEntries: [LiveFriendMapPlace] {
+        LiveFriendMapPlace.projections(posts: outing.posts)
+            .filter { !friendsVisitedOnly || $0.hasVisited }
+    }
+    private var friendPlaces: [LiveMapPlace] { LiveFriendMapPlace.groupedByVenue(friendEntries).compactMap { $0.first?.pin } }
     private var pins: [LiveMapPlace] {
-        let values = mode == .personal ? saved : (outing.selectedListID == nil ? friendPlaces : groupPlaces)
+        let values = mode == .personal ? saved : friendPlaces + groupPlaces.filter { groupPin in
+            !friendPlaces.contains { $0.place.matches(groupPin.place) }
+        }
         return values + [searchPin].compactMap { $0 }.filter { pin in !values.contains(where: { $0.id == pin.id }) }
     }
     private var sessionIsCurrent: Bool {
@@ -113,7 +121,7 @@ struct LivePlanningMapRoot: View {
         .onChange(of: saved.map(\.id)) { _, _ in fitSavedIfNeeded() }
         .onChange(of: mode) { _, next in
             selected = nil; pendingSavedDetail = nil; searchPin = nil; selectedStops = []; plan.cancel()
-            if next == .outing { Task { await outing.refresh() } }
+            if next == .outing { didFitFriends = false; Task { await outing.refresh() } }
             else { outing.deactivate() }
         }
         .onChange(of: outing.items.map(\.id)) { _, _ in
@@ -121,8 +129,12 @@ struct LivePlanningMapRoot: View {
             if selected?.origin == .shared { selected = nil }
             if !groupPlaces.isEmpty { fit(groupPlaces) }
         }
-        .onChange(of: outing.posts.map(\.id)) { _, _ in
+        .onChange(of: outing.posts) { _, _ in
             if selected?.origin == .shared { selected = nil }
+            if mode == .outing, !didFitFriends, !friendPlaces.isEmpty {
+                didFitFriends = true
+                if outing.selectedListID == nil { fit(friendPlaces) }
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, mode == .outing { Task { await outing.refresh() } }
@@ -152,7 +164,7 @@ struct LivePlanningMapRoot: View {
     private var realMap: some View {
         LiveInteractiveMapSurface(
             position: $camera, pins: pins, routes: mode == .outing ? plan.routes : [], isInteractive: mapCanSelect,
-            activePinID: selected?.id, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
+            activePinID: selected?.id, friends: mode == .outing ? friendEntries : [], ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
             onSelect: { pin in
                 guard sessionIsCurrent, mapCanSelect else { return }
                 let resolved = pin.existingSavedProjection(in: mapVM.places) ?? pin
@@ -246,6 +258,20 @@ struct LivePlanningMapRoot: View {
                 Button { teamPresented = true } label: { Image(systemName: "person.badge.plus").frame(width: 44, height: 44) }
                     .accessibilityLabel(copy("Shared lists and members", "共同清單與成員")).accessibilityIdentifier("live.team")
             }
+            HStack(spacing: 8) {
+                ForEach([false, true], id: \.self) { visitedOnly in
+                    Button { friendsVisitedOnly = visitedOnly } label: {
+                        Label(visitedOnly ? copy("Visited", "朋友去過") : copy("Shared", "朋友分享"),
+                              systemImage: visitedOnly ? "checkmark.seal" : "person.2")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .foregroundStyle(friendsVisitedOnly == visitedOnly ? DateTheme.actionInk : DateTheme.ink)
+                            .background(friendsVisitedOnly == visitedOnly ? DateTheme.action : DateTheme.soft,
+                                        in: RoundedRectangle(cornerRadius: 12))
+                    }.buttonStyle(.plain)
+                        .accessibilityAddTraits(friendsVisitedOnly == visitedOnly ? .isSelected : [])
+                }
+            }
             if outing.isLoading || outing.isWorking { ProgressView(copy("Loading shared lists…", "連線共同清單…")) }
             if let error = outing.error {
                 Text(copy("Couldn’t complete this outing action. Try again.", error)).font(.caption).foregroundStyle(DateTheme.coral)
@@ -270,12 +296,12 @@ struct LivePlanningMapRoot: View {
                 ScrollView {
                     VStack(spacing: 8) {
                         if outing.selectedListID == nil {
-                            ForEach(friendPlaces) { pin in
-                                Button { selected = pin } label: { venueRow(name: pin.place.name, address: pin.place.address, symbol: pin.place.category.iconName, suffix: copy("Shared by friends", "朋友分享")) }
+                            ForEach(friendEntries) { friend in
+                                Button { selected = friend.pin } label: { venueRow(name: friend.pin.place.name, address: friend.pin.place.address, symbol: friend.pin.place.category.iconName, suffix: friend.statusTitle(language.language)) }
                                     .buttonStyle(.plain)
                             }
                             if friendPlaces.isEmpty, !outing.isLoading {
-                                Text(copy("No shared places yet. Create a list or join with an invite code.", "還沒有共同清單或可顯示的朋友分享。先建立清單，或用邀請碼加入。"))
+                                Text(friendsVisitedOnly ? copy("No shared visited places yet.", "還沒有朋友分享去過的地點。") : copy("No shared places yet. Create a list or join with an invite code.", "還沒有可顯示的朋友分享。可先建立共同清單。"))
                                     .font(.subheadline).foregroundStyle(DateTheme.muted).frame(maxWidth: .infinity, alignment: .leading)
                             }
                         } else {
@@ -360,6 +386,7 @@ struct LivePlanningMapRoot: View {
     private func placeCard(_ pin: LiveMapPlace) -> some View {
         LivePlaceDetail(
             pin: pin, isSaving: savingPinID != nil, saveError: saveError,
+            ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
             onSave: pin.confirmationCandidate == nil ? nil : { save(pin) },
             onOpenSaved: pin.origin == .saved ? {
                 pendingSavedDetail = pin.place.id
@@ -391,7 +418,9 @@ struct LivePlanningMapRoot: View {
                     ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
                 guard !Task.isCancelled, sessionIsCurrent, selected?.id == pin.id else { return }
                 searchPin = nil
-                selected = LiveMapPlace.saved(place)
+                var projection = LiveMapPlace.saved(place)
+                projection?.nativeMapItem = pin.nativeMapItem
+                selected = projection
             } catch {
                 guard !Task.isCancelled, sessionIsCurrent, selected?.id == pin.id else { return }
                 if case ReviewCandidateError.alreadySavedMapStamp = error,
@@ -487,7 +516,7 @@ struct LivePlanningMapRoot: View {
         }
     }
     private func modeTitle(_ value: LiveMapMode) -> String {
-        value == .personal ? copy("Personal", "個人") : copy("Friends", "朋友出遊")
+        value == .personal ? copy("Personal", "個人") : copy("Friends map", "朋友地圖")
     }
     private func sourceTitle(_ pin: LiveMapPlace) -> String {
         switch pin.origin {

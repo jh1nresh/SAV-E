@@ -5116,9 +5116,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.googleRating, 4.6)
         XCTAssertEqual(place.sourceUrl, "https://maps.google.com/?q=Sushi+Gen")
         XCTAssertEqual(place.sourcePlatform, .googleMaps)
-        XCTAssertTrue(place.note?.contains("Visible on map") == true)
+        XCTAssertEqual(place.note, "https://maps.google.com/?q=Sushi+Gen")
         XCTAssertFalse(place.note?.contains("External reviews:") == true)
-        XCTAssertEqual(place.cleanMemoryNote, "Visible on map")
+        XCTAssertEqual(place.cleanMemoryNote, "https://maps.google.com/?q=Sushi+Gen")
+        XCTAssertTrue(place.savedAdditionalSourceEvidence.contains("Visible on map"))
         XCTAssertTrue(place.savedAdditionalSourceEvidence.contains("External reviews: 4100"))
     }
 
@@ -5143,8 +5144,8 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let place = try controller.makeSavedPlace(from: draft)
 
-        XCTAssertNil(place.cleanMemoryNote)
-        XCTAssertNil(place.note)
+        XCTAssertEqual(place.cleanMemoryNote, "https://maps.google.com/?q=Harbor+Oven")
+        XCTAssertEqual(place.note, "https://maps.google.com/?q=Harbor+Oven")
         XCTAssertEqual(
             place.savedAdditionalSourceEvidence,
             [

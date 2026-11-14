@@ -1148,7 +1148,7 @@ private extension SaveMemoryRecord {
             city: nil,
             latitude: latitude,
             longitude: longitude,
-            evidence: (evidence + [sourceText ?? ""] + (sourceURL.map { ["Source URL: \($0)"] } ?? []))
+            evidence: ((sourceURL.map { ["Source URL: \($0)"] } ?? []) + evidence + [sourceText ?? ""])
                 .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.reduce(into: [String]()) {
                     if !$0.contains($1) { $0.append($1) }
                 },

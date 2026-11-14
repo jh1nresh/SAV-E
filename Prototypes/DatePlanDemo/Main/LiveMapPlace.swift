@@ -13,6 +13,7 @@ struct LiveMapPlace: Identifiable {
     let place: Place
     let origin: LiveMapOrigin
     let sourceLabel: String
+    var nativeMapItem: MKMapItem? = nil
     private let payload: SaveListItem
 
     var coordinate: CLLocationCoordinate2D { place.coordinate }
@@ -21,7 +22,10 @@ struct LiveMapPlace: Identifiable {
     /// Reuse the canonical venue identity rule; preserve the account's real ID,
     /// note and visit state instead of relabeling a native duplicate as unsaved.
     func existingSavedProjection(in places: [Place]) -> LiveMapPlace? {
-        places.first(where: { $0.matches(place) }).flatMap(Self.saved)
+        guard let owned = places.first(where: { $0.matches(place) }),
+              var projection = Self.saved(owned) else { return nil }
+        projection.nativeMapItem = nativeMapItem
+        return projection
     }
 
     /// User confirmation input only. A projection does not become a saved place until
@@ -37,7 +41,7 @@ struct LiveMapPlace: Identifiable {
             category: payload.category,
             sourceURL: origin == .search ? components.url?.absoluteString : nil,
             sourcePlatform: origin == .search ? .appleMaps : .other,
-            evidence: [origin == .search ? "Selected Apple Maps place" : "Selected shared venue"]
+            evidence: origin == .search ? ["Apple Maps POI"] : []
         )
     }
 
@@ -83,8 +87,10 @@ struct LiveMapPlace: Identifiable {
         var place = candidatePlace(payload, markerID: id)
         place.sourcePlatform = .appleMaps
         place.providerPlaceId = providerID
-        return candidate(id: id, place: place, origin: .search,
-                         label: "搜尋結果候選", payload: payload)
+        var projection = candidate(id: id, place: place, origin: .search,
+                                   label: "搜尋結果候選", payload: payload)
+        projection?.nativeMapItem = item
+        return projection
     }
 
     static func shared(_ item: SaveListItem, listID: UUID) -> LiveMapPlace? {

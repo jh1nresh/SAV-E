@@ -53,7 +53,7 @@ final class CityMVPFunctionalTests: XCTestCase {
             title: candidate.title, address: candidate.subtitle, latitude: candidate.latitude,
             longitude: candidate.longitude, category: candidate.category, sourceURL: candidate.sourceURL,
             sourcePlatform: candidate.sourcePlatform, evidence: candidate.evidence))
-        XCTAssertNil(saved.userFacingNote)
+        XCTAssertEqual(saved.userFacingNote, candidate.sourceURL)
         XCTAssertEqual(saved.savedAdditionalSourceEvidence.count, 3)
         XCTAssertTrue(saved.savedAdditionalSourceEvidence.contains { $0.contains("position and entrance unverified") })
         let outer = try XCTUnwrap(CityContextPlace.catalogue?.records.first)
@@ -62,7 +62,7 @@ final class CityMVPFunctionalTests: XCTestCase {
             title: outerCandidate.title, address: outerCandidate.subtitle, latitude: outerCandidate.latitude,
             longitude: outerCandidate.longitude, category: outerCandidate.category, sourceURL: outerCandidate.sourceURL,
             sourcePlatform: outerCandidate.sourcePlatform, evidence: outerCandidate.evidence))
-        XCTAssertNil(outerSaved.userFacingNote)
+        XCTAssertEqual(outerSaved.userFacingNote, outerCandidate.sourceURL)
         XCTAssertEqual(outerSaved.savedAdditionalSourceEvidence.count, 4)
     }
 
