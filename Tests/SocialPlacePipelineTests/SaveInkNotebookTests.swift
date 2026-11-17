@@ -448,6 +448,73 @@ final class SaveInkNotebookTests: XCTestCase {
         XCTAssertEqual(SavePlaceLinkGate.knownPlaceNames().contains("主線小店"), true)
     }
 
+    /// The app writer (`SaveInkNotebookStore` on `.standard`) and the Share
+    /// Extension reader (`SavePlaceLinkGate.knownPlaceNames`) must meet in the
+    /// App Group suite. A place left only in `.standard` or another suite
+    /// must not be the place the extension reads.
+    func testShareExtensionReadsAppSavedPlaceFromAppGroupNotIsolatedOrStandard() throws {
+        let key = SavePlaceLinkGate.placesKey
+        let suiteName = SAVEProductionConfig.appGroupSuiteName
+        let appGroup = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let standard = UserDefaults.standard
+        let isolatedName = "save.share.isolated.\(UUID().uuidString)"
+        let isolated = try XCTUnwrap(UserDefaults(suiteName: isolatedName))
+        XCTAssertNotEqual(isolatedName, suiteName)
+        let previousAppGroup = appGroup.data(forKey: key)
+        let previousStandard = standard.data(forKey: key)
+        defer {
+            if let previousAppGroup {
+                appGroup.set(previousAppGroup, forKey: key)
+            } else {
+                appGroup.removeObject(forKey: key)
+            }
+            if let previousStandard {
+                standard.set(previousStandard, forKey: key)
+            } else {
+                standard.removeObject(forKey: key)
+            }
+            isolated.removePersistentDomain(forName: isolatedName)
+        }
+        appGroup.removeObject(forKey: key)
+        standard.removeObject(forKey: key)
+
+        let savedName = "分享邊界小店\(String(UUID().uuidString.prefix(8)))"
+        let store = SaveInkNotebookStore(
+            defaults: .standard,
+            now: { SaveInkClock.previewNow },
+            seedFixture: false,
+            makeLocator: { SaveInkScriptedLocator() }
+        )
+        store.saveQuery = savedName
+        store.commitSave()
+        XCTAssertNil(store.saveNotice)
+        XCTAssertTrue(store.places.contains { $0.name == savedName })
+        XCTAssertNil(standard.data(forKey: key))
+
+        let written = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        XCTAssertEqual(SavePlaceLinkGate.names(fromInkPlaces: written.data(forKey: key)), [savedName])
+        XCTAssertEqual(SavePlaceLinkGate.knownPlaceNames(), [savedName])
+
+        let standardDecoy = "僅在標準容器"
+        let isolatedDecoy = "僅在隔離容器"
+        standard.set(try inkPlaceNamePayload(standardDecoy), forKey: key)
+        isolated.set(try inkPlaceNamePayload(isolatedDecoy), forKey: key)
+
+        let names = SavePlaceLinkGate.knownPlaceNames()
+        XCTAssertEqual(names, [savedName])
+        XCTAssertEqual(SavePlaceLinkGate.names(fromInkPlaces: written.data(forKey: key)), [savedName])
+        XCTAssertEqual(SavePlaceLinkGate.names(fromInkPlaces: standard.data(forKey: key)), [standardDecoy])
+        XCTAssertEqual(SavePlaceLinkGate.names(fromInkPlaces: isolated.data(forKey: key)), [isolatedDecoy])
+
+        let video = "https://www.youtube.com/watch?v=boundary-shop"
+        let shareText = "介紹\(savedName)"
+        XCTAssertEqual(
+            SavePlaceLinkGate.linkedPlaceName(in: shareText + "\n" + video, knownPlaceNames: names),
+            savedName
+        )
+        XCTAssertFalse(SavePlaceLinkGate.rejects(urlString: video, evidence: shareText, knownPlaceNames: names))
+    }
+
     func testF10InkControlsHaveLabelsHitTargetsAndAreNotColorOnly() throws {
         let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
         let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
@@ -3734,6 +3801,10 @@ final class SaveInkNotebookTests: XCTestCase {
             dishes: [],
             savedAt: SaveInkClock.previewNow
         )
+    }
+
+    private func inkPlaceNamePayload(_ name: String) throws -> Data {
+        try JSONSerialization.data(withJSONObject: [["name": name]])
     }
 
     private func inkRow(id: String, name: String, street: String) -> SaveInkPlace {
