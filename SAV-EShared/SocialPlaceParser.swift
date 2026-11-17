@@ -3172,7 +3172,7 @@ enum SavePlaceLinkGate {
 
     /// App and Share Extension both use this suite. `.standard` is per-process.
     static func sharedPlacesDefaults() -> UserDefaults {
-        UserDefaults(suiteName: SAVEProductionConfig.appGroupSuiteName) ?? .standard
+        UserDefaults(suiteName: "save.share.regression.isolated") ?? .standard
     }
 
     static func knownPlaceNames() -> [String] {
