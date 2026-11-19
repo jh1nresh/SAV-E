@@ -1,0 +1,31 @@
+{
+  "venues": [
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJf6SEq_SrQjQR94Iaq4KfLKE",
+        "name": "養心茶樓mini 台北101店",
+        "address": "台北市信義區市府路45號 台北101 B1 39櫃",
+        "latitude": 25.0341712,
+        "longitude": 121.5639057,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DaIQMoziWSk/",
+          "observedIn": "https://imreadygo.com/249389/",
+          "authorHandle": "_veggiehome_",
+          "title": "養心茶樓 mini 台北 101 店的蔬食港點食記",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T01:36:45.015Z",
+            "contentFingerprint": "581c81d63fbc7a46b749a33c270d1a9ea387883db5453f31b3624bce6b1ee1aa",
+            "branchEvidence": "The public Instagram caption explicitly identifies 養心茶樓mini inside Taipei 101 and its B1 food court at City Hall Road No. 45. ReadyGo links to this exact post in its corresponding venue section and lists counter 39. The brand news page https://shop.ysvege.com/blogs/news confirms its distinct Taipei 101 format. Reopening the exact Google venue ID independently shows the same branch name and B1 address. Its WGS84 pin is shared with another counter in the food court; identity is resolved by place ID. No exact MapKit branch was found, so no alias is asserted."
+          }
+        }
+      ]
+    }
+  ]
+}

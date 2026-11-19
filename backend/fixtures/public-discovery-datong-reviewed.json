@@ -1,0 +1,72 @@
+{
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJ8cqWc0mpQjQRZm3RZqjV0pM",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9A3EC8F87F1",
+      "branchEvidence": "Fonfood and Footinder independently carry this Google place ID at the same Hami Street address verified by Taipei Travel and the Apple item."
+    },
+    {
+      "googlePlaceID": "ChIJAdNKvnOpQjQRbhQLPflI9O8",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C2B5E2EBF",
+      "branchEvidence": "The exact Google Place ID opens the public 螺螄福Rose food正宗柳州螺螄粉 listing at 14-1 Chifeng St, Datong, with branch phone 02-2558-0568. The official Reel reports the same street number and phone, and the dedicated Apple Maps item resolves the Chifeng address. The canonical identity is the Apple Maps place. The pin uses the exact Google storefront’s verified WGS84 coordinates."
+    }
+  ],
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9A3EC8F87F1",
+        "name": "阿仁炒飯",
+        "address": "103 台北市大同區保安里哈密街45巷2之4號",
+        "latitude": 25.0734533,
+        "longitude": 121.5174441,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/Bu-l9PfhOmw/",
+          "authorHandle": "jamesb_1201",
+          "title": "阿仁炒飯的臘肉炒飯",
+          "review": {
+            "checkedAt": "2026-11-18T23:35:18.737Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The public Instagram captioned embed identifies 阿仁炒飯 in its location header, and Bella embeds that same post in its 阿仁炒飯 section. Taipei Travel verifies 哈密街45巷2之4號. MapKit returned H2710I3F9A3EC8F87F1 at that address; Footinder and Fonfood independently returned nearly identical WGS84 pins. Taipei City’s address-to-village table lists even-numbered premises 2–6 on Lane 45, Hami Street under 保安里 (https://www-ws.gov.taipei/001/Upload/public/Data/411514564171.pdf).",
+            "contentFingerprint": "02db96920c21b607894f98b2a5c4a9804e7c164b3a4d489f293417b5327e10ab"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C2B5E2EBF",
+        "name": "螺螄福 Rose food 赤峰店",
+        "address": "台北市大同區赤峰街14-1號",
+        "latitude": 25.0550226,
+        "longitude": 121.5195571,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DPncwzoEevc/",
+          "authorHandle": "rosefood__laozhou",
+          "title": "螺螄福官方門市介紹（含赤峰店）",
+          "observedIn": "https://www.instagram.com/rosefood__laozhou/",
+          "review": {
+            "checkedAt": "2026-11-18T18:25:11.048Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public Instagram Reel by the brand lists its locations, explicitly naming the Chifeng branch at 14-1 Chifeng Street with phone 02-2558-0568. MapKit resolves an exact Rose food POI at 14-1 in Datong, and https://leafyeh.com/rose-food/ corroborates its street number and phone. This is a brand directory post, not a single-branch visit or user endorsement. The pin uses the exact Google storefront's verified WGS84 coordinates.",
+            "contentFingerprint": "6d83a6635a70e64249e5605ea4e76885bd5d297cdb761f9aa99663eb40ca171f",
+            "multiVenue": true
+          }
+        }
+      ]
+    }
+  ]
+}

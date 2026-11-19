@@ -43,6 +43,39 @@ async function read(filePath: string, query?: string) {
   return listPublicDiscoveryPosts(url(query), { filePath, now });
 }
 
+test("exact Google venues are opt-in, scoped by ID and incompatible with alias collisions", async t => {
+  const apple = post("APPLE");
+  const googleID = "ChIJ_exact_101";
+  const googlePlace: PublicDiscoveryPost["place"] = {
+    ...apple.place, provider: "google_places", providerPlaceID: googleID,
+  };
+  const googlePosts = [post("GOOGLE1", { place: googlePlace }), post("GOOGLE2", { place: googlePlace })];
+  const index = manifest([apple, ...googlePosts]);
+  const filePath = await indexFile(t, index);
+  const explicit = (query: string) => listPublicDiscoveryPosts(url(query), { filePath, now, googleVenues: true });
+  const query = "bbox=121,25,122,26";
+  const exact = query + "&provider=google_places&placeID=" + googleID;
+  const legacy = await read(filePath, query);
+  assert.deepEqual(legacy.posts, [apple]);
+  assert.equal(legacy.coverage.find(row => row.platform === "threads")?.indexedPostCount, 1);
+  assert.deepEqual((await read(filePath, exact)).posts, []);
+  assert.equal((await explicit(query)).posts.length, 3);
+  const scoped = await explicit(exact + "&limit=1");
+  assert.deepEqual(scoped.posts, [googlePosts[0]]);
+  assert.equal(scoped.googlePlaceMatch, undefined);
+  assert.ok(scoped.nextCursor);
+  const nextQuery = exact + "&limit=1&cursor=" + scoped.nextCursor;
+  assert.deepEqual((await explicit(nextQuery)).posts, [googlePosts[1]]);
+  await assert.rejects(read(filePath, nextQuery), failure(400));
+  assert.deepEqual((await explicit(query + "&provider=google_places&placeID=" + googleID.toLowerCase())).posts, []);
+  const collision = { ...index, googlePlaceAliases: [{
+    googlePlaceID: googleID, provider: "apple_maps", providerPlaceID: apple.place.providerPlaceID,
+  }] };
+  assert.throws(() => validate(collision), failure(503));
+  const badPlace = { ...googlePlace, providerPlaceID: "not a place ID" };
+  assert.throws(() => validate(manifest([post("GOOGLE", { place: badPlace })])), failure(503));
+});
+
 test("dedicated file is required; empty/missing configuration is not a seeded success", async t => {
   await assert.rejects(listPublicDiscoveryPosts(url(), { filePath: "", now }), failure(503));
   const path = await indexFile(t, manifest());
@@ -118,6 +151,52 @@ test("response expires at the earliest manifest, source check, cover or five-min
   assert.equal((await read(await indexFile(t, cover))).expiresAt, iso(3_000));
 });
 
+test("an expired post and cover do not remove other venues from a current snapshot", async t => {
+  const old = post("OLD", { verifiedAt: iso(-day + 2_000) });
+  const fresh = post("FRESH", { cover: {
+    url: "https://scontent.fbcdn.net/fixture.jpg", expiresAt: iso(3_000), permission: "author",
+  } });
+  const input = manifest([post("NEW"), old, fresh]);
+  input.googlePlaceAliases = [
+    { googlePlaceID: "ChIJOld", provider: "apple_maps", providerPlaceID: old.place.providerPlaceID },
+    { googlePlaceID: "ChIJFresh", provider: "apple_maps", providerPlaceID: fresh.place.providerPlaceID },
+  ];
+  const filePath = await indexFile(t, input);
+  const first = await read(filePath, "bbox=121,25,122,26&limit=1");
+  assert.ok(first.nextCursor);
+  const expired = new Date(iso(2_000));
+  const active = await listPublicDiscoveryPosts(url(), { filePath, now: expired });
+  assert.deepEqual(active.posts.map(post => post.id), ["threads:FRESH", "threads:NEW"]);
+  assert.equal(active.coverage.find(row => row.platform === "threads")?.indexedPostCount, 2);
+  assert.notEqual(active.indexRevision, first.indexRevision);
+  assert.equal(active.expiresAt, iso(3_000));
+  await assert.rejects(listPublicDiscoveryPosts(
+    url(`bbox=121,25,122,26&limit=1&cursor=${first.nextCursor}`), { filePath, now: expired },
+  ), failure(400));
+
+  const oldSaved = await listPublicDiscoveryPosts(
+    url("bbox=121,25,122,26&provider=google_places&placeID=ChIJOld"), { filePath, now: expired },
+  );
+  assert.deepEqual(oldSaved.posts, []);
+  assert.equal(oldSaved.googlePlaceMatch, undefined);
+  const currentTime = new Date(iso(3_000));
+  const freshSaved = await listPublicDiscoveryPosts(
+    url("bbox=121,25,122,26&provider=google_places&placeID=ChIJFresh"), { filePath, now: currentTime },
+  );
+  assert.equal(freshSaved.googlePlaceMatch?.providerPlaceID, fresh.place.providerPlaceID);
+  assert.deepEqual(freshSaved.posts, [{ ...fresh, cover: null }]);
+  assert.notEqual(freshSaved.indexRevision, active.indexRevision);
+
+  // Validate hidden rows too, and never extend a legacy artifact's declared deadline.
+  input.posts[1].note = "PRIVATE";
+  await writeFile(filePath, JSON.stringify(input));
+  await assert.rejects(listPublicDiscoveryPosts(url(), { filePath, now: currentTime }), failure(503));
+  delete input.posts[1].note;
+  input.expiresAt = iso(2_000);
+  await writeFile(filePath, JSON.stringify(input));
+  await assert.rejects(listPublicDiscoveryPosts(url(), { filePath, now: currentTime }), failure(503));
+});
+
 test("source URLs canonicalize only supported real post paths and retain no tracking", () => {
   const inputs = [
     post("REEL_1", { id: "instagram:REEL_1", platform: "instagram", sourceURL: "https://instagram.com/reels/REEL_1?igsh=tracking#fragment" }),
@@ -156,7 +235,7 @@ test("post identity, public status, reliable geo association and field types are
     value => { value.posts[0].visibility = "private"; }, value => { value.posts[0].locationEvidence = "unresolved"; },
     value => { value.posts[0].locationEvidence = ["reviewed_match"]; }, value => { value.posts[0].title = "a".repeat(161); },
     value => { value.posts[0].authorName = "a".repeat(81); }, value => { value.posts[0].authorHandle = "a".repeat(101); },
-    value => { value.posts[0].place.coordinateSystem = "GCJ-02"; }, value => { value.posts[0].place.provider = "google_places"; },
+    value => { value.posts[0].place.coordinateSystem = "GCJ-02"; }, value => { value.posts[0].place.provider = "unverified_provider"; },
     value => { value.posts[0].place.provider = ["apple_maps"]; }, value => { value.posts[0].place.providerPlaceID = " "; },
     value => { value.posts[0].place.address = ""; }, value => { value.posts[0].place.latitude = NaN; },
     value => { value.posts[0].place.longitude = Infinity; }, value => { value.posts[0].place.latitude = 91; },
@@ -255,6 +334,36 @@ test("pagination is deterministic, complete and retryable for equivalent normali
   const last = await read(path, `bbox=121,25,122,26&limit=2&cursor=${second.nextCursor}`);
   assert.deepEqual(last.posts.map(value => value.id), ["threads:E"]);
   assert.equal(last.nextCursor, null);
+});
+
+test("reviewed multi-venue originals page independently while legacy readers keep unique IDs", async t => {
+  const first = post("SHARED", { multiVenue: true });
+  const second = { ...first, place: { ...first.place, providerPlaceID: "other-branch", address: "2 Fixture Street" } };
+  const miss = { ...second, multiVenue: undefined };
+  assert.throws(() => validate(manifest([first, miss])), failure(503));
+  assert.throws(() => validate(manifest([first, first])), failure(503));
+  assert.throws(() => validate(manifest([first, { ...second, authorHandle: "changed" }])), failure(503));
+  assert.throws(() => validate(manifest([first, { ...second, locationEvidence: "explicit_geotag" }])), failure(503));
+  for (const providerPlaceID of ["Caf\u00e9", "Cafe\u0301", "branch,1"]) {
+    assert.throws(() => validate(manifest([first, { ...second, place: { ...second.place, providerPlaceID } }])), failure(503));
+  }
+  const path = await indexFile(t, manifest([second, first, post("THIRD")]));
+  const opts = { filePath: path, now, multiVenue: true };
+  const single = url("bbox=121,25,122,26&limit=1");
+  const legacy = await listPublicDiscoveryPosts(single, { filePath: path, now });
+  const modern = await listPublicDiscoveryPosts(single, opts);
+  assert.equal(legacy.coverage.find(item => item.platform === "threads")?.indexedPostCount, 2);
+  assert.equal(modern.coverage.find(item => item.platform === "threads")?.indexedPostCount, 3);
+  assert.equal(modern.posts[0]?.place.providerPlaceID, first.place.providerPlaceID);
+  assert.ok(modern.nextCursor && legacy.nextCursor);
+  single.searchParams.set("cursor", modern.nextCursor);
+  const after = await listPublicDiscoveryPosts(single, opts);
+  assert.equal(after.posts[0]?.id, first.id);
+  assert.equal(after.posts[0]?.place.providerPlaceID, second.place.providerPlaceID);
+  await assert.rejects(listPublicDiscoveryPosts(single, { filePath: path, now }), failure(400));
+  const saved = await read(path, "bbox=121,25,122,26&provider=apple_maps&placeID=other-branch");
+  assert.deepEqual(saved.posts, [second]);
+  assert.deepEqual((await read(path)).posts.map(p => p.id), ["threads:SHARED", "threads:THIRD"]);
 });
 
 test("cursor cannot be replayed against another viewport, limit, index revision or an invented page", async t => {
