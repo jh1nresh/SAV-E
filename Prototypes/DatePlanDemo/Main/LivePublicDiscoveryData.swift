@@ -96,14 +96,27 @@ struct LivePublicDiscoveryPost: Codable, Equatable, Identifiable, Sendable {
     let place: LivePublicDiscoveryPlace
     var highlightRank: Int? = nil
     var multiVenue: Bool? = nil
+    var publishedOn: String? = nil
 
     var sourceLink: URL? { LivePublicDiscoveryPolicy.source(sourceURL, platform: platform)?.url }
+
+    fileprivate var publicationSortDate: Date? {
+        publishedAt.flatMap(LivePublicDiscoveryPolicy.date)
+            ?? publishedOn.flatMap(LivePublicDiscoveryPolicy.calendarDay)
+    }
+
+    func formattedPublicationDay(locale: Locale) -> String? {
+        publishedOn.flatMap(LivePublicDiscoveryPolicy.calendarDay)?.formatted(
+            Date.FormatStyle(date: .abbreviated, time: .omitted, locale: locale, timeZone: .gmt)
+        )
+    }
 
     fileprivate var associationKey: [String] { [id, place.provider, place.providerPlaceID] }
 
     fileprivate func matchesSharedOriginal(_ other: Self) -> Bool {
         multiVenue == true && other.multiVenue == true && sourceURL == other.sourceURL
             && authorName == other.authorName && authorHandle == other.authorHandle && publishedAt == other.publishedAt
+            && publishedOn == other.publishedOn
     }
 }
 
@@ -214,7 +227,9 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
                   let verified = LivePublicDiscoveryPolicy.date(post.verifiedAt), verified <= generated,
                   now.timeIntervalSince(verified) < 86_400,
                   expiry <= verified.addingTimeInterval(86_400),
-                  post.publishedAt == nil || LivePublicDiscoveryPolicy.date(post.publishedAt!).map({ $0 <= verified }) == true else {
+                  post.publishedAt == nil || LivePublicDiscoveryPolicy.date(post.publishedAt!).map({ $0 <= verified }) == true,
+                  post.publishedOn == nil || (post.publishedAt == nil
+                    && post.publishedOn.flatMap(LivePublicDiscoveryPolicy.calendarDay).map({ $0 <= verified }) == true) else {
                 throw LivePublicDiscoveryValidationError.invalidPost
             }
             let normalizedPlace = try post.place.normalized()
@@ -227,7 +242,7 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
                 title: post.title.trimmingCharacters(in: .whitespacesAndNewlines), publishedAt: post.publishedAt, verifiedAt: post.verifiedAt,
                 visibility: post.visibility, locationEvidence: post.locationEvidence,
                 cover: post.cover?.previewURL(at: now, platform: post.platform) == nil ? nil : post.cover,
-                place: normalizedPlace, highlightRank: post.highlightRank, multiVenue: post.multiVenue)
+                place: normalizedPlace, highlightRank: post.highlightRank, multiVenue: post.multiVenue, publishedOn: post.publishedOn)
             guard verificationDates.updateValue(verified, forKey: validated.associationKey) == nil else {
                 throw LivePublicDiscoveryValidationError.invalidPost
             }
@@ -274,7 +289,7 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
 
     var postsByHighlight: [LivePublicDiscoveryPost] {
         let ordered = posts.enumerated().map {
-            (index: $0.offset, post: $0.element, date: $0.element.publishedAt.flatMap(LivePublicDiscoveryPolicy.date))
+            (index: $0.offset, post: $0.element, date: $0.element.publicationSortDate)
         }.sorted {
             let a = $0.post.highlightRank ?? Int.max, b = $1.post.highlightRank ?? Int.max
             if a != b { return a < b }
@@ -412,6 +427,12 @@ private enum LivePublicDiscoveryPolicy {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let date = formatter.date(from: canonical), formatter.string(from: date) == canonical else { return nil }
         return date
+    }
+
+    static func calendarDay(_ value: String) -> Date? {
+        guard value.utf8.count == 10,
+              value.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil else { return nil }
+        return date("\(value)T00:00:00Z")
     }
 
     static func webURL(_ raw: String) -> URLComponents? {
