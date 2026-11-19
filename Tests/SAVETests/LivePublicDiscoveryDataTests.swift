@@ -22,6 +22,18 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertNil(result.posts.first?.cover)
     }
 
+    func testVenueHighlightsRemainLimitedWithoutDroppingOtherOriginals() throws {
+        let first = post(id: "Highlight", overrides: ["highlightRank": 1])
+        let second = post(id: "Second", overrides: ["highlightRank": 2])
+        let dated = post(id: "Dated", overrides: ["publishedAt": timestamp(now.addingTimeInterval(-3_600))])
+        let undated = post(id: "Unknown")
+        let result = try decode(page(posts: [undated, dated, second, first])).validated(at: now)
+        XCTAssertEqual(result.venues.first?.postsByHighlight.map(\.id), ["threads:Highlight", "threads:Second", "threads:Dated", "threads:Unknown"])
+        XCTAssertEqual(result.venues.first?.posts.count, 4)
+        XCTAssertThrowsError(try decode(page(posts: [first, post(id: "Bad", overrides: ["highlightRank": 1])])).validated(at: now))
+        XCTAssertThrowsError(try decode(page(posts: [post(id: "Invalid", overrides: ["highlightRank": 4])])).validated(at: now))
+    }
+
     func testMalformedSchemaDatesFreshnessAndPublicBoundaryFailClosed() throws {
         for overrides: [String: Any] in [
             ["schemaVersion": 2], ["indexRevision": "not-a-revision"],

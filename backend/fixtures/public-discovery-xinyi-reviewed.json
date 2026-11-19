@@ -103,7 +103,12 @@
             "checkedAt": "2026-11-18T17:53:44.272Z",
             "origin": "public_web_index",
             "branchEvidence": "The observatory's official Instagram account explicitly names Taipei 101 Observatory and the wind damper. The official venue page identifies the 89F address and the Taiwan Tourism Administration's public listing supplies the WGS84 point. MapKit returned a separate ID for the observatory and the main tower.",
-            "contentFingerprint": "4f28a3ecdda398e7791b6d54382ece8cd171f0a906b784538555eba73158bc96"
+            "contentFingerprint": "4f28a3ecdda398e7791b6d54382ece8cd171f0a906b784538555eba73158bc96",
+            "publishedAt": "2019-04-18T10:16:22.000Z",
+            "publicLikes": {
+              "count": 52,
+              "observedAt": "2026-11-19T16:03:15.650Z"
+            }
           }
         },
         {
@@ -115,7 +120,12 @@
             "checkedAt": "2026-11-18T17:53:44.272Z",
             "origin": "public_web_index",
             "branchEvidence": "The public Threads original explicitly describes buying a ticket to visit the 101 observatory and names its wind-damper mascot. The post's original link was cross-checked through United Daily News.",
-            "contentFingerprint": "b0ce5d13a0d79fdbe699a0d93767f6d92d8ef8939536ad6dc48fd1cdcf193914"
+            "contentFingerprint": "b0ce5d13a0d79fdbe699a0d93767f6d92d8ef8939536ad6dc48fd1cdcf193914",
+            "publishedAt": "2026-08-23T15:34:11.000Z",
+            "publicLikes": {
+              "count": 15982,
+              "observedAt": "2026-11-19T16:03:17.037Z"
+            }
           }
         },
         {
@@ -128,7 +138,12 @@
             "checkedAt": "2026-11-18T17:53:44.272Z",
             "origin": "publisher_reference",
             "branchEvidence": "The public original describes paying NT$900 to go up Taipei 101 and getting a NT$290 candied strawberry skewer there. The UDN article embeds this exact post. Era News visited the shop and identifies the skewer as sold inside the paid Taipei 101 Observatory (https://www.eracom.com.tw/EraNews/Home/Life/2026-02-25/2271819.html). The official observatory site identifies the 89F venue separately from the mall.",
-            "contentFingerprint": "33c50ecae07b1188b606e9894269afedbd4fb0a73db8ba90d08dd4bd5dd47236"
+            "contentFingerprint": "33c50ecae07b1188b606e9894269afedbd4fb0a73db8ba90d08dd4bd5dd47236",
+            "publishedAt": "2026-02-23T03:15:43.000Z",
+            "publicLikes": {
+              "count": 56448,
+              "observedAt": "2026-11-19T16:03:16.801Z"
+            }
           }
         },
         {

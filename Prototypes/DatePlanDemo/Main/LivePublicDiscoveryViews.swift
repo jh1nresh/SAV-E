@@ -63,9 +63,11 @@ struct LivePublicDiscoveryDetail: View {
     var discoveryExpiresAt: Date? = nil
     var onGuideDestination: ((LivePublicGuideDestination) -> Void)? = nil
     @State private var guidePresented = false
+    @State private var showAllPosts = false
     @Environment(\.appLanguageSettings) private var language
 
     var body: some View {
+        let orderedPosts = venue.postsByHighlight
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -99,7 +101,7 @@ struct LivePublicDiscoveryDetail: View {
                     }
                     if isSaving { ProgressView(copy("Saving…", "正在收藏…")) }
                     if let saveError { Text(saveError).font(.caption).foregroundStyle(DateTheme.ink) }
-                    ForEach(venue.posts) { post in
+                    ForEach(showAllPosts ? orderedPosts : Array(orderedPosts.prefix(3))) { post in
                         VStack(alignment: .leading, spacing: 12) {
                             if post.cover != nil {
                                 LivePublicPostCover(post: post, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
@@ -127,12 +129,23 @@ struct LivePublicDiscoveryDetail: View {
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                             .background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 22))
                     }
+                    if venue.posts.count > 3 {
+                        Button(showAllPosts ? copy("Show highlights", "只看精選")
+                               : copy("Show all \(venue.posts.count) posts", "查看全部 \(venue.posts.count) 篇貼文")) {
+                            showAllPosts.toggle()
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                        .tint(DateTheme.blue)
+                        .accessibilityIdentifier("live.discovery.allPosts")
+                    }
                 }.padding(20)
             }.background(DateTheme.canvas).foregroundStyle(DateTheme.ink)
                 .navigationTitle(copy("\(venue.posts.count) posts", "\(venue.posts.count) 篇貼文"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Close", "關閉"), action: onClose) } }
         }.accessibilityIdentifier("live.discovery.detail")
+            .onChange(of: venue.id) { _, _ in showAllPosts = false }
             .sheet(isPresented: $guidePresented) {
                 if let expiry = discoveryExpiresAt {
                     LivePublicGuideChooser(venue: venue, expiresAt: expiry, ownerSubject: ownerSubject,

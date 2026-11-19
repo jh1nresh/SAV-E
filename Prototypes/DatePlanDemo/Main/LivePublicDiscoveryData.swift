@@ -54,6 +54,7 @@ struct LivePublicDiscoveryPost: Codable, Equatable, Identifiable, Sendable {
     let locationEvidence: String
     let cover: LivePublicDiscoveryCover?
     let place: LivePublicDiscoveryPlace
+    var highlightRank: Int? = nil
 
     var sourceLink: URL? { LivePublicDiscoveryPolicy.source(sourceURL, platform: platform)?.url }
 }
@@ -158,6 +159,7 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
                   post.authorHandle == nil || LivePublicDiscoveryPolicy.text(post.authorHandle!, limit: 100, allowEmpty: true),
                   let source = LivePublicDiscoveryPolicy.source(post.sourceURL, platform: post.platform),
                   post.id == "\(post.platform):\(source.postID)",
+                  post.highlightRank.map({ (1...3).contains($0) }) ?? true,
                   let verified = LivePublicDiscoveryPolicy.date(post.verifiedAt), verified <= generated,
                   now.timeIntervalSince(verified) < 86_400,
                   expiry <= verified.addingTimeInterval(86_400),
@@ -174,7 +176,8 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
                 authorName: LivePublicDiscoveryPolicy.optionalText(post.authorName), authorHandle: LivePublicDiscoveryPolicy.optionalText(post.authorHandle),
                 title: post.title.trimmingCharacters(in: .whitespacesAndNewlines), publishedAt: post.publishedAt, verifiedAt: post.verifiedAt,
                 visibility: post.visibility, locationEvidence: post.locationEvidence,
-                cover: post.cover?.previewURL(at: now, platform: post.platform) == nil ? nil : post.cover, place: normalizedPlace))
+                cover: post.cover?.previewURL(at: now, platform: post.platform) == nil ? nil : post.cover,
+                place: normalizedPlace, highlightRank: post.highlightRank))
         }
         validatedPosts.sort {
             let left = verificationDates[$0.id]!, right = verificationDates[$1.id]!
@@ -191,6 +194,18 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
     let place: LivePublicDiscoveryPlace
     let posts: [LivePublicDiscoveryPost]
 
+    var postsByHighlight: [LivePublicDiscoveryPost] {
+        let ordered = posts.enumerated().map {
+            (index: $0.offset, post: $0.element, date: $0.element.publishedAt.flatMap(LivePublicDiscoveryPolicy.date))
+        }.sorted {
+            let a = $0.post.highlightRank ?? Int.max, b = $1.post.highlightRank ?? Int.max
+            if a != b { return a < b }
+            if $0.date != $1.date { return ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+            return $0.index < $1.index
+        }
+        return ordered.map(\.post)
+    }
+
     /// Call with validated pages only. Cross-page venue conflicts must also fail closed.
     fileprivate static func grouping(_ posts: [LivePublicDiscoveryPost]) throws -> [Self] {
         guard posts.count <= 5_000, Set(posts.map(\.id)).count == posts.count else {
@@ -198,10 +213,14 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
         }
         var places: [String: LivePublicDiscoveryPlace] = [:]
         var groups: [String: [LivePublicDiscoveryPost]] = [:]
+        var highlightRanks: [String: Set<Int>] = [:]
         var order: [String] = []
         for post in posts {
             _ = try post.place.normalized()
             let id = post.place.identity
+            if let rank = post.highlightRank, !highlightRanks[id, default: []].insert(rank).inserted {
+                throw LivePublicDiscoveryValidationError.invalidPost
+            }
             if let previous = places[id], previous != post.place { throw LivePublicDiscoveryValidationError.inconsistentPlace }
             if places[id] == nil { order.append(id); places[id] = post.place }
             groups[id, default: []].append(post)
