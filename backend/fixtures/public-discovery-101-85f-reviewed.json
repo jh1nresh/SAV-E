@@ -29,6 +29,23 @@
               "observedAt": "2026-11-19T21:21:42.588Z"
             }
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@supertastesupertaste/post/DbXorbYks-z",
+          "authorHandle": "supertastesupertaste",
+          "title": "食尚玩家介紹 85TD 的一人港點與調酒",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T22:38:39.192Z",
+            "publishedAt": "2026-07-29T08:00:19.000Z",
+            "publicLikes": {
+              "count": 29,
+              "observedAt": "2026-11-19T22:38:39.192Z"
+            },
+            "contentFingerprint": "2c1475c275bb154e48971b82713c4546ae951f5d47711a0180a036890d15518c",
+            "branchEvidence": "The public Threads original names 捌伍添第 85TD, Taipei 101 and floor 85, and discusses the restaurant's dim sum and cocktails. Its official contact page https://www.85td-101.com/en/contact/ confirms the exact venue. The name distinguishes it from 隨意鳥地方 on the same floor."
+          }
         }
       ]
     },

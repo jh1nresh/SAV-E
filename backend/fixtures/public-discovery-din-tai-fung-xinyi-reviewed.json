@@ -83,6 +83,23 @@
             "branchEvidence": "The parent public thread explicitly names Din Tai Fung. This selected author reply summarizes recommendations in the thread, listing A4 and A13 by name. Other public replies independently specify Xinyi A4 and downstairs. The title presents this as a discussion, without attributing a visit or a current waiting time to the author. The official brand directory at https://www.dintaifung.com.tw/store_list.php corroborates the branch address, with independent Apple and Google venue matches.",
             "contentFingerprint": "threads-parent-v1:474445ddb4c55acc78c208457a364d243b7b822310c255c25ac757f3ea420e51"
           }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DXguawHlHj5/",
+          "authorHandle": "wendy_alanhd",
+          "title": "鼎泰豐 A4 店的小籠包與排骨蛋炒飯",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T22:38:33.215Z",
+            "publishedAt": "2026-04-24T10:38:04.000Z",
+            "publicLikes": {
+              "count": 17,
+              "observedAt": "2026-11-19T22:43:51.983Z"
+            },
+            "contentFingerprint": "c49fa3c8c582bdf052bb3d9ddb2614ca606c49a5b72966dd173badf1a055f81b",
+            "branchEvidence": "The public Instagram original explicitly names 鼎泰豐 A4店 and 松高路19號B2, and describes its soup dumplings and pork chop fried rice. The restaurant's official locations page https://www.dintaifung.com.tw/store.php confirms that branch and distinguishes it from A13 and Taipei 101."
+          }
         }
       ]
     }

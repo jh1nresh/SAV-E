@@ -133,6 +133,19 @@
             "contentFingerprint": "a6263ef97bf90573f006e9e5c8182a55ceefcea63afa710b3b0f7e43f6023f24",
             "multiVenue": true
           }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DJWEJCuzUXL/",
+          "authorHandle": "eatfoodgod",
+          "title": "德惠鵝肉錦州街店的煙燻與白斬鵝",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T22:37:39.742Z",
+            "publishedAt": "2025-05-07T07:58:29.000Z",
+            "contentFingerprint": "7dc0075710f9f5462f374754136defc2923f38fb69f9d1eec5b8935830e9c1c8",
+            "branchEvidence": "The public Instagram reel names 德惠鵝肉專賣店 and tags 錦州街36號. The business directory https://www.iyp.com.tw/0225819595 confirms No. 36, 1F. The name and door number distinguish the reviewed shop from the separate No. 21 goose restaurant."
+          }
         }
       ]
     },
@@ -159,6 +172,23 @@
             "origin": "publisher_reference",
             "branchEvidence": "The visible Threads original describes a meal with steamed sea bass and explicitly states 鮮食坊 at No. 1, Alley 3, Lane 108, Section 1, Nanchang Road. The NOWnews article embeds the exact original and lists phone 02-2392-6919. Exact Apple and Google listings identify that address. The verified Google storefront supplies the WGS84 pin. The title omits the historical price and hours.",
             "contentFingerprint": "5e1df656ed17340d53edf1f15eb744fa0b33bee1927d55e40593895de31d2e04"
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DfWaSyoSNwV/",
+          "authorHandle": "mecocute",
+          "title": "鮮食坊的整尾蒸魚定食",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T22:37:38.373Z",
+            "publishedAt": "2026-11-05T06:42:07.000Z",
+            "publicLikes": {
+              "count": 442,
+              "observedAt": "2026-11-19T22:43:50.827Z"
+            },
+            "contentFingerprint": "a55e5308bd3075034abb6833a3a93c321eaf2d861c4bff1184368ba403a6b86e",
+            "branchEvidence": "The public Instagram reel names 鮮食坊 at 南昌路一段108巷3弄1號 with phone 02-2392-6919. The creator's separate write-up https://www.mecocute.com/freshfoodkitchen/ corroborates the same shop. The title describes the meal in the reel and omits its historical price and hours."
           }
         }
       ]
