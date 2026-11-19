@@ -24,9 +24,10 @@ struct LivePublicDiscoverySummary: View {
                     .font(.caption).foregroundStyle(DateTheme.muted)
                 Button(copy("Try again", "重新載入"), action: onRetry).frame(minHeight: 44)
             } else if let page = model.page {
-                Text(page.posts.isEmpty
+                let postCount = Set(page.posts.map(\.id)).count
+                Text(postCount == 0
                      ? copy("No indexed posts in this area. Try another area.", "這個範圍還沒有已收錄的貼文，試試其他區域。")
-                     : copy("\(page.posts.count) posts · \(page.venues.count) places", "\(page.posts.count) 篇貼文 · \(page.venues.count) 個地點"))
+                     : copy("\(postCount) posts · \(page.venues.count) places", "\(postCount) 篇貼文 · \(page.venues.count) 個地點"))
                     .font(.caption).foregroundStyle(DateTheme.muted)
                 let connected = page.coverage.filter { $0.status == "connected" }.map { Self.platformName($0.platform) }
                 Text(connected.isEmpty ? copy("No platforms connected", "尚未接通平台")
@@ -62,6 +63,7 @@ struct LivePublicDiscoveryDetail: View {
     let onClose: () -> Void
     var discoveryExpiresAt: Date? = nil
     var onGuideDestination: ((LivePublicGuideDestination) -> Void)? = nil
+    var canReadPost: @MainActor (LivePublicDiscoveryPost) -> Bool = { _ in false }
     @State private var guidePresented = false
     @State private var showAllPosts = false
     @Environment(\.appLanguageSettings) private var language
@@ -129,11 +131,8 @@ struct LivePublicDiscoveryDetail: View {
                                 }
                             }
                             if !post.title.isEmpty { Text(post.title).font(.subheadline).fixedSize(horizontal: false, vertical: true) }
-                            if let url = URL(string: post.sourceURL) {
-                                Link(destination: url) {
-                                    Label(copy("Read original post", "查看原始貼文"), systemImage: "arrow.up.right")
-                                        .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
-                                }.tint(DateTheme.blue)
+                            if let expiry = discoveryExpiresAt {
+                                LiveVenueOriginalButton(post: post, expiresAt: expiry, isCurrent: { canReadPost(post) })
                             }
                         }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                             .background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 22))
@@ -152,8 +151,14 @@ struct LivePublicDiscoveryDetail: View {
             }.background(DateTheme.canvas).foregroundStyle(DateTheme.ink)
                 .navigationTitle(copy("\(venue.posts.count) posts", "\(venue.posts.count) 篇貼文"))
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Close", "關閉"), action: onClose) } }
-        }.accessibilityIdentifier("live.discovery.detail")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(copy("Close", "關閉"), action: onClose)
+                            .accessibilityIdentifier("live.discovery.detail.close")
+                    }
+                }
+        }.accessibilityElement(children: .contain)
+            .accessibilityIdentifier("live.discovery.detail")
             .onChange(of: venue.id) { _, _ in showAllPosts = false }
             .sheet(isPresented: $guidePresented) {
                 if let expiry = discoveryExpiresAt {
@@ -166,6 +171,158 @@ struct LivePublicDiscoveryDetail: View {
             }
     }
     private func copy(_ english: String, _ chinese: String) -> String { language.localized(english: english, traditionalChinese: chinese) }
+}
+
+@MainActor
+struct LiveVenueOriginalButton: View {
+    let post: LivePublicDiscoveryPost
+    let expiresAt: Date
+    let isCurrent: @MainActor () -> Bool
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.openURL) private var openURL
+    @State private var presented = false
+
+    var body: some View {
+        if let url = post.sourceLink {
+            let source = LiveSourcePostURL.parse(url)
+            Button {
+                guard Date() < expiresAt, isCurrent() else { return }
+                if source != nil { presented = true }
+                else { openURL(url) }
+            } label: {
+                let platform = LivePublicDiscoverySummary.platformName(post.platform)
+                Label(language.localized(english: "Read on \(platform)", traditionalChinese: "在 \(platform) 查看原文"),
+                      systemImage: "arrow.up.right")
+                    .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+            }
+            .tint(DateTheme.blue)
+            .accessibilityIdentifier("live.discovery.original.\(post.id)")
+            .sheet(isPresented: $presented) {
+                if let source {
+                    LiveSourcePostView(source: source, expiresAt: expiresAt, isCurrent: isCurrent,
+                                       onClose: { presented = false })
+                }
+            }
+        }
+    }
+}
+
+@MainActor
+struct LiveSavedVenuePostsEntry: View {
+    let place: Place
+    let ownerSubject: String
+    let sessionGeneration: Int
+    @ObservedObject private var auth = PrivyAuthService.shared
+
+    var body: some View {
+        if let key = LivePublicDiscoveryVenueKey(savedPlace: place) {
+            if case .authenticated(let owner) = auth.authState,
+               owner == ownerSubject, auth.currentUserId == ownerSubject,
+               auth.sessionGeneration == sessionGeneration {
+                LiveSavedVenuePosts(venue: key, owner: ownerSubject, generation: sessionGeneration)
+                    .id("\(ownerSubject):\(sessionGeneration):\(key.provider):\(key.id)")
+            }
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+            if LivePlanningReviewFixture.reviewedVenuePostsAreCurrent,
+               place.id == LivePlanningReviewFixture.reviewedVenue.id,
+               ownerSubject == LivePlanningReviewFixture.shared.ownerSubject,
+               sessionGeneration == LivePlanningReviewFixture.shared.sessionGeneration {
+                LiveSavedVenuePosts(venue: key, fixture: LivePlanningReviewFixture.shared)
+            }
+#endif
+        }
+    }
+}
+
+/// Saved opens a scoped read for the provider ID only. An indexed post remains
+/// separate from the original URL, note and visit status stored by the owner.
+@MainActor
+struct LiveSavedVenuePosts: View {
+    let venue: LivePublicDiscoveryVenueKey
+    let isCurrent: @MainActor () -> Bool
+    @StateObject private var discovery: LivePublicDiscoveryModel
+    @State private var refresh = 0
+    @State private var showAll = false
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(venue: LivePublicDiscoveryVenueKey, owner: String, generation: Int) {
+        self.venue = venue
+        self.isCurrent = {
+            let auth = PrivyAuthService.shared
+            guard case .authenticated(let active) = auth.authState else { return false }
+            return active == owner && auth.currentUserId == owner && auth.sessionGeneration == generation
+        }
+        _discovery = StateObject(wrappedValue: LivePublicDiscoveryModel(ownerSubject: owner, sessionGeneration: generation))
+    }
+
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+    init(venue: LivePublicDiscoveryVenueKey, fixture: LivePlanningReviewFixture) {
+        self.venue = venue
+        self.isCurrent = { fixture.isCurrent && LivePlanningReviewFixture.reviewedVenuePostsAreCurrent }
+        _discovery = StateObject(wrappedValue: fixture.makeVenueDiscovery())
+    }
+#endif
+
+    private var viewport: LivePublicDiscoveryViewport? {
+        try? LivePublicDiscoveryViewport(west: -180, south: -90, east: 180, north: 90)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let page = discovery.page, let matched = page.venues.first, isCurrent() {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(copy("Public posts", "公開貼文")).font(.headline)
+                        .accessibilityIdentifier("live.saved.venuePosts")
+                    ForEach(showAll ? matched.postsByHighlight : Array(matched.postsByHighlight.prefix(3))) { post in
+                        VStack(alignment: .leading, spacing: 4) {
+                            let attribution = [LivePublicDiscoverySummary.platformName(post.platform),
+                                               post.authorName ?? post.authorHandle].compactMap { $0 }.joined(separator: " · ")
+                            Text(attribution).font(.caption).foregroundStyle(DateTheme.muted)
+                            if !post.title.isEmpty { Text(post.title).font(.subheadline) }
+                            LiveVenueOriginalButton(post: post, expiresAt: page.expiresAt,
+                                isCurrent: { canRead(post, revision: page.indexRevision) })
+                        }
+                    }
+                    if page.nextCursor != nil {
+                        Button(copy("Show more posts", "顯示更多貼文")) {
+                            showAll = true
+                            Task { await discovery.loadMore() }
+                        }.disabled(discovery.isLoadingMore).frame(minHeight: 44)
+                    } else if matched.posts.count > 3 {
+                        Button(showAll ? copy("Show highlights", "只看精選") : copy("Show all", "查看全部")) {
+                            showAll.toggle()
+                        }.frame(minHeight: 44)
+                    }
+                }
+                .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                .background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 18))
+            } else if discovery.unavailable, isCurrent() {
+                Button(copy("Retry public posts", "重新載入公開貼文")) { refresh &+= 1 }
+                    .font(.subheadline).frame(minHeight: 44)
+                    .accessibilityIdentifier("live.saved.venuePosts.retry")
+            }
+        }
+        .task(id: refresh) {
+            guard let viewport, isCurrent() else { return }
+            await discovery.refresh(viewport, venue: venue)
+        }
+        .onDisappear { discovery.clear() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refresh &+= 1 }
+            else { discovery.clear() }
+        }
+    }
+
+    private func canRead(_ post: LivePublicDiscoveryPost, revision: String) -> Bool {
+        guard isCurrent(), scenePhase == .active, let page = discovery.page,
+              Date() < page.expiresAt, page.indexRevision == revision else { return false }
+        return page.posts.contains(post)
+    }
+
+    private func copy(_ english: String, _ chinese: String) -> String {
+        language.localized(english: english, traditionalChinese: chinese)
+    }
 }
 
 @MainActor

@@ -82,6 +82,42 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertEqual(group.pins.map(\.place.name), ["Fixture Cafe", "Other Fixture Cafe"])
     }
 
+    func testExactGoogleAliasRejectsOtherBranchesAndCannotEnterExplore() throws {
+        let key = try XCTUnwrap(LivePublicDiscoveryVenueKey(provider: "google_places", id: "ChIJExact"))
+        let alias = ["googlePlaceID": "ChIJExact", "provider": "apple_maps", "providerPlaceID": "fixture-venue"]
+        let raw = try decode(page(overrides: ["googlePlaceMatch": alias]))
+        XCTAssertEqual(try raw.validated(at: now, venue: key).venues.map(\.id), ["apple_maps:fixture-venue"])
+        XCTAssertThrowsError(try raw.validated(at: now))
+        let otherGoogle = try XCTUnwrap(LivePublicDiscoveryVenueKey(provider: "google_places", id: "ChIJOther"))
+        XCTAssertThrowsError(try raw.validated(at: now, venue: otherGoogle))
+
+        var other = place()
+        other["providerPlaceID"] = "fixture-other"
+        let sameCoordinates = post(id: "WrongBranch", overrides: ["place": other])
+        let forged = try decode(page(posts: [sameCoordinates], overrides: ["googlePlaceMatch": alias]))
+        XCTAssertThrowsError(try forged.validated(at: now, venue: key))
+        XCTAssertThrowsError(try decode(page()).validated(at: now, venue: key))
+    }
+
+    func testExplicitlyReviewedOriginalMayAppearAtTwoExactVenues() throws {
+        var sameCoordinateBranch = place()
+        sameCoordinateBranch["provider"] = "google_places"
+        sameCoordinateBranch["providerPlaceID"] = "ChIJOther"
+        sameCoordinateBranch["name"] = "Other Fixture Cafe"
+        let a = post(overrides: ["multiVenue": true, "highlightRank": 1])
+        let b = post(overrides: ["multiVenue": true, "highlightRank": 2, "place": sameCoordinateBranch])
+        let validated = try decode(page(posts: [a, b])).validated(at: now)
+        XCTAssertEqual(validated.venues.map(\.id), ["apple_maps:fixture-venue", "google_places:ChIJOther"])
+        XCTAssertEqual(validated.venues.map { $0.posts.first?.highlightRank }, [1, 2])
+        for invalid in [
+            post(overrides: ["place": sameCoordinateBranch]),
+            post(overrides: ["multiVenue": true, "place": sameCoordinateBranch, "authorHandle": "wrong"])
+        ] {
+            XCTAssertThrowsError(try decode(page(posts: [a, invalid])).validated(at: now))
+        }
+        XCTAssertThrowsError(try decode(page(posts: [a, a])).validated(at: now))
+    }
+
     func testMalformedSchemaDatesFreshnessAndPublicBoundaryFailClosed() throws {
         for overrides: [String: Any] in [
             ["schemaVersion": 2], ["indexRevision": "not-a-revision"],

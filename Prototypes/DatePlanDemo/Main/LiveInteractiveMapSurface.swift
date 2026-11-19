@@ -105,6 +105,9 @@ struct LiveInteractiveMapSurface: View {
         }
         .onReceive(Publishers.CombineLatest(PrivyAuthService.shared.$authState,
                                            PrivyAuthService.shared.$sessionGeneration)) { state, generation in
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+            if usesIsolatedVenueFixture { return }
+#endif
             // Published values arrive before the singleton's stored values are updated.
             guard case .authenticated(let owner) = state,
                   owner == ownerSubject, generation == sessionGeneration else {
@@ -169,7 +172,19 @@ struct LiveInteractiveMapSurface: View {
         onSelect(pin)
     }
 
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+    private var usesIsolatedVenueFixture: Bool {
+        LivePlanningReviewFixture.reviewedVenuePostsAreCurrent
+            && LivePlanningReviewFixture.shared.isCurrent
+            && LivePlanningReviewFixture.shared.ownerSubject == ownerSubject
+            && LivePlanningReviewFixture.shared.sessionGeneration == sessionGeneration
+    }
+#endif
+
     private var sessionIsCurrent: Bool {
+#if SAVVY_CITY_MVP && targetEnvironment(simulator)
+        if usesIsolatedVenueFixture { return true }
+#endif
         let auth = PrivyAuthService.shared
         guard case .authenticated(let owner) = auth.authState else { return false }
         return owner == ownerSubject && auth.sessionGeneration == sessionGeneration

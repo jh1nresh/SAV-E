@@ -73,6 +73,10 @@ struct LivePlaceDetail: View {
                 VStack(alignment: .leading, spacing: 18) {
                     businessPhotos
                     identity
+                    if pin.origin == .saved, let ownerSubject, let sessionGeneration {
+                        LiveSavedVenuePostsEntry(place: pin.place, ownerSubject: ownerSubject,
+                                                sessionGeneration: sessionGeneration)
+                    }
                     Label(pin.place.category.displayName(language: language.language), systemImage: pin.place.category.iconName)
                         .font(.subheadline).foregroundStyle(DateTheme.muted)
                     address

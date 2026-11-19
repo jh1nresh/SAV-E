@@ -40,6 +40,46 @@ struct LivePublicDiscoveryCoverage: Codable, Equatable, Sendable {
     let indexedPostCount: Int
 }
 
+struct LivePublicDiscoveryVenueKey: Hashable, Sendable {
+    let provider: String
+    let id: String
+
+    init?(provider: String?, id: String?) {
+        guard let provider, let id else { return nil }
+        if provider == "google_places" {
+            guard (1...180).contains(id.utf8.count), id.utf8.allSatisfy({
+                (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
+            }) else { return nil }
+        } else {
+            guard ["apple_maps", "amap"].contains(provider), (1...200).contains(id.utf8.count),
+                  id.utf8.allSatisfy({ (33...126).contains($0) && $0 != 44 }) else { return nil }
+        }
+        self.provider = provider
+        self.id = id
+    }
+
+    init?(savedPlace: Place) {
+        if let provider = savedPlace.locationProvider,
+           let existing = Self(provider: provider.rawValue,
+                               id: provider == .googlePlaces ? savedPlace.googlePlaceId : savedPlace.providerPlaceId) {
+            self = existing
+            return
+        }
+        guard savedPlace.locationProvider == nil || savedPlace.locationProvider == .googlePlaces else { return nil }
+        self.init(provider: "google_places", id: savedPlace.googlePlaceId)
+    }
+
+    func matches(_ place: LivePublicDiscoveryPlace) -> Bool {
+        provider == place.provider && id.utf8.elementsEqual(place.providerPlaceID.utf8)
+    }
+}
+
+struct LivePublicDiscoveryGoogleMatch: Codable, Equatable, Sendable {
+    let googlePlaceID: String
+    let provider: String
+    let providerPlaceID: String
+}
+
 /// Public attribution only. This is never a saved Place or a business photograph.
 struct LivePublicDiscoveryPost: Codable, Equatable, Identifiable, Sendable {
     let id: String
@@ -55,8 +95,16 @@ struct LivePublicDiscoveryPost: Codable, Equatable, Identifiable, Sendable {
     let cover: LivePublicDiscoveryCover?
     let place: LivePublicDiscoveryPlace
     var highlightRank: Int? = nil
+    var multiVenue: Bool? = nil
 
     var sourceLink: URL? { LivePublicDiscoveryPolicy.source(sourceURL, platform: platform)?.url }
+
+    fileprivate var associationKey: [String] { [id, place.provider, place.providerPlaceID] }
+
+    fileprivate func matchesSharedOriginal(_ other: Self) -> Bool {
+        multiVenue == true && other.multiVenue == true && sourceURL == other.sourceURL
+            && authorName == other.authorName && authorHandle == other.authorHandle && publishedAt == other.publishedAt
+    }
 }
 
 struct LivePublicDiscoveryPlace: Codable, Equatable, Sendable {
@@ -72,7 +120,10 @@ struct LivePublicDiscoveryPlace: Codable, Equatable, Sendable {
     var identity: String { "\(provider):\(providerPlaceID)" }
 
     fileprivate func normalized() throws -> Self {
-        guard ["apple_maps", "amap"].contains(provider), coordinateSystem == "WGS84",
+        let validProvider = provider == "google_places"
+            ? LivePublicDiscoveryVenueKey(provider: provider, id: providerPlaceID) != nil
+            : ["apple_maps", "amap"].contains(provider)
+        guard validProvider, coordinateSystem == "WGS84",
               LivePublicDiscoveryPolicy.text(providerPlaceID, limit: 200),
               LivePublicDiscoveryPolicy.text(name, limit: 80), LivePublicDiscoveryPolicy.text(address, limit: 500),
               LivePublicDiscoveryPolicy.text(category, limit: 80),
@@ -127,9 +178,10 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
     let coverage: [LivePublicDiscoveryCoverage]
     let posts: [LivePublicDiscoveryPost]
     let nextCursor: String?
+    var googlePlaceMatch: LivePublicDiscoveryGoogleMatch? = nil
 
     func validated(at now: Date, viewport: LivePublicDiscoveryViewport? = nil,
-                   limit: Int = 50) throws -> LivePublicDiscoveryValidatedPage {
+                   venue: LivePublicDiscoveryVenueKey? = nil, limit: Int = 50) throws -> LivePublicDiscoveryValidatedPage {
         guard now.timeIntervalSince1970.isFinite, schemaVersion == 1,
               indexRevision.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
               let generated = LivePublicDiscoveryPolicy.date(generatedAt),
@@ -147,13 +199,12 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
             throw LivePublicDiscoveryValidationError.invalidPage
         }
         var validatedPosts: [LivePublicDiscoveryPost] = []
-        var ids = Set<String>()
-        var verificationDates: [String: Date] = [:]
+        var verificationDates: [[String]: Date] = [:]
         for post in posts {
-            guard ids.insert(post.id).inserted,
-                  let row = coverage.first(where: { $0.platform == post.platform }), row.status == "connected",
+            guard let row = coverage.first(where: { $0.platform == post.platform }), row.status == "connected",
                   posts.filter({ $0.platform == post.platform }).count <= row.indexedPostCount,
                   post.visibility == "public", ["explicit_geotag", "reviewed_match"].contains(post.locationEvidence),
+                  post.multiVenue == nil || (post.multiVenue == true && post.locationEvidence == "reviewed_match"),
                   LivePublicDiscoveryPolicy.text(post.title, limit: 160, allowEmpty: true),
                   post.authorName == nil || LivePublicDiscoveryPolicy.text(post.authorName!, limit: 80, allowEmpty: true),
                   post.authorHandle == nil || LivePublicDiscoveryPolicy.text(post.authorHandle!, limit: 100, allowEmpty: true),
@@ -167,25 +218,41 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
                 throw LivePublicDiscoveryValidationError.invalidPost
             }
             let normalizedPlace = try post.place.normalized()
-            verificationDates[post.id] = verified
             if let viewport, !viewport.contains(latitude: post.place.latitude, longitude: post.place.longitude) {
                 throw LivePublicDiscoveryValidationError.invalidPlace
             }
-            validatedPosts.append(LivePublicDiscoveryPost(id: post.id, platform: post.platform,
+            let validated = LivePublicDiscoveryPost(id: post.id, platform: post.platform,
                 sourceURL: source.url.absoluteString,
                 authorName: LivePublicDiscoveryPolicy.optionalText(post.authorName), authorHandle: LivePublicDiscoveryPolicy.optionalText(post.authorHandle),
                 title: post.title.trimmingCharacters(in: .whitespacesAndNewlines), publishedAt: post.publishedAt, verifiedAt: post.verifiedAt,
                 visibility: post.visibility, locationEvidence: post.locationEvidence,
                 cover: post.cover?.previewURL(at: now, platform: post.platform) == nil ? nil : post.cover,
-                place: normalizedPlace, highlightRank: post.highlightRank))
+                place: normalizedPlace, highlightRank: post.highlightRank, multiVenue: post.multiVenue)
+            guard verificationDates.updateValue(verified, forKey: validated.associationKey) == nil else {
+                throw LivePublicDiscoveryValidationError.invalidPost
+            }
+            validatedPosts.append(validated)
+        }
+        guard matchesRequestedVenue(venue, posts: validatedPosts) else {
+            throw LivePublicDiscoveryValidationError.invalidPlace
         }
         validatedPosts.sort {
-            let left = verificationDates[$0.id]!, right = verificationDates[$1.id]!
-            return left == right ? $0.id < $1.id : left > right
+            let left = verificationDates[$0.associationKey]!, right = verificationDates[$1.associationKey]!
+            return left == right ? $0.associationKey.lexicographicallyPrecedes($1.associationKey) : left > right
         }
         let coverDeadline = validatedPosts.compactMap { $0.cover.flatMap { LivePublicDiscoveryPolicy.date($0.expiresAt) } }.min()
         return try LivePublicDiscoveryValidatedPage(indexRevision: indexRevision, generatedAt: generated,
-            expiresAt: min(expiry, coverDeadline ?? expiry), coverage: coverage, posts: validatedPosts, nextCursor: nextCursor)
+            expiresAt: min(expiry, coverDeadline ?? expiry), coverage: coverage, posts: validatedPosts,
+            nextCursor: nextCursor, googlePlaceMatch: googlePlaceMatch)
+    }
+
+    private func matchesRequestedVenue(_ venue: LivePublicDiscoveryVenueKey?, posts: [LivePublicDiscoveryPost]) -> Bool {
+        guard let venue else { return googlePlaceMatch == nil }
+        guard let alias = googlePlaceMatch else { return posts.allSatisfy { venue.matches($0.place) } }
+        guard venue.provider == "google_places", venue.id == alias.googlePlaceID,
+              alias.provider != "google_places",
+              let canonical = LivePublicDiscoveryVenueKey(provider: alias.provider, id: alias.providerPlaceID) else { return false }
+        return posts.allSatisfy { canonical.matches($0.place) }
     }
 }
 
@@ -219,15 +286,20 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
 
     /// Call with validated pages only. Cross-page venue conflicts must also fail closed.
     fileprivate static func grouping(_ posts: [LivePublicDiscoveryPost]) throws -> [Self] {
-        guard posts.count <= 5_000, Set(posts.map(\.id)).count == posts.count else {
+        guard posts.count <= 5_000, Set(posts.map(\.associationKey)).count == posts.count else {
             throw LivePublicDiscoveryValidationError.invalidPage
         }
         var places: [String: LivePublicDiscoveryPlace] = [:]
         var groups: [String: [LivePublicDiscoveryPost]] = [:]
+        var originals: [String: LivePublicDiscoveryPost] = [:]
         var highlightRanks: [String: Set<Int>] = [:]
         var order: [String] = []
         for post in posts {
             _ = try post.place.normalized()
+            if let previous = originals[post.id], !post.matchesSharedOriginal(previous) {
+                throw LivePublicDiscoveryValidationError.invalidPost
+            }
+            originals[post.id] = post
             let id = post.place.identity
             if let rank = post.highlightRank, !highlightRanks[id, default: []].insert(rank).inserted {
                 throw LivePublicDiscoveryValidationError.invalidPost
@@ -249,13 +321,16 @@ struct LivePublicDiscoveryValidatedPage: Sendable {
     let nextCursor: String?
     let venues: [LivePublicDiscoveryVenue]
     private let consumedCursors: Set<String>
+    private let googlePlaceMatch: LivePublicDiscoveryGoogleMatch?
 
     fileprivate init(indexRevision: String, generatedAt: Date, expiresAt: Date,
                      coverage: [LivePublicDiscoveryCoverage], posts: [LivePublicDiscoveryPost], nextCursor: String?,
+                     googlePlaceMatch: LivePublicDiscoveryGoogleMatch?,
                      consumedCursors: Set<String> = []) throws {
         self.indexRevision = indexRevision; self.generatedAt = generatedAt; self.expiresAt = expiresAt
         self.coverage = coverage; self.posts = posts; self.nextCursor = nextCursor
         self.consumedCursors = consumedCursors
+        self.googlePlaceMatch = googlePlaceMatch
         venues = try LivePublicDiscoveryVenue.grouping(posts)
     }
 
@@ -269,29 +344,33 @@ struct LivePublicDiscoveryValidatedPage: Sendable {
               !previous.consumedCursors.contains(requestedCursor), nextCursor != requestedCursor,
               nextCursor == nil || !previous.consumedCursors.contains(nextCursor!),
               indexRevision == previous.indexRevision, generatedAt == previous.generatedAt,
+              googlePlaceMatch == previous.googlePlaceMatch,
               Set(coverage.map { "\($0.platform):\($0.status):\($0.indexedPostCount)" })
                 == Set(previous.coverage.map { "\($0.platform):\($0.status):\($0.indexedPostCount)" }),
               expiresAt > now, previous.expiresAt > now else {
             throw LivePublicDiscoveryValidationError.invalidContinuation
         }
         var combined = previous.posts
-        var byID = Dictionary(uniqueKeysWithValues: previous.posts.map { ($0.id, $0) })
+        var byID = Dictionary(uniqueKeysWithValues: previous.posts.map { ($0.associationKey, $0) })
         for post in posts {
-            if let existing = byID[post.id] {
+            if let existing = byID[post.associationKey] {
                 guard existing == post else { throw LivePublicDiscoveryValidationError.invalidContinuation }
             } else {
-                byID[post.id] = post
+                byID[post.associationKey] = post
                 combined.append(post)
             }
         }
         guard coverage.allSatisfy({ row in combined.filter { $0.platform == row.platform }.count <= row.indexedPostCount }) else {
             throw LivePublicDiscoveryValidationError.invalidContinuation
         }
-        let dates = Dictionary(uniqueKeysWithValues: combined.map { ($0.id, LivePublicDiscoveryPolicy.date($0.verifiedAt)!) })
-        combined.sort { dates[$0.id]! == dates[$1.id]! ? $0.id < $1.id : dates[$0.id]! > dates[$1.id]! }
+        let dates = Dictionary(uniqueKeysWithValues: combined.map { ($0.associationKey, LivePublicDiscoveryPolicy.date($0.verifiedAt)!) })
+        combined.sort {
+            let left = dates[$0.associationKey]!, right = dates[$1.associationKey]!
+            return left == right ? $0.associationKey.lexicographicallyPrecedes($1.associationKey) : left > right
+        }
         return try Self(indexRevision: indexRevision, generatedAt: generatedAt,
             expiresAt: min(expiresAt, previous.expiresAt), coverage: coverage,
-            posts: combined, nextCursor: nextCursor, consumedCursors: previous.consumedCursors.union([requestedCursor]))
+            posts: combined, nextCursor: nextCursor, googlePlaceMatch: googlePlaceMatch, consumedCursors: previous.consumedCursors.union([requestedCursor]))
     }
 }
 

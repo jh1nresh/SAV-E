@@ -160,7 +160,8 @@ struct LiveMapPlace: Identifiable {
         let payload = venuePayload(id: id, source: .mapCandidate, sourceID: value.providerPlaceID,
             name: value.name, address: value.address, latitude: value.latitude, longitude: value.longitude,
             category: PlaceCategory(rawValue: value.category), coordinateSystem: .wgs84,
-            provider: PlaceMatchProvider(rawValue: value.provider), googleID: nil, addedAt: unknownCreationDate)
+            provider: PlaceMatchProvider(rawValue: value.provider),
+            googleID: value.provider == "google_places" ? value.providerPlaceID : nil, addedAt: unknownCreationDate)
         var place = candidatePlace(payload, markerID: id)
         place.providerPlaceId = value.providerPlaceID
         var pin = candidate(id: id, place: place, origin: .publicPost, label: "公開貼文 · 尚未收藏", payload: payload)
