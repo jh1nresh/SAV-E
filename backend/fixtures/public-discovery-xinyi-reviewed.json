@@ -223,7 +223,12 @@
             "checkedAt": "2026-11-18T19:06:01.961Z",
             "origin": "publisher_reference",
             "branchEvidence": "The official public IG post lists 101 B1 stall 06 at 45 City Hall Road and telephone 0913-888-913, separately from the Da'an and Dunhua shops. ReadyGo embeds that same original in its 101 branch section. The public Google Maps listing independently shows the 101 branch name, number, B1 address and an exact store-specific Place ID. The post describes a dish and lists multiple branches.",
-            "contentFingerprint": "da77b01929ece73e98464eeb98b51ec5f82a5d449eba5dc83ecb3e0659399f3c"
+            "contentFingerprint": "da77b01929ece73e98464eeb98b51ec5f82a5d449eba5dc83ecb3e0659399f3c",
+            "publishedOn": "2026-09-14",
+            "publicLikes": {
+              "count": 2,
+              "observedAt": "2026-11-19T21:21:42.707Z"
+            }
           }
         }
       ]
@@ -250,7 +255,12 @@
             "checkedAt": "2026-11-18T20:13:54.754Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original public reel explicitly names the Taipei 101 teppanyaki restaurant and links to the official booking site https://www.chu-yu.com.tw/. The official locator confirms City Hall Road 45, 4F, and the exact Google listing identifies the combined sushi and teppanyaki storefront on that floor. The original covers teppanyaki. The KKday article embeds that exact original in its branch section.",
-            "contentFingerprint": "fedaff4872b9f9cf077a39de9ad2f0cb2aaf8e591b39fd799a4bd638f886ce2d"
+            "contentFingerprint": "fedaff4872b9f9cf077a39de9ad2f0cb2aaf8e591b39fd799a4bd638f886ce2d",
+            "publishedOn": "2025-02-17",
+            "publicLikes": {
+              "count": 56,
+              "observedAt": "2026-11-19T21:21:41.290Z"
+            }
           }
         }
       ]
@@ -277,7 +287,12 @@
             "checkedAt": "2026-11-18T20:13:54.754Z",
             "origin": "publisher_reference",
             "branchEvidence": "The brand’s public opening post names its Taipei 101 location and explicitly gives 45 City Hall Road, B1. The official store locator https://www.cheng-ji.com/pages/home independently confirms that address and specifies the escalator and elevator 2. The exact public Google listing matches both. The KKday article embeds the same original in its CHENG JI section. The title avoids presenting the original opening date or offers as current.",
-            "contentFingerprint": "5650ac650487ad92a79b066e107122cfe5cdbe14d38a7b03759e61b7357649b0"
+            "contentFingerprint": "5650ac650487ad92a79b066e107122cfe5cdbe14d38a7b03759e61b7357649b0",
+            "publishedOn": "2025-09-21",
+            "publicLikes": {
+              "count": 1324,
+              "observedAt": "2026-11-19T21:21:42.401Z"
+            }
           }
         }
       ]
@@ -466,7 +481,12 @@
             "checkedAt": "2026-11-18T21:24:23.878Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original Instagram caption specifies the Milk Tea Mansion at 17 Songzhi Road, Breeze Nan Shan 2F. The author embeds this original and repeats its branch address. The exact Apple listing identifies the Breeze NanShan shop; the confirmed Google ID and WGS84 pin resolve the same retail floor, address and phone 02-2722-0876.",
-            "contentFingerprint": "3ff18d4855f55a5665f27bf1142dcefc9e0d7823c394159819a4be6f3aa09553"
+            "contentFingerprint": "3ff18d4855f55a5665f27bf1142dcefc9e0d7823c394159819a4be6f3aa09553",
+            "publishedOn": "2021-10-25",
+            "publicLikes": {
+              "count": 231,
+              "observedAt": "2026-11-19T21:21:41.147Z"
+            }
           }
         }
       ]

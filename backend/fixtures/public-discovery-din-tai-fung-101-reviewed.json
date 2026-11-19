@@ -30,7 +30,12 @@
             "checkedAt": "2026-11-19T00:55:23.401Z",
             "origin": "publisher_reference",
             "contentFingerprint": "add4693140228acbf50a543254180d44d7bded5c80db1eca2de234a32030e1e0",
-            "branchEvidence": "The selected public Reel caption explicitly says the author dined at the Din Tai Fung inside Taipei 101. The linked travel article embeds this exact original. The brand store directory at https://www.dintaifung.com.tw/store_list.php confirms City Hall Road No. 45 B1 and phone 02-8101-7799. The exact MapKit item and Google place listing independently resolve the same address, floor and phone. Coordinates come from the exact Google storefront WGS84 pin."
+            "branchEvidence": "The selected public Reel caption explicitly says the author dined at the Din Tai Fung inside Taipei 101. The linked travel article embeds this exact original. The brand store directory at https://www.dintaifung.com.tw/store_list.php confirms City Hall Road No. 45 B1 and phone 02-8101-7799. The exact MapKit item and Google place listing independently resolve the same address, floor and phone. Coordinates come from the exact Google storefront WGS84 pin.",
+            "publishedOn": "2025-07-07",
+            "publicLikes": {
+              "count": 2540,
+              "observedAt": "2026-11-19T21:21:42.005Z"
+            }
           }
         }
       ]

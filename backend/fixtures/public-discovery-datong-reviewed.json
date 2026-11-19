@@ -35,7 +35,12 @@
             "checkedAt": "2026-11-18T23:35:18.737Z",
             "origin": "public_web_index",
             "branchEvidence": "The public Instagram captioned embed identifies 阿仁炒飯 in its location header, and Bella embeds that same post in its 阿仁炒飯 section. Taipei Travel verifies 哈密街45巷2之4號. MapKit returned H2710I3F9A3EC8F87F1 at that address; Footinder and Fonfood independently returned nearly identical WGS84 pins. Taipei City’s address-to-village table lists even-numbered premises 2–6 on Lane 45, Hami Street under 保安里 (https://www-ws.gov.taipei/001/Upload/public/Data/411514564171.pdf).",
-            "contentFingerprint": "02db96920c21b607894f98b2a5c4a9804e7c164b3a4d489f293417b5327e10ab"
+            "contentFingerprint": "02db96920c21b607894f98b2a5c4a9804e7c164b3a4d489f293417b5327e10ab",
+            "publishedOn": "2019-03-13",
+            "publicLikes": {
+              "count": 44,
+              "observedAt": "2026-11-19T21:21:40.497Z"
+            }
           }
         }
       ]

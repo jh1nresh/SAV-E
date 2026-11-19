@@ -14,6 +14,7 @@ export type PublicDiscoveryPost = {
   verifiedAt: string; visibility: "public"; locationEvidence: "explicit_geotag" | "reviewed_match";
   cover: { url: string; expiresAt: string; permission: "author" | "provider" } | null;
   place: PublicDiscoveryPlace;
+  publishedOn?: string;
   multiVenue?: true;
   highlightRank?: number;
 };
@@ -71,6 +72,12 @@ export function timestamp(value: unknown): string {
   const time = Date.parse(canonical);
   if (!Number.isFinite(time) || new Date(time).toISOString() !== canonical) return invalid();
   return canonical;
+}
+
+export function publicationDay(value: unknown): string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return invalid();
+  timestamp(`${value}T00:00:00Z`);
+  return value;
 }
 function hasSecretParameters(url: URL): boolean {
   const sensitive = /token|auth|credential|password|passwd|cookie|session|secret|api[_-]?key|^key$/i;
@@ -174,7 +181,7 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
   const highlightSlots = new Set<string>();
   const originals = new Map<string, { signature: string; multiVenue: boolean }>();
   const validatedPosts = input.posts.map((value): PublicDiscoveryPost => {
-    const row = record(value, ["id", "platform", "sourceURL", "authorName", "authorHandle", "title", "publishedAt", "verifiedAt", "visibility", "locationEvidence", "place"], ["cover", "multiVenue", "highlightRank"]);
+    const row = record(value, ["id", "platform", "sourceURL", "authorName", "authorHandle", "title", "publishedAt", "verifiedAt", "visibility", "locationEvidence", "place"], ["cover", "multiVenue", "highlightRank", "publishedOn"]);
     const platform = row.platform as PublicDiscoveryPlatform;
     if (!platforms.includes(platform) || statuses.get(platform) !== "connected" || row.visibility !== "public"
       || typeof row.locationEvidence !== "string" || !["explicit_geotag", "reviewed_match"].includes(row.locationEvidence)) return invalid();
@@ -183,8 +190,10 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
       || (row.multiVenue !== undefined && (row.multiVenue !== true || row.locationEvidence !== "reviewed_match"))) return invalid();
     const verifiedAt = timestamp(row.verifiedAt), verified = Date.parse(verifiedAt);
     const publishedAt = row.publishedAt === null ? null : timestamp(row.publishedAt);
+    const publishedOn = row.publishedOn === undefined ? undefined : publicationDay(row.publishedOn);
     if (verified > generated || (mode !== "reviewArchive" && verified + day <= sourceValidationTime)
-      || (publishedAt !== null && Date.parse(publishedAt) > verified)) return invalid();
+      || (publishedAt !== null && Date.parse(publishedAt) > verified)
+      || (publishedOn !== undefined && (publishedAt !== null || publishedOn > verifiedAt.slice(0, 10)))) return invalid();
     const venue = validatePublicDiscoveryPlace(row.place), key = JSON.stringify([venue.provider, venue.providerPlaceID]);
     if (row.multiVenue === true && !isPublicDiscoveryVenueID(venue.providerPlaceID)) return invalid();
     const associationID = JSON.stringify([id, key]);
@@ -198,7 +207,7 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
       highlightSlots.add(slot);
     }
     const authorName = nullableText(row.authorName, 80), authorHandle = nullableText(row.authorHandle, 100);
-    const originalSignature = JSON.stringify([source.url, authorName, authorHandle, publishedAt]);
+    const originalSignature = JSON.stringify([source.url, authorName, authorHandle, publishedAt, publishedOn]);
     const prior = originals.get(id);
     if (prior && (!prior.multiVenue || row.multiVenue !== true || prior.signature !== originalSignature)) return invalid();
     originals.set(id, { signature: originalSignature, multiVenue: row.multiVenue === true });
@@ -208,6 +217,7 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
     return { id, platform, sourceURL: source.url, authorName, authorHandle, title: text(row.title, 160, true), publishedAt,
       verifiedAt, visibility: "public", locationEvidence: row.locationEvidence as PublicDiscoveryPost["locationEvidence"],
       cover: cover(row.cover, platform, sourceValidationTime), place: venue,
+      ...(publishedOn === undefined ? {} : { publishedOn }),
       ...(row.multiVenue === true ? { multiVenue: true } : {}),
       ...(highlightRank === undefined ? {} : { highlightRank }) };
   });

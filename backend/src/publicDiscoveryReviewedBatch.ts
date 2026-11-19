@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import {
   canonicalSource, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
-  timestamp, validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
+  publicationDay, timestamp, validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
   type PublicDiscoveryPlace, type PublicDiscoveryPost,
 } from "./publicDiscovery.js";
 import { addVenueHighlights, type PublicLikesObservation } from "./publicDiscoveryHighlights.js";
@@ -186,11 +186,12 @@ function projectReviewArchive(raw: unknown, now: Date) {
         withheld += 1;
         continue;
       }
-      const review = reviewedEvidence(candidate.review, candidate.observedIn, platform);
+      const review = reviewedEvidence(candidate.review, candidate.observedIn, platform, now);
       if (typeof review.checkedAt !== "string") throw new Error("Invalid review date");
       const id = `${platform}:${source.postID}`;
       const publishedAt = typeof review.publishedAt === "string" ? review.publishedAt : null;
-      const observation = parsePublicLikes(review.publicLikes, publishedAt, now);
+      const publishedOn = typeof review.publishedOn === "string" ? review.publishedOn : undefined;
+      const observation = parsePublicLikes(review.publicLikes, publishedAt ?? publishedOn, now);
       if (observation) {
         const previous = likes.get(id);
         if (previous?.observedAt === observation.observedAt && previous.count !== observation.count) {
@@ -203,6 +204,7 @@ function projectReviewArchive(raw: unknown, now: Date) {
         publishedAt,
         verifiedAt: review.checkedAt, visibility: "public", locationEvidence: "reviewed_match",
         cover: null, place,
+        ...(publishedOn === undefined ? {} : { publishedOn }),
         ...(review.multiVenue === true ? { multiVenue: true } : {}) });
       if (posts.length > 5_000) throw new Error("Invalid post count");
     }
@@ -242,8 +244,8 @@ function projectReviewArchive(raw: unknown, now: Date) {
   return { manifest: currentManifest, withheld, expired };
 }
 
-function reviewedEvidence(value: unknown, observedIn: unknown, platform: "threads" | "instagram") {
-  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publicLikes"]);
+function reviewedEvidence(value: unknown, observedIn: unknown, platform: "threads" | "instagram", now: Date) {
+  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publishedOn", "publicLikes"]);
   if (review.multiVenue !== undefined && review.multiVenue !== true) throw new Error("Invalid multi-venue review");
   if ((review.origin !== "public_web_index" && review.origin !== "creator_submission"
     && (review.origin !== "publisher_reference" || !publisherPageURL(observedIn)))
@@ -258,7 +260,13 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
       throw new Error("Invalid reviewed content fingerprint");
     }
   }
-  if (review.publishedAt !== undefined) {
+  if (review.publishedOn !== undefined) {
+    const publishedOn = publicationDay(review.publishedOn);
+    if (review.publishedAt !== undefined || publishedOn > timestamp(review.checkedAt).slice(0, 10)
+      || publishedOn > now.toISOString().slice(0, 10)) {
+      throw new Error("Invalid calendar publication day");
+    }
+  } else if (review.publishedAt !== undefined) {
     const publishedAt = timestamp(review.publishedAt);
     if (publishedAt > timestamp(review.checkedAt)) throw new Error("Publication date follows review");
     return { ...review, publishedAt };
@@ -266,12 +274,12 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
   return review;
 }
 
-function parsePublicLikes(value: unknown, publishedAt: string | null, now: Date): PublicLikesObservation | undefined {
+function parsePublicLikes(value: unknown, publication: string | undefined, now: Date): PublicLikesObservation | undefined {
   if (value === undefined) return;
   const row = fields(value, ["count", "observedAt"]);
   const observedAt = timestamp(row.observedAt);
   if (typeof row.count !== "number" || !Number.isSafeInteger(row.count) || row.count < 0
-    || publishedAt === null || observedAt < publishedAt || Date.parse(observedAt) > now.getTime()) {
+    || publication === undefined || observedAt < publication || Date.parse(observedAt) > now.getTime()) {
     throw new Error("Invalid public likes observation");
   }
   return { count: row.count, observedAt };
@@ -309,8 +317,9 @@ export async function recheckReviewedPublicBatch(raw: unknown, options: RecheckO
       if (platform !== "instagram" && platform !== "threads") throw new Error("Unsupported platform");
       const sourceURL = canonicalSource(candidate.sourceURL, platform).url;
       if (candidate.review === null) { summary.pending++; return candidate; }
-      const review = reviewedEvidence(candidate.review, candidate.observedIn, platform);
-      parsePublicLikes(review.publicLikes, typeof review.publishedAt === "string" ? review.publishedAt : null, now);
+      const review = reviewedEvidence(candidate.review, candidate.observedIn, platform, now);
+      const publication = review.publishedAt ?? review.publishedOn;
+      parsePublicLikes(review.publicLikes, typeof publication === "string" ? publication : undefined, now);
       const next = { ...candidate, review: { ...review } };
       if (!review.contentFingerprint) { summary.unconfigured++; return next; }
       const includeThreadParent = String(review.contentFingerprint).startsWith(threadsParentFingerprintPrefix);

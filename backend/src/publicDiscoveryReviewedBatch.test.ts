@@ -116,6 +116,34 @@ test("publication time and likes observations must be independently valid", asyn
   }
 });
 
+test("publication days stay calendar-only and inform highlights", () => {
+  const older = { ...instagram, review: { ...review, publishedAt: "2026-11-12T23:59:59Z" } };
+  const calendarOnly = { ...threads, review: { ...review, publishedOn: "2026-11-13",
+    publicLikes: { count: 12, observedAt: "2026-11-17T00:00:00Z" } } };
+  const { manifest } = compileReviewedPublicBatch(batch(older, calendarOnly), now);
+  const source = manifest.posts.find(row => row.id === "threads:TER_1");
+  assert.equal(source?.publishedAt, null);
+  assert.equal(source?.publishedOn, "2026-11-13");
+  assert.equal(source?.highlightRank, 1);
+  assert.equal(Object.hasOwn(source!, "publicLikes"), false);
+});
+
+test("rejects invalid or conflicting calendar publication days before fetching originals", async () => {
+  for (const invalid of [
+    { publishedOn: "2026-02-30" },
+    { publishedOn: "2026-11-19" },
+    { publishedOn: "2026-11-19", checkedAt: "2026-11-19T02:00:00Z" },
+    { publishedOn: "2026-11-13T00:00:00Z" },
+    { publishedOn: "2026-11-13", publishedAt: "2026-11-13T10:00:00Z" },
+    { publishedOn: "2026-11-13", publicLikes: { count: 1, observedAt: "2026-11-12T23:59:59Z" } },
+  ]) {
+    const ready = { ...instagram, review: { ...review, contentFingerprint: "a".repeat(64) } };
+    const input = batch(ready, { ...threads, review: { ...review, ...invalid } });
+    assert.throws(() => compileReviewedPublicBatch(input, now));
+    await assert.rejects(recheckReviewedPublicBatch(input, { now, fetchEmbed: async () => assert.fail("invalid review must not fetch") }));
+  }
+});
+
 test("offline preview keeps the manifest deadline and preserves individual review timestamps", () => {
   const alias = { googlePlaceID: "ChIJ_venue", provider: place.provider, providerPlaceID: place.providerPlaceID,
     branchEvidence: "Named storefront and exact address independently agree." };
