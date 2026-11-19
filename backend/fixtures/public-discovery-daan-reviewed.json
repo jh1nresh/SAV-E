@@ -64,6 +64,24 @@
             "contentFingerprint": "eb50090db7ba99fc67b48cd9b4f9705adbac741e49f5ce8f1730aca4e13ca7da",
             "publishedAt": "2026-10-17T09:14:44.000Z"
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@pio.jio_twins/post/Dejfavfmd6n",
+          "observedIn": "https://www.threads.com/@pio.jio_twins",
+          "authorHandle": "pio.jio_twins",
+          "title": "啊潔分享二本松本館北海道海膽宴",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T20:05:37.000Z",
+            "publishedAt": "2026-10-16T12:04:28.000Z",
+            "publicLikes": {
+              "count": 75,
+              "observedAt": "2026-11-19T20:05:37.000Z"
+            },
+            "contentFingerprint": "threads-parent-v1:864234ee68543bf2851e67f4c9eb6c7b89dcda8ed4341eb07926875aa2d0594f",
+            "branchEvidence": "The Threads reply names Er Ben Song Shabu and the newly launched Hokkaido sea urchin dinner. The same author’s Instagram post https://www.instagram.com/p/DelwydEGdeN/ explicitly identifies No. 118 Rui’an Street. Its photos 2 and 7 match the Threads parent’s photos 3 and 2, respectively, showing the same sea urchin box and the same rice bowl. The FunNow main-branch listing https://www.myfunnow.com/en/branches/3025998847248 confirms No. 118. The fingerprint binds the reply and parent text. The matched photos were checked separately."
+          }
         }
       ]
     },
