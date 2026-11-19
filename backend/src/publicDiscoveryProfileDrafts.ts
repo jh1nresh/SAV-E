@@ -15,7 +15,7 @@ const handlePattern = /^(?=.*[a-z0-9_])[a-z0-9._]{1,30}$/i;
 const postPattern = /^[a-z0-9_-]{1,100}$/i;
 type Platform = "instagram" | "threads";
 type Profile = { platform: Platform; handle: string };
-type ProfileQuery = Profile & { terms: string[] };
+type ProfileQuery = Profile & { terms: string[]; branchTerms: string[] };
 type ProfilePost = { id: string; sourceURL: string; caption: string };
 type ProfileStatus = "read" | "no_readable_posts" | "access_required" | "rate_limited"
   | "unavailable" | "not_attempted";
@@ -33,9 +33,10 @@ function records(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function fields(value: unknown, expected: string[]): JSONObject {
+function fields(value: unknown, expected: string[], optional: string[] = []): JSONObject {
   const row = object(value);
-  if (!row || Object.keys(row).length !== expected.length || !expected.every(key => Object.hasOwn(row, key))) {
+  if (!row || !expected.every(key => Object.hasOwn(row, key))
+    || Object.keys(row).some(key => !expected.includes(key) && !optional.includes(key))) {
     throw new Error("Invalid profile batch input");
   }
   return row;
@@ -53,19 +54,26 @@ function profileURL({ platform, handle }: Profile): string {
   return platform === "threads" ? `https://www.threads.com/@${handle}` : `https://www.instagram.com/${handle}/`;
 }
 
-function profileQuery(value: unknown): ProfileQuery {
-  const { platform, handle, terms } = fields(value, ["platform", "handle", "terms"]);
-  if ((platform !== "instagram" && platform !== "threads") || typeof handle !== "string"
-    || !handlePattern.test(handle) || !Array.isArray(terms) || terms.length < 1 || terms.length > 8) {
-    throw new Error("Invalid profile query");
-  }
-  const normalized = terms.map((term: unknown) => {
+function matchTerms(terms: unknown): string[] {
+  if (!Array.isArray(terms) || terms.length < 1 || terms.length > 8) throw new Error("Invalid match terms");
+  const normalized = Array.from(terms, (term: unknown) => {
     if (typeof term !== "string" || term.length > 160 || /[\p{Cc}]/u.test(term)) throw new Error("Invalid match term");
     const text = normalizedText(term);
     if (Array.from(text).length < 2) throw new Error("Invalid match term");
     return text;
   });
-  return { platform, handle: handle.toLowerCase(), terms: [...new Set(normalized)] };
+  return [...new Set(normalized)];
+}
+
+function profileQuery(value: unknown): ProfileQuery {
+  const row = fields(value, ["platform", "handle", "terms"], ["branchTerms"]);
+  const { platform, handle, terms, branchTerms } = row;
+  if ((platform !== "instagram" && platform !== "threads") || typeof handle !== "string"
+    || !handlePattern.test(handle)) throw new Error("Invalid profile query");
+  return {
+    platform, handle: handle.toLowerCase(), terms: matchTerms(terms),
+    branchTerms: Object.hasOwn(row, "branchTerms") ? matchTerms(branchTerms) : [],
+  };
 }
 
 function authorPrivacy(profile: Profile, owner: JSONObject | undefined): boolean | undefined {
@@ -196,7 +204,10 @@ async function readProfile(profile: Profile, fetchImpl: typeof fetch): Promise<P
   }
 }
 
-/** Scan explicitly named public profiles for literal terms. Candidates do not establish a venue association. */
+/**
+ * Find drafts with a business term and, if supplied, a separate branch term in the caption.
+ * These matches are leads for review and do not establish a venue association.
+ */
 export async function collectPublicProfileDiscoveryDrafts(raw: unknown, fetchImpl: typeof fetch = fetch) {
   const { venues } = fields(raw, ["venues"]);
   if (!Array.isArray(venues) || venues.length < 1 || venues.length > maxVenues) throw new Error("Invalid venue batch");
@@ -231,6 +242,7 @@ export async function collectPublicProfileDiscoveryDrafts(raw: unknown, fetchImp
     for (const profile of queries) {
       for (const post of results.get(profileKey(profile))!.posts) {
         if (!profile.terms.some(term => post.caption.includes(term))) continue;
+        if (profile.branchTerms.length && !profile.branchTerms.some(term => post.caption.includes(term))) continue;
         matches.set(`${profile.platform}:${post.id}`, {
           platform: profile.platform, sourceURL: post.sourceURL, authorHandle: profile.handle,
           observedIn: profileURL(profile), title: "", review: null,

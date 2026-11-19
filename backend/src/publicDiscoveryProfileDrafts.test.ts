@@ -117,6 +117,30 @@ test("separates readable empties and challenges and stops a rate-limited platfor
   assert.deepEqual(result.draft.venues, []);
 });
 
+test("requires both a business term and a branch term when a place supplies branch terms", async () => {
+  const profiles = [
+    { ...lookup("instagram", "example", "Kitchen", "Cafe Name"), branchTerms: ["Ａ４館", "松高路19號"] },
+  ];
+  const posts = [
+    post("SameMall", "example", "新光三越A4館 另一家牛排館"),
+    post("OtherBranch", "example", "Kitchen A13館"),
+    post("ExactMall", "example", "Kitchen 在新光三越A4館"),
+    post("ExactAddress", "example", "Cafe Name 在松高路19號"),
+  ];
+  let requests = 0;
+  const result = await collectPublicProfileDiscoveryDrafts({ venues: [
+    { place: branch, profiles },
+    { place: otherBranch, profiles: [lookup("instagram", "example", "Other", "A13館")] },
+  ] }, async () => {
+    requests += 1;
+    return page(html("example", posts, "instagram"));
+  });
+  assert.equal(requests, 1);
+  assert.deepEqual(result.draft.venues.map(({ candidates }) =>
+    candidates.map(({ sourceURL }) => sourceURL.split("/").at(-2))), [["ExactMall", "ExactAddress"], ["OtherBranch"]]);
+  assert.equal(compileReviewedPublicBatch(result.draft).withheld, 3);
+});
+
 test("malformed, oversized, and mismatched-profile responses do not yield drafts", async () => {
   for (const body of [
     html("other", [post("WrongAccount", "example", "Kitchen")]),
@@ -203,6 +227,9 @@ test("rejects malformed scope and over-budget profiles before any request", asyn
     [{ ...branch, privateNote: "value" }, [lookup("threads", "example", "Kitchen")]],
     [branch, [lookup("instagram", "../accounts", "Kitchen")]],
     [branch, [lookup("threads", "example", "")]],
+    [branch, [{ ...lookup("instagram", "example", "Kitchen"), branchTerms: [] }]],
+    [branch, [{ ...lookup("instagram", "example", "Kitchen"), branchTerms: ["A"] }]],
+    [branch, [{ ...lookup("instagram", "example", "Kitchen"), branchTerms: Array(9).fill("A4") }]],
     [branch, Array.from({ length: 31 }, (_, i) => lookup("threads", `example${i}`, "Kitchen"))],
   ]) {
     await assert.rejects(collectPublicProfileDiscoveryDrafts({ venues: [{ place, profiles }] }, inspect));
