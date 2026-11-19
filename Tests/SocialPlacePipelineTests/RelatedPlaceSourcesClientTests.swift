@@ -101,6 +101,20 @@ final class RelatedPlaceSourcesClientTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(RelatedPlaceSource.self, from: insecure))
     }
 
+    func testAcceptsCanonicalAndLegacyThreadsDomains() throws {
+        for host in ["www.threads.com", "www.threads.net"] {
+            let url = "https://\(host)/@makan.tw.food/post/DeZTko_k3-V"
+            let data = sourceJSON(platform: "threads", url: url, confidence: 0.8)
+            let source = try JSONDecoder().decode(RelatedPlaceSource.self, from: data)
+            XCTAssertEqual(source.url.absoluteString, url)
+            XCTAssertEqual(source.identityStatus, .candidate)
+        }
+        for host in ["threads.com.example.org", "www.www.threads.com"] {
+            let data = sourceJSON(platform: "threads", url: "https://\(host)/@example/post/123", confidence: 0.8)
+            XCTAssertThrowsError(try JSONDecoder().decode(RelatedPlaceSource.self, from: data))
+        }
+    }
+
     func testRejectsOutOfRangeConfidence() throws {
         let data = sourceJSON(
             platform: "threads",

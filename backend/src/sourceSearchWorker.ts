@@ -1425,6 +1425,9 @@ export async function searchPublicWebResults(
 ): Promise<SourceSearchResult[]> {
   const boundedLimit = Math.max(1, Math.min(10, Math.trunc(limit)));
   const html = await fetchText(duckDuckGoHTMLURL(query), signal);
+  if (/<form\b[^>]*\s+id\s*=\s*(["'])challenge-form\1/i.test(html)) {
+    throw new Error("Public search requires verification");
+  }
   return parseDuckDuckGoResults(html, query).slice(0, boundedLimit);
 }
 

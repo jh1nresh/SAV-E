@@ -27,6 +27,9 @@ enum RelatedSourcePlatform: String, Codable, CaseIterable, Equatable, Sendable {
         else { return false }
 
         let host = rawHost.hasPrefix("www.") ? String(rawHost.dropFirst(4)) : rawHost
+        if self == .threads {
+            return url.user == nil && url.password == nil && url.port == nil && allowedHosts.contains(host)
+        }
         return allowedHosts.contains { host == $0 || host.hasSuffix(".\($0)") }
     }
 
@@ -37,7 +40,7 @@ enum RelatedSourcePlatform: String, Codable, CaseIterable, Equatable, Sendable {
         case .youtube: return ["youtube.com", "youtu.be"]
         case .xiaohongshu: return ["xiaohongshu.com", "xhslink.com"]
         case .douyin: return ["douyin.com", "iesdouyin.com"]
-        case .threads: return ["threads.net"]
+        case .threads: return ["threads.com", "threads.net"]
         case .x: return ["x.com", "twitter.com"]
         }
     }

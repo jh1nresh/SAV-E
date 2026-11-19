@@ -479,3 +479,24 @@ test("the server route delegates owner-scoped persistence through the endpoint s
     /isV0 && resource === "places" && id && segments\[2\] === "related-sources"/,
   );
 });
+
+test("searches current Threads posts and deduplicates the legacy domain", async () => {
+  const actual = "https://www.threads.com/@makan.tw.food/post/DeZTko_k3-V";
+  const place = {
+    ...confirmedPlace,
+    name: "凱菲屋",
+    address: "台北市信義區松壽路2號",
+  };
+  const pack = await discoverRelatedPlaceSources(place, { platforms: ["threads"] }, {
+    search: async query => [
+      `${actual}?xmt=referral`,
+      "https://www.threads.net/@makan.tw.food/post/DeZTko_k3-V",
+      "https://www.threads.com/@makan.tw.food",
+      "https://www.www.threads.com/@makan.tw.food/post/DeZTko_k3-V?token=fixture",
+      "https://threads.example/@makan.tw.food/post/DeZTko_k3-V",
+    ].map(url => ({ query, url, title: "凱菲屋 台北市信義區松壽路2號" })),
+  });
+  assert.equal(pack.coverage[0]?.queries[0], 'site:threads.com "凱菲屋" "台北市"');
+  assert.deepEqual(pack.sources.map(source => source.url), [actual]);
+  assert.equal(pack.sources[0]?.identityStatus, "candidate");
+});
