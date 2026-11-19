@@ -76,6 +76,15 @@ struct LivePublicDiscoveryDetail: View {
                             .font(.caption.weight(.semibold)).foregroundStyle(DateTheme.blue)
                         Text(venue.place.name).font(.title2.weight(.bold))
                         Text(venue.place.address).font(.subheadline).foregroundStyle(DateTheme.muted)
+                        let now = Date()
+                        if let discoveryExpiresAt, discoveryExpiresAt > now,
+                           let count = venue.recentTopicAccountCount(at: now) {
+                            Label(copy("\(count) accounts posted about this place in the past 30 days",
+                                       "近 30 天有 \(count) 個帳號提到這裡"),
+                                  systemImage: "flame.fill")
+                                .font(.caption.weight(.semibold)).foregroundStyle(DateTheme.ink)
+                                .accessibilityIdentifier("live.discovery.recentTopic")
+                        }
                         Text(copy("Check the place before saving. Posts are their authors’ views.",
                                   "收藏前請確認地點；貼文內容代表原作者的分享。"))
                             .font(.caption).foregroundStyle(DateTheme.muted)

@@ -6,6 +6,34 @@ enum LiveMapOrigin: Equatable {
     case saved, search, shared, publicPost
 }
 
+/// Separate venues in a mall can share one map coordinate, so expose a chooser for those pins.
+struct LiveExplorePinGroup: Identifiable {
+    private struct Position: Hashable {
+        let latitude: Double
+        let longitude: Double
+    }
+
+    private(set) var pins: [LiveMapPlace]
+    var id: String { pins[0].id }
+
+    static func group(_ pins: [LiveMapPlace]) -> [Self] {
+        var groups: [Self] = []
+        var publicPositions: [Position: Int] = [:]
+        for pin in pins {
+            if pin.origin == .publicPost {
+                let position = Position(latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude)
+                if let index = publicPositions[position] {
+                    groups[index].pins.append(pin)
+                    continue
+                }
+                publicPositions[position] = groups.count
+            }
+            groups.append(Self(pins: [pin]))
+        }
+        return groups
+    }
+}
+
 /// An ephemeral venue projection. Only `.saved` represents the account's collection.
 /// Creating or sharing this value never confirms a place or records a visit.
 struct LiveMapPlace: Identifiable {

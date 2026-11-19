@@ -34,6 +34,54 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertThrowsError(try decode(page(posts: [post(id: "Invalid", overrides: ["highlightRank": 4])])).validated(at: now))
     }
 
+    func testRecentTopicsCountDifferentAccountsAtTheExactBranch() throws {
+        let boundary = now.addingTimeInterval(-30 * 86_400)
+        let current = timestamp(now)
+        var otherBranch = place()
+        otherBranch["providerPlaceID"] = "fixture-other-branch"
+        otherBranch["name"] = "Other Fixture Cafe"
+
+        let posts = [
+            post(id: "First", overrides: ["publishedAt": timestamp(boundary)]),
+            post(id: "Repeated", overrides: ["publishedAt": timestamp(boundary), "authorHandle": "FIXTURE"]),
+            post(id: "Other", overrides: [
+                "id": "instagram:Other", "platform": "instagram",
+                "sourceURL": "https://www.instagram.com/p/Other/",
+                "publishedAt": current, "authorHandle": "another"
+            ]),
+            post(id: "Stale", overrides: [
+                "sourceURL": "https://www.threads.com/@old/post/Stale",
+                "publishedAt": timestamp(boundary.addingTimeInterval(-60)), "authorHandle": "old"
+            ]),
+            post(id: "WrongAccount", overrides: ["publishedAt": current, "authorHandle": "other_publisher"]),
+            post(id: "InvalidAccount", overrides: [
+                "id": "instagram:InvalidAccount", "platform": "instagram",
+                "sourceURL": "https://www.instagram.com/p/InvalidAccount/",
+                "publishedAt": current, "authorHandle": "Invalid handle"
+            ]),
+            post(id: "Undated", overrides: ["authorHandle": "undated"]),
+            post(id: "Anonymous", overrides: ["publishedAt": current, "authorHandle": NSNull()]),
+            post(id: "SameCoordinates", overrides: [
+                "sourceURL": "https://www.threads.com/@unrelated/post/SameCoordinates",
+                "publishedAt": current, "authorHandle": "unrelated", "place": otherBranch
+            ])
+        ]
+        let result = try decode(page(posts: posts)).validated(at: now)
+        let cafe = try XCTUnwrap(result.venues.first { $0.place.providerPlaceID == "fixture-venue" })
+        let other = try XCTUnwrap(result.venues.first { $0.place.providerPlaceID == "fixture-other-branch" })
+        XCTAssertEqual(cafe.recentTopicAccountCount(at: now), 2)
+        XCTAssertNil(cafe.recentTopicAccountCount(at: now.addingTimeInterval(1)))
+        XCTAssertNil(cafe.recentTopicAccountCount(at: now.addingTimeInterval(-1)))
+        XCTAssertNil(other.recentTopicAccountCount(at: now))
+
+        let pins = try [cafe, other].map { try XCTUnwrap(LiveMapPlace.discovery($0)) }
+        let groups = LiveExplorePinGroup.group(pins)
+        XCTAssertEqual(groups.count, 1)
+        let group = try XCTUnwrap(groups.first)
+        XCTAssertEqual(group.pins.map(\.id), pins.map(\.id))
+        XCTAssertEqual(group.pins.map(\.place.name), ["Fixture Cafe", "Other Fixture Cafe"])
+    }
+
     func testMalformedSchemaDatesFreshnessAndPublicBoundaryFailClosed() throws {
         for overrides: [String: Any] in [
             ["schemaVersion": 2], ["indexRevision": "not-a-revision"],
