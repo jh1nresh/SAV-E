@@ -22,7 +22,12 @@
             "origin": "publisher_reference",
             "checkedAt": "2026-11-19T06:30:14.840Z",
             "contentFingerprint": "e5a696d4cbe5a29ed5b662ae4392e25b8abe7103b6d2353bf387e064db14be9a",
-            "branchEvidence": "The original creator explicitly names 好公道金雞園 and gives Da’an District Yongkang Street No. 28-1. Taiwan Plus embeds it under its exact Yongkang venue section. Taipei City's food safety list identifies 好公道金雞園 at Yongkang Street No. 28-1. The exact Apple and Google listings both match that address. The exact Google listing supplies WGS84. Gongguan 金雞園 at Roosevelt Road is a distinct place."
+            "branchEvidence": "The original creator explicitly names 好公道金雞園 and gives Da’an District Yongkang Street No. 28-1. Taiwan Plus embeds it under its exact Yongkang venue section. Taipei City's food safety list identifies 好公道金雞園 at Yongkang Street No. 28-1. The exact Apple and Google listings both match that address. The exact Google listing supplies WGS84. Gongguan 金雞園 at Roosevelt Road is a distinct place.",
+            "publishedAt": "2026-01-28T01:00:00.000Z",
+            "publicLikes": {
+              "count": 9,
+              "observedAt": "2026-11-19T23:02:01.218Z"
+            }
           }
         },
         {

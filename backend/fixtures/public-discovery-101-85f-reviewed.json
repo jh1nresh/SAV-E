@@ -71,7 +71,12 @@
             "origin": "publisher_reference",
             "checkedAt": "2026-11-19T03:36:59.562Z",
             "contentFingerprint": "9c6f9ab215423dedf1d2b9cb42bffab9ebfe72bd1ff938e4a7ae88eaa80a54fe",
-            "branchEvidence": "The public taipei101_dt1988 original names Diamond Tony’s 隨意鳥地方 and gives Xinyi Road Section 5, No. 7, 85F, Suite A. ReadyGo links to that exact original in the restaurant’s own section. The restaurant group’s official reservations page separately lists the Taipei 101 branch and 85F, distinct from its other venues. The exact Apple Maps listing names the 101 restaurant and specifies 85F. Official page https://www.dt101.com.tw/pages/reservation-area. The re-opened exact Google place supplies the WGS84 pin; MapKit here returns a regional coordinate offset."
+            "branchEvidence": "The public taipei101_dt1988 original names Diamond Tony’s 隨意鳥地方 and gives Xinyi Road Section 5, No. 7, 85F, Suite A. ReadyGo links to that exact original in the restaurant’s own section. The restaurant group’s official reservations page separately lists the Taipei 101 branch and 85F, distinct from its other venues. The exact Apple Maps listing names the 101 restaurant and specifies 85F. Official page https://www.dt101.com.tw/pages/reservation-area. The re-opened exact Google place supplies the WGS84 pin; MapKit here returns a regional coordinate offset.",
+            "publishedAt": "2025-04-02T08:38:39.000Z",
+            "publicLikes": {
+              "count": 26,
+              "observedAt": "2026-11-19T23:02:00.471Z"
+            }
           }
         },
         {
