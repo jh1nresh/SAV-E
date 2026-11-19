@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import {
   canonicalSource, isPublicDiscoveryVenueID, readPublicDiscoveryFile, validatePublicDiscoveryPlace,
@@ -243,7 +243,17 @@ export async function collectPublicProfileDiscoveryDrafts(raw: unknown, fetchImp
   return { draft: { venues: draft }, profiles };
 }
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+function runningAsCommand(entry: string | undefined): boolean {
+  if (typeof import.meta.main === "boolean") return import.meta.main;
+  // Node 20 does not expose import.meta.main. Evaluation arguments are not script paths.
+  if (!entry || entry === "-" || process.execArgv.some(arg => /^(?:-[ep]|--(?:eval|print)(?:=|$))/.test(arg))) return false;
+  if (pathToFileURL(entry).href === import.meta.url) return true;
+  // Node resolves symlinks for the module URL but preserves the invocation path in argv.
+  try { return pathToFileURL(realpathSync(entry)).href === import.meta.url; }
+  catch { return false; }
+}
+
+if (runningAsCommand(process.argv[1])) {
   void (async () => {
     const [input] = process.argv.slice(2);
     if (!input || process.argv.length !== 3) throw new Error("Expected one public profile batch file");
