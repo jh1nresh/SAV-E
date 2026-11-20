@@ -1,0 +1,108 @@
+{
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJY3YUcaKrQjQRZ1OTdcQlbEo",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C59235879",
+      "branchEvidence": "The FunNow branch page https://www.myfunnow.com/en/branches/3025998847248 labels the listing Main, prints No. 118, Rui’an St., and embeds this Google Maps place ID. MapKit identifies Erben Songshuanshuan Wubenguan at the same No. 118 address. The pin uses the exact MapKit item coordinate."
+    },
+    {
+      "googlePlaceID": "ChIJ11E1o3OrQjQRSWCo0KZNkxo",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C2A2890D0",
+      "branchEvidence": "FooTinder's venue page links this Google place ID and prints the Ren'ai Road Section 4, Lane 48, No. 30-1 address. The same Google ID is present on https://esgpaybonus.tw/store/4543 for 醇一拉麵 at the same address. MapKit returned Chun Ramen with the exact door number and its own dedicated place ID."
+    }
+  ],
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C59235879",
+        "name": "二本松涮涮屋 本館",
+        "address": "台北市大安區瑞安街118號",
+        "latitude": 25.026759,
+        "longitude": 121.546355,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DfeZRqTv203/",
+          "authorHandle": "mardi.130",
+          "title": "二本松本館雲丹和牛宴",
+          "review": {
+            "checkedAt": "2026-11-18T21:42:11.326Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The public captioned Instagram embed by mardi.130 explicitly names 二本松涮涮屋 本館 and No. 118, Rui’an Street, Da’an. MapKit and the public FunNow main-branch listing resolve the same address.",
+            "contentFingerprint": "98e6ecc7f5aac9a473d346d4bd426af3a8d092778065097118e124ffa3adf9af"
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/De6cfx4N2Hw/",
+          "authorHandle": "twoboysfoods",
+          "title": "二本松的七道海膽料理",
+          "review": {
+            "checkedAt": "2026-11-18T21:42:11.326Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The public captioned Instagram embed by twoboysfoods names 二本松涮涮屋 and No. 118, Rui’an Street. Its restaurant phone also matches published main-branch listings.",
+            "contentFingerprint": "42a5980e382a5dd78fbfc27aef88144b663c3ca38aa09effec90bc0790e72a26"
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DelwydEGdeN/",
+          "authorHandle": "pio.jio_twins",
+          "title": "二本松北海道海膽宴食記",
+          "review": {
+            "checkedAt": "2026-11-18T21:42:11.326Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The public captioned Instagram embed by pio.jio_twins identifies 二本松涮涮屋 at No. 118, Rui’an Street, Longtu Village, Da’an, matching the main branch.",
+            "contentFingerprint": "eb50090db7ba99fc67b48cd9b4f9705adbac741e49f5ce8f1730aca4e13ca7da"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C2A2890D0",
+        "name": "醇一拉麵 總店",
+        "address": "106 台北市大安區德安里仁愛路四段48巷30-1號",
+        "latitude": 25.033419,
+        "longitude": 121.550799,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CgRcphbvemJ/",
+          "authorHandle": "huhgry",
+          "title": "醇一拉麵總店的鹹蛋湯頭食記",
+          "observedIn": "https://www.huhgry.com/projects/chun-yi-la-mian",
+          "review": {
+            "checkedAt": "2026-11-18T23:35:18.737Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The creator's linked Instagram captioned embed identifies 醇一拉麵 at Ren'ai Road Section 4, Lane 48, No. 30-1. Its full address agrees with both the creator's article and the exact Chun Ramen item returned by MapKit. The post is a dining report from the time it was published. Taipei City’s address-to-village table lists even-numbered premises 2–30 on Lane 48, Section 4, Ren’ai Road under 德安里 (https://www-ws.gov.taipei/001/Upload/419/relfile/20768/3383979/6055ae6f-876a-4dd0-9820-ac7acfbfd691.pdf).",
+            "contentFingerprint": "38ececd4e477c637f065fe36c96b2158652171beadae83c11ce6d46b58456971"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@chun.ramenshop/post/DcpgIr3n6Cs",
+          "authorHandle": "chun.ramenshop",
+          "title": "醇一拉麵總店的夏季玉蜀黍冷麵（2026）",
+          "observedIn": "https://www.threads.com/@chun.ramenshop",
+          "review": {
+            "checkedAt": "2026-11-19T11:46:20.307Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public Threads profile 醇一拉麵 links the August 2026 original and gives 02-2706-6800. The original by that storefront account labels the location 仁愛圓環. The matching Instagram storefront handle and phone are corroborated by HUHGRY at https://www.huhgry.com/projects/chun-yi-la-mian , which gives that same telephone and Ren'ai Road Section 4, Lane 48, No. 30-1. The title dates the seasonal dish.",
+            "contentFingerprint": "7870e35c826016de471d1333821326f3059cda03721ae769a16e41ba080427e0"
+          }
+        }
+      ]
+    }
+  ]
+}

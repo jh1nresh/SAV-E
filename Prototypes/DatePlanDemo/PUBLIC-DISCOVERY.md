@@ -10,6 +10,24 @@ The iOS preview implements the native UI and wire contract; the read-only index 
 
 Demand is the user's explicit default-map correction. Pricing/paywall is unchanged and unvalidated. First distribution is local native evidence and the existing Draft343. Phone152 remains the current installed baseline until the new data route is actually available.
 
+## Reviewed Taipei source archive
+
+The `backend/fixtures/public-discovery-*-reviewed.json` files contain public source links and independently reviewed Taipei venue associations. The existing synthetic UI fixtures are separate. The compiler carries only the canonical original link, public attribution, reviewed title, and exact venue into the index. Pending candidates stay in the archive. Post captions, fingerprints, review notes, and publisher evidence URLs stay out of the served artifact.
+
+From `backend/`, compile and inspect a local snapshot with:
+
+```sh
+npm run build
+node dist/publicDiscoveryReviewedBatch.js fixtures/public-discovery-*-reviewed.json > /absolute/path/taipei-index.json
+node dist/publicDiscoveryReviewedBatch.js --coverage /absolute/path/public-venues.json /absolute/path/taipei-index.json
+```
+
+The coverage input is `{"publicVenues":[...]}` with rows in the public place wire shape. Use an independent inventory so the report includes known venues without any source. The result groups uncovered venues and missing Instagram or Threads sources into bounded batches. For local verification, `--preview` exports the current index with native paging metadata. Keep generated snapshots outside the repository.
+
+A snapshot lives for at most 24 hours. Use `--refresh-index` to validate the full archive and renew checks only where a public original still matches its prior fingerprint. This reads the canonical provider embeds without a profile lookup or an account feed. An unreachable or changed original keeps its previous check time and leaves the published index when that check expires.
+
+The existing discovery endpoint also accepts an exact `provider` and `placeID` pair with the viewport. Reviewed Google aliases resolve to their canonical venue. Clients that send `X-Savvy-Discovery-Google-Venues: 1` receive independent Google venue rows. Clients that send `X-Savvy-Discovery-Associations: 1` receive each separately reviewed venue association for a shared original. Other clients receive unique originals and corresponding index-wide counts. A cursor binds the venue and the requested capabilities. The endpoint reads the snapshot selected by `SAVE_PUBLIC_DISCOVERY_INDEX_FILE`.
+
 ## Boundaries and observable acceptance
 
 - A dedicated public-source manifest must validate in full before serving. Do not query/join places, friend ratings, follows, captures or profiles. No public write/import API.
@@ -74,7 +92,7 @@ Each post has only:
 
 Source platforms: `instagram`, `threads`, `xiaohongshu`. Post ID is `platform:canonical-post-id`. Source URL must be an actual supported post path, not profile/search/login/short-share URL; normalize Threads.net to Threads.com. Strip tracking query/fragment and reject credentials and access-token-style source URLs. This is canonical attribution, not a claim every platform will open without its own login.
 
-Nullable author name/handle are shown as unavailable, never invented. Title<=160 characters, name<=80, handle<=100. `publishedAt` is the original timestamp if known; never invent it from fetch time. `visibility` must be `public`. Location evidence is `explicit_geotag` or `reviewed_match`; provider is `apple_maps` or `amap`, provider ID/name/address nonempty, normalized coordinateSystem exactlyWGS84, valid/nonzero venue coordinates. The same provider/place ID must have consistent name/address/category/coordinates across records.
+Nullable author name/handle are shown as unavailable, never invented. Title<=160 characters, name<=80, handle<=100. `publishedAt` is the original timestamp if known; never invent it from fetch time. `visibility` must be `public`. Location evidence is `explicit_geotag` or `reviewed_match`; provider is `apple_maps`, `amap`, or opt-in `google_places`, provider ID/name/address nonempty, normalized coordinateSystem exactlyWGS84, valid/nonzero venue coordinates. The same provider/place ID must have consistent name/address/category/coordinates across records.
 
 Optional cover: `{ "url": "https://...", "expiresAt": "...", "permission": "author" | "provider" }`. Recognized subdomains: `cdninstagram.com`, `fbcdn.net`, `xhscdn.com`, `xiaohongshu.com` image-CDN hosts only. HTTPS, no credentials/local/private hosts, no API access tokens. Unknown/stale/ungranted covers are rejected or omitted explicitly; backend never fetches these URLs. Native image reads must be ephemeral, bounded and cancelable.
 

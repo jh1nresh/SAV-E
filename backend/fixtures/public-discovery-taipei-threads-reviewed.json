@@ -1,0 +1,167 @@
+{
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJ41wbgbqrQjQR75mxQgbywys",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F996BD800A5C",
+      "branchEvidence": "The original late-night list names ICHIRAN on Songren Road. The official Taiwan locator (https://ichiran.com.tw/shop/Stores.aspx) identifies No. 97 Songren Road as the Taipei main shop, distinct from the A11 annex on Songshou Road and other stores. The Apple Maps item identifies the main shop; the exact Google listing confirms the Songren address, 02-2758-8918 and WGS84 pin. The title omits the old hours in the dated list."
+    },
+    {
+      "googlePlaceID": "ChIJBc6Vf8CrQjQRQuI3orYB4lE",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9A3B865C8C7",
+      "branchEvidence": "The original names Liu Mama Noodle on Civic Boulevard. Taipei Travel identifies it in that street (https://travel.taipei/file/2804/). MapKit shows this Civic Boulevard storefront separately from the Raohe Street shop. The exact Google listing confirms No. 37 Section 5, 02-8787-2093 and the WGS84 pin. The title omits hours and does not assert a visit."
+    },
+    {
+      "googlePlaceID": "ChIJ7eKUMUOpQjQRyHpGZcYLkGA",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C2A77364E",
+      "branchEvidence": "The original names Dehui Goose on Jinzhou Street. The public business telephone directory (https://www.iyp.com.tw/0225819595) lists 36 Jinzhou Street, 1F, and 02-2581-9595. Both map providers independently return this Jinzhou storefront, and the exact Google listing supplies the verified WGS84 pin. The title omits hours and does not assert a visit."
+    },
+    {
+      "googlePlaceID": "ChIJ74_lAaqpQjQReVp5r6R8x60",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F97B3B507821",
+      "branchEvidence": "The visible Threads original describes a meal with steamed sea bass and explicitly states 鮮食坊 at No. 1, Alley 3, Lane 108, Section 1, Nanchang Road. The NOWnews article embeds the exact original and lists phone 02-2392-6919. Exact Apple and Google listings identify that address. The verified Google storefront supplies the WGS84 pin. The title omits the historical price and hours."
+    }
+  ],
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F996BD800A5C",
+        "name": "一蘭 台灣台北本店",
+        "address": "台北市信義區松仁路97號1樓",
+        "latitude": 25.0364415,
+        "longitude": 121.5692243,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@eatfoodgod/post/DH5PSIUp50m",
+          "authorHandle": "eatfoodgod",
+          "title": "台北宵夜清單收錄一蘭松仁路本店",
+          "observedIn": "https://tobiehuang.com/2025-threads-marketing-case-study/",
+          "review": {
+            "checkedAt": "2026-11-18T21:35:21.238Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original late-night list names ICHIRAN on Songren Road. The official Taiwan locator (https://ichiran.com.tw/shop/Stores.aspx) identifies No. 97 Songren Road as the Taipei main shop, distinct from the A11 annex on Songshou Road and other stores. The Apple Maps item identifies the main shop; the exact Google listing confirms the Songren address, 02-2758-8918 and WGS84 pin. The title omits the old hours in the dated list.",
+            "contentFingerprint": "fbb7f78b923b1f9c6d62f1d6aa41e2bb162eafb3bd721041ae736dc71b4f2c2d",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/BZ8mogRl-rv/",
+          "observedIn": "https://dailyview.tw/popular/detail/1433",
+          "authorHandle": "foodie_leilei",
+          "title": "一蘭松仁路本店拉麵食記（2017）",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T04:42:05.195Z",
+            "contentFingerprint": "1cbae770d603abf52222319c8a7f2240a9a9753bb38ff4b8e387b10a8f3baa68",
+            "branchEvidence": "The readable original names 一蘭拉麵台灣 and 象山站. The contemporaneous DailyView article embeds precisely this permalink under 一蘭, dates it October 7 2017, and gives No. 97 Songren Road. Ichiran's May 2017 release specifies June 15 2017 as the first Taiwan shop's opening date at that address (https://www.value-press.com/pressrelease/183392). The separate A11 annex opened in June 2018 (https://www.value-press.com/pressrelease/201034). Current official locator https://ichiran.com.tw/shop/stores.aspx distinguishes the two stores. The post location label corroborates the brand; the exact branch is established by publisher context and the original date before any second Taiwan location."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9A3B865C8C7",
+        "name": "劉媽媽涼麵 市民大道店",
+        "address": "台北市松山區市民大道五段37號",
+        "latitude": 25.0461301,
+        "longitude": 121.5597737,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@eatfoodgod/post/DH5PSIUp50m",
+          "authorHandle": "eatfoodgod",
+          "title": "台北宵夜清單收錄劉媽媽涼麵市民大道店",
+          "observedIn": "https://tobiehuang.com/2025-threads-marketing-case-study/",
+          "review": {
+            "checkedAt": "2026-11-18T21:35:21.238Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original names Liu Mama Noodle on Civic Boulevard. Taipei Travel identifies it in that street (https://travel.taipei/file/2804/). MapKit shows this Civic Boulevard storefront separately from the Raohe Street shop. The exact Google listing confirms No. 37 Section 5, 02-8787-2093 and the WGS84 pin. The title omits hours and does not assert a visit.",
+            "contentFingerprint": "b6ba0d66c3cd0bb096dfe89c0e2c05011a2b69d6a01351b17d55f250f54ec3ce",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CJsK8BInCHa/",
+          "authorHandle": "eatwiththeblacklayers",
+          "title": "劉媽媽涼麵的麻醬涼麵與味噌湯",
+          "observedIn": "https://cbook.tw/archives/9477",
+          "review": {
+            "checkedAt": "2026-11-18T22:23:51.302Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original caption names 劉媽媽涼麵 and uses Instagram venue location 13466. CBOOK embeds this post and a second original (https://www.instagram.com/p/B1-URUfh99O/) under the same venue section, which gives No. 37, Section 5, Civic Boulevard and 02-8787-2093, matching the exact Google listing. The second original has the same location tag and gives No. 33 on the same street section; the No. 33 directory entry gives the same phone (https://www.319papago.idv.tw/SuperTaste/100-SP.html). MapKit independently identifies the Civic Boulevard storefront separately from Raohe Street. The in-app title contains no hours or price claims.",
+            "contentFingerprint": "20ab573da9d3a31676f5ecdd402b62075a2cebd5f66e359a3b321ed4af6e4d97"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C2A77364E",
+        "name": "德惠鵝肉專賣店 錦州街",
+        "address": "台北市中山區錦州街36號1樓",
+        "latitude": 25.0602089,
+        "longitude": 121.5251468,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@eatfoodgod/post/DH5PSIUp50m",
+          "authorHandle": "eatfoodgod",
+          "title": "台北宵夜清單收錄錦州街德惠鵝肉",
+          "observedIn": "https://tobiehuang.com/2025-threads-marketing-case-study/",
+          "review": {
+            "checkedAt": "2026-11-18T21:35:21.238Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original names Dehui Goose on Jinzhou Street. The public business telephone directory (https://www.iyp.com.tw/0225819595) lists 36 Jinzhou Street, 1F, and 02-2581-9595. Both map providers independently return this Jinzhou storefront, and the exact Google listing supplies the verified WGS84 pin. The title omits hours and does not assert a visit.",
+            "contentFingerprint": "a6263ef97bf90573f006e9e5c8182a55ceefcea63afa710b3b0f7e43f6023f24",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F97B3B507821",
+        "name": "鮮食坊",
+        "address": "台北市中正區南昌路一段108巷3弄1號",
+        "latitude": 25.0301697,
+        "longitude": 121.5174741,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@211health168/post/DebMOUwGPTA",
+          "authorHandle": "211health168",
+          "title": "鮮食坊用餐記錄：清蒸鱸魚",
+          "observedIn": "https://www.nownews.com/amp/news/6883284",
+          "review": {
+            "checkedAt": "2026-11-18T21:35:21.238Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The visible Threads original describes a meal with steamed sea bass and explicitly states 鮮食坊 at No. 1, Alley 3, Lane 108, Section 1, Nanchang Road. The NOWnews article embeds the exact original and lists phone 02-2392-6919. Exact Apple and Google listings identify that address. The verified Google storefront supplies the WGS84 pin. The title omits the historical price and hours.",
+            "contentFingerprint": "5e1df656ed17340d53edf1f15eb744fa0b33bee1927d55e40593895de31d2e04"
+          }
+        }
+      ]
+    }
+  ]
+}

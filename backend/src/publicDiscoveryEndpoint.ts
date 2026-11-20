@@ -1,11 +1,13 @@
-import { listPublicDiscoveryPosts, PublicDiscoveryError, type PublicDiscoveryResponse } from "./publicDiscovery.js";
+import { listPublicDiscoveryPosts, PublicDiscoveryError, type PublicDiscoveryCapabilities, type PublicDiscoveryResponse } from "./publicDiscovery.js";
 
 export async function evaluatePublicDiscoveryRequest(input: {
   method: string | undefined;
   authorization: string | undefined;
+  multiVenue?: boolean;
+  googleVenues?: boolean;
   url: URL;
   verifySubject: (token: string) => Promise<string>;
-  readPosts?: (url: URL) => Promise<PublicDiscoveryResponse>;
+  readPosts?: (url: URL, options: PublicDiscoveryCapabilities) => Promise<PublicDiscoveryResponse>;
 }): Promise<{ statusCode: number; body: unknown }> {
   const token = input.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
   if (!token) return { statusCode: 401, body: { error: "Account bearer required" } };
@@ -16,7 +18,9 @@ export async function evaluatePublicDiscoveryRequest(input: {
     return { statusCode: 405, body: { error: "Method not allowed" } };
   }
   try {
-    return { statusCode: 200, body: await (input.readPosts ?? listPublicDiscoveryPosts)(input.url) };
+    return { statusCode: 200, body: await (input.readPosts ?? listPublicDiscoveryPosts)(input.url, {
+      multiVenue: input.multiVenue, googleVenues: input.googleVenues,
+    }) };
   } catch (error) {
     if (error instanceof PublicDiscoveryError) return { statusCode: error.statusCode, body: { error: error.code } };
     return { statusCode: 503, body: { error: "public_discovery_unavailable" } };

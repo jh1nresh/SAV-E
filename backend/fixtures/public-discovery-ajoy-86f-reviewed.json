@@ -1,0 +1,39 @@
+{
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C57D75FEB",
+        "name": "饗 A Joy",
+        "address": "台北市信義區信義路五段7號86樓",
+        "latitude": 25.033976,
+        "longitude": 121.5645389,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CvkFUW1P2Kg/",
+          "observedIn": "https://taiwan-plus.com/archives/11285",
+          "authorHandle": "ajoy_tw",
+          "title": "饗 A Joy 台北 101 的 86 樓用餐空間",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T06:07:42.587Z",
+            "contentFingerprint": "b12ab014da36910b1456333b0ebaf5e229ffcc369a4a603c8be3467758bab914",
+            "branchEvidence": "The restaurant’s own Instagram post explicitly names 饗 A Joy, Taipei 101 and 86F. Taiwan Plus embeds the same original in its section for this specific venue. The official contact page https://www.ajoy.com.tw/zh-TW/contact-us and exact Apple and Google listings corroborate Taipei 101, No. 7, Section 5, Xinyi Road, 86F. The exact Google listing supplies WGS84."
+          }
+        }
+      ]
+    }
+  ],
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJbwzev3arQjQRYhE7fLo9EnI",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C57D75FEB",
+      "branchEvidence": "Both map IDs return the same A Joy name, website and address at Taipei 101, No. 7, Section 5, Xinyi Road, 86F. The restaurant contact page https://www.ajoy.com.tw/zh-TW/contact-us confirms the floor."
+    }
+  ]
+}
