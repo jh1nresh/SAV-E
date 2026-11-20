@@ -4556,6 +4556,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(Place.from(reloaded).sourceUrl, source)
         let pending = service.pendingSemanticSource(caption: text, sourceURL: source)
         XCTAssertEqual(pending.evidence.first, "Source URL: \(source)")
+        XCTAssertEqual(Place.from(reloaded).note, source)
     }
 
     @MainActor

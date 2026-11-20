@@ -7,6 +7,46 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D0CF5E1E6F145692C1C6D365 /* DatePlanModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86392DA85DC10A4ADB33915B /* DatePlanModel.swift */; };
+		833D37439B03977F381EB707 /* GuideBrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C8A8F0663D372E34151F3A4 /* GuideBrief.swift */; };
+		209EB0AD259D4C639FAFE46C /* LiveBusinessPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEF21FB7489D0FA5F1A2357 /* LiveBusinessPhoto.swift */; };
+		C33B354BDC9E18733BBADF60 /* LiveBusinessWebsitePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811F39A2F5DF0B0BE805B7CF /* LiveBusinessWebsitePhoto.swift */; };
+		1904220BB2E80356B86D31CA /* LiveFriendMapPlaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53135C7736E992266C62C059 /* LiveFriendMapPlaces.swift */; };
+		325C0AE78562D7C16A523313 /* LiveInteractiveMapSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7284C808378948544260E72 /* LiveInteractiveMapSurface.swift */; };
+		83820A99186557B348B3BD13 /* LiveMapConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FCAE35E26CB83F2838A8E96 /* LiveMapConfirmation.swift */; };
+		0D987CAEE630D8D44A8D7359 /* LiveMapLocationControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E9A69DAC985E37151DD876 /* LiveMapLocationControl.swift */; };
+		42898EBEB37B731FD65A1656 /* LiveMapPlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56618D7E7F6A5B5B3D5F3AB /* LiveMapPlace.swift */; };
+		02B5D5A204E4694D9EEEA164 /* LiveOutingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010AA47EA9DCAF694F178900 /* LiveOutingModel.swift */; };
+		EE9A6071EA4F596D29100B12 /* LivePlaceDetail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ABABE9C737C53F7E7A49841 /* LivePlaceDetail.swift */; };
+		FDF1E99BAB9415B78406B352 /* LivePlaceInformation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606E2188D8F78350322570FB /* LivePlaceInformation.swift */; };
+		6DC74CD8C3CE68E5307B0C10 /* LivePlanningLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */; };
+		D9DBE44C2CB540905F4E1261 /* LivePlanningMapRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */; };
+		1780E07F02EBA441F158DF60 /* LivePlanningReviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D7D48775E88FA44A02C0377 /* LivePlanningReviewFixture.swift */; };
+		EECDF0885DAB4A0A441DE560 /* LivePublicDiscoveryData.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */; };
+		84EB06F6384ACBC4092DCD6A /* LivePublicDiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */; };
+		55038F2DD4E9F45BDE1D31EE /* LivePublicDiscoveryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A167ED3A8F63FF3230B311 /* LivePublicDiscoveryViews.swift */; };
+		B2587C43F73BA71184D01ABC /* LivePublicGuideChooser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1D87A6FDCA01E5112B5064 /* LivePublicGuideChooser.swift */; };
+		902226D778C57F64D8ED3AC1 /* LivePublicGuideModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C96D854EEF5DAC76EDA3F1A /* LivePublicGuideModel.swift */; };
+		A1F4C79B9877FF6A820D42C6 /* LiveRoutePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19F5FDDB9F1488AA7491B500 /* LiveRoutePlan.swift */; };
+		C140305081562A6007679C8F /* DatePlanDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BF0E5B1EF0DB50DE24A77CA /* DatePlanDemoApp.swift */; };
+		3904A0F4C16E03819283412A /* DatePlanningViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A6D6CFB39C206FE585E966 /* DatePlanningViews.swift */; };
+		68507F674A81C8CFC6A7C48F /* DemoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8613421755DCC3485EFE953E /* DemoTheme.swift */; };
+		4A11E65F445241665F210748 /* LiveBusinessPhotoSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DBD047BDAF5B48EBC49016 /* LiveBusinessPhotoSourceTests.swift */; };
+		9055B8942D0A788AA70140A2 /* LiveBusinessWebsitePhotoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C6BBE2ABF5BB85554C68B4 /* LiveBusinessWebsitePhotoTests.swift */; };
+		818EA690E75ED68001269B19 /* LiveFriendMapPlacesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7275927CAB6374979121F9BE /* LiveFriendMapPlacesTests.swift */; };
+		7B5DEDD830B70A7B02294B31 /* LiveMapPlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E53210CFA5CB9BB43B26B58 /* LiveMapPlaceTests.swift */; };
+		6D74EA59F435F5C41FA4DE1F /* LiveOutingModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71762E43A5D610C293BA085F /* LiveOutingModelTests.swift */; };
+		6E82756B24CB1D4CB9A611EB /* LivePlaceInformationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5DBBD4E67D5544A4595A349 /* LivePlaceInformationTests.swift */; };
+		8065AEB7A16FB48783A0B61B /* LivePlaceNativeProbeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B15056EEBAD97FE9B11B05 /* LivePlaceNativeProbeTests.swift */; };
+		8B50A3BEDA3B38960215A745 /* LivePlanningLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F10F2B74AA32C794F3415C /* LivePlanningLibraryTests.swift */; };
+		36711F3D00A6485778138A5C /* LivePlanningReviewFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F33DDDA27A5FCFB4F188B0 /* LivePlanningReviewFixtureTests.swift */; };
+		54B8CE8842DA5CF8072E364F /* LivePlanningSurfaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 265604D05D5006242E5C058B /* LivePlanningSurfaceTests.swift */; };
+		57E0F4C69AA62D316B0EE2FE /* LivePublicDiscoveryDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25A8F38EDD50D9E66C89C6E5 /* LivePublicDiscoveryDataTests.swift */; };
+		D815E83BDF03E54AC233EF5D /* LivePublicDiscoveryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E16BAF563220BD6D8AF6DA72 /* LivePublicDiscoveryModelTests.swift */; };
+		CD9D954ED2419AE39C61E3F0 /* LivePublicGuideModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6967B34E702DB05E41E6592C /* LivePublicGuideModelTests.swift */; };
+		5F2042215980D90A1D474679 /* LiveRoutePlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E744F3AAD02178BF9A8BA9 /* LiveRoutePlanTests.swift */; };
+		30F8F970CA537D39B07F2A6E /* LivePlanningReviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF60A1EBAA449E8D1037E46 /* LivePlanningReviewUITests.swift */; };
+		2267D22652C38D463DD859D2 /* ImportedLinkNoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04EAD61BA7E8C9E44503F0F /* ImportedLinkNoteTests.swift */; };
 
 
 		C1A000000000000000000041 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000040 /* PendingShareStore.swift */; };
@@ -357,6 +397,46 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		86392DA85DC10A4ADB33915B /* DatePlanModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DatePlanModel.swift; path = "Prototypes/DatePlanDemo/Core/DatePlanModel.swift"; sourceTree = SOURCE_ROOT; };
+		1C8A8F0663D372E34151F3A4 /* GuideBrief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GuideBrief.swift; path = "Prototypes/DatePlanDemo/Core/GuideBrief.swift"; sourceTree = SOURCE_ROOT; };
+		DDEF21FB7489D0FA5F1A2357 /* LiveBusinessPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveBusinessPhoto.swift; path = "Prototypes/DatePlanDemo/Main/LiveBusinessPhoto.swift"; sourceTree = SOURCE_ROOT; };
+		811F39A2F5DF0B0BE805B7CF /* LiveBusinessWebsitePhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveBusinessWebsitePhoto.swift; path = "Prototypes/DatePlanDemo/Main/LiveBusinessWebsitePhoto.swift"; sourceTree = SOURCE_ROOT; };
+		53135C7736E992266C62C059 /* LiveFriendMapPlaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveFriendMapPlaces.swift; path = "Prototypes/DatePlanDemo/Main/LiveFriendMapPlaces.swift"; sourceTree = SOURCE_ROOT; };
+		A7284C808378948544260E72 /* LiveInteractiveMapSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveInteractiveMapSurface.swift; path = "Prototypes/DatePlanDemo/Main/LiveInteractiveMapSurface.swift"; sourceTree = SOURCE_ROOT; };
+		9FCAE35E26CB83F2838A8E96 /* LiveMapConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveMapConfirmation.swift; path = "Prototypes/DatePlanDemo/Main/LiveMapConfirmation.swift"; sourceTree = SOURCE_ROOT; };
+		A0E9A69DAC985E37151DD876 /* LiveMapLocationControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveMapLocationControl.swift; path = "Prototypes/DatePlanDemo/Main/LiveMapLocationControl.swift"; sourceTree = SOURCE_ROOT; };
+		C56618D7E7F6A5B5B3D5F3AB /* LiveMapPlace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveMapPlace.swift; path = "Prototypes/DatePlanDemo/Main/LiveMapPlace.swift"; sourceTree = SOURCE_ROOT; };
+		010AA47EA9DCAF694F178900 /* LiveOutingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveOutingModel.swift; path = "Prototypes/DatePlanDemo/Main/LiveOutingModel.swift"; sourceTree = SOURCE_ROOT; };
+		0ABABE9C737C53F7E7A49841 /* LivePlaceDetail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlaceDetail.swift; path = "Prototypes/DatePlanDemo/Main/LivePlaceDetail.swift"; sourceTree = SOURCE_ROOT; };
+		606E2188D8F78350322570FB /* LivePlaceInformation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlaceInformation.swift; path = "Prototypes/DatePlanDemo/Main/LivePlaceInformation.swift"; sourceTree = SOURCE_ROOT; };
+		7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningLibrary.swift; path = "Prototypes/DatePlanDemo/Main/LivePlanningLibrary.swift"; sourceTree = SOURCE_ROOT; };
+		3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningMapRoot.swift; path = "Prototypes/DatePlanDemo/Main/LivePlanningMapRoot.swift"; sourceTree = SOURCE_ROOT; };
+		5D7D48775E88FA44A02C0377 /* LivePlanningReviewFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningReviewFixture.swift; path = "Prototypes/DatePlanDemo/Main/LivePlanningReviewFixture.swift"; sourceTree = SOURCE_ROOT; };
+		BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryData.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryData.swift"; sourceTree = SOURCE_ROOT; };
+		A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryModel.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryModel.swift"; sourceTree = SOURCE_ROOT; };
+		29A167ED3A8F63FF3230B311 /* LivePublicDiscoveryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryViews.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryViews.swift"; sourceTree = SOURCE_ROOT; };
+		FC1D87A6FDCA01E5112B5064 /* LivePublicGuideChooser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicGuideChooser.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicGuideChooser.swift"; sourceTree = SOURCE_ROOT; };
+		6C96D854EEF5DAC76EDA3F1A /* LivePublicGuideModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicGuideModel.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicGuideModel.swift"; sourceTree = SOURCE_ROOT; };
+		19F5FDDB9F1488AA7491B500 /* LiveRoutePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveRoutePlan.swift; path = "Prototypes/DatePlanDemo/Main/LiveRoutePlan.swift"; sourceTree = SOURCE_ROOT; };
+		9BF0E5B1EF0DB50DE24A77CA /* DatePlanDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DatePlanDemoApp.swift; path = "Prototypes/DatePlanDemo/Sources/DatePlanDemoApp.swift"; sourceTree = SOURCE_ROOT; };
+		56A6D6CFB39C206FE585E966 /* DatePlanningViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DatePlanningViews.swift; path = "Prototypes/DatePlanDemo/Sources/DatePlanningViews.swift"; sourceTree = SOURCE_ROOT; };
+		8613421755DCC3485EFE953E /* DemoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DemoTheme.swift; path = "Prototypes/DatePlanDemo/Sources/DemoTheme.swift"; sourceTree = SOURCE_ROOT; };
+		39DBD047BDAF5B48EBC49016 /* LiveBusinessPhotoSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveBusinessPhotoSourceTests.swift; path = "Tests/SAVETests/LiveBusinessPhotoSourceTests.swift"; sourceTree = SOURCE_ROOT; };
+		59C6BBE2ABF5BB85554C68B4 /* LiveBusinessWebsitePhotoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveBusinessWebsitePhotoTests.swift; path = "Tests/SAVETests/LiveBusinessWebsitePhotoTests.swift"; sourceTree = SOURCE_ROOT; };
+		7275927CAB6374979121F9BE /* LiveFriendMapPlacesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveFriendMapPlacesTests.swift; path = "Tests/SAVETests/LiveFriendMapPlacesTests.swift"; sourceTree = SOURCE_ROOT; };
+		7E53210CFA5CB9BB43B26B58 /* LiveMapPlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveMapPlaceTests.swift; path = "Tests/SAVETests/LiveMapPlaceTests.swift"; sourceTree = SOURCE_ROOT; };
+		71762E43A5D610C293BA085F /* LiveOutingModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveOutingModelTests.swift; path = "Tests/SAVETests/LiveOutingModelTests.swift"; sourceTree = SOURCE_ROOT; };
+		B5DBBD4E67D5544A4595A349 /* LivePlaceInformationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlaceInformationTests.swift; path = "Tests/SAVETests/LivePlaceInformationTests.swift"; sourceTree = SOURCE_ROOT; };
+		70B15056EEBAD97FE9B11B05 /* LivePlaceNativeProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlaceNativeProbeTests.swift; path = "Tests/SAVETests/LivePlaceNativeProbeTests.swift"; sourceTree = SOURCE_ROOT; };
+		86F10F2B74AA32C794F3415C /* LivePlanningLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningLibraryTests.swift; path = "Tests/SAVETests/LivePlanningLibraryTests.swift"; sourceTree = SOURCE_ROOT; };
+		20F33DDDA27A5FCFB4F188B0 /* LivePlanningReviewFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningReviewFixtureTests.swift; path = "Tests/SAVETests/LivePlanningReviewFixtureTests.swift"; sourceTree = SOURCE_ROOT; };
+		265604D05D5006242E5C058B /* LivePlanningSurfaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningSurfaceTests.swift; path = "Tests/SAVETests/LivePlanningSurfaceTests.swift"; sourceTree = SOURCE_ROOT; };
+		25A8F38EDD50D9E66C89C6E5 /* LivePublicDiscoveryDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryDataTests.swift; path = "Tests/SAVETests/LivePublicDiscoveryDataTests.swift"; sourceTree = SOURCE_ROOT; };
+		E16BAF563220BD6D8AF6DA72 /* LivePublicDiscoveryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryModelTests.swift; path = "Tests/SAVETests/LivePublicDiscoveryModelTests.swift"; sourceTree = SOURCE_ROOT; };
+		6967B34E702DB05E41E6592C /* LivePublicGuideModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicGuideModelTests.swift; path = "Tests/SAVETests/LivePublicGuideModelTests.swift"; sourceTree = SOURCE_ROOT; };
+		24E744F3AAD02178BF9A8BA9 /* LiveRoutePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveRoutePlanTests.swift; path = "Tests/SAVETests/LiveRoutePlanTests.swift"; sourceTree = SOURCE_ROOT; };
+		7FF60A1EBAA449E8D1037E46 /* LivePlanningReviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningReviewUITests.swift; path = "Tests/SAVEUITests/LivePlanningReviewUITests.swift"; sourceTree = SOURCE_ROOT; };
+		B04EAD61BA7E8C9E44503F0F /* ImportedLinkNoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ImportedLinkNoteTests.swift; path = "Tests/SocialPlacePipelineTests/ImportedLinkNoteTests.swift"; sourceTree = SOURCE_ROOT; };
 
 		C1A000000000000000000001 /* ClipDoodleTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDoodleTheme.swift; sourceTree = "<group>"; };
 		C1A000000000000000000040 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
@@ -629,6 +709,53 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		465D7865E587A6D0A236D7C8 /* Date Plan Preview */ = {
+			isa = PBXGroup;
+			children = (
+				9BF0E5B1EF0DB50DE24A77CA /* DatePlanDemoApp.swift */,
+				86392DA85DC10A4ADB33915B /* DatePlanModel.swift */,
+				56A6D6CFB39C206FE585E966 /* DatePlanningViews.swift */,
+				8613421755DCC3485EFE953E /* DemoTheme.swift */,
+				1C8A8F0663D372E34151F3A4 /* GuideBrief.swift */,
+				B04EAD61BA7E8C9E44503F0F /* ImportedLinkNoteTests.swift */,
+				DDEF21FB7489D0FA5F1A2357 /* LiveBusinessPhoto.swift */,
+				39DBD047BDAF5B48EBC49016 /* LiveBusinessPhotoSourceTests.swift */,
+				811F39A2F5DF0B0BE805B7CF /* LiveBusinessWebsitePhoto.swift */,
+				59C6BBE2ABF5BB85554C68B4 /* LiveBusinessWebsitePhotoTests.swift */,
+				53135C7736E992266C62C059 /* LiveFriendMapPlaces.swift */,
+				7275927CAB6374979121F9BE /* LiveFriendMapPlacesTests.swift */,
+				A7284C808378948544260E72 /* LiveInteractiveMapSurface.swift */,
+				9FCAE35E26CB83F2838A8E96 /* LiveMapConfirmation.swift */,
+				A0E9A69DAC985E37151DD876 /* LiveMapLocationControl.swift */,
+				C56618D7E7F6A5B5B3D5F3AB /* LiveMapPlace.swift */,
+				7E53210CFA5CB9BB43B26B58 /* LiveMapPlaceTests.swift */,
+				010AA47EA9DCAF694F178900 /* LiveOutingModel.swift */,
+				71762E43A5D610C293BA085F /* LiveOutingModelTests.swift */,
+				0ABABE9C737C53F7E7A49841 /* LivePlaceDetail.swift */,
+				606E2188D8F78350322570FB /* LivePlaceInformation.swift */,
+				B5DBBD4E67D5544A4595A349 /* LivePlaceInformationTests.swift */,
+				70B15056EEBAD97FE9B11B05 /* LivePlaceNativeProbeTests.swift */,
+				7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */,
+				86F10F2B74AA32C794F3415C /* LivePlanningLibraryTests.swift */,
+				3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */,
+				5D7D48775E88FA44A02C0377 /* LivePlanningReviewFixture.swift */,
+				20F33DDDA27A5FCFB4F188B0 /* LivePlanningReviewFixtureTests.swift */,
+				7FF60A1EBAA449E8D1037E46 /* LivePlanningReviewUITests.swift */,
+				265604D05D5006242E5C058B /* LivePlanningSurfaceTests.swift */,
+				BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */,
+				25A8F38EDD50D9E66C89C6E5 /* LivePublicDiscoveryDataTests.swift */,
+				A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */,
+				E16BAF563220BD6D8AF6DA72 /* LivePublicDiscoveryModelTests.swift */,
+				29A167ED3A8F63FF3230B311 /* LivePublicDiscoveryViews.swift */,
+				FC1D87A6FDCA01E5112B5064 /* LivePublicGuideChooser.swift */,
+				6C96D854EEF5DAC76EDA3F1A /* LivePublicGuideModel.swift */,
+				6967B34E702DB05E41E6592C /* LivePublicGuideModelTests.swift */,
+				19F5FDDB9F1488AA7491B500 /* LiveRoutePlan.swift */,
+				24E744F3AAD02178BF9A8BA9 /* LiveRoutePlanTests.swift */,
+			);
+			name = "Date Plan Preview";
+			sourceTree = "<group>";
+		};
 		051C942F7137E365C09B7E40 /* SAV-EShareExtension */ = {
 			isa = PBXGroup;
 			children = (
@@ -939,6 +1066,7 @@
 		8BD1D63BF3DB238ECA5017E0 = {
 			isa = PBXGroup;
 			children = (
+				465D7865E587A6D0A236D7C8 /* Date Plan Preview */,
 				47BDFECDD76A0B7A6486DC9E /* DebugBridgeCore */,
 				0AEE946204DCDF793372965E /* DebugBridgeTouch */,
 				74981D00DBB34968E864115E /* DebugBridgeUI */,
@@ -1691,6 +1819,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2267D22652C38D463DD859D2 /* ImportedLinkNoteTests.swift in Sources */,
+				4A11E65F445241665F210748 /* LiveBusinessPhotoSourceTests.swift in Sources */,
+				9055B8942D0A788AA70140A2 /* LiveBusinessWebsitePhotoTests.swift in Sources */,
+				818EA690E75ED68001269B19 /* LiveFriendMapPlacesTests.swift in Sources */,
+				7B5DEDD830B70A7B02294B31 /* LiveMapPlaceTests.swift in Sources */,
+				6D74EA59F435F5C41FA4DE1F /* LiveOutingModelTests.swift in Sources */,
+				6E82756B24CB1D4CB9A611EB /* LivePlaceInformationTests.swift in Sources */,
+				8065AEB7A16FB48783A0B61B /* LivePlaceNativeProbeTests.swift in Sources */,
+				8B50A3BEDA3B38960215A745 /* LivePlanningLibraryTests.swift in Sources */,
+				36711F3D00A6485778138A5C /* LivePlanningReviewFixtureTests.swift in Sources */,
+				54B8CE8842DA5CF8072E364F /* LivePlanningSurfaceTests.swift in Sources */,
+				57E0F4C69AA62D316B0EE2FE /* LivePublicDiscoveryDataTests.swift in Sources */,
+				D815E83BDF03E54AC233EF5D /* LivePublicDiscoveryModelTests.swift in Sources */,
+				CD9D954ED2419AE39C61E3F0 /* LivePublicGuideModelTests.swift in Sources */,
+				5F2042215980D90A1D474679 /* LiveRoutePlanTests.swift in Sources */,
 				D21F69AA0C15E4242F4AB549 /* AccountSessionGateTests.swift in Sources */,
 				F9C08228C620B32B7E4BD547 /* AppLanguageSettingsTests.swift in Sources */,
 				3D477A002A189FE30CCD528C /* AtlasFiveTabBarTests.swift in Sources */,
@@ -1794,6 +1937,30 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C140305081562A6007679C8F /* DatePlanDemoApp.swift in Sources */,
+				D0CF5E1E6F145692C1C6D365 /* DatePlanModel.swift in Sources */,
+				3904A0F4C16E03819283412A /* DatePlanningViews.swift in Sources */,
+				68507F674A81C8CFC6A7C48F /* DemoTheme.swift in Sources */,
+				833D37439B03977F381EB707 /* GuideBrief.swift in Sources */,
+				209EB0AD259D4C639FAFE46C /* LiveBusinessPhoto.swift in Sources */,
+				C33B354BDC9E18733BBADF60 /* LiveBusinessWebsitePhoto.swift in Sources */,
+				1904220BB2E80356B86D31CA /* LiveFriendMapPlaces.swift in Sources */,
+				325C0AE78562D7C16A523313 /* LiveInteractiveMapSurface.swift in Sources */,
+				83820A99186557B348B3BD13 /* LiveMapConfirmation.swift in Sources */,
+				0D987CAEE630D8D44A8D7359 /* LiveMapLocationControl.swift in Sources */,
+				42898EBEB37B731FD65A1656 /* LiveMapPlace.swift in Sources */,
+				02B5D5A204E4694D9EEEA164 /* LiveOutingModel.swift in Sources */,
+				EE9A6071EA4F596D29100B12 /* LivePlaceDetail.swift in Sources */,
+				FDF1E99BAB9415B78406B352 /* LivePlaceInformation.swift in Sources */,
+				6DC74CD8C3CE68E5307B0C10 /* LivePlanningLibrary.swift in Sources */,
+				D9DBE44C2CB540905F4E1261 /* LivePlanningMapRoot.swift in Sources */,
+				1780E07F02EBA441F158DF60 /* LivePlanningReviewFixture.swift in Sources */,
+				EECDF0885DAB4A0A441DE560 /* LivePublicDiscoveryData.swift in Sources */,
+				84EB06F6384ACBC4092DCD6A /* LivePublicDiscoveryModel.swift in Sources */,
+				55038F2DD4E9F45BDE1D31EE /* LivePublicDiscoveryViews.swift in Sources */,
+				B2587C43F73BA71184D01ABC /* LivePublicGuideChooser.swift in Sources */,
+				902226D778C57F64D8ED3AC1 /* LivePublicGuideModel.swift in Sources */,
+				A1F4C79B9877FF6A820D42C6 /* LiveRoutePlan.swift in Sources */,
 				E1765044D53DA1C39EA3DC25 /* AIDrawerView.swift in Sources */,
 				A2044F57E65B309A4A9CD9E7 /* AIDrawerViewModel.swift in Sources */,
 				A0CF383392FBA76C9B676E0F /* AIParsingService.swift in Sources */,
@@ -1945,6 +2112,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				30F8F970CA537D39B07F2A6E /* LivePlanningReviewUITests.swift in Sources */,
 				A306E01D0000000000000004 /* SAVEGooglePhotoAttributionTests.swift in Sources */,
 				733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */,
 				243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */,
@@ -2311,6 +2479,7 @@
 		62E490771C1EB29468F7E8E3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SAVVY_MAIN_APP";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -2425,6 +2594,7 @@
 		97CDFFAEC41D5EA50569DC80 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SAVVY_MAIN_APP";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";

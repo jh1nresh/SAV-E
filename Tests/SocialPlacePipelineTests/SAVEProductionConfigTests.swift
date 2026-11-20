@@ -8666,6 +8666,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
         let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
         XCTAssertEqual(Place.from(reloaded).sourceUrl, "https://example.com/post")
+        XCTAssertEqual(Place.from(reloaded).note, "https://example.com/post")
     }
 
     @MainActor
