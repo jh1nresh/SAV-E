@@ -1,6 +1,48 @@
 import Foundation
 import MapKit
 
+/// Prospective import mapping only. Never reinterpret an existing saved note.
+enum ImportedLinkNote {
+    static func normalizedURL(_ raw: String?) -> String? {
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty,
+              value.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil,
+              var components = URLComponents(string: value),
+              ["https", "http"].contains(components.scheme?.lowercased() ?? ""),
+              components.host?.isEmpty == false, components.user == nil, components.password == nil else { return nil }
+        components.scheme = components.scheme?.lowercased()
+        components.host = components.host?.lowercased()
+        // Map and post identity may live in query/fragment; sharing sanitizers
+        // intentionally strip these and therefore cannot normalize this note.
+        return components.url?.absoluteString
+    }
+
+    private static func sourceRecord(in evidence: [String]) -> String? {
+        let records = evidence.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.contains("\n") && !$0.contains("\r") }
+        return records.first { $0.lowercased().hasPrefix("source url:") }
+            ?? records.first { $0.lowercased().hasPrefix("source:") }
+    }
+
+    static func hasExplicitSource(in evidence: [String]) -> Bool { sourceRecord(in: evidence) != nil }
+
+    static func explicitURL(in evidence: [String]) -> String? {
+        guard let record = sourceRecord(in: evidence), let colon = record.firstIndex(of: ":") else { return nil }
+        return normalizedURL(String(record[record.index(after: colon)...]))
+    }
+
+    static func evidencePreservingProse(_ classified: (note: String?, additional: [String])) -> [String] {
+        var evidence = classified.additional
+        for raw in (classified.note ?? "").components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !line.isEmpty, !evidence.contains(line) { evidence.append(line) }
+        }
+        return evidence
+    }
+
+
+}
+
 struct PendingSharedPlace: Codable {
     var ownerSubject: String? = nil
     var googlePlaceId: String? = nil
@@ -650,7 +692,12 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
     static func unplacedInboxItem(from place: Place, ownerSubject: String? = nil) -> PlaceReviewCandidate {
-        var venueEvidence = place.sourceEvidence
+        var archive = place
+        archive.additionalSourceEvidence = place.savedAdditionalSourceEvidence.flatMap { $0.components(separatedBy: .newlines) }.map { line in
+            let isVenueIdentity = Self.providerVenueEvidencePrefixes.contains { line.hasPrefix($0) }
+            return Place.classifiedSourceLines([line]).note != nil && !isVenueIdentity ? "Evidence: \(line)" : line
+        }
+        var venueEvidence = archive.sourceEvidence
         venueEvidence += Self.providerVenueEvidence(from: place)
         let canReconstructProvider = Self.providerLocation(from: venueEvidence) != nil
         // Never drop lat/lon unless provider evidence can rebuild the venue.
@@ -1387,7 +1434,9 @@ final class PendingPlaceImportService {
 
 extension Place {
     static func from(_ pendingPlace: PendingSharedPlace, id: UUID = UUID()) -> Place {
-        Place(
+        let hasSource = pendingPlace.sourceURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let linkNote = ImportedLinkNote.normalizedURL(pendingPlace.sourceURL)
+        return Place(
             id: id,
             name: pendingPlace.name,
             address: pendingPlace.address,
@@ -1397,7 +1446,7 @@ extension Place {
             category: PlaceCategory(rawValue: pendingPlace.category) ?? .food,
             status: .wantToGo,
             rating: nil,
-            note: pendingPlace.sourceText,
+            note: hasSource ? linkNote : pendingPlace.sourceText,
             sourceUrl: pendingPlace.sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: pendingPlace.sourceURL),
             sourceImageUrl: nil,
@@ -1424,9 +1473,15 @@ extension Place {
             displayName = refinedMatch?.name ?? candidate.name
         }
 
-        let sourceURL = sourceURL(from: candidate.evidence)
+        let legacySourceURL = sourceURL(from: candidate.evidence)
         let classified = Place.classifiedSourceLines(candidate.evidence)
-        let additional = classified.additional.filter { line in
+        // Unplaced can be a recovery snapshot of a real user's edited memory.
+        // Only fresh, explicitly linked imports adopt the URL-only note policy.
+        let hasSource = !candidate.isUnplacedInbox && ImportedLinkNote.hasExplicitSource(in: candidate.evidence)
+        let linkNote = hasSource ? ImportedLinkNote.explicitURL(in: candidate.evidence) : nil
+        let sourceURL = hasSource ? linkNote : legacySourceURL
+        let sourceEvidence = hasSource ? ImportedLinkNote.evidencePreservingProse(classified) : classified.additional
+        let additional = sourceEvidence.filter { line in
             guard let sourceURL else { return true }
             return line != "Source URL: \(sourceURL)"
         }
@@ -1447,7 +1502,7 @@ extension Place {
                 PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             status: .wantToGo,
             rating: nil,
-            note: classified.note,
+            note: hasSource ? linkNote : classified.note,
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
             coordinateSystem: coordinateSystem,

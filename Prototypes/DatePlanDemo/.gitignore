@@ -1,0 +1,5 @@
+Evidence/
+*.xcodeproj/xcuserdata/
+.host-checks
+.build-main/
+.build-main-lock/

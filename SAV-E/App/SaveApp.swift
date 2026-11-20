@@ -132,102 +132,123 @@ struct SaveApp: App {
             appState: DebugQAState.shared,
             register: DebugQAStateAccessor.register
         )
-        ReviewDemoStorage.resetUITestStorageIfRequested()
-        // UI tests cannot use "-hasCompletedOnboarding NO": NSArgumentDomain outranks
-        // the persistent domain, so the in-app write back to true would never be read.
-        if ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding") {
-            UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
-            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
-            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
-            ClipAppleAccountStore.clear()
-        }
-        // Keep the first-run map coachmark tour out of UI tests / smoke runs so
-        // it never traps focus over the map under test.
-        if ProcessInfo.processInfo.arguments.contains("--skip-map-tour") {
-            UserDefaults.standard.set(true, forKey: "hasSeenMapTour")
-        }
-        // Screenshot/UI-test rail: jump straight past onboarding so the sign-in
-        // screen (and the review-demo flow behind it) is immediately reachable.
-        if ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding") {
-            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
-            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
-            ClipAppleAccountStore.clear()
-        }
-        // After an intentional backend identity rebuild (new account-ref
-        // secret), stored refs can never match and the recovery screen has no
-        // forward path. Clearing the ref makes the next sign-in first-time;
-        // the local vault is untouched.
-        if ProcessInfo.processInfo.arguments.contains("--uitest-reset-account-gate") {
-            try? KeychainAccountReferenceStore.shared.clear()
-            ClipAppleAccountStore.clear()
+#if SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
+        let permitsLegacyTestMutations = !LivePlanningReviewFixture.hasLaunchIntent(arguments: ProcessInfo.processInfo.arguments)
+#else
+        let permitsLegacyTestMutations = true
+#endif
+        if permitsLegacyTestMutations {
+            ReviewDemoStorage.resetUITestStorageIfRequested()
+            // UI tests cannot use "-hasCompletedOnboarding NO": NSArgumentDomain outranks
+            // the persistent domain, so the in-app write back to true would never be read.
+            if ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding") {
+                UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+                UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
+                UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
+                ClipAppleAccountStore.clear()
+            }
+            // Keep the first-run map coachmark tour out of UI tests / smoke runs so
+            // it never traps focus over the map under test.
+            if ProcessInfo.processInfo.arguments.contains("--skip-map-tour") {
+                UserDefaults.standard.set(true, forKey: "hasSeenMapTour")
+            }
+            // Screenshot/UI-test rail: jump straight past onboarding so the sign-in
+            // screen (and the review-demo flow behind it) is immediately reachable.
+            if ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding") {
+                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
+                UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
+                ClipAppleAccountStore.clear()
+            }
+            // After an intentional backend identity rebuild (new account-ref
+            // secret), stored refs can never match and the recovery screen has no
+            // forward path. Clearing the ref makes the next sign-in first-time;
+            // the local vault is untouched.
+            if ProcessInfo.processInfo.arguments.contains("--uitest-reset-account-gate") {
+                try? KeychainAccountReferenceStore.shared.clear()
+                ClipAppleAccountStore.clear()
+            }
         }
 #endif
     }
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                rootContent
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
+            if LivePlanningReviewFixture.hasLaunchIntent(arguments: ProcessInfo.processInfo.arguments) {
+                LivePlanningReviewFixtureRoot()
+            } else {
+                standardWindowContent
             }
-            .environment(\.appLanguageSettings, languageSettings)
-            .environment(\.locale, languageSettings.locale)
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { languageSettings.refreshSystemLanguage() }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)) { _ in
-                languageSettings.refreshSystemLanguage()
-            }
-#if DEBUG
-            .modifier(UITestAppearanceOverride())
+#else
+            standardWindowContent
 #endif
-            .onAppear(perform: restorePendingShare)
-            .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
-                if receiptID == nil {
-                    pendingFriendShareURL = ""
-                    // Closing a preview is not confirmation or dismissal of its
-                    // durable Clip journal. Relaunch can offer it again.
-                }
+        }
+    }
+
+    /// The isolated simulator rail does not register private share/URL/account
+    /// listeners. Ordinary launches keep the same window content and handlers.
+    private var standardWindowContent: some View {
+        Group {
+            rootContent
+        }
+        .environment(\.appLanguageSettings, languageSettings)
+        .environment(\.locale, languageSettings.locale)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { languageSettings.refreshSystemLanguage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)) { _ in
+            languageSettings.refreshSystemLanguage()
+        }
+#if DEBUG
+        .modifier(UITestAppearanceOverride())
+#endif
+        .onAppear(perform: restorePendingShare)
+        .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
+            if receiptID == nil {
+                pendingFriendShareURL = ""
+                // Closing a preview is not confirmation or dismissal of its
+                // durable Clip journal. Relaunch can offer it again.
             }
-            .onOpenURL(perform: handleIncomingURL)
-            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                guard let url = activity.webpageURL else { return }
-                handleIncomingURL(url)
-            }
-            .onChange(of: authService.sessionGeneration) { _, generation in
-                handleAccountGenerationChange(generation)
-            }
-            .alert(linkAlertTitle, isPresented: Binding(
-                get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkErrorMessage != nil },
-                set: {
-                    if !$0 {
-                        openedTrip = nil
-                        openedList = nil
-                        openedReferral = nil
-                        linkErrorMessage = nil
-                    }
-                }
-            )) {
-                Button(languageSettings.text(.ok)) {
+        }
+        .onOpenURL(perform: handleIncomingURL)
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            guard let url = activity.webpageURL else { return }
+            handleIncomingURL(url)
+        }
+        .onChange(of: authService.sessionGeneration) { _, generation in
+            handleAccountGenerationChange(generation)
+        }
+        .alert(linkAlertTitle, isPresented: Binding(
+            get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkErrorMessage != nil },
+            set: {
+                if !$0 {
                     openedTrip = nil
                     openedList = nil
                     openedReferral = nil
                     linkErrorMessage = nil
                 }
-            } message: {
-                if let linkErrorMessage {
-                    Text(linkErrorMessage)
-                } else if let openedReferral {
-                    Text(referralReadyMessage(openedReferral))
-                } else if let openedList {
-                    Text(listReadyMessage(openedList))
-                } else if let openedTrip {
-                    Text(String(
-                        format: languageSettings.text(.tripLinkMessage),
-                        openedTrip.name,
-                        openedTrip.stops.count
-                    ))
-                }
+            }
+        )) {
+            Button(languageSettings.text(.ok)) {
+                openedTrip = nil
+                openedList = nil
+                openedReferral = nil
+                linkErrorMessage = nil
+            }
+        } message: {
+            if let linkErrorMessage {
+                Text(linkErrorMessage)
+            } else if let openedReferral {
+                Text(referralReadyMessage(openedReferral))
+            } else if let openedList {
+                Text(listReadyMessage(openedList))
+            } else if let openedTrip {
+                Text(String(
+                    format: languageSettings.text(.tripLinkMessage),
+                    openedTrip.name,
+                    openedTrip.stops.count
+                ))
             }
         }
     }
@@ -306,6 +327,10 @@ struct SaveApp: App {
                     sessionOrigin: authService.sessionOrigin,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
+                    pendingClipListSave: $pendingClipListSave,
                     onVerificationChanged: updateVerifiedAccount
                 )
                     .environmentObject(authService)
@@ -730,6 +755,10 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
+    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var requiresShareConfirmation: Bool
+    @Binding var requiresListConfirmation: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
 
     @State private var isRebindConfirmationPresented = false
@@ -778,10 +807,46 @@ private struct AuthenticatedRootView: View {
         }
     }
 
+    @ViewBuilder
     private var verifiedAccountContent: some View {
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if let owner = authService.currentUserId {
+            ContentView(
+                incomingPlaceReceipt: $incomingPlaceReceipt,
+                requiresShareConfirmation: $requiresShareConfirmation,
+                requiresListConfirmation: $requiresListConfirmation,
+                pendingClipListSave: $pendingClipListSave,
+                pendingOnboardingClue: accountOnboardingClue
+            )
+            .id("date-plan-\(owner)-\(sessionGeneration)")
+            .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+        } else {
+            AuthLoadingView()
+        }
+#else
         SaveInkNotebookRoot()
             .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+#endif
     }
+
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    private var accountOnboardingClue: Binding<String> {
+        Binding(get: {
+            guard authService.sessionGeneration == sessionGeneration else { return "" }
+            return PendingOnboardingClueAccess.isAvailable(text: pendingOnboardingClue,
+                ownerUserID: pendingOnboardingClueOwnerID, currentUserID: authService.currentUserId)
+                ? pendingOnboardingClue : ""
+        }, set: { value in
+            guard authService.sessionGeneration == sessionGeneration,
+                  let owner = authService.currentUserId,
+                  PendingOnboardingClueAccess.canMutate(ownerUserID: pendingOnboardingClueOwnerID,
+                    currentUserID: owner) else { return }
+            pendingOnboardingClue = value
+            pendingOnboardingClueOwnerID = PendingOnboardingClueAccess.ownerAfterMutation(
+                newText: value, ownerUserID: pendingOnboardingClueOwnerID, currentUserID: owner)
+        })
+    }
+#endif
 
     private func claimPendingOnboardingClueIfNeeded() {
         guard !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
