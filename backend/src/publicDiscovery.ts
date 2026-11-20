@@ -217,11 +217,15 @@ export async function listPublicDiscoveryPosts(
   url: URL, options: { filePath?: string; now?: Date } = {},
 ): Promise<PublicDiscoveryResponse> {
   const { bounds, limit, cursor } = query(url);
-  const now = options.now ?? new Date();
   const filePath = options.filePath ?? process.env.SAVE_PUBLIC_DISCOVERY_INDEX_FILE;
   if (!filePath?.trim()) return invalid();
+  let now: Date;
   let index: PublicDiscoveryIndex;
-  try { index = validatePublicDiscoveryManifest(await readIndex(filePath), now); } catch { return invalid(); }
+  try {
+    const contents = await readIndex(filePath);
+    now = options.now ?? new Date();
+    index = validatePublicDiscoveryManifest(contents, now);
+  } catch { return invalid(); }
   const indexRevision = createHash("sha256").update(JSON.stringify(index)).digest("hex");
   const filtered = index.posts.filter(post => inBounds(post, bounds));
   let offset = 0;

@@ -289,3 +289,13 @@ test("invalid replacements are rejected rather than serving a last-known-good ca
   assert.equal((await read(path)).posts.length, 1);
   await assert.rejects(listPublicDiscoveryPosts(url(), { filePath: path, now: new Date(now.getTime() + day) }), failure(503));
 });
+
+test("an index that expires during the file read is unavailable", async t => {
+  const input = manifest();
+  input.expiresAt = iso(1_000);
+  const filePath = await indexFile(t, input);
+  t.mock.timers.enable({ apis: ["Date"], now: now.getTime() + 999 });
+  const result = listPublicDiscoveryPosts(url(), { filePath });
+  t.mock.timers.setTime(now.getTime() + 1_000);
+  await assert.rejects(result, failure(503));
+});
