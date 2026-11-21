@@ -6,7 +6,8 @@ const highlightLimit = 3;
 export type PublicLikesObservation = { count: number; observedAt: string };
 
 function publicationTime(post: PublicDiscoveryPost): number {
-  return post.publishedAt === null ? Number.NEGATIVE_INFINITY : Date.parse(post.publishedAt);
+  const published = post.publishedAt ?? post.publishedOn;
+  return published === undefined ? Number.NEGATIVE_INFINITY : Date.parse(published);
 }
 
 /** Reviewed inputs only. Likes compare recent posts from the same platform. */
@@ -23,7 +24,10 @@ export function addVenueHighlights(posts: PublicDiscoveryPost[], likes: Map<stri
   const currentMetrics = now.getTime() - 30 * day;
   for (const group of byVenue.values()) {
     // Stable ties keep the verified index order.
-    const ordered = group.sort((a, b) => a.publishedAt === b.publishedAt ? 0 : publicationTime(b) - publicationTime(a));
+    const ordered = group.sort((a, b) => {
+      const left = publicationTime(a), right = publicationTime(b);
+      return left === right ? 0 : right - left;
+    });
     for (const platform of ["instagram", "threads"] as const) {
       const comparable = ordered.map((post, index) => ({ post, index, observation: likes.get(post.id) }))
         .filter(({ post, observation }) => post.platform === platform && publicationTime(post) >= recent
