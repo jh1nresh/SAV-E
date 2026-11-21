@@ -341,6 +341,24 @@
             "branchEvidence": "The original Instagram caption explicitly lists GreenHouse and No. 8, Alley 6, Lane 395, Section 4, Xinyi Road, 1F. The author's article embeds this original and repeats the street address. The exact Apple Maps result names Green House and the same house number; the confirmed Google place lists the same 1F address and supplies the pin’s WGS84 coordinate.",
             "contentFingerprint": "9affde5304046b629cf3295da36e489da05fe24a3d0a9490fb5ae4ed57a53eac"
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@greenhouse.tw/post/DfYZqKymQMY",
+          "observedIn": "https://www.threads.com/@greenhouse.tw",
+          "authorHandle": "greenhouse.tw",
+          "title": "GreenHouse 官方分享：濃苦抹茶",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T20:45:48.000Z",
+            "publishedAt": "2026-11-06T01:13:54.000Z",
+            "publicLikes": {
+              "count": 539,
+              "observedAt": "2026-11-19T20:45:48.000Z"
+            },
+            "contentFingerprint": "267f9025c2e2343f66de6775cd4f8146abd0205c4bc2c8f6b6cd95c780fc3385",
+            "branchEvidence": "The Threads profile links this original and directly links its matching Instagram business profile https://www.instagram.com/greenhouse.tw/, which reciprocally links to this Threads profile. The venue guide https://anita.tw/greenhouse/ lists that exact Instagram profile for GreenHouse, No. 8, Alley 6, Lane 395, Section 4, Xinyi Road. The Threads original is a question about the cafe's rich bitter matcha. Its caption does not itself state a street address."
+          }
         }
       ]
     },
@@ -367,6 +385,24 @@
             "origin": "publisher_reference",
             "branchEvidence": "The original Instagram caption names 食令shabu and specifies Taipei 101, 4F, at 45 City Hall Road. The author's article embeds the original. The mall's own venue article (https://stage.taipei101mall.com.tw/article/309) identifies the 4F branch. MapKit returns this venue separately from Dazhi; the independently confirmed Google ID and WGS84 pin resolve the same floor and public branch phone 02-8101-7989.",
             "contentFingerprint": "4d0fd648b5d9b96ab21a7c577ec04904d72e0441cdd2072374766c83d6513652"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@shi_ling_shabu_101/post/DUx4tccjyxK",
+          "observedIn": "https://www.threads.com/@shi_ling_shabu_101",
+          "authorHandle": "shi_ling_shabu_101",
+          "title": "食令 shabu 台北 101 店的 2026 春節公告",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T20:45:48.000Z",
+            "publishedAt": "2026-02-15T13:00:55.000Z",
+            "publicLikes": {
+              "count": 0,
+              "observedAt": "2026-11-19T20:45:48.000Z"
+            },
+            "contentFingerprint": "f274b33c6c227b8e83c87dfa2c8d4f9b5c153c9079c2d01f9bcbafb144adfbd5",
+            "branchEvidence": "The restaurant's Threads profile identifies Taipei 101 4F and links this exact original. Its 2026 Lunar New Year notice states No. 45 City Hall Road, fourth floor, and booking phone 02-8101-7989. Taipei 101's official restaurant guide https://stage.taipei101mall.com.tw/article/309 confirms this floor and phone and distinguishes the sister brand. The Dazhi outlet is only mentioned among keywords. The title identifies this as a historical announcement."
           }
         }
       ]
