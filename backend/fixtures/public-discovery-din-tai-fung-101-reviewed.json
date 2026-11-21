@@ -37,6 +37,23 @@
               "observedAt": "2026-11-19T21:21:42.005Z"
             }
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@natalie.veg/post/DYcJeWgAVc7",
+          "authorHandle": "natalie.veg",
+          "title": "鼎泰豐 101 店的蔬食小籠包與素餃",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T22:49:17.813Z",
+            "publishedAt": "2026-05-17T12:29:43.000Z",
+            "publicLikes": {
+              "count": 70,
+              "observedAt": "2026-11-19T22:49:17.813Z"
+            },
+            "contentFingerprint": "38f8b950c468d089d771fa5248dbdbee971c0bc67558a4d5df6ad662a41b457f",
+            "branchEvidence": "The public Threads author describes their meal, names 鼎泰豐 101店 and lists 市府路45號B1 and phone 02-81017799. The brand directory https://www.dintaifung.com.tw/store_list.php confirms the exact branch, address, floor and phone, separate from A4 and A13. The title describes what the author ordered and omits historical prices and hours."
+          }
         }
       ]
     }
