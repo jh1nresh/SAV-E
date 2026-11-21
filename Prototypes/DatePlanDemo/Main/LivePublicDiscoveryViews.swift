@@ -126,9 +126,7 @@ struct LivePublicDiscoveryDetail: View {
                                         .font(.caption).foregroundStyle(DateTheme.muted)
                                 }
                                 Spacer()
-                                if let date = post.publishedAt.flatMap(LivePublicPostCover.date) {
-                                    Text(date, style: .date).font(.caption2).foregroundStyle(DateTheme.muted)
-                                }
+                                LivePublicPostDateLabel(post: post)
                             }
                             if !post.title.isEmpty { Text(post.title).font(.subheadline).fixedSize(horizontal: false, vertical: true) }
                             if let expiry = discoveryExpiresAt {
@@ -171,6 +169,21 @@ struct LivePublicDiscoveryDetail: View {
             }
     }
     private func copy(_ english: String, _ chinese: String) -> String { language.localized(english: english, traditionalChinese: chinese) }
+}
+
+private struct LivePublicPostDateLabel: View {
+    let post: LivePublicDiscoveryPost
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        Group {
+            if let day = post.formattedPublicationDay(locale: locale) {
+                Text(day)
+            } else if let date = post.publishedAt.flatMap(LivePublicPostCover.date) {
+                Text(date, style: .date)
+            }
+        }.font(.caption2).foregroundStyle(DateTheme.muted)
+    }
 }
 
 @MainActor
@@ -278,7 +291,11 @@ struct LiveSavedVenuePosts: View {
                         VStack(alignment: .leading, spacing: 4) {
                             let attribution = [LivePublicDiscoverySummary.platformName(post.platform),
                                                post.authorName ?? post.authorHandle].compactMap { $0 }.joined(separator: " · ")
-                            Text(attribution).font(.caption).foregroundStyle(DateTheme.muted)
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(attribution).font(.caption).foregroundStyle(DateTheme.muted)
+                                Spacer(minLength: 0)
+                                LivePublicPostDateLabel(post: post)
+                            }
                             if !post.title.isEmpty { Text(post.title).font(.subheadline) }
                             LiveVenueOriginalButton(post: post, expiresAt: page.expiresAt,
                                 isCurrent: { canRead(post, revision: page.indexRevision) })

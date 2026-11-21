@@ -51,6 +51,31 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertEqual(venue.postsByHighlight.count, 4)
     }
 
+    func testPublicationCalendarDateRoundTripsAndOrdersWithoutInventingTime() throws {
+        let day = post(id: "Calendar", overrides: ["publishedOn": "2026-11-13"])
+        let older = post(id: "Exact", overrides: ["publishedAt": "2026-11-12T23:59:59Z"])
+        let raw = try decode(page(posts: [post(id: "Unknown"), older, day]))
+        let roundTrip = try JSONDecoder().decode(LivePublicDiscoveryPage.self, from: JSONEncoder().encode(raw))
+        let result = try roundTrip.validated(at: now)
+        let ordered = try XCTUnwrap(result.venues.first?.postsByHighlight)
+        XCTAssertEqual(ordered.map(\.id), ["threads:Calendar", "threads:Exact", "threads:Unknown"])
+        XCTAssertEqual(ordered.first?.publishedOn, "2026-11-13")
+        XCTAssertNil(ordered.first?.publishedAt)
+        XCTAssertEqual(ordered.first?.formattedPublicationDay(locale: Locale(identifier: "en_US")), "Nov 13, 2026")
+        XCTAssertNil(ordered.last?.formattedPublicationDay(locale: Locale(identifier: "en_US")))
+    }
+
+    func testCalendarPublicationDateRejectsInvalidAndConflictingValues() throws {
+        for overrides: [String: Any] in [
+            ["publishedOn": "2026-02-30"],
+            ["publishedOn": "2026-11-15"],
+            ["publishedOn": "2026-11-13T00:00:00Z"],
+            ["publishedOn": "2026-11-13", "publishedAt": "2026-11-13T00:00:00Z"]
+        ] {
+            XCTAssertThrowsError(try decode(page(posts: [post(overrides: overrides)])).validated(at: now))
+        }
+    }
+
     func testRecentTopicsCountDifferentAccountsAtTheExactBranch() throws {
         let boundary = now.addingTimeInterval(-30 * 86_400)
         let current = timestamp(now)
@@ -142,7 +167,8 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertEqual(validated.venues.map { $0.posts.first?.highlightRank }, [1, 2])
         for invalid in [
             post(overrides: ["place": sameCoordinateBranch]),
-            post(overrides: ["multiVenue": true, "place": sameCoordinateBranch, "authorHandle": "wrong"])
+            post(overrides: ["multiVenue": true, "place": sameCoordinateBranch, "authorHandle": "wrong"]),
+            post(overrides: ["multiVenue": true, "place": sameCoordinateBranch, "publishedOn": "2026-11-10"])
         ] {
             XCTAssertThrowsError(try decode(page(posts: [a, invalid])).validated(at: now))
         }
