@@ -77,7 +77,12 @@
             "checkedAt": "2026-11-18T17:53:44.272Z",
             "origin": "public_web_index",
             "branchEvidence": "The public Threads embed names Grand Hyatt Taipei Café and gives the same venue phone as the Hyatt post.",
-            "contentFingerprint": "3ebe32b6b1d2ac42e9b0c7e47f44f4cecd3ed13f17fbc4743651fedfa95aa264"
+            "contentFingerprint": "3ebe32b6b1d2ac42e9b0c7e47f44f4cecd3ed13f17fbc4743651fedfa95aa264",
+            "publishedAt": "2026-10-12T13:08:36.000Z",
+            "publicLikes": {
+              "count": 140,
+              "observedAt": "2026-11-19T21:42:28.512Z"
+            }
           }
         }
       ]
@@ -312,7 +317,12 @@
             "origin": "publisher_reference",
             "contentFingerprint": "bb615bceb225f06edec1ea9dd7a2f6006ac9d1fe42b58d79932cdeedf0fc71b0",
             "multiVenue": true,
-            "branchEvidence": "The readable exact original describes a route across public mall skywalks and ends at Taipei 101 after Breeze Nanshan. UDN links to this exact post. The city public works footbridge inventory lists the bridge between Taipei Financial Center and Breeze Nanshan Plaza. The Breeze access map (https://breeze-assets.breeze.com.tw/navigation/f7c5d04c5ac65f6d64d2697dc678daf598a96eda.pdf) labels the Taipei 101 shopping center on the public skyway network; the official venue guide https://www.taipei-101.com.tw/tw/shopping distinguishes the mall at No. 45 City Hall Road from the observatory. Scope is access to the public mall, not the other stops, indoor access, the observatory, or a weather guarantee."
+            "branchEvidence": "The readable exact original describes a route across public mall skywalks and ends at Taipei 101 after Breeze Nanshan. UDN links to this exact post. The city public works footbridge inventory lists the bridge between Taipei Financial Center and Breeze Nanshan Plaza. The Breeze access map (https://breeze-assets.breeze.com.tw/navigation/f7c5d04c5ac65f6d64d2697dc678daf598a96eda.pdf) labels the Taipei 101 shopping center on the public skyway network; the official venue guide https://www.taipei-101.com.tw/tw/shopping distinguishes the mall at No. 45 City Hall Road from the observatory. Scope is access to the public mall, not the other stops, indoor access, the observatory, or a weather guarantee.",
+            "publishedAt": "2026-10-05T15:02:26.000Z",
+            "publicLikes": {
+              "count": 20518,
+              "observedAt": "2026-11-19T21:37:36.471Z"
+            }
           }
         }
       ]

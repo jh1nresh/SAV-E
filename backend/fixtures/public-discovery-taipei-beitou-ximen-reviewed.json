@@ -35,7 +35,12 @@
             "checkedAt": "2026-11-19T11:07:43.274Z",
             "origin": "publisher_reference",
             "branchEvidence": "The originating Threads profile is named 雞の專家 北投總店, uses the same handle and shop name as its public Instagram profile, and displays the exact post. The post confirms the shop is at 中和街333號 and describes ordering in person. Its Beitou main-store address is independently confirmed by the exact Google Maps listing and a storefront visit reported by hanblog.tw/masterg. The title omits dated weather and operating information.",
-            "contentFingerprint": "d440bb463b2965a69f9c931ffbc05e1f31a5d0cec291b6e47fe58e18de5e336f"
+            "contentFingerprint": "d440bb463b2965a69f9c931ffbc05e1f31a5d0cec291b6e47fe58e18de5e336f",
+            "publishedAt": "2026-07-10T06:52:13.000Z",
+            "publicLikes": {
+              "count": 10,
+              "observedAt": "2026-11-19T21:42:25.452Z"
+            }
           }
         }
       ]
