@@ -15,6 +15,7 @@ export type PublicDiscoveryPost = {
   cover: { url: string; expiresAt: string; permission: "author" | "provider" } | null;
   place: PublicDiscoveryPlace;
   multiVenue?: true;
+  highlightRank?: number;
 };
 export type PublicDiscoveryCoverage = {
   platform: PublicDiscoveryPlatform; status: "connected" | "not_connected"; indexedPostCount: number;
@@ -62,7 +63,7 @@ function text(value: unknown, max: number, allowEmpty = false): string {
 function nullableText(value: unknown, max: number): string | null {
   return value === null ? null : text(value, max, true) || null;
 }
-function timestamp(value: unknown): string {
+export function timestamp(value: unknown): string {
   if (typeof value !== "string") return invalid();
   const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/.exec(value);
   if (!match) return invalid();
@@ -170,9 +171,10 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
     statuses.set(row.platform as PublicDiscoveryPlatform, row.status as PublicDiscoveryCoverage["status"]);
   }
   const associationIDs = new Set<string>(), identities = new Map<string, string>();
+  const highlightSlots = new Set<string>();
   const originals = new Map<string, { signature: string; multiVenue: boolean }>();
   const validatedPosts = input.posts.map((value): PublicDiscoveryPost => {
-    const row = record(value, ["id", "platform", "sourceURL", "authorName", "authorHandle", "title", "publishedAt", "verifiedAt", "visibility", "locationEvidence", "place"], ["cover", "multiVenue"]);
+    const row = record(value, ["id", "platform", "sourceURL", "authorName", "authorHandle", "title", "publishedAt", "verifiedAt", "visibility", "locationEvidence", "place"], ["cover", "multiVenue", "highlightRank"]);
     const platform = row.platform as PublicDiscoveryPlatform;
     if (!platforms.includes(platform) || statuses.get(platform) !== "connected" || row.visibility !== "public"
       || typeof row.locationEvidence !== "string" || !["explicit_geotag", "reviewed_match"].includes(row.locationEvidence)) return invalid();
@@ -188,6 +190,13 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
     const associationID = JSON.stringify([id, key]);
     if (associationIDs.has(associationID)) return invalid();
     associationIDs.add(associationID);
+    const highlightRank = row.highlightRank;
+    if (highlightRank !== undefined) {
+      if (typeof highlightRank !== "number" || ![1, 2, 3].includes(highlightRank)) return invalid();
+      const slot = JSON.stringify([key, highlightRank]);
+      if (highlightSlots.has(slot)) return invalid();
+      highlightSlots.add(slot);
+    }
     const authorName = nullableText(row.authorName, 80), authorHandle = nullableText(row.authorHandle, 100);
     const originalSignature = JSON.stringify([source.url, authorName, authorHandle, publishedAt]);
     const prior = originals.get(id);
@@ -199,7 +208,8 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
     return { id, platform, sourceURL: source.url, authorName, authorHandle, title: text(row.title, 160, true), publishedAt,
       verifiedAt, visibility: "public", locationEvidence: row.locationEvidence as PublicDiscoveryPost["locationEvidence"],
       cover: cover(row.cover, platform, sourceValidationTime), place: venue,
-      ...(row.multiVenue === true ? { multiVenue: true } : {}) };
+      ...(row.multiVenue === true ? { multiVenue: true } : {}),
+      ...(highlightRank === undefined ? {} : { highlightRank }) };
   });
   const validatedAliases = validatedGoogleAliases(input.googlePlaceAliases, identities);
   const posts = mode !== "strict"

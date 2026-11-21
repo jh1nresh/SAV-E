@@ -28,6 +28,14 @@ A snapshot lives for at most 24 hours. Use `--refresh-index` to validate the ful
 
 The existing discovery endpoint also accepts an exact `provider` and `placeID` pair with the viewport. Reviewed Google aliases resolve to their canonical venue. Clients that send `X-Savvy-Discovery-Google-Venues: 1` receive independent Google venue rows. Clients that send `X-Savvy-Discovery-Associations: 1` receive each separately reviewed venue association for a shared original. Other clients receive unique originals and corresponding index-wide counts. A cursor binds the venue and the requested capabilities. The endpoint reads the snapshot selected by `SAVE_PUBLIC_DISCOVERY_INDEX_FILE`.
 
+## Highlights per venue
+
+Record `review.publishedAt` only when the platform's original metadata identifies the same post and author. An independent `review.publicLikes` observation can include a nonnegative integer `count` and `observedAt` after the publication timestamp. A freshness recheck preserves both dates. The index publishes the date and a venue-local rank, while observation details stay in the archive.
+
+Sort by original publication time, with unknown dates after known dates. Rank by likes only among posts on the same platform published in the last 90 days with public observations no older than 30 days. Posts without counts retain their chronological slots. Keep both platforms in the highlights when both have a current associated original. Less recent originals remain eligible when needed. Exact branch identity and freshness still gate every row.
+
+The Explore venue sheet opens with up to three highlights. “Show all” reveals the rest of the loaded venue posts in the same order. The index retains every fresh association. Viewport pagination, coverage counts, source links, and save actions retain their existing contract.
+
 ## Boundaries and observable acceptance
 
 - A dedicated public-source manifest must validate in full before serving. Do not query/join places, friend ratings, follows, captures or profiles. No public write/import API.
