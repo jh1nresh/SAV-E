@@ -27,6 +27,7 @@ struct LiveInteractiveMapSurface: View {
     @State private var isLoading = false
     @State private var hasError = false
     @State private var isMounted = false
+    @State private var pinGroupSelection: LiveExplorePinGroup?
 
     init(position: Binding<MapCameraPosition>, pins: [LiveMapPlace], routes: [MKRoute], isInteractive: Bool = true,
          activePinID: String?, friends: [LiveFriendMapPlace] = [], publicVenues: [LivePublicDiscoveryVenue] = [],
@@ -52,16 +53,25 @@ struct LiveInteractiveMapSurface: View {
             group.first.map { ($0.pin.id, group) }
         })
         let publicByPinID = Dictionary(uniqueKeysWithValues: publicVenues.map { ("public:\($0.id)", $0) })
+        let now = Date()
+        let topicPins = Set(publicByPinID.compactMap { id, venue in
+            venue.recentTopicAccountCount(at: now).map { _ in id }
+        })
+        let groups = LiveExplorePinGroup.group(pins)
         return Map(position: $position, interactionModes: .all, selection: $selectedFeature) {
-            ForEach(pins) { pin in
+            ForEach(groups) { group in
+                let pin = group.pins[0]
                 Annotation(pin.place.name, coordinate: pin.coordinate, anchor: .bottom) {
-                    LiveInteractivePinButton(pin: pin, showsDetails: cameraDistance < 20_000,
-                                             isActive: activePinID == pin.id,
-                                             friends: friendsByPinID[pin.id] ?? [], publicVenue: publicByPinID[pin.id],
-                                             ownerSubject: ownerSubject, sessionGeneration: sessionGeneration) {
-                        guard isMounted, isInteractive, sessionIsCurrent else { return }
-                        cancelRequest(clearSelection: true)
-                        onSelect(pin)
+                    if group.pins.count > 1 {
+                        groupedPin(group, hasRecentTopic: group.pins.contains { topicPins.contains($0.id) })
+                    } else {
+                        LiveInteractivePinButton(pin: pin, showsDetails: cameraDistance < 20_000,
+                                                 isActive: activePinID == pin.id,
+                                                 friends: friendsByPinID[pin.id] ?? [], publicVenue: publicByPinID[pin.id],
+                                                 isRecentTopic: topicPins.contains(pin.id),
+                                                 ownerSubject: ownerSubject, sessionGeneration: sessionGeneration) {
+                            select(pin)
+                        }
                     }
                 }.annotationTitles(.hidden)
             }
@@ -82,30 +92,81 @@ struct LiveInteractiveMapSurface: View {
             else { cancelRequest(clearSelection: false) }
         }
         .onChange(of: activePinID) { _, id in
-            if id != nil { cancelRequest(clearSelection: true) }
+            if id != nil { invalidateInteraction() }
         }
-        .onChange(of: pins.map(\.id)) { _, _ in cancelRequest(clearSelection: true) }
+        .onChange(of: pins.map(\.id)) { _, _ in invalidateInteraction() }
         .onChange(of: isInteractive) { _, enabled in
-            if !enabled { cancelRequest(clearSelection: true) }
+            if !enabled { invalidateInteraction() }
         }
-        .onChange(of: ownerSubject) { _, _ in cancelRequest(clearSelection: true) }
-        .onChange(of: sessionGeneration) { _, _ in cancelRequest(clearSelection: true) }
+        .onChange(of: ownerSubject) { _, _ in invalidateInteraction() }
+        .onChange(of: sessionGeneration) { _, _ in invalidateInteraction() }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { cancelRequest(clearSelection: true) }
+            if phase != .active { invalidateInteraction() }
         }
         .onReceive(Publishers.CombineLatest(PrivyAuthService.shared.$authState,
                                            PrivyAuthService.shared.$sessionGeneration)) { state, generation in
             // Published values arrive before the singleton's stored values are updated.
             guard case .authenticated(let owner) = state,
                   owner == ownerSubject, generation == sessionGeneration else {
-                cancelRequest(clearSelection: true)
+                invalidateInteraction()
                 return
             }
         }
         .onAppear { isMounted = true }
-        .onDisappear { isMounted = false; cancelRequest(clearSelection: true) }
+        .onDisappear { isMounted = false; invalidateInteraction() }
+        .confirmationDialog(copy("Choose a place", "選擇地點"), isPresented: pinGroupPresented,
+                            titleVisibility: .visible, presenting: pinGroupSelection) { group in
+            ForEach(group.pins) { option in
+                Button(group.selectionTitle(for: option)) {
+                    guard let current = pins.first(where: { $0.id == option.id }),
+                          current.coordinate.latitude == option.coordinate.latitude,
+                          current.coordinate.longitude == option.coordinate.longitude else { return }
+                    select(current)
+                }
+            }
+        }
         .overlay { requestStatus }
         .accessibilityIdentifier("live.map")
+    }
+
+    private var pinGroupPresented: Binding<Bool> {
+        Binding(get: { pinGroupSelection != nil }, set: { if !$0 { pinGroupSelection = nil } })
+    }
+
+    private func invalidateInteraction() {
+        pinGroupSelection = nil
+        cancelRequest(clearSelection: true)
+    }
+
+    private func groupedPin(_ group: LiveExplorePinGroup, hasRecentTopic: Bool) -> some View {
+        Button {
+            guard isMounted, isInteractive, sessionIsCurrent else { return }
+            cancelRequest(clearSelection: true)
+            pinGroupSelection = group
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: hasRecentTopic ? "flame.fill" : "text.bubble.fill")
+                Text(group.pins.count, format: .number)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(hasRecentTopic ? DateTheme.actionInk : DateTheme.ink)
+            .padding(.horizontal, 8)
+            .frame(minHeight: 28)
+            .background(hasRecentTopic ? DateTheme.action : DateTheme.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(DateTheme.blue, lineWidth: 1.5))
+            .frame(minWidth: 44, minHeight: 44, alignment: .bottom)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(copy("\(group.pins.count) places at this spot", "這裡有 \(group.pins.count) 個地點"))
+        .accessibilityValue(hasRecentTopic ? copy("Includes a recent topic", "包含近期話題店") : "")
+        .accessibilityIdentifier("live.map.pin.group.\(group.id)")
+    }
+
+    private func select(_ pin: LiveMapPlace) {
+        guard isMounted, isInteractive, sessionIsCurrent else { return }
+        invalidateInteraction()
+        onSelect(pin)
     }
 
     private var sessionIsCurrent: Bool {
@@ -187,6 +248,7 @@ private struct LiveInteractivePinButton: View {
     let isActive: Bool
     let friends: [LiveFriendMapPlace]
     let publicVenue: LivePublicDiscoveryVenue?
+    let isRecentTopic: Bool
     let ownerSubject: String
     let sessionGeneration: Int
     let onTap: () -> Void
@@ -214,6 +276,8 @@ private struct LiveInteractivePinButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(pin.place.name), \(friends.isEmpty ? sourceTitle : friends.map { $0.statusTitle(language.language) }.joined(separator: ", "))")
+        .accessibilityValue(isRecentTopic
+                            ? language.localized(english: "Recent topic", traditionalChinese: "近期話題") : "")
         .accessibilityAddTraits(isActive ? .isSelected : [])
         .accessibilityIdentifier("live.map.pin.\(pin.id)")
     }
@@ -230,16 +294,23 @@ private struct LiveInteractivePinButton: View {
                             Image(systemName: "text.bubble.fill").foregroundStyle(DateTheme.blue)
                                 .frame(width: 46, height: 46).background(DateTheme.soft, in: Circle())
                         }
-                        Text("\(publicVenue.posts.count)").font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(DateTheme.actionInk).padding(4).background(DateTheme.action, in: Circle())
+                        HStack(spacing: 2) {
+                            if isRecentTopic { Image(systemName: "flame.fill") }
+                            Text(publicVenue.posts.count, format: .number)
+                        }
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(DateTheme.actionInk).padding(4).background(DateTheme.action, in: Circle())
                     }
                     .overlay(Circle().stroke(DateTheme.surface, lineWidth: 2))
                     Text(pin.place.name).font(.system(size: 11, weight: .semibold))
                         .lineLimit(1).padding(.horizontal, 8).padding(.vertical, 5)
                         .background(DateTheme.surface, in: Capsule())
                 } else {
-                    Image(systemName: "text.bubble.fill").font(.system(size: 13))
-                        .frame(width: 28, height: 28).background(DateTheme.surface, in: Circle())
+                    Image(systemName: isRecentTopic ? "flame.fill" : "text.bubble.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isRecentTopic ? DateTheme.actionInk : DateTheme.ink)
+                        .frame(width: 28, height: 28)
+                        .background(isRecentTopic ? DateTheme.action : DateTheme.surface, in: Circle())
                         .overlay(Circle().stroke(DateTheme.blue, lineWidth: 1.5))
                 }
             } else if !friends.isEmpty {

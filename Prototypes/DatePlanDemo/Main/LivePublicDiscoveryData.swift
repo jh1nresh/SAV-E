@@ -196,6 +196,17 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
     let place: LivePublicDiscoveryPlace
     let posts: [LivePublicDiscoveryPost]
 
+    func recentTopicAccountCount(at now: Date) -> Int? {
+        let start = now.addingTimeInterval(-30 * 86_400)
+        let handles = Set(posts.compactMap { post -> String? in
+            guard let handle = LivePublicDiscoveryPolicy.recentTopicHandle(for: post),
+                  let date = post.publishedAt.flatMap(LivePublicDiscoveryPolicy.date),
+                  start <= date, date <= now else { return nil }
+            return handle
+        })
+        return handles.count >= 2 ? handles.count : nil
+    }
+
     var postsByHighlight: [LivePublicDiscoveryPost] {
         let ordered = posts.enumerated().map {
             (index: $0.offset, post: $0.element, date: $0.element.publishedAt.flatMap(LivePublicDiscoveryPolicy.date))
@@ -301,6 +312,21 @@ struct LivePublicDiscoveryValidatedPage: Sendable {
 
 private enum LivePublicDiscoveryPolicy {
     static let platforms: Set<String> = ["instagram", "threads", "xiaohongshu"]
+
+    static func recentTopicHandle(for post: LivePublicDiscoveryPost) -> String? {
+        guard let handle = post.authorHandle?.lowercased(),
+              handle.range(of: "^[a-z0-9._]{1,30}$", options: .regularExpression) != nil else { return nil }
+        switch post.platform {
+        case "instagram":
+            return handle
+        case "threads":
+            // Threads originals include the publishing account in the canonical path.
+            let pathHandle = post.sourceLink?.path.split(separator: "/").first?.lowercased()
+            return pathHandle == "@\(handle)" ? handle : nil
+        default:
+            return nil
+        }
+    }
 
     static func text(_ value: String, limit: Int, allowEmpty: Bool = false) -> Bool {
         let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
