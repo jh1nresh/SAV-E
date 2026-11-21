@@ -1,10 +1,10 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  canonicalSource, readPublicDiscoveryFile, type PublicDiscoveryPlace,
+  canonicalIndexedThreadsSource, canonicalSource, readPublicDiscoveryFile, type PublicDiscoveryPlace,
 } from "./publicDiscovery.js";
 import { publicVenueSourceCoverage } from "./publicDiscoveryReviewedBatch.js";
-import { boundedResponseText } from "./sourceSearchWorker.js";
+import { boundedResponseText, searchPublicWebResults, type SourceSearchResult } from "./sourceSearchWorker.js";
 
 const keywordSearchURL = "https://graph.threads.net/v1.0/keyword_search";
 const searchModes = ["RECENT", "TOP"] as const;
@@ -12,7 +12,8 @@ const placeBatchSize = 20;
 const pageSize = 20;
 const maxResponseBytes = 256_000;
 
-type SearchMode = typeof searchModes[number];
+type KeywordSearchMode = typeof searchModes[number];
+type SearchMode = KeywordSearchMode | "PUBLIC_WEB";
 type SearchStatus = "searched" | "not_configured" | "access_required" | "rate_limited"
   | "unavailable" | "not_attempted";
 type DraftCandidate = {
@@ -28,7 +29,8 @@ type SearchRun = {
   hasMoreResults: boolean;
   candidates: DraftCandidate[];
 };
-type Options = { token?: string; offset?: number; now?: Date; fetchImpl?: typeof fetch };
+type WebSearch = (query: string) => Promise<SourceSearchResult[]>;
+type Options = { token?: string; offset?: number; now?: Date; fetchImpl?: typeof fetch; webSearch?: WebSearch };
 
 function providerStatus(response: Response, code: unknown): SearchStatus {
   if (response.status === 429 || code === 4 || code === 17 || code === 32 || code === 613) {
@@ -58,7 +60,7 @@ function draftCandidate(value: unknown): DraftCandidate | undefined {
 }
 
 async function keywordSearch(
-  query: string, mode: SearchMode, token: string, fetchImpl: typeof fetch,
+  query: string, mode: KeywordSearchMode, token: string, fetchImpl: typeof fetch,
 ): Promise<SearchRun> {
   const url = new URL(keywordSearchURL);
   url.search = new URLSearchParams({
@@ -95,6 +97,32 @@ async function keywordSearch(
   }
 }
 
+function webDraftCandidate(value: string | undefined): DraftCandidate | undefined {
+  const original = canonicalIndexedThreadsSource(value);
+  if (!original) return;
+  const username = new URL(original.url).pathname.split("/")[1]!.slice(1);
+  return draftCandidate({ permalink: original.url, username });
+}
+
+async function publicWebSearch(place: PublicDiscoveryPlace, search: WebSearch): Promise<SearchRun> {
+  const mode = "PUBLIC_WEB";
+  const text = (value: string) => value.normalize("NFKC").replace(/[^\p{L}\p{N}.-]+/gu, " ").trim();
+  const query = `site:threads.com ${text(place.name)} ${text(place.address).slice(0, 100)}`;
+  try {
+    const hits = await search(query);
+    const candidates = hits.slice(0, 10).map(hit => webDraftCandidate(hit.url))
+      .filter((candidate): candidate is DraftCandidate => candidate !== undefined);
+    return { mode, status: "searched", hasMoreResults: false,
+      candidates };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const status = message === "HTTP 429" ? "rate_limited"
+      : ["HTTP 401", "HTTP 403", "Public search requires verification"].includes(message) ? "access_required"
+        : "unavailable";
+    return emptyRun(mode, status);
+  }
+}
+
 /** Stages search hits only. Serving an association still requires separate original and branch review. */
 export async function collectThreadsDiscoveryDrafts(
   inventory: unknown, currentManifest: unknown, options: Options = {},
@@ -112,7 +140,13 @@ export async function collectThreadsDiscoveryDrafts(
   const places = missing.slice(offset, offset + placeBatchSize);
   const token = options.token?.trim();
   const fetchImpl = options.fetchImpl ?? fetch;
+  const webSearch = options.webSearch;
+  const runners = webSearch
+    ? [{ mode: "PUBLIC_WEB" as const, run: (place: PublicDiscoveryPlace) => publicWebSearch(place, webSearch) }]
+    : searchModes.map(mode => ({ mode, run: (place: PublicDiscoveryPlace) => token
+      ? keywordSearch(place.name, mode, token, fetchImpl) : emptyRun(mode, "not_configured") }));
   const venues: Array<{ place: PublicDiscoveryPlace; candidates: DraftCandidate[] }> = [];
+  const webAuthors = new Map<string, string | null>();
   const searches: Array<{ placeKey: string; modes: Array<Omit<SearchRun, "candidates">> }> = [];
   let halted = false;
   let unavailable = false;
@@ -120,23 +154,33 @@ export async function collectThreadsDiscoveryDrafts(
   for (const place of places) {
     const matches = new Map<string, DraftCandidate>();
     const modes: Array<Omit<SearchRun, "candidates">> = [];
-    for (const mode of searchModes) {
-      const run: SearchRun = !token ? emptyRun(mode, "not_configured")
-        : halted ? emptyRun(mode, "not_attempted")
-          : await keywordSearch(place.name, mode, token, fetchImpl);
+    for (const { mode, run: search } of runners) {
+      const run: SearchRun = halted ? emptyRun(mode, "not_attempted") : await search(place);
       modes.push({ mode, status: run.status, hasMoreResults: run.hasMoreResults });
       unavailable ||= run.status !== "searched";
-      halted ||= run.status === "access_required" || run.status === "rate_limited";
+      halted ||= run.status === "access_required" || run.status === "rate_limited"
+        || (mode === "PUBLIC_WEB" && run.status === "unavailable");
       for (const candidate of run.candidates) {
-        matches.set(canonicalSource(candidate.sourceURL, "threads").postID, candidate);
+        const { postID } = canonicalSource(candidate.sourceURL, "threads");
+        if (mode === "PUBLIC_WEB") {
+          const author = candidate.authorHandle.toLowerCase();
+          const previous = webAuthors.get(postID);
+          webAuthors.set(postID, previous === undefined || previous === author ? author : null);
+        }
+        matches.set(postID, candidate);
       }
     }
     if (matches.size > 0) venues.push({ place, candidates: [...matches.values()] });
     searches.push({ placeKey: `${place.provider}:${place.providerPlaceID}`, modes });
   }
 
+  const acceptedVenues = webSearch ? venues.flatMap(({ place, candidates }) => {
+    const accepted = candidates.filter(({ sourceURL }) =>
+      webAuthors.get(canonicalSource(sourceURL, "threads").postID) !== null);
+    return accepted.length ? [{ place, candidates: accepted }] : [];
+  }) : venues;
   return {
-    draft: { venues },
+    draft: { venues: acceptedVenues },
     coverage: {
       totalMissing: missing.length, offset,
       nextOffset: !unavailable && offset + places.length < missing.length ? offset + places.length : null,
@@ -147,17 +191,21 @@ export async function collectThreadsDiscoveryDrafts(
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  const [inventoryPath, manifestPath, offset] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const usePublicWeb = args[0] === "--public-web";
+  const [inventoryPath, manifestPath, offset, extra] = usePublicWeb ? args.slice(1) : args;
   void (async () => {
     if (!inventoryPath || !manifestPath || (offset !== undefined && !/^\d{1,3}$/.test(offset))
-      || process.argv.length > 5) {
+      || extra !== undefined) {
       throw new Error("Expected inventory, current manifest, and optional numeric offset");
     }
     const [inventory, manifest] = await Promise.all([
       readPublicDiscoveryFile(inventoryPath), readPublicDiscoveryFile(manifestPath),
     ]);
     const result = await collectThreadsDiscoveryDrafts(inventory, manifest, {
-      token: process.env.SAVE_THREADS_KEYWORD_SEARCH_TOKEN,
+      ...(usePublicWeb
+        ? { webSearch: query => searchPublicWebResults(query, undefined, 10) }
+        : { token: process.env.SAVE_THREADS_KEYWORD_SEARCH_TOKEN }),
       offset: offset === undefined ? undefined : Number(offset),
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
