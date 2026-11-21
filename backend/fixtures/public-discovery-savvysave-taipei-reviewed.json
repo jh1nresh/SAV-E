@@ -3807,6 +3807,592 @@
           }
         }
       ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C59235879",
+        "name": "二本松涮涮屋 本館",
+        "address": "台北市大安區瑞安街118號",
+        "latitude": 25.0296508,
+        "longitude": 121.5425305,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DfwsAORFaeq",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北火鍋清單 · 二本松涮涮屋 本館",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T11:36:59.856Z",
+            "publishedOn": "2026-11-15",
+            "contentFingerprint": "6c260d8928d1be824bddf161635011a4a88dba071f0e286b0508c4adc70e5f00",
+            "branchEvidence": "The original carousel slide 12 names 二本松涮涮屋 at 台北市大安區瑞安街118號. The exact Apple Maps venue H2710I3F98C59235879 matches the reviewed address. Carousel SHA-256 c7d1454dc2795936588b9d6486dbcc42e65e164dfdd1032d980da98576099bf0. The main storefront at 118 is distinct from the second branch at 116.",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9267923395B",
+        "name": "阿宗麵線 西門店",
+        "address": "台北市萬華區峨眉街8-1號",
+        "latitude": 25.0432984,
+        "longitude": 121.5077519,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DfHbt93Fsj3/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜西門站 · 阿宗麵線 西門店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:23:48.544Z",
+            "publishedOn": "2026-10-30",
+            "contentFingerprint": "c516b77084471dd938915d308171f376cec82f3aed836319b35f6659978da9d1",
+            "branchEvidence": "The original guide identifies the Ximending location near Exit 6 and its pork-intestine vermicelli. Taipei Wanhua District and the Ximending business association independently confirm its address and the exact Apple listing. https://whdo.gov.taipei/News_Content.aspx?n=19CABBEF3F991E9E&s=C0811D8F9FC97E2E&sms=FE5F0DE8FA424CE8",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DfHb3hGlcDq",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜西門站 · 阿宗麵線 西門店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:23:48.544Z",
+            "publishedOn": "2026-10-30",
+            "contentFingerprint": "3aa1cf0adc808b28347254189138f84abce02405e0b7b6066e312fbaeebd0687",
+            "branchEvidence": "The original guide identifies the Ximending location near Exit 6 and its pork-intestine vermicelli. Taipei Wanhua District and the Ximending business association independently confirm its address and the exact Apple listing. https://whdo.gov.taipei/News_Content.aspx?n=19CABBEF3F991E9E&s=C0811D8F9FC97E2E&sms=FE5F0DE8FA424CE8",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C28F5BB0D",
+        "name": "老天祿滷味 武昌街總店",
+        "address": "台北市萬華區武昌街二段55號",
+        "latitude": 25.0447332,
+        "longitude": 121.5072237,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DfHbt93Fsj3/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜西門站 · 老天祿滷味 武昌街總店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:23:48.544Z",
+            "publishedOn": "2026-10-30",
+            "contentFingerprint": "9ca177f6db26593e1fe36239b10daa3432f5f38cb7406f0d621ca389c1815909",
+            "branchEvidence": "The original names Lao Tian Lu and describes its specialty duck tongue and official daily hours near Exit 6. The business location page names a single location at Wuchang Section 2 No. 55. Its official directions pin is within 5.5 meters of the exact named Apple point after WGS84 normalization. The separate Shanghai Laotianlu is on Chengdu Road and has a different ID and phone. https://www.lautianlu.com.tw/store-detail/wuchang-lautianlu/",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DfHb3hGlcDq",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜西門站 · 老天祿滷味 武昌街總店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:23:48.544Z",
+            "publishedOn": "2026-10-30",
+            "contentFingerprint": "2ae555180ab04d0a46fa573bda3d9de96be68a81574ed2a89edf2db6dc5c2dea",
+            "branchEvidence": "The original names Lao Tian Lu and describes its specialty duck tongue and official daily hours near Exit 6. The business location page names a single location at Wuchang Section 2 No. 55. Its official directions pin is within 5.5 meters of the exact named Apple point after WGS84 normalization. The separate Shanghai Laotianlu is on Chengdu Road and has a different ID and phone. https://www.lautianlu.com.tw/store-detail/wuchang-lautianlu/",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJeVVhZiKrQjQRnpFOMd5J9LI",
+        "name": "酥軾 SUISPY",
+        "address": "台北市大安區大安路一段228號",
+        "latitude": 25.0339382,
+        "longitude": 121.5458288,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DfKDuWiFvfj/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜大安站 · 酥軾 SUISPY",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-31",
+            "contentFingerprint": "cafe01d7c979dd3c85214310a512a33235b615c520121b25ef696a39908f8f5e",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJeVVhZiKrQjQRnpFOMd5J9LI, named business, street and WGS84 point. The same flaky egg pancakes and Exit 6 walking distance identify the brunch shop at No. 228. https://www.mecocute.com/suispy/",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DfKD4FhFWsb",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜大安站 · 酥軾 SUISPY",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-31",
+            "contentFingerprint": "c0c240af33861ace2cb9b908d40b337ff0c966282f458b68bb9fc4d81141831a",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJeVVhZiKrQjQRnpFOMd5J9LI, named business, street and WGS84 point. The same flaky egg pancakes and Exit 6 walking distance identify the brunch shop at No. 228. https://www.mecocute.com/suispy/",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJwXU8A-GrQjQRnHvnarx4XoQ",
+        "name": "3元6虱目魚湯",
+        "address": "台北市中山區龍江路191號",
+        "latitude": 25.0558739,
+        "longitude": 121.5405682,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DfCR_U1m_Xl/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜南京復興站 · 3元6虱目魚湯",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-28",
+            "contentFingerprint": "7e4e18a7845ce7a7963eb9594a48e781f2ddcab18b1d9adfe816369cd013f242",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJwXU8A-GrQjQRnHvnarx4XoQ, named business, street and WGS84 point. The exact name, fish broth, No. 191, business phone and eight-minute range from Exit 1 independently align. https://go.17eat.com/435/",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DfCSLuXG1E1",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜南京復興站 · 3元6虱目魚湯",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-28",
+            "contentFingerprint": "d20fee83a34e79ecf91a971ef4b45c9107eded4acb019f96bc09d34571d93383",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJwXU8A-GrQjQRnHvnarx4XoQ, named business, street and WGS84 point. The exact name, fish broth, No. 191, business phone and eight-minute range from Exit 1 independently align. https://go.17eat.com/435/",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJuQYlDIupQjQRTePyZpJvZ_U",
+        "name": "珍記豬血糕",
+        "address": "台北市中正區羅斯福路四段24巷12弄12號旁",
+        "latitude": 25.0147502,
+        "longitude": 121.5330064,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/De_t2ktFtia/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜公館站 · 珍記豬血糕",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-27",
+            "contentFingerprint": "ba038c39611c3f1f7aad57fac0a9a96384d541b47d4acdc10380bf18c483366c",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJuQYlDIupQjQRTePyZpJvZ_U, named business, street and WGS84 point. The standalone stall near Tingzhou Road and Exit 4 is independently confirmed with the shop phone and Wednesday closure. https://supertaste.tvbs.com.tw/infocard/28105",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/De_t-dNFTVw",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜公館站 · 珍記豬血糕",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-27",
+            "contentFingerprint": "57212cf44d8780cb82db53098bb109173f5062ee6941ebf0abc5a1c41bda6eac",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJuQYlDIupQjQRTePyZpJvZ_U, named business, street and WGS84 point. The standalone stall near Tingzhou Road and Exit 4 is independently confirmed with the shop phone and Wednesday closure. https://supertaste.tvbs.com.tw/infocard/28105",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJK-SHbqmpQjQRV3AeYZwWCMs",
+        "name": "貨室甜品",
+        "address": "台北市大同區赤峰街71巷34號",
+        "latitude": 25.0565493,
+        "longitude": 121.5204453,
+        "category": "cafe",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/De1d4pNG-u4/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜雙連站 · 貨室甜品",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-23",
+            "contentFingerprint": "b7dc966dd129d651306b7b97c81417f6f08a4322866c17db18cae555575b5fde",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJK-SHbqmpQjQRV3AeYZwWCMs, named business, street and WGS84 point. Taipei Travel names the Chifeng shop and official Instagram. The same white shop and milk-and-roasted-flour ice from the original are documented here. https://www.travel.taipei/file/35713/ https://wunweistories.com/food-huoshih-202505/",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/De1zvmkG_ae",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜雙連站 · 貨室甜品",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-23",
+            "contentFingerprint": "8ddec188f785af19fa9db6b1241b6e42eb999d59f68304583e24e37155547493",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJK-SHbqmpQjQRV3AeYZwWCMs, named business, street and WGS84 point. Taipei Travel names the Chifeng shop and official Instagram. The same white shop and milk-and-roasted-flour ice from the original are documented here. https://www.travel.taipei/file/35713/ https://wunweistories.com/food-huoshih-202505/",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/De14cqVlbaV",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜雙連站補充 · 貨室甜品",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-23",
+            "contentFingerprint": "43ca8885139e7eeca9a213311b28cb588744d350cf243157f4c867d234e7efdb",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJK-SHbqmpQjQRV3AeYZwWCMs, named business, street and WGS84 point. Taipei Travel names the Chifeng shop and official Instagram. The same white shop and milk-and-roasted-flour ice from the original are documented here. https://www.travel.taipei/file/35713/ https://wunweistories.com/food-huoshih-202505/",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJHXBm2JurQjQR0UaTJIHt5X4",
+        "name": "福島屋圓圓燒",
+        "address": "台北市松山區饒河街138號前 174攤",
+        "latitude": 25.0505229,
+        "longitude": 121.5752848,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DezAA-tGyEJ/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜饒河夜市 · 福島屋圓圓燒",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-22",
+            "contentFingerprint": "053f5bfaab5e90cda00ce9a129306c24b0820d762f8204addf340b3f3f60b1e5",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJHXBm2JurQjQR0UaTJIHt5X4, named business, street and WGS84 point. Taipei Market Administration directly identifies the Japanese round-pancake stall as No. 174 at 138 Raohe Street. https://www.tcma.gov.taipei/News_Content.aspx?n=A90BF1B705D5AC0E&s=BA0C118811241F3B&sms=E5D0A9B8CEF9D29F",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DezCsjVG5J6",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜饒河夜市 · 福島屋圓圓燒",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-22",
+            "contentFingerprint": "36677e48bc1c3d16a0d877956472c9145329cc634594223dcf7b0493e7f4edc8",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJHXBm2JurQjQR0UaTJIHt5X4, named business, street and WGS84 point. Taipei Market Administration directly identifies the Japanese round-pancake stall as No. 174 at 138 Raohe Street. https://www.tcma.gov.taipei/News_Content.aspx?n=A90BF1B705D5AC0E&s=BA0C118811241F3B&sms=E5D0A9B8CEF9D29F",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJ9yhRSHyrQjQRYp-lXGOKUYg",
+        "name": "万端 By 肝苦嘆呷郎",
+        "address": "台北市松山區敦化北路165巷20號1樓",
+        "latitude": 25.0546048,
+        "longitude": 121.5509577,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DewQqqNm7ay/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北小巨蛋站 · 万端 By 肝苦嘆呷郎",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-21",
+            "contentFingerprint": "b3b607201f3ee0fc8eea55bdb7055d5bbd04a37203e6aa5a6db408abe5e5cbc5",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJ9yhRSHyrQjQRYp-lXGOKUYg, named business, street and WGS84 point. The current first permanent shop is corroborated by the matching booking telephone and a firsthand report giving No. 20 and first floor. This excludes the previous tenant at this address. https://eatsy.tech/booking/g_k_t_j_l https://www.yilan.com.tw/article/cjaycontent2/4131",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DewQ7Zrm-DR",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北小巨蛋站 · 万端 By 肝苦嘆呷郎",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-21",
+            "contentFingerprint": "788d5ab47f077d1a64fb1d3f67d585f41ec3c6f9f7aceb5b77ff8ea3978fe767",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJ9yhRSHyrQjQRYp-lXGOKUYg, named business, street and WGS84 point. The current first permanent shop is corroborated by the matching booking telephone and a firsthand report giving No. 20 and first floor. This excludes the previous tenant at this address. https://eatsy.tech/booking/g_k_t_j_l https://www.yilan.com.tw/article/cjaycontent2/4131",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJvzYdxuurQjQRC4rVDCT5AdU",
+        "name": "麵麵聚到",
+        "address": "台北市松山區南京東路四段133巷9弄1號",
+        "latitude": 25.0531236,
+        "longitude": 121.5551748,
+        "category": "food",
+        "coordinateSystem": "WGS84"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DewQqqNm7ay/",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北小巨蛋站 · 麵麵聚到",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-21",
+            "contentFingerprint": "260e9d95d07052d513a97332e842e3a53375b8bcc95f2ca0dcbba52081e4d3e4",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJvzYdxuurQjQRC4rVDCT5AdU, named business, street and WGS84 point. The merchant delivery menu and firsthand location report match its dish, full business name, phone and exact No. 1 storefront. https://fooday.app/zh-TW/spots/eSUpvCCY7FJK2Gvn2vhXsM/meal https://ifoodie.tw/post/62c5996f781cc06f8157ec73",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DewQ7Zrm-DR",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北小巨蛋站 · 麵麵聚到",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:31:12.532Z",
+            "publishedOn": "2026-10-21",
+            "contentFingerprint": "bfd1f9d4eea40e4c52b2e33b1ec768a3e99ade8508353d5936e5d5f99feb8244",
+            "branchEvidence": "The original Savvy guide names the venue. Two public Maps checks agree on the exact Google Place ID ChIJvzYdxuurQjQRC4rVDCT5AdU, named business, street and WGS84 point. The merchant delivery menu and firsthand location report match its dish, full business name, phone and exact No. 1 storefront. https://fooday.app/zh-TW/spots/eSUpvCCY7FJK2Gvn2vhXsM/meal https://ifoodie.tw/post/62c5996f781cc06f8157ec73",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F996BE32AF56",
+        "name": "燒肉中山 台北信義店",
+        "address": "台北市信義區松壽路12號 ATT 4 FUN 10樓",
+        "latitude": 25.0353052,
+        "longitude": 121.5660604,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/Df9WvxlFcgJ",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北燒肉清單 · 燒肉中山 台北信義店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:39:38.753Z",
+            "publishedOn": "2026-11-20",
+            "contentFingerprint": "1a68c81009055305baf9b8af500e04a0b50dcdeb9877a5b2a4637359b65e457f",
+            "branchEvidence": "The original names Taipei Xinyi and floor 10. The official chain lists its Songshou Road No. 12 ATT 4 FUN 10F branch, matching both providers’ floor and location. https://www.zonzen.com.tw/ The independently resolved Google listing agrees with the normalized Apple point within 0.82 meters.",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C58890EAB",
+        "name": "開囍滷肉專賣店",
+        "address": "台北市信義區莊敬路441號",
+        "latitude": 25.0271462,
+        "longitude": 121.5671182,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/Df3kiL6jxUw",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北必比登清單 · 開囍滷肉專賣店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:39:38.753Z",
+            "publishedOn": "2026-11-17",
+            "contentFingerprint": "9861f066f82722ecfce39805ee652e86ddaa78000a5416790fc1c1ee9f1ee5ba",
+            "branchEvidence": "The Michelin entry names 開囍 at Zhuangjing Road No. 441. The named Apple preview is approximate in its text description, but its exact normalized point agrees with the verified storefront and address. https://guide.michelin.com/tw/zh_TW/taipei-region/taipei/restaurant/open-smile The independently resolved Google listing agrees with the normalized Apple point within 0.79 meters.",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C58256733",
+        "name": "軟食力 中山店",
+        "address": "台北市中山區民權東路二段135巷30弄21號",
+        "latitude": 25.0642958,
+        "longitude": 121.5341255,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/Df3kiL6jxUw",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北必比登清單 · 軟食力 中山店",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:39:38.753Z",
+            "publishedOn": "2026-11-17",
+            "contentFingerprint": "685b2bfbf4018ef65dfd75cc73201379591bc1b2bae8305d8e8499b5d63f6173",
+            "branchEvidence": "The Michelin entry calls this Zhongshan branch by its exact address and explains its move to the alley by Xingtian Temple. The public Maps listing calls it the Xingtian Temple location, with the same exact address. https://guide.michelin.com/tw/zh_TW/taipei-region/taipei/restaurant/soft-power The independently resolved Google listing agrees with the normalized Apple point within 0.64 meters.",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9AC86CA4B67",
+        "name": "無名推車燒餅",
+        "address": "台北市中正區中華路二段315巷5弄 南機場夜市72號攤",
+        "latitude": 25.0284402,
+        "longitude": 121.5067272,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/Df3kiL6jxUw",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北必比登清單 · 無名推車燒餅",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:39:38.753Z",
+            "publishedOn": "2026-11-17",
+            "contentFingerprint": "fd53a09434e32f34c74c66c15e4ebf0b8959ca61c0f28220a780eebd3728401b",
+            "branchEvidence": "The original quotes Michelin Lane 311 stall 74. Taipei Market Administration names this same unique cart at Lane 315 Alley 5 stall 72; both exact named maps independently agree with the market location. The index uses the market authority’s stall address while the original link preserves its original wording. https://guide.michelin.com/tw/en/taipei-region/taipei/restaurant/unnamed-clay-oven-roll https://www.tcma.gov.taipei/News_Content.aspx?n=1C075C39A3BF3EEA&s=613AC04AEB782A1D&sms=90C2E31A022481CE The independently resolved Google listing agrees with the normalized Apple point within 0.79 meters.",
+            "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJT81rBaipQjQR6Jc9USFITI8",
+        "name": "一甲子餐飲",
+        "address": "台北市萬華區康定路79號",
+        "latitude": 25.0404022,
+        "longitude": 121.5021711,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/Df61EtrE0xT",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台灣滷肉飯清單 · 一甲子餐飲",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-21T15:39:38.753Z",
+            "publishedOn": "2026-11-19",
+            "contentFingerprint": "1f168ed6638c8195e8b2019a318c19c77dd65e11899c281235d754d84141757b",
+            "branchEvidence": "Both the Taipei Food Tracer and Wanhua District office match the exact Google listing at Kangding No. 79 with phone 02-2311-5241. The Apple candidate provides a conflicting Changsha Road address; it is excluded. https://whdo.gov.taipei/News_Content.aspx?n=19CABBEF3F991E9E&s=761B8F4A0ACF2FC5&sms=FE5F0DE8FA424CE8 The WGS84 coordinates are taken from the exact Google map listing.",
+            "multiVenue": true
+          }
+        }
+      ]
+    }
+  ],
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJPTb63QurQjQR0im9oA2FXp4",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F996BE32AF56",
+      "branchEvidence": "The original names Taipei Xinyi and floor 10. The official chain lists its Songshou Road No. 12 ATT 4 FUN 10F branch, matching both providers’ floor and location. https://www.zonzen.com.tw/ The independently resolved Google listing agrees with the normalized Apple point within 0.82 meters."
+    },
+    {
+      "googlePlaceID": "ChIJRzED6xerQjQR848nEXAScXA",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C58890EAB",
+      "branchEvidence": "The Michelin entry names 開囍 at Zhuangjing Road No. 441. The named Apple preview is approximate in its text description, but its exact normalized point agrees with the verified storefront and address. https://guide.michelin.com/tw/zh_TW/taipei-region/taipei/restaurant/open-smile The independently resolved Google listing agrees with the normalized Apple point within 0.79 meters."
+    },
+    {
+      "googlePlaceID": "ChIJg5CffQqpQjQRGC-w8J-69mg",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C58256733",
+      "branchEvidence": "The Michelin entry calls this Zhongshan branch by its exact address and explains its move to the alley by Xingtian Temple. The public Maps listing calls it the Xingtian Temple location, with the same exact address. https://guide.michelin.com/tw/zh_TW/taipei-region/taipei/restaurant/soft-power The independently resolved Google listing agrees with the normalized Apple point within 0.64 meters."
+    },
+    {
+      "googlePlaceID": "ChIJ56-COrupQjQRggNd7rtSK1U",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9AC86CA4B67",
+      "branchEvidence": "The original quotes Michelin Lane 311 stall 74. Taipei Market Administration names this same unique cart at Lane 315 Alley 5 stall 72; both exact named maps independently agree with the market location. The index uses the market authority’s stall address while the original link preserves its original wording. https://guide.michelin.com/tw/en/taipei-region/taipei/restaurant/unnamed-clay-oven-roll https://www.tcma.gov.taipei/News_Content.aspx?n=1C075C39A3BF3EEA&s=613AC04AEB782A1D&sms=90C2E31A022481CE The independently resolved Google listing agrees with the normalized Apple point within 0.79 meters."
     }
   ]
 }
