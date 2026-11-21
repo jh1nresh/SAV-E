@@ -25,6 +25,24 @@
             "contentFingerprint": "3989b1359b1b92384ad16990d5612d13191378b92b4aeb5be5687ccacb85632c",
             "multiVenue": true
           }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DTUYd0eke9z/",
+          "authorHandle": "popyummy_mag",
+          "title": "波波發胖的公館金雞園食旅圖卡",
+          "observedIn": "https://www.popdaily.com.tw/food/1576206?is_app=true",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T21:09:41.668Z",
+            "publishedAt": "2026-01-10T05:29:47.000Z",
+            "publicLikes": {
+              "count": 4099,
+              "observedAt": "2026-11-19T20:57:09.000Z"
+            },
+            "branchEvidence": "Slide 3 of the original public carousel (DTUYdtEESg1) labels 金雞園（公館） and shows the storefront and its business listing. The editor’s source article places the visit in Gongguan. The existing exact MapKit and Google branch match is No. 3-1, Alley 8, Lane 316, Section 3, Roosevelt Road. This is an editorial roundup.",
+            "multiVenue": true
+          }
         }
       ]
     },
@@ -51,6 +69,24 @@
             "origin": "publisher_reference",
             "branchEvidence": "The original Threads itinerary names 公館得正 and lists No. 10-2, Lane 316, Section 3, Roosevelt Road. JUKSY embeds that exact original. MapKit and the exact Google place independently match the branch address and 02-2368-3130, and the Google result supplies the WGS84 storefront pin. This original is an itinerary compilation.",
             "contentFingerprint": "b7e76e58bbe4fab152b1f0f64e67f1f42a008b2df395a2e2c003cedb31099035",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DTUYd0eke9z/",
+          "authorHandle": "popyummy_mag",
+          "title": "波波發胖的得正台北公館計劃圖卡",
+          "observedIn": "https://www.popdaily.com.tw/food/1576206?is_app=true",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T21:09:41.668Z",
+            "publishedAt": "2026-01-10T05:29:47.000Z",
+            "publicLikes": {
+              "count": 4099,
+              "observedAt": "2026-11-19T20:57:09.000Z"
+            },
+            "branchEvidence": "Slide 4 of the original public carousel (DTUYdtEEa2K) identifies 得正#台北公館計劃 in its storefront/business listing. The editor’s source article places the visit in Gongguan and mentions pearl milk tea. The existing exact MapKit and Google branch match is No. 10-2, Lane 316, Section 3, Roosevelt Road. This is an editorial roundup.",
             "multiVenue": true
           }
         }
