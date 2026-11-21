@@ -606,3 +606,101 @@ test("reviewed Google aliases reject duplicate, orphaned and unsupported crosswa
     [{ ...alias, provider: "google_places" }],
   ]) assert.throws(() => compileReviewedPublicBatch({ ...batch(instagram, threads), googlePlaceAliases: aliases }, now));
 });
+
+test("an event post leaves Saved and Explore at its reviewed local-day cutoff", async t => {
+  const before = new Date("2026-11-18T15:59:30Z");
+  const cutoff = new Date("2026-11-18T16:00:00Z");
+  const dir = await mkdtemp(join(tmpdir(), "savvy-event-expiry-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "review.json"), index = join(dir, "index.json");
+  const html = `<div class="Embed">
+    <a class="EmbeddedMedia" href="https://www.instagram.com/p/IG_1/">post</a>
+    <div class="Caption"><a class="CaptionUsername" href="/example/">example</a>
+    Workshop at Store A, 10 Example Rd, ground floor
+    </div></div>`;
+  const fingerprint = publicPostEvidenceFingerprint(html, "instagram", instagram.sourceURL, "example", place as PublicDiscoveryPlace);
+  assert.ok(fingerprint);
+  const event = { ...instagram, review: { ...review, visibleUntil: cutoff.toISOString(), contentFingerprint: fingerprint } };
+  const archive = batch(event, threads);
+  const published = compileReviewedPublicBatch(archive, before).manifest;
+  assert.equal(makeReviewedPublicPreview(published, before).snapshot.expiresAt, cutoff.toISOString());
+  const preview = makeReviewedPublicPreview(published, cutoff);
+  assert.deepEqual(preview.snapshot.posts.map(post => post.id), ["threads:TER_1"]);
+  await writeFile(path, JSON.stringify(archive));
+  await writeFile(index, JSON.stringify(published));
+
+  const urls = [
+    "http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1&limit=1",
+    "http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1&provider=apple_maps&placeID=BranchA&limit=1",
+  ];
+  for (const target of urls) {
+    const url = new URL(target);
+    const active = await listPublicDiscoveryPosts(url, { filePath: index, now: before });
+    assert.equal(active.posts[0]?.id, "instagram:IG_1");
+    assert.equal(active.expiresAt, cutoff.toISOString());
+    assert.equal("visibleUntil" in active.posts[0]!, false);
+    assert.ok(active.nextCursor);
+    const atCutoff = await listPublicDiscoveryPosts(url, { filePath: index, now: cutoff });
+    assert.deepEqual(atCutoff.posts.map(post => post.id), ["threads:TER_1"]);
+    assert.notEqual(atCutoff.indexRevision, active.indexRevision);
+    assert.equal(atCutoff.coverage.find(item => item.platform === "instagram")?.indexedPostCount, 0);
+    url.searchParams.set("cursor", active.nextCursor);
+    await assert.rejects(listPublicDiscoveryPosts(url, { filePath: index, now: cutoff }));
+  }
+  const refreshed = await refreshReviewedPublicFiles([path], { now: cutoff, fetchEmbed: async () => html });
+  assert.deepEqual(refreshed.manifest.posts.map(post => post.id), ["threads:TER_1"]);
+  assert.equal(refreshed.expired, 1);
+  assert.equal(refreshed.summary.refreshed, 1, "the original is still public");
+});
+
+test("invalid post cutoff fails before the reviewed refresh accesses its sources", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "savvy-invalid-event-expiry-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "review.json");
+  for (const visibleUntil of [null, "2026-02-30T16:00:00Z", "2026-11-18"]) {
+    const candidate = { ...instagram, review: { ...review, visibleUntil, contentFingerprint: "a".repeat(64) } };
+    await writeFile(path, JSON.stringify(batch(candidate)));
+    let requests = 0;
+    await assert.rejects(refreshReviewedPublicFiles([path], { now, fetchEmbed: async () => { requests++; return ""; } }));
+    assert.equal(requests, 0);
+  }
+});
+
+test("a current index whose last scheduled post has ended returns an empty page", async t => {
+  const before = new Date("2026-11-18T15:59:30Z");
+  const cutoff = new Date("2026-11-18T16:00:00Z");
+  const dir = await mkdtemp(join(tmpdir(), "savvy-last-event-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "index.json"), reviewPath = join(dir, "review.json");
+  const event = { ...instagram, review: { ...review, visibleUntil: cutoff.toISOString(), contentFingerprint: "a".repeat(64) } };
+  const archive = batch(event);
+  await writeFile(path, JSON.stringify(compileReviewedPublicBatch(archive, before).manifest));
+  const url = new URL("http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1");
+  const initialSnapshot = await listPublicDiscoveryPosts(url, { filePath: path, now: cutoff });
+  assert.deepEqual(initialSnapshot.posts, []);
+  assert.equal(initialSnapshot.nextCursor, null);
+  assert.equal(initialSnapshot.coverage.find(item => item.platform === "instagram")?.indexedPostCount, 0);
+
+  const later = new Date("2026-11-20T16:00:00Z");
+  await writeFile(reviewPath, JSON.stringify(archive));
+  let requests = 0;
+  const fetchEmbed = async () => {
+    requests++;
+    throw new Error("Unavailable original");
+  };
+  const refreshed = await refreshReviewedPublicFiles([reviewPath], { now: later, fetchEmbed });
+  assert.equal(refreshed.summary.unconfirmed, 1);
+  assert.equal(requests, 1);
+  assert.deepEqual(refreshed.manifest.posts, []);
+  assert.equal(refreshed.expired, 1);
+  await writeFile(path, JSON.stringify(refreshed.manifest));
+  const newSnapshot = await listPublicDiscoveryPosts(url, { filePath: path, now: later });
+  assert.deepEqual(newSnapshot.posts, []);
+  assert.equal(newSnapshot.coverage.find(item => item.platform === "instagram")?.status, "not_connected");
+
+  const staleMixedArchive = batch(event, threads);
+  assert.throws(() => compileReviewedPublicBatch(staleMixedArchive, later), /No current reviewed posts/);
+  await writeFile(reviewPath, JSON.stringify(staleMixedArchive));
+  await assert.rejects(refreshReviewedPublicFiles([reviewPath], { now: later, fetchEmbed }), /No current reviewed posts/);
+  assert.equal(requests, 2);
+});
