@@ -21,13 +21,24 @@ enum RelatedSourcePlatform: String, Codable, CaseIterable, Equatable, Sendable {
         }
     }
 
-    fileprivate func allows(_ url: URL) -> Bool {
-        guard url.scheme?.lowercased() == "https",
+    fileprivate func validatedURL(_ value: String) -> URL? {
+        guard let url = URL(string: value), url.scheme?.lowercased() == "https",
               let rawHost = url.host?.lowercased()
-        else { return false }
+        else { return nil }
 
         let host = rawHost.hasPrefix("www.") ? String(rawHost.dropFirst(4)) : rawHost
-        return allowedHosts.contains { host == $0 || host.hasSuffix(".\($0)") }
+        if self == .threads {
+            guard url.user == nil, url.password == nil, url.port == nil, allowedHosts.contains(host),
+                  var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  components.percentEncodedPath.range(of: #"^/@[A-Za-z0-9._]{1,100}/post/[A-Za-z0-9_-]{1,100}(?:/[^/]+)?/?$"#,
+                                                       options: .regularExpression) != nil else { return nil }
+            let path = components.percentEncodedPath.split(separator: "/")
+            components.percentEncodedPath = "/\(path[0].lowercased())/post/\(path[2])"
+            components.percentEncodedQuery = nil
+            components.percentEncodedFragment = nil
+            return components.url
+        }
+        return allowedHosts.contains { host == $0 || host.hasSuffix(".\($0)") } ? url : nil
     }
 
     private var allowedHosts: [String] {
@@ -37,10 +48,14 @@ enum RelatedSourcePlatform: String, Codable, CaseIterable, Equatable, Sendable {
         case .youtube: return ["youtube.com", "youtu.be"]
         case .xiaohongshu: return ["xiaohongshu.com", "xhslink.com"]
         case .douyin: return ["douyin.com", "iesdouyin.com"]
-        case .threads: return ["threads.net"]
+        case .threads: return ["threads.com", "threads.net"]
         case .x: return ["x.com", "twitter.com"]
         }
     }
+}
+
+private enum InvalidThreadsSourceURL: Error {
+    case invalidOriginal
 }
 
 enum RelatedSourceRelation: String, Codable, Equatable, Sendable {
@@ -115,7 +130,8 @@ struct RelatedPlaceSource: Codable, Equatable, Identifiable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let platform = try container.decode(RelatedSourcePlatform.self, forKey: .platform)
         let rawURL = try container.decode(String.self, forKey: .url)
-        guard let url = URL(string: rawURL), platform.allows(url) else {
+        guard let url = platform.validatedURL(rawURL) else {
+            if platform == .threads { throw InvalidThreadsSourceURL.invalidOriginal }
             throw DecodingError.dataCorruptedError(
                 forKey: .url,
                 in: container,
@@ -161,7 +177,7 @@ struct RelatedSourceCoverage: Codable, Equatable, Identifiable, Sendable {
     let status: RelatedSourceCoverageStatus
     let queries: [String]
     let inspectedCount: Int
-    let resultCount: Int
+    fileprivate(set) var resultCount: Int
     let blockedReason: RelatedSourceBlockedReason?
 
     var id: RelatedSourcePlatform { platform }
@@ -185,8 +201,8 @@ struct RelatedSourcesReceipt: Codable, Equatable, Sendable {
     let searchedPlatforms: [RelatedSourcePlatform]
     let failedPlatforms: [RelatedSourcePlatform]
     let rawResultCount: Int
-    let independentResultCount: Int
-    let missing: [String]
+    fileprivate(set) var independentResultCount: Int
+    fileprivate(set) var missing: [String]
 
     private enum CodingKeys: String, CodingKey {
         case sourceBoundary = "source_boundary"
@@ -223,6 +239,50 @@ struct RelatedPlaceSourcePack: Codable, Equatable, Sendable {
     let coverage: [RelatedSourceCoverage]
     let receipt: RelatedSourcesReceipt
     let storage: RelatedSourcesStorage?
+
+    private enum CodingKeys: String, CodingKey {
+        case place, sources, coverage, receipt, storage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        place = try container.decode(RelatedSourcePlaceIdentity.self, forKey: .place)
+        var decodedCoverage = try container.decode([RelatedSourceCoverage].self, forKey: .coverage)
+        var decodedReceipt = try container.decode(RelatedSourcesReceipt.self, forKey: .receipt)
+        storage = try container.decodeIfPresent(RelatedSourcesStorage.self, forKey: .storage)
+        var rows = try container.nestedUnkeyedContainer(forKey: .sources)
+        var decodedSources: [RelatedPlaceSource] = []
+        var threadOriginals = Set<String>()
+        var filteredThreads = false
+        while !rows.isAtEnd {
+            let row = try rows.superDecoder()
+            do {
+                let source = try RelatedPlaceSource(from: row)
+                if source.platform == .threads, !threadOriginals.insert(source.url.path).inserted {
+                    filteredThreads = true
+                    continue
+                }
+                decodedSources.append(source)
+            } catch InvalidThreadsSourceURL.invalidOriginal {
+                // An older backend can still serve cached non-post Threads links.
+                filteredThreads = true
+            }
+        }
+        if filteredThreads {
+            if let index = decodedCoverage.firstIndex(where: { $0.platform == .threads }) {
+                decodedCoverage[index].resultCount = threadOriginals.count
+                let noSource = "threads: no same-place public source found"
+                decodedReceipt.missing.removeAll { $0 == noSource }
+                if threadOriginals.isEmpty, decodedCoverage[index].status != .failed {
+                    decodedReceipt.missing.append(noSource)
+                }
+            }
+            decodedReceipt.independentResultCount = decodedSources.count
+        }
+        sources = decodedSources
+        coverage = decodedCoverage
+        receipt = decodedReceipt
+    }
 }
 
 enum RelatedPlaceSourcesClientError: LocalizedError, Equatable {

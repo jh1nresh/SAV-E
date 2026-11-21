@@ -1600,3 +1600,13 @@ test("source-only media opt-out never invokes video recovery", async () => {
   assert.equal(output.receipt.output, "source_only_clue");
   assert.equal(calls, 0);
 });
+
+test("public web search reports a provider challenge instead of an empty result", async () => {
+  const challenge = '<form id="challenge-form" action="//duckduckgo.com/anomaly.js?query=redacted"></form>';
+  await assert.rejects(
+    searchPublicWebResults("site:threads.com 凱菲屋", async () => challenge),
+    /Public search requires verification/,
+  );
+  const empty = '<div class="no-results">No results found</div>';
+  assert.deepEqual(await searchPublicWebResults("凱菲屋", async () => empty), []);
+});

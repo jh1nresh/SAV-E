@@ -103,6 +103,20 @@ export function canonicalSource(value: unknown, platform: PublicDiscoveryPlatfor
   }
   return invalid();
 }
+
+/** Search indexes may append a caption slug to an otherwise exact Threads post. */
+export function canonicalIndexedThreadsSource(value: unknown): { url: string; postID: string } | undefined {
+  try {
+    const url = webURL(value, 2_048);
+    const match = /^\/@([A-Za-z0-9._]{1,100})\/post\/([A-Za-z0-9_-]{1,100})(?:\/[^/]+)?\/?$/.exec(url.pathname);
+    if (!match) return;
+    url.pathname = `/@${match[1]!.toLowerCase()}/post/${match[2]}`;
+    return canonicalSource(url.href, "threads");
+  } catch {
+    return;
+  }
+}
+
 function cover(value: unknown, platform: PublicDiscoveryPlatform, now: number): PublicDiscoveryPost["cover"] {
   if (value === null || value === undefined) return null;
   const input = record(value, ["url", "expiresAt", "permission"]);

@@ -1,3 +1,4 @@
+import { canonicalIndexedThreadsSource } from "./publicDiscovery.js";
 import {
   discoverRelatedPlaceSources,
   relatedPlaceSourcePackResponseBody,
@@ -46,6 +47,7 @@ export type RelatedPlaceSourcesEndpointDependencies = {
   ) => Promise<void>;
   consumeDiscoveryQuota?: () => RelatedPlaceSourcesQuotaResult;
   now?: () => Date;
+  preferCurrentThreadsDomain?: boolean;
 };
 
 export const relatedPlaceSourcesStalenessWindowMs = 7 * 24 * 60 * 60 * 1_000;
@@ -119,7 +121,7 @@ export async function executeRelatedPlaceSourcesEndpoint(
     if (stored && storedRequestMatches(stored, resolvedRequest, ownedPlace)) {
       return {
         statusCode: 200,
-        body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date()),
+        body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date(), dependencies.preferCurrentThreadsDomain),
       };
     }
   }
@@ -183,7 +185,7 @@ export async function executeRelatedPlaceSourcesEndpoint(
 
   return {
     statusCode: 200,
-    body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date()),
+    body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date(), dependencies.preferCurrentThreadsDomain),
   };
 }
 
@@ -207,6 +209,7 @@ function storedRequestMatches(
 function storedPackResponseBody(
   stored: StoredRelatedPlaceSourcePack,
   now: Date,
+  preferCurrentThreadsDomain = false,
 ): Record<string, unknown> {
   const fetchedAt = new Date(stored.fetchedAt);
   if (Number.isNaN(fetchedAt.getTime())) {
@@ -214,7 +217,7 @@ function storedPackResponseBody(
   }
   const staleAfter = new Date(fetchedAt.getTime() + relatedPlaceSourcesStalenessWindowMs);
   return {
-    ...stored.pack,
+    ...projectThreadsSources(stored.pack, preferCurrentThreadsDomain),
     storage: {
       persistence: "owner_private_backend",
       fetched_at: fetchedAt.toISOString(),
@@ -222,6 +225,42 @@ function storedPackResponseBody(
       is_stale: now.getTime() > staleAfter.getTime(),
       query_set: stored.querySet,
     },
+  };
+}
+
+function isThreadsRow(row: unknown): row is { platform: "threads"; url?: unknown } {
+  return row !== null && typeof row === "object" && "platform" in row && row.platform === "threads";
+}
+
+function projectThreadsSources(pack: Record<string, unknown>, preferCurrentThreadsDomain: boolean) {
+  const { sources, coverage, receipt } = pack;
+  if (!Array.isArray(sources) || !sources.some(isThreadsRow)) return pack;
+  const seen = new Set<string>();
+  const projected = sources.flatMap((source: unknown) => {
+    if (!isThreadsRow(source)) return [source];
+    const canonical = canonicalIndexedThreadsSource(source.url);
+    if (!canonical || seen.has(canonical.url)) return [];
+    seen.add(canonical.url);
+    // Older app versions only decode the legacy hostname on this endpoint.
+    const url = preferCurrentThreadsDomain ? canonical.url : canonical.url.replace("://www.threads.com/", "://www.threads.net/");
+    return [{ ...source, url }];
+  });
+  const threadsCoverage = Array.isArray(coverage) ? coverage.find(isThreadsRow) : undefined;
+  const updatedReceipt = receipt && typeof receipt === "object"
+    ? { ...receipt, independent_result_count: projected.length } : receipt;
+  if (threadsCoverage && updatedReceipt && typeof updatedReceipt === "object"
+      && "missing" in updatedReceipt && Array.isArray(updatedReceipt.missing)) {
+    const noSource = "threads: no same-place public source found";
+    const missing = updatedReceipt.missing.filter(entry => entry !== noSource);
+    if (seen.size === 0 && "status" in threadsCoverage && threadsCoverage.status !== "failed") missing.push(noSource);
+    updatedReceipt.missing = missing;
+  }
+  return {
+    ...pack,
+    sources: projected,
+    coverage: Array.isArray(coverage) ? coverage.map((row: unknown) =>
+      isThreadsRow(row) ? { ...row, result_count: seen.size } : row) : coverage,
+    receipt: updatedReceipt,
   };
 }
 

@@ -101,6 +101,50 @@ final class RelatedPlaceSourcesClientTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(RelatedPlaceSource.self, from: insecure))
     }
 
+    func testAcceptsCanonicalAndLegacyThreadsDomains() throws {
+        for host in ["www.threads.com", "www.threads.net"] {
+            let url = "https://\(host)/@makan.tw.food/post/DeZTko_k3-V"
+            let data = sourceJSON(platform: "threads", url: url, confidence: 0.8)
+            let source = try JSONDecoder().decode(RelatedPlaceSource.self, from: data)
+            XCTAssertEqual(source.url.absoluteString, url)
+            XCTAssertEqual(source.identityStatus, .candidate)
+        }
+        for host in ["threads.com.example.org", "www.www.threads.com"] {
+            let data = sourceJSON(platform: "threads", url: "https://\(host)/@example/post/123", confidence: 0.8)
+            XCTAssertThrowsError(try JSONDecoder().decode(RelatedPlaceSource.self, from: data))
+        }
+    }
+
+    func testLegacyThreadsRowsDoNotHideValidRelatedSources() throws {
+        func row(_ platform: String, _ url: String) -> String {
+            String(decoding: sourceJSON(platform: platform, url: url, confidence: 0.8), as: UTF8.self)
+        }
+        let input = """
+        {
+          "place":{"id":"11111111-1111-4111-8111-111111111111","name":"Fixture","address":"1 Fixture Street"},
+          "sources":[
+            \(row("threads", "https://threads.net/@profile")),
+            \(row("threads", "https://m.threads.net/@example/post/InvalidHost")),
+            \(row("threads", "https://www.threads.net/@example/post/Original/indexed-caption?xmt=referral")),
+            \(row("threads", "https://www.threads.com/@Example/post/Original")),
+            \(row("instagram", "https://www.instagram.com/p/Sibling/"))
+          ],
+          "coverage":[{"platform":"threads","method":"public_index","status":"searched","queries":[],"inspected_count":4,"result_count":4}],
+          "receipt":{"source_boundary":"public_web_index","privacy":"owner_private","checked_at":"2026-07-24T08:00:00Z",
+            "requested_platforms":["threads","instagram"],"searched_platforms":["threads","instagram"],"failed_platforms":[],
+            "raw_result_count":5,"independent_result_count":5,"missing":["x: public search failed"]}
+        }
+        """
+        let pack = try JSONDecoder.supabase.decode(RelatedPlaceSourcePack.self, from: Data(input.utf8))
+        XCTAssertEqual(pack.sources.map(\.url.absoluteString), [
+            "https://www.threads.net/@example/post/Original", "https://www.instagram.com/p/Sibling/"
+        ])
+        XCTAssertEqual(pack.coverage.first?.resultCount, 1)
+        XCTAssertEqual(pack.receipt.independentResultCount, 2)
+        XCTAssertEqual(pack.receipt.rawResultCount, 5)
+        XCTAssertEqual(pack.receipt.missing, ["x: public search failed"])
+    }
+
     func testRejectsOutOfRangeConfidence() throws {
         let data = sourceJSON(
             platform: "threads",

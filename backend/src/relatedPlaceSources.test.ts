@@ -473,9 +473,48 @@ test("the server route delegates owner-scoped persistence through the endpoint s
   assert.match(handler, /relatedPlaceSourcesStore\.save/);
   assert.doesNotMatch(handler, /\binsert\b|\bupdate\b|\bdelete\b/i);
   assert.match(handler, /Cache-Control", "private, no-store"/);
-  assert.match(handler, /Vary", "Authorization"/);
+  assert.match(handler, /Vary", "Authorization, X-Savvy-Related-Sources-Threads-Com"/);
+  assert.match(handler, /preferCurrentThreadsDomain: request.headers\["x-savvy-related-sources-threads-com"\] === "1"/);
   assert.match(
     serverSource,
     /isV0 && resource === "places" && id && segments\[2\] === "related-sources"/,
   );
+});
+
+test("searches current Threads posts and deduplicates the legacy domain", async () => {
+  const actual = "https://www.threads.com/@makan.tw.food/post/DeZTko_k3-V";
+  const place = {
+    ...confirmedPlace,
+    name: "凱菲屋",
+    address: "台北市信義區松壽路2號",
+  };
+  const pack = await discoverRelatedPlaceSources(place, { platforms: ["threads"] }, {
+    search: async query => [
+      `${actual}?xmt=referral`,
+      "https://www.threads.net/@makan.tw.food/post/DeZTko_k3-V",
+      "https://www.threads.com/@makan.tw.food",
+      "https://www.www.threads.com/@makan.tw.food/post/DeZTko_k3-V?token=fixture",
+      "https://threads.example/@makan.tw.food/post/DeZTko_k3-V",
+    ].map(url => ({ query, url, title: "凱菲屋 台北市信義區松壽路2號" })),
+  });
+  assert.equal(pack.coverage[0]?.queries[0], 'site:threads.com "凱菲屋" "台北市"');
+  assert.deepEqual(pack.sources.map(source => source.url), [actual]);
+  assert.equal(pack.sources[0]?.identityStatus, "candidate");
+});
+
+test("indexed Threads captions retain the exact original and still exclude the seed", async () => {
+  const original = "https://www.threads.com/@example/post/Relevant";
+  const place = {
+    ...confirmedPlace,
+    sourceUrl: "https://www.threads.net/@example/post/Seed/original-caption",
+  };
+  const pack = await discoverRelatedPlaceSources(place, { platforms: ["threads"] }, {
+    search: async query => [
+      `${original}/indexed-caption/?xmt=referral`,
+      "https://threads.com/@Example/post/Seed",
+      "https://threads.com/@example/post/Secret/indexed-caption?access_token=fixture",
+      "https://threads.com/@example",
+    ].map(url => ({ query, url, title: `${place.name} ${place.address}` })),
+  });
+  assert.deepEqual(pack.sources.map(source => source.url), [original]);
 });
