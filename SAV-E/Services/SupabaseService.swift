@@ -554,7 +554,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(
             path: "/v0/places/\(placeId.uuidString.lowercased())/related-sources",
             method: "POST",
-            body: body
+            body: body,
+            additionalHeaders: ["X-Savvy-Related-Sources-Threads-Com": "1"]
         )
         let pack: RelatedPlaceSourcePack
         do {

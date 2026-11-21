@@ -214,6 +214,61 @@ test("a matching owner-scoped pack is re-read without verification, quota, or di
   });
 });
 
+test("cached Threads posts retain exact identity across old and current app versions", async () => {
+  const legacyPost = { platform: "threads", url: "https://threads.net/@example/post/Original/indexed-caption?xmt=referral" };
+  const sibling = { platform: "instagram", url: "https://instagram.com/p/Sibling/" };
+  const stored: StoredRelatedPlaceSourcePack = {
+    pack: {
+      place: { id: ownedPlace.id, google_place_id: ownedPlace.googlePlaceId },
+      sources: [
+        legacyPost,
+        { platform: "threads", url: "https://www.threads.com/@Example/post/Original" },
+        { platform: "threads", url: "https://threads.net/@profile" },
+        { platform: "threads", url: "https://m.threads.net/@example/post/UnverifiedHost" },
+        sibling,
+      ],
+      coverage: [{ platform: "threads", status: "searched", result_count: 4 }, { platform: "instagram", result_count: 1 }],
+      receipt: { independent_result_count: 5, raw_result_count: 6, missing: ["x: public search failed"] },
+    },
+    fetchedAt: "2026-08-15T12:00:00.000Z",
+    requestedPlatforms: ["threads", "instagram"],
+    maxResultsPerPlatform: 3,
+    querySet: [],
+  };
+  for (const preferCurrentThreadsDomain of [false, true]) {
+    const dependencies = {
+      loadOwnedPlace: async () => ownedPlace,
+      verifyPublicVenue: async () => assert.fail("matching legacy cache needs no new verification"),
+      loadStoredPack: async () => stored,
+      storePack: async () => assert.fail("response normalization must not rewrite stored packs"),
+      preferCurrentThreadsDomain,
+    };
+    const result = await executeRelatedPlaceSourcesEndpoint(ownedPlace.id, "owner-user", {
+      platforms: ["threads", "instagram"],
+    }, dependencies);
+    const domain = preferCurrentThreadsDomain ? "threads.com" : "threads.net";
+    assert.deepEqual(result.body.sources, [
+      { ...legacyPost, url: `https://www.${domain}/@example/post/Original` }, sibling,
+    ]);
+    assert.deepEqual(result.body.coverage, [{ platform: "threads", status: "searched", result_count: 1 }, { platform: "instagram", result_count: 1 }]);
+    assert.deepEqual(result.body.receipt, { independent_result_count: 2, raw_result_count: 6, missing: ["x: public search failed"] });
+    assert.equal((stored.pack.sources as unknown[]).length, 5);
+
+    const noPost = { ...stored, pack: { ...stored.pack, sources: [
+      { platform: "threads", url: "https://threads.net/@profile" }, sibling,
+    ] } };
+    const empty = await executeRelatedPlaceSourcesEndpoint(ownedPlace.id, "owner-user", {
+      platforms: ["threads", "instagram"],
+    }, { ...dependencies, loadStoredPack: async () => noPost });
+    assert.deepEqual(empty.body.sources, [sibling]);
+    assert.deepEqual(empty.body.coverage, [{ platform: "threads", status: "searched", result_count: 0 }, { platform: "instagram", result_count: 1 }]);
+    assert.deepEqual(empty.body.receipt, {
+      independent_result_count: 1, raw_result_count: 6,
+      missing: ["x: public search failed", "threads: no same-place public source found"],
+    });
+  }
+});
+
 test("force refresh replaces the one current pack and preserves failed coverage", async () => {
   let saved: StoredRelatedPlaceSourcePack | undefined;
   const failedPack: RelatedPlaceSourcePack = {

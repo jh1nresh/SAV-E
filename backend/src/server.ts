@@ -1927,7 +1927,7 @@ async function handlePlaceRelatedSources(
   userId: string,
 ): Promise<void> {
   response.setHeader("Cache-Control", "private, no-store");
-  response.setHeader("Vary", "Authorization");
+  response.setHeader("Vary", "Authorization, X-Savvy-Related-Sources-Threads-Com");
 
   if (request.method !== "POST") {
     return sendJson(response, { error: "Unsupported related-sources route" }, 405);
@@ -1963,6 +1963,7 @@ async function handlePlaceRelatedSources(
           stored,
         ),
         consumeDiscoveryQuota: () => relatedPlaceSourcesRateLimiter.consume(userId),
+        preferCurrentThreadsDomain: request.headers["x-savvy-related-sources-threads-com"] === "1",
       },
     );
     if (result.retryAfterSeconds !== undefined) {

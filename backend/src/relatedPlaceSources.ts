@@ -1,3 +1,4 @@
+import { canonicalIndexedThreadsSource } from "./publicDiscovery.js";
 import {
   searchPublicWebResults,
   type SourceSearchResult,
@@ -120,8 +121,8 @@ const platformDefinitions: Record<RelatedSourcePlatform, PlatformDefinition> = {
     hosts: ["douyin.com", "iesdouyin.com"],
   },
   threads: {
-    queryDomain: "threads.net",
-    hosts: ["threads.net"],
+    queryDomain: "threads.com",
+    hosts: ["threads.com", "threads.net"],
   },
   x: {
     queryDomain: "x.com",
@@ -468,7 +469,7 @@ function relatedSourceFromSearchResult(
   platform: RelatedSourcePlatform,
   result: SourceSearchResult,
 ): RelatedPlaceSource | undefined {
-  const url = canonicalizeSourceURL(result.url);
+  const url = canonicalizeSourceURL(result.url, platform);
   if (!url || !isAllowedPlatformURL(platform, url)) return undefined;
 
   const title = boundedText(result.title, maxTitleLength);
@@ -600,13 +601,20 @@ function branchAdministrativeTokens(value: string): string[] {
   );
 }
 
-function canonicalizeSourceURL(value: string | undefined): string | undefined {
+function canonicalizeSourceURL(
+  value: string | undefined,
+  platform?: RelatedSourcePlatform,
+): string | undefined {
   if (!value) return undefined;
   try {
     const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    if (platform === "threads" || platformDefinitions.threads.hosts.includes(host)) {
+      return canonicalIndexedThreadsSource(value)?.url;
+    }
     if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
     url.protocol = "https:";
-    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.hostname = host;
     url.hash = "";
     for (const key of [...url.searchParams.keys()]) {
       if (trackingParameters.has(key.toLowerCase()) || key.toLowerCase().startsWith("utm_")) {
