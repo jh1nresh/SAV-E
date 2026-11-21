@@ -37,6 +37,24 @@
             "branchEvidence": "The original location tag names 合‧shabu. The visible caption explicitly gives BELLAVITA, 4F at No. 28 Songren Road, Xinyi, and 02-2723-9222. GOMAJI embeds the exact original in its 合.shabu section. BELLAVITA’s floor guide (https://www.bellavita.com.tw/cht/store.php?d=95) and the exact Google listing’s address field independently agree on this restaurant and floor. The Google storefront supplies the WGS84 pin. No current price or hours are inferred from the post.",
             "contentFingerprint": "fced49ab5c9bfd71e9a0cce287d58bfe05e921129c45672be394ec3a8ebb6cdc"
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@hostshabu/post/DdQhHmYk3kx",
+          "observedIn": "https://www.threads.com/@hostshabu",
+          "authorHandle": "hostshabu",
+          "title": "合 shabu 官方分享：秋季北海道鱈場蟹",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T20:05:37.000Z",
+            "publishedAt": "2026-09-14T06:42:23.000Z",
+            "publicLikes": {
+              "count": 6,
+              "observedAt": "2026-11-19T20:05:37.000Z"
+            },
+            "contentFingerprint": "09b5b5afa69ea514deb482e8c37f19da5ee352c363158be83fe5c83a653076f4",
+            "branchEvidence": "The restaurant’s own Threads post names Host Shabu and the exact reservation telephone 02-2723-9222. BELLAVITA’s directory https://www.bellavita.com.tw/cht/store.php?d=95 independently associates that telephone with its 4F Host Shabu. The post date and reference to the autumn menu identify historical venue evidence without assuming current availability."
+          }
         }
       ]
     }
