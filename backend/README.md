@@ -77,6 +77,19 @@ curl "$RAILWAY_PUBLIC_DOMAIN/health/source-recovery"
 
 `npm start` builds the TypeScript backend and runs `check:source-recovery` before boot. The check stays green when OCR, ASR, and external rubric are disabled. It fails when an enabled OCR/ASR adapter is missing its executable or when `SAVE_EVIDENCE_RUBRIC_URL` is not an HTTPS public URL. Railway also uses `/health/source-recovery` as the deployment healthcheck, so source-recovery adapter misconfiguration blocks rollout instead of silently falling back in production.
 
+### Threads discovery drafts
+
+Build the backend and use the current reviewed manifest plus an explicit public venue inventory.
+
+```sh
+npm run build
+node dist/publicDiscoveryThreadsDrafts.js public-venues.json current-index.json
+```
+
+The optional third argument is the offset returned as `coverage.nextOffset`. Each batch queries at most 20 missing branches. An authorized Threads token with public keyword search access can be supplied through the operator environment as `SAVE_THREADS_KEYWORD_SEARCH_TOKEN`. An unset token returns `not_configured` without network requests.
+
+The JSON output includes provider search outcomes and a `draft.venues` array. Each new candidate has a canonical permalink and `review: null`. Review the original and its exact branch before including a candidate in a public manifest. A successful provider response covers only the requested search page. The CLI reports when more results exist and leaves public-access verification to a separately authorized live check.
+
 ## Deploy checklist
 
 Merge does not migrate. The backend does not auto-apply SQL on boot.
