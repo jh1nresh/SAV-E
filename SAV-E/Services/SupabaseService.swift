@@ -1017,14 +1017,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage {
+        try await fetchPublicDiscovery(viewport: viewport, cursor: cursor, venue: nil)
+    }
+
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?,
+                              venue: LivePublicDiscoveryVenueKey?) async throws -> LivePublicDiscoveryPage {
 #if SAVVY_PUBLIC_DISCOVERY_BACKEND
-        var components = URLComponents()
-        components.path = "/v0/discovery/posts"
-        components.queryItems = [URLQueryItem(name: "bbox", value: viewport.queryValue),
-                                 URLQueryItem(name: "limit", value: "30")]
-        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
-        guard let path = components.string else { throw SupabaseError.invalidResponse("Invalid map bounds") }
-        let data = try await request(path: path)
+        guard let path = Self.publicDiscoveryPostsPath(viewport: viewport, cursor: cursor, venue: venue) else {
+            throw SupabaseError.invalidResponse("Invalid map bounds")
+        }
+        let data = try await request(path: path, additionalHeaders: [
+            "x-savvy-discovery-associations": "1", "x-savvy-discovery-google-venues": "1"
+        ])
         guard data.count <= 6 * 1_024 * 1_024 else { throw SupabaseError.invalidResponse("Discovery response too large") }
         return try JSONDecoder().decode(LivePublicDiscoveryPage.self, from: data)
 #else
@@ -1032,6 +1036,22 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         // authenticated route. Leave Explore unavailable until its read route ships.
         throw SupabaseError.notConfigured
 #endif
+    }
+
+    static func publicDiscoveryPostsPath(viewport: LivePublicDiscoveryViewport, cursor: String?,
+                                         venue: LivePublicDiscoveryVenueKey?) -> String? {
+        var components = URLComponents()
+        components.path = "/v0/discovery/posts"
+        components.queryItems = [URLQueryItem(name: "bbox", value: viewport.queryValue),
+                                 URLQueryItem(name: "limit", value: "30")]
+        if let venue {
+            components.queryItems?.append(URLQueryItem(name: "provider", value: venue.provider))
+            components.queryItems?.append(URLQueryItem(name: "placeID", value: venue.id))
+        }
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        // The backend query parser treats an unescaped plus as a space.
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return components.string
     }
 #endif
 

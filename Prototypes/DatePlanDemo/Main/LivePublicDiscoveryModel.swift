@@ -5,6 +5,16 @@ import Foundation
 @MainActor
 protocol LivePublicDiscoveryBackend {
     func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?,
+                              venue: LivePublicDiscoveryVenueKey?) async throws -> LivePublicDiscoveryPage
+}
+
+extension LivePublicDiscoveryBackend {
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?,
+                              venue: LivePublicDiscoveryVenueKey?) async throws -> LivePublicDiscoveryPage {
+        guard venue == nil else { throw URLError(.unsupportedURL) }
+        return try await fetchPublicDiscovery(viewport: viewport, cursor: cursor)
+    }
 }
 
 extension SupabaseService: LivePublicDiscoveryBackend {}
@@ -20,6 +30,7 @@ final class LivePublicDiscoveryModel: ObservableObject {
     private let sessionIsCurrent: @MainActor () -> Bool
     private let now: @MainActor () -> Date
     private var viewport: LivePublicDiscoveryViewport?
+    private var venue: LivePublicDiscoveryVenueKey?
     private var revision: UInt64 = 0
     private var expiryTask: Task<Void, Never>?
     private var authObservation: AnyCancellable?
@@ -49,26 +60,24 @@ final class LivePublicDiscoveryModel: ObservableObject {
     func clear() {
         revision &+= 1
         expiryTask?.cancel(); expiryTask = nil
-        page = nil; viewport = nil; isLoading = false; isLoadingMore = false
+        page = nil; viewport = nil; venue = nil; isLoading = false; isLoadingMore = false
         unavailable = false; paginationFailed = false
     }
 
-    func refresh(_ viewport: LivePublicDiscoveryViewport) async {
+    func refresh(_ viewport: LivePublicDiscoveryViewport, venue: LivePublicDiscoveryVenueKey? = nil) async {
         clear()
         guard sessionIsCurrent(), !Task.isCancelled else { return }
         self.viewport = viewport
+        self.venue = venue
         let ticket = revision
         isLoading = true
         defer { if revision == ticket { isLoading = false } }
         do {
             try await Task.sleep(nanoseconds: 250_000_000)
             guard ticket == revision, sessionIsCurrent(), !Task.isCancelled else { return }
-            let value = try await backend.fetchPublicDiscovery(viewport: viewport, cursor: nil)
+            let value = try await backend.fetchPublicDiscovery(viewport: viewport, cursor: nil, venue: venue)
             guard ticket == revision, sessionIsCurrent(), !Task.isCancelled else { return }
-            let verified = try value.validated(at: now())
-            guard verified.posts.allSatisfy({ viewport.contains(latitude: $0.place.latitude, longitude: $0.place.longitude) }) else {
-                throw DiscoveryFailure.invalidViewport
-            }
+            let verified = try value.validated(at: now(), viewport: viewport, venue: venue)
             publish(verified, ticket: ticket)
         } catch {
             guard ticket == revision else { return }
@@ -85,13 +94,10 @@ final class LivePublicDiscoveryModel: ObservableObject {
         isLoadingMore = true; paginationFailed = false
         defer { if ticket == revision { isLoadingMore = false } }
         do {
-            let raw = try await backend.fetchPublicDiscovery(viewport: viewport, cursor: cursor)
+            let raw = try await backend.fetchPublicDiscovery(viewport: viewport, cursor: cursor, venue: venue)
             guard ticket == revision, sessionIsCurrent(), !Task.isCancelled else { return }
-            let next = try raw.validated(at: now())
+            let next = try raw.validated(at: now(), viewport: viewport, venue: venue)
             let combined = try next.appending(to: previous, requestedCursor: cursor, at: now())
-            guard combined.posts.allSatisfy({ viewport.contains(latitude: $0.place.latitude, longitude: $0.place.longitude) }) else {
-                throw DiscoveryFailure.invalidViewport
-            }
             publish(combined, ticket: ticket)
         } catch {
             guard ticket == revision else { return }
@@ -113,6 +119,5 @@ final class LivePublicDiscoveryModel: ObservableObject {
         }
     }
 
-    private enum DiscoveryFailure: Error { case invalidViewport }
 }
 #endif

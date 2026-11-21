@@ -113,6 +113,42 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         ])
     }
 
+    func testExactGoogleAliasRejectsOtherBranchesAndCannotEnterExplore() throws {
+        let key = try XCTUnwrap(LivePublicDiscoveryVenueKey(provider: "google_places", id: "ChIJExact"))
+        let alias = ["googlePlaceID": "ChIJExact", "provider": "apple_maps", "providerPlaceID": "fixture-venue"]
+        let raw = try decode(page(overrides: ["googlePlaceMatch": alias]))
+        XCTAssertEqual(try raw.validated(at: now, venue: key).venues.map(\.id), ["apple_maps:fixture-venue"])
+        XCTAssertThrowsError(try raw.validated(at: now))
+        let otherGoogle = try XCTUnwrap(LivePublicDiscoveryVenueKey(provider: "google_places", id: "ChIJOther"))
+        XCTAssertThrowsError(try raw.validated(at: now, venue: otherGoogle))
+
+        var other = place()
+        other["providerPlaceID"] = "fixture-other"
+        let sameCoordinates = post(id: "WrongBranch", overrides: ["place": other])
+        let forged = try decode(page(posts: [sameCoordinates], overrides: ["googlePlaceMatch": alias]))
+        XCTAssertThrowsError(try forged.validated(at: now, venue: key))
+        XCTAssertThrowsError(try decode(page()).validated(at: now, venue: key))
+    }
+
+    func testExplicitlyReviewedOriginalMayAppearAtTwoExactVenues() throws {
+        var sameCoordinateBranch = place()
+        sameCoordinateBranch["provider"] = "google_places"
+        sameCoordinateBranch["providerPlaceID"] = "ChIJOther"
+        sameCoordinateBranch["name"] = "Other Fixture Cafe"
+        let a = post(overrides: ["multiVenue": true, "highlightRank": 1])
+        let b = post(overrides: ["multiVenue": true, "highlightRank": 2, "place": sameCoordinateBranch])
+        let validated = try decode(page(posts: [a, b])).validated(at: now)
+        XCTAssertEqual(validated.venues.map(\.id), ["apple_maps:fixture-venue", "google_places:ChIJOther"])
+        XCTAssertEqual(validated.venues.map { $0.posts.first?.highlightRank }, [1, 2])
+        for invalid in [
+            post(overrides: ["place": sameCoordinateBranch]),
+            post(overrides: ["multiVenue": true, "place": sameCoordinateBranch, "authorHandle": "wrong"])
+        ] {
+            XCTAssertThrowsError(try decode(page(posts: [a, invalid])).validated(at: now))
+        }
+        XCTAssertThrowsError(try decode(page(posts: [a, a])).validated(at: now))
+    }
+
     func testMalformedSchemaDatesFreshnessAndPublicBoundaryFailClosed() throws {
         for overrides: [String: Any] in [
             ["schemaVersion": 2], ["indexRevision": "not-a-revision"],
@@ -214,6 +250,18 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertEqual(try decode(page()).validated(at: now, viewport: local, limit: 1).posts.count, 1)
         XCTAssertThrowsError(try decode(page()).validated(at: now, viewport: crossing))
         XCTAssertThrowsError(try decode(page()).validated(at: now, limit: 0))
+    }
+
+    func testVenueLookupPathPreservesLiteralPlusInExactIdentity() throws {
+        let viewport = try LivePublicDiscoveryViewport(west: 121, south: 25, east: 122, north: 26)
+        let venue = try XCTUnwrap(LivePublicDiscoveryVenueKey(provider: "apple_maps", id: "Branch+B"))
+        let path = try XCTUnwrap(SupabaseService.publicDiscoveryPostsPath(viewport: viewport, cursor: cursor, venue: venue))
+        let components = try XCTUnwrap(URLComponents(string: path))
+        XCTAssertEqual(components.path, "/v0/discovery/posts")
+        XCTAssertTrue(components.percentEncodedQueryItems?.contains(URLQueryItem(name: "placeID", value: "Branch%2BB")) == true)
+        XCTAssertEqual(components.queryItems?.first { $0.name == "placeID" }?.value, venue.id)
+        XCTAssertEqual(components.queryItems?.first { $0.name == "provider" }?.value, venue.provider)
+        XCTAssertEqual(components.queryItems?.first { $0.name == "cursor" }?.value, cursor)
     }
 
     func testExactProviderIdentityGroupsAllAuthorsAndRejectsMetadataConflicts() throws {
