@@ -65,7 +65,8 @@
             "checkedAt": "2026-11-18T17:53:44.272Z",
             "origin": "public_web_index",
             "branchEvidence": "The official Hyatt post names Café and gives the restaurant phone. Hyatt and Taipei Food Tracer confirm Songshou Road No. 2, 1F. MapKit returned the restaurant's place ID; use FunNow's checked WGS84 venue pin because the local MapKit search returned an offset coordinate.",
-            "contentFingerprint": "7b8cbbbf2c51d37f9627c9f2d71b0987bb40b4f0c4b696e5915aa9f9b5236840"
+            "contentFingerprint": "7b8cbbbf2c51d37f9627c9f2d71b0987bb40b4f0c4b696e5915aa9f9b5236840",
+            "publishedAt": "2025-01-14T13:00:39.000Z"
           }
         },
         {
@@ -183,7 +184,8 @@
             "origin": "publisher_reference",
             "branchEvidence": "The public Instagram Reel by the brand explicitly lists its Xinyi branch at 175 Zhongxiao East Road Section 5 with phone 02-27564526. MapKit returns the Xinyi-specific Rose Food POI at that address. The on-site review at https://ifoodie.tw/post/6804ed8feb74c4d1095f3a29 corroborates the same street number and phone. The original also lists other branches, so it is shown as a brand directory, not a branch-specific diner endorsement. The pin uses the exact Google storefront's verified WGS84 coordinates.",
             "contentFingerprint": "9696adc1c399545c864579f6e93147495b699e04ef09895da826a0c1750dcf76",
-            "multiVenue": true
+            "multiVenue": true,
+            "publishedAt": "2025-10-10T05:13:08.000Z"
           }
         },
         {
@@ -196,7 +198,8 @@
             "checkedAt": "2026-11-18T18:46:56.397Z",
             "origin": "publisher_reference",
             "branchEvidence": "The visible original Reel caption by scthaen1ey names 螺螄福信義店 and gives No. 175, Section 5, Zhongxiao East Road. That door number resolves to the exact Xinyi venue in MapKit. The review title describes the dishes and excludes the promotion mentioned in the original. The pin uses the exact Google storefront's verified WGS84 coordinates.",
-            "contentFingerprint": "346c2b733ea696315dec06a44bc8a1ecf512c85874ad6dd5ed3649c8b5a721a8"
+            "contentFingerprint": "346c2b733ea696315dec06a44bc8a1ecf512c85874ad6dd5ed3649c8b5a721a8",
+            "publishedAt": "2026-04-17T10:56:14.000Z"
           }
         }
       ]
@@ -318,7 +321,8 @@
             "checkedAt": "2026-11-18T20:25:56.935Z",
             "origin": "public_web_index",
             "branchEvidence": "The visible public original names the Cartier Panther event in Taipei 101 4F City Square, a mall common area. The mall’s event announcement (2026/11/06 to 11/21) and shopping floor guide identify this same event and venue. The mall contact page lists 45 City Hall Road and 02-8101-8800, both corroborated by the exact Google Shopping Center listing independently of the Observatory, offices and tenants. References: https://www.taipei-101.com.tw/tw/event/center and https://www.taipei-101.com.tw/contact . The dated title describes the event in the original without implying it recurs.",
-            "contentFingerprint": "cb0e80ede1fb5ba0e3f26595a47ecb23756f5f4744fc4c0d9581d89b73a5ce3f"
+            "contentFingerprint": "cb0e80ede1fb5ba0e3f26595a47ecb23756f5f4744fc4c0d9581d89b73a5ce3f",
+            "publishedAt": "2026-11-06T09:02:37.000Z"
           }
         },
         {
@@ -364,7 +368,12 @@
             "checkedAt": "2026-11-18T21:24:23.878Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original Instagram caption explicitly lists GreenHouse and No. 8, Alley 6, Lane 395, Section 4, Xinyi Road, 1F. The author's article embeds this original and repeats the street address. The exact Apple Maps result names Green House and the same house number; the confirmed Google place lists the same 1F address and supplies the pin’s WGS84 coordinate.",
-            "contentFingerprint": "9affde5304046b629cf3295da36e489da05fe24a3d0a9490fb5ae4ed57a53eac"
+            "contentFingerprint": "9affde5304046b629cf3295da36e489da05fe24a3d0a9490fb5ae4ed57a53eac",
+            "publishedAt": "2024-11-15T08:12:02.000Z",
+            "publicLikes": {
+              "count": 70,
+              "observedAt": "2026-11-19T23:02:18.952Z"
+            }
           }
         },
         {
@@ -409,7 +418,8 @@
             "checkedAt": "2026-11-18T21:24:23.878Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original Instagram caption names 食令shabu and specifies Taipei 101, 4F, at 45 City Hall Road. The author's article embeds the original. The mall's own venue article (https://stage.taipei101mall.com.tw/article/309) identifies the 4F branch. MapKit returns this venue separately from Dazhi; the independently confirmed Google ID and WGS84 pin resolve the same floor and public branch phone 02-8101-7989.",
-            "contentFingerprint": "4d0fd648b5d9b96ab21a7c577ec04904d72e0441cdd2072374766c83d6513652"
+            "contentFingerprint": "4d0fd648b5d9b96ab21a7c577ec04904d72e0441cdd2072374766c83d6513652",
+            "publishedAt": "2020-07-18T14:13:58.000Z"
           }
         },
         {
@@ -454,7 +464,8 @@
             "checkedAt": "2026-11-18T21:24:23.878Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original Instagram Reel names We & Me Cafe and lists No. 188-2, Section 1, Keelung Road and phone 02-2763-8767. The article embeds that exact Reel. The Taipei City friendly-store directory (https://friendlystore.taipei/store/tw/pg1/3/company/8298) and exact Apple Maps POI confirm the address. The independently confirmed Google ID matches the number and phone and supplies the WGS84 pin.",
-            "contentFingerprint": "664d35c0812ce8f1540c7595650321b00979cda0d1ecb47e81f0167e47d20730"
+            "contentFingerprint": "664d35c0812ce8f1540c7595650321b00979cda0d1ecb47e81f0167e47d20730",
+            "publishedAt": "2024-06-13T14:16:22.000Z"
           }
         }
       ]
