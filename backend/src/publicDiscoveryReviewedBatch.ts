@@ -5,9 +5,10 @@ import { pathToFileURL } from "node:url";
 import {
   canonicalSource, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
-  validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
+  timestamp, validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
   type PublicDiscoveryPlace, type PublicDiscoveryPost,
 } from "./publicDiscovery.js";
+import { addVenueHighlights, type PublicLikesObservation } from "./publicDiscoveryHighlights.js";
 import { defaultFetchText } from "./sourceSearchWorker.js";
 import { publicPostEvidenceFingerprint, publicReviewEmbedURL, threadsParentFingerprintPrefix } from "./publicPostReverification.js";
 
@@ -142,6 +143,8 @@ function projectReviewArchive(raw: unknown, now: Date) {
   }
   const generatedAt = now.toISOString();
   const posts: PublicDiscoveryPost[] = [];
+  const likes = new Map<string, PublicLikesObservation>();
+  const likesByObservation = new Map<string, number>();
   const venueSignatures = new Map<string, string>();
   const associations = new Set<string>();
   let withheld = 0;
@@ -186,9 +189,22 @@ function projectReviewArchive(raw: unknown, now: Date) {
       }
       const review = reviewedEvidence(candidate.review, candidate.observedIn, platform);
       if (typeof review.checkedAt !== "string") throw new Error("Invalid review date");
-      posts.push({ id: `${platform}:${source.postID}`, platform, sourceURL: source.url,
+      const id = `${platform}:${source.postID}`;
+      const publishedAt = typeof review.publishedAt === "string" ? review.publishedAt : null;
+      const observation = parsePublicLikes(review.publicLikes, publishedAt, now);
+      if (observation) {
+        const observationKey = JSON.stringify([id, observation.observedAt]);
+        const previousCount = likesByObservation.get(observationKey);
+        if (previousCount !== undefined && previousCount !== observation.count) {
+          throw new Error("Conflicting public likes observations");
+        }
+        likesByObservation.set(observationKey, observation.count);
+        const latest = likes.get(id);
+        if (!latest || observation.observedAt > latest.observedAt) likes.set(id, observation);
+      }
+      posts.push({ id, platform, sourceURL: source.url,
         authorName: null, authorHandle: candidate.authorHandle ?? threadsHandle, title: candidate.title,
-        publishedAt: null,
+        publishedAt,
         verifiedAt: review.checkedAt, visibility: "public", locationEvidence: "reviewed_match",
         cover: null, place,
         ...(review.multiVenue === true ? { multiVenue: true } : {}) });
@@ -224,14 +240,14 @@ function projectReviewArchive(raw: unknown, now: Date) {
     coverage: projected.coverage.map(({ platform, indexedPostCount }) => ({
       platform, status: indexedPostCount > 0 ? "connected" : "not_connected",
     })),
-    posts: projected.posts,
+    posts: addVenueHighlights(projected.posts, likes, now),
     ...(projected.googlePlaceAliases ? { googlePlaceAliases: projected.googlePlaceAliases } : {}),
   };
   return { manifest: currentManifest, withheld, expired };
 }
 
 function reviewedEvidence(value: unknown, observedIn: unknown, platform: "threads" | "instagram") {
-  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue"]);
+  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publicLikes"]);
   if (review.multiVenue !== undefined && review.multiVenue !== true) throw new Error("Invalid multi-venue review");
   if ((review.origin !== "public_web_index" && review.origin !== "creator_submission"
     && (review.origin !== "publisher_reference" || !publisherPageURL(observedIn)))
@@ -246,7 +262,23 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
       throw new Error("Invalid reviewed content fingerprint");
     }
   }
+  if (review.publishedAt !== undefined) {
+    const publishedAt = timestamp(review.publishedAt);
+    if (publishedAt > timestamp(review.checkedAt)) throw new Error("Publication date follows review");
+    return { ...review, publishedAt };
+  }
   return review;
+}
+
+function parsePublicLikes(value: unknown, publishedAt: string | null, now: Date): PublicLikesObservation | undefined {
+  if (value === undefined) return;
+  const row = fields(value, ["count", "observedAt"]);
+  const observedAt = timestamp(row.observedAt);
+  if (typeof row.count !== "number" || !Number.isSafeInteger(row.count) || row.count < 0
+    || publishedAt === null || observedAt < publishedAt || Date.parse(observedAt) > now.getTime()) {
+    throw new Error("Invalid public likes observation");
+  }
+  return { count: row.count, observedAt };
 }
 
 type RecheckOptions = {
@@ -282,6 +314,7 @@ export async function recheckReviewedPublicBatch(raw: unknown, options: RecheckO
       const sourceURL = canonicalSource(candidate.sourceURL, platform).url;
       if (candidate.review === null) { summary.pending++; return candidate; }
       const review = reviewedEvidence(candidate.review, candidate.observedIn, platform);
+      parsePublicLikes(review.publicLikes, typeof review.publishedAt === "string" ? review.publishedAt : null, now);
       const next = { ...candidate, review: { ...review } };
       if (!review.contentFingerprint) { summary.unconfigured++; return next; }
       const includeThreadParent = String(review.contentFingerprint).startsWith(threadsParentFingerprintPrefix);

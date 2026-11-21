@@ -30,7 +30,8 @@
             "checkedAt": "2026-11-19T01:19:25.848Z",
             "origin": "publisher_reference",
             "contentFingerprint": "e495359716377a79e190893b3af73fec3e07c1f0bfc5cff8b83c9bb9373e4292",
-            "branchEvidence": "The public post explicitly names Simple Kaffa Sola 天空興波 and describes visiting its 88th-floor cafe at Taipei 101. ReadyGo links the exact original in the Sola section with 88F, 7 Xinyi Road Section 5 and 02-8101-0099. The independent MapKit and Google venue listings resolve the same address and floor, corroborated by the cafe’s official site. The preview title does not carry over the post’s past wait or prices."
+            "branchEvidence": "The public post explicitly names Simple Kaffa Sola 天空興波 and describes visiting its 88th-floor cafe at Taipei 101. ReadyGo links the exact original in the Sola section with 88F, 7 Xinyi Road Section 5 and 02-8101-0099. The independent MapKit and Google venue listings resolve the same address and floor, corroborated by the cafe’s official site. The preview title does not carry over the post’s past wait or prices.",
+            "publishedAt": "2026-07-28T16:07:50.000Z"
           }
         },
         {
@@ -42,7 +43,8 @@
             "checkedAt": "2026-11-19T11:46:20.307Z",
             "origin": "public_web_index",
             "branchEvidence": "The public Threads original by xiuhua1687 names 興波咖啡 and specifies the 88th floor of Taipei 101. The cafe's own https://simplekaffa.com/journal/Simple-Kaffa-Sola page identifies that exact floor as Simple Kaffa Sola 天空興波, consistent with the existing MapKit ID.",
-            "contentFingerprint": "f64a69f8b2feaa9ad5c3ec6b809e222a15c4ea1eb5f04853b1ce2ac151b1d7b3"
+            "contentFingerprint": "f64a69f8b2feaa9ad5c3ec6b809e222a15c4ea1eb5f04853b1ce2ac151b1d7b3",
+            "publishedAt": "2025-06-29T10:13:29.000Z"
           }
         }
       ]

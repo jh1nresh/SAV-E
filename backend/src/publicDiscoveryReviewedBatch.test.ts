@@ -74,6 +74,66 @@ test("Threads reply fingerprints bind the selected reply and optionally require 
   }
 });
 
+test("venue highlights preserve all originals and compare only current likes on recent same-platform posts", () => {
+  const observation = (count: number) => ({ count, observedAt: "2026-11-18T11:30:00Z" });
+  const candidate = (code: string, publishedAt: string, publicLikes?: object) => ({
+    ...instagram, sourceURL: `https://www.instagram.com/p/${code}/`,
+    review: { ...review, publishedAt, ...(publicLikes ? { publicLikes } : {}) },
+  });
+  const noMetric = candidate("UNKNOWN", "2026-11-17T00:00:00Z");
+  const newer = candidate("NEWER", "2026-11-16T00:00:00Z", observation(2));
+  const higher = candidate("HIGHER", "2026-11-15T00:00:00Z", observation(5));
+  const staleMetric = candidate("STALE", "2026-10-01T00:00:00Z", {
+    count: 50_000, observedAt: "2026-10-10T00:00:00Z",
+  });
+  const oldest = candidate("OLD", "2025-11-12T00:00:00Z", observation(500_000));
+  const ranked = (posts: ReturnType<typeof compileReviewedPublicBatch>["manifest"]["posts"]) =>
+    posts.filter(row => row.highlightRank).sort((a, b) => a.highlightRank! - b.highlightRank!).map(row => row.id);
+  const onlyInstagram = compileReviewedPublicBatch(batch(noMetric, newer, higher, oldest, staleMetric), now).manifest;
+  assert.deepEqual(ranked(onlyInstagram.posts), ["instagram:UNKNOWN", "instagram:HIGHER", "instagram:NEWER"]);
+
+  const oldThreads = { ...threads, review: { ...review, publishedAt: "2025-10-02T00:00:00Z", publicLikes: observation(10_000) } };
+  const samePlace = compileReviewedPublicBatch(batch(noMetric, newer, higher, oldest, staleMetric, oldThreads), now).manifest;
+  assert.equal(samePlace.posts.length, 6);
+  assert.deepEqual(ranked(samePlace.posts), ["instagram:UNKNOWN", "instagram:HIGHER", "threads:TER_1"]);
+  assert.equal(samePlace.posts.find(row => row.id === "threads:TER_1")?.publishedAt, "2025-10-02T00:00:00.000Z");
+  assert.ok(samePlace.posts.every(row => !Object.hasOwn(row, "publicLikes")));
+  assert.deepEqual(ranked(compileReviewedPublicBatch(batch(threads), now).manifest.posts), ["threads:TER_1"]);
+});
+
+test("publication time and likes observations must be independently valid", async () => {
+  for (const invalid of [
+    { publishedAt: "2026-11-18T10:00:01Z" },
+    { publishedAt: "2026-02-30T00:00:00Z" },
+    { publicLikes: { count: 1, observedAt: "2026-11-18T00:00:00Z" } },
+    { publishedAt: "2026-11-01T00:00:00Z", publicLikes: { count: -1, observedAt: "2026-11-02T00:00:00Z" } },
+    { publishedAt: "2026-11-01T00:00:00Z", publicLikes: { count: 1, observedAt: "2026-11-19T00:00:00Z" } },
+    { publishedAt: "2026-11-01T00:00:00Z", publicLikes: { count: 1, observedAt: "2026-10-01T00:00:00Z" } },
+  ]) {
+    const input = batch({ ...threads, review: { ...review, ...invalid } });
+    assert.throws(() => compileReviewedPublicBatch(input, now));
+    await assert.rejects(recheckReviewedPublicBatch(input, { now, fetchEmbed: async () => assert.fail("invalid review must not fetch") }));
+  }
+});
+
+test("conflicting observations for the same original are rejected regardless of venue order", () => {
+  const candidate = (count: number, observedAt: string) => ({
+    ...instagram, review: {
+      ...review, multiVenue: true, publishedAt: "2026-11-17T00:00:00Z", publicLikes: { count, observedAt },
+    },
+  });
+  const past = "2026-11-18T07:00:00Z";
+  const recent = "2026-11-18T08:00:00Z";
+  const first = { place, candidates: [candidate(3, past)] };
+  const conflicting = { place: other, candidates: [candidate(5, "2026-11-18T07:00:00.000Z")] };
+  const latest = { place: { ...place, providerPlaceID: "BranchC" }, candidates: [candidate(1, recent)] };
+  for (const venues of [[first, conflicting, latest], [latest, first, conflicting]]) {
+    assert.throws(() => compileReviewedPublicBatch({ venues }, now), /Conflicting public likes observations/);
+  }
+  const agreeing = { ...conflicting, candidates: [candidate(3, past)] };
+  assert.equal(compileReviewedPublicBatch({ venues: [latest, first, agreeing] }, now).manifest.posts.length, 3);
+});
+
 test("offline preview keeps the manifest deadline and preserves individual review timestamps", () => {
   const alias = { googlePlaceID: "ChIJ_venue", provider: place.provider, providerPlaceID: place.providerPlaceID,
     branchEvidence: "Named storefront and exact address independently agree." };
@@ -215,7 +275,8 @@ test("recheck renews only unchanged public originals with existing branch finger
   const threadsHash = publicPostEvidenceFingerprint(threadsHTML, "threads", threads.sourceURL, "example", venue);
   assert.ok(igHash && threadsHash);
   const input = batch(
-    { ...instagram, review: { ...review, contentFingerprint: igHash } },
+    { ...instagram, review: { ...review, contentFingerprint: igHash, publishedAt: "2026-11-15T00:00:00Z",
+      publicLikes: { count: 4, observedAt: "2026-11-16T06:00:00Z" } } },
     { ...threads, authorHandle: "example", review: { ...review, contentFingerprint: threadsHash } },
     { ...instagram, sourceURL: "https://www.instagram.com/p/MANUAL", review },
     { ...instagram, sourceURL: "https://www.instagram.com/p/WAITING", review: null },
@@ -233,6 +294,8 @@ test("recheck renews only unchanged public originals with existing branch finger
   assert.deepEqual(updated.summary, { refreshed: 1, unconfirmed: 1, unconfigured: 1, pending: 1 });
   const reviewed = compileReviewedPublicBatch(updated.batch, now);
   assert.equal(reviewed.manifest.posts.find(post => post.id === "instagram:IG_1")?.verifiedAt, now.toISOString());
+  assert.equal(reviewed.manifest.posts.find(post => post.id === "instagram:IG_1")?.publishedAt, "2026-11-15T00:00:00.000Z");
+  assert.ok(JSON.stringify(updated.batch).includes("2026-11-16T06:00:00Z"));
   assert.equal(reviewed.manifest.posts.find(post => post.id === "threads:TER_1")?.verifiedAt, "2026-11-18T10:00:00.000Z");
   assert.ok(!JSON.stringify(reviewed).includes(igHash));
   assert.ok(!JSON.stringify(updated).includes("this weekend"));
