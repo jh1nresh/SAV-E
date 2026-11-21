@@ -49,7 +49,12 @@
             "origin": "publisher_reference",
             "checkedAt": "2026-11-19T04:42:05.185Z",
             "contentFingerprint": "b7ae1b6cfe328fdb180147a3991b8f039ff0a388b431507a14fcd61d3ef94f89",
-            "branchEvidence": "The public original explicitly gives No. 58 Songren Road, Far Eastern Xinyi 1F and labels 鼎泰豐遠百a13店. The same author embeds this exact post in the PopDaily article with the same address. The mall lists this Din Tai Fung on 1F at https://origin.feds.com.tw/tw/55/MallInfo/FloorRestaurant?FloorId=172&RestaurantId=270&tab=floor-1F. Keep the existing exact Apple venue and Google alias; title omits historical wait and pricing."
+            "branchEvidence": "The public original explicitly gives No. 58 Songren Road, Far Eastern Xinyi 1F and labels 鼎泰豐遠百a13店. The same author embeds this exact post in the PopDaily article with the same address. The mall lists this Din Tai Fung on 1F at https://origin.feds.com.tw/tw/55/MallInfo/FloorRestaurant?FloorId=172&RestaurantId=270&tab=floor-1F. Keep the existing exact Apple venue and Google alias; title omits historical wait and pricing.",
+            "publishedOn": "2020-05-17",
+            "publicLikes": {
+              "count": 55,
+              "observedAt": "2026-11-19T21:21:40.845Z"
+            }
           }
         }
       ]

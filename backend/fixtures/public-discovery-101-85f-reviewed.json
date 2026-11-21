@@ -22,7 +22,12 @@
             "origin": "publisher_reference",
             "checkedAt": "2026-11-19T03:36:59.562Z",
             "contentFingerprint": "560c0b47be3ddb8b8e17ad62d2ab67b570359f57e150cc3d51c30633d10165bc",
-            "branchEvidence": "The public 85td_tw original names 捌伍添第 85TD in the caption and identifies its venue in the location label. ReadyGo links to that exact original in its own 85TD section. The official restaurant contact page lists Taipei 101, Xinyi Road Section 5, No. 7, 85F and links to its exact Google venue. The resolved Apple venue points to the same official 85TD site. Official page https://www.85td-101.com/en/contact/. The re-opened exact Google place supplies the WGS84 pin; MapKit here returns a regional coordinate offset."
+            "branchEvidence": "The public 85td_tw original names 捌伍添第 85TD in the caption and identifies its venue in the location label. ReadyGo links to that exact original in its own 85TD section. The official restaurant contact page lists Taipei 101, Xinyi Road Section 5, No. 7, 85F and links to its exact Google venue. The resolved Apple venue points to the same official 85TD site. Official page https://www.85td-101.com/en/contact/. The re-opened exact Google place supplies the WGS84 pin; MapKit here returns a regional coordinate offset.",
+            "publishedOn": "2026-07-03",
+            "publicLikes": {
+              "count": 25,
+              "observedAt": "2026-11-19T21:21:42.588Z"
+            }
           }
         }
       ]
