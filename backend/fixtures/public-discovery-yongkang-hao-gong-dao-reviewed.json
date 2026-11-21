@@ -1,0 +1,39 @@
+{
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C28F542EC",
+        "name": "好公道金雞園",
+        "address": "台北市大安區永康街28-1號",
+        "latitude": 25.0307503,
+        "longitude": 121.529454,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DUCP58oAbpe/",
+          "observedIn": "https://taiwan-plus.com/archives/11842",
+          "authorHandle": "shutter_girl_journal",
+          "title": "永康街好公道金雞園的小籠包與蝦仁燒賣",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T06:30:14.840Z",
+            "contentFingerprint": "e5a696d4cbe5a29ed5b662ae4392e25b8abe7103b6d2353bf387e064db14be9a",
+            "branchEvidence": "The original creator explicitly names 好公道金雞園 and gives Da’an District Yongkang Street No. 28-1. Taiwan Plus embeds it under its exact Yongkang venue section. Taipei City's food safety list identifies 好公道金雞園 at Yongkang Street No. 28-1. The exact Apple and Google listings both match that address. The exact Google listing supplies WGS84. Gongguan 金雞園 at Roosevelt Road is a distinct place."
+          }
+        }
+      ]
+    }
+  ],
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJ2c7OvYOpQjQR0gsYO_lmsKw",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C28F542EC",
+      "branchEvidence": "Both exact map IDs identify 好公道金雞園 at Yongkang Street No. 28-1, Da’an District, Taipei. They do not resolve to the Gongguan shop."
+    }
+  ]
+}

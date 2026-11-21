@@ -1,0 +1,71 @@
+{
+  "venues": [
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJC_nw4E6uQjQRc1J6TLpf-W8",
+        "name": "雞の專家 北投總店",
+        "address": "台北市北投區中和街333號",
+        "latitude": 25.140947,
+        "longitude": 121.499674,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CcPrN_qvBf0/",
+          "authorHandle": "aga_food_photo",
+          "title": "雞の專家北投總店：炸雞食記",
+          "observedIn": "https://www.walkerland.com.tw/article/view/324435",
+          "review": {
+            "checkedAt": "2026-11-19T08:25:47.861Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public original by aga_food_photo names 雞の專家 北投總店 and gives 台北市北投區中和街333號 in its main-store block. It labels the other branches separately. WalkerLand embeds the same original. Its sidebar lists 335號. The public Google Maps embed returns the exact Beitou main store at 333號 with the Place ID, CID, and coordinates. FooTinder independently links the same Place ID and 333號 address. Only 北投總店 is associated.",
+            "contentFingerprint": "9beca8c21041f3fc27fc43c4a3a28b3859e700beba519ad9e4e783c798dc5a7b"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@masterg0718/post/DamlxuqDJ0Z",
+          "authorHandle": "masterg0718",
+          "title": "雞の專家北投總店：地址與現場點餐",
+          "observedIn": "https://www.threads.com/@masterg0718",
+          "review": {
+            "checkedAt": "2026-11-19T11:07:43.274Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The originating Threads profile is named 雞の專家 北投總店, uses the same handle and shop name as its public Instagram profile, and displays the exact post. The post confirms the shop is at 中和街333號 and describes ordering in person. Its Beitou main-store address is independently confirmed by the exact Google Maps listing and a storefront visit reported by hanblog.tw/masterg. The title omits dated weather and operating information.",
+            "contentFingerprint": "d440bb463b2965a69f9c931ffbc05e1f31a5d0cec291b6e47fe58e18de5e336f"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJN9uYYQCpQjQRmIi-Db1nWY0",
+        "name": "香雞城西門店",
+        "address": "台北市萬華區漢口街二段54-33號",
+        "latitude": 25.0458568,
+        "longitude": 121.5058251,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@chun_yu1990/post/DV0GIuOErD1",
+          "authorHandle": "chun_yu1990",
+          "title": "香雞城西門店試營運（2026）",
+          "observedIn": "https://www.nownews.com/news/6795498",
+          "review": {
+            "checkedAt": "2026-11-19T11:07:43.281Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original identifies 香雞城's Taipei Ximen launch and the March 13 opening date. NOWnews embeds and credits that exact original, reports the same branch and opening, and gives the numbered storefront. The brand's official store directory confirms 台北市萬華區漢口街二段54-33號. The public Google Maps result gives that exact street and the matching Place ID and WGS84 coordinates. The title describes the dated opening without presenting historical hours as current.",
+            "contentFingerprint": "94e6c1bc3bb6ab0b1979064b2f042aad700387b187d2979c17f80ac05aba5b98"
+          }
+        }
+      ]
+    }
+  ]
+}

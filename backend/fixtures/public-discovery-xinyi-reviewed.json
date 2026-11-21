@@ -1,0 +1,414 @@
+{
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJgSA4p7erQjQRaMkEL45Q--c",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9A3DC84C790",
+      "branchEvidence": "The verified FunNow listing for Grand Hyatt Taipei Café carries this Google place ID and identifies Songshou Road No. 2, 1F. The address and venue name match the Hyatt venue page and the exact Apple item."
+    },
+    {
+      "googlePlaceID": "ChIJSTLZ6barQjQRMdkCqrP3CNU",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9267AE96F0E",
+      "branchEvidence": "Wanderlog's Taipei 101 Observatory listing links directly to this Google Place ID, the 89F Xinyi Road address, and the official observatory site. The official site confirms the specific venue and floor. MapKit identifies the observatory separately from the Taipei 101 tower."
+    },
+    {
+      "googlePlaceID": "ChIJrddEfgCrQjQR8QS01bq9GA4",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C580EA694",
+      "branchEvidence": "The exact Google Place ID opens the public 螺螄福 信義店 listing at 175 Zhongxiao East Road Section 5 with branch phone 02-2756-4526. The official Reel confirms that address and phone and the dedicated Apple Maps item resolves the same branch. The canonical identity is the Apple Maps place. The pin uses the exact Google storefront’s verified WGS84 coordinates."
+    },
+    {
+      "googlePlaceID": "ChIJ37N8OairQjQRnIKBXJPX7ek",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C28F5DB7B",
+      "branchEvidence": "The original Instagram caption explicitly lists GreenHouse and No. 8, Alley 6, Lane 395, Section 4, Xinyi Road, 1F. The author's article embeds this original and repeats the street address. The exact Apple Maps result names Green House and the same house number; the confirmed Google place lists the same 1F address and supplies the pin’s WGS84 coordinate."
+    },
+    {
+      "googlePlaceID": "ChIJEbkgt6urQjQReBGcJ4HRG2Y",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F996BD8055AF",
+      "branchEvidence": "The original Instagram caption names 食令shabu and specifies Taipei 101, 4F, at 45 City Hall Road. The author's article embeds the original. The mall's own venue article (https://stage.taipei101mall.com.tw/article/309) identifies the 4F branch. MapKit returns this venue separately from Dazhi; the independently confirmed Google ID and WGS84 pin resolve the same floor and public branch phone 02-8101-7989."
+    },
+    {
+      "googlePlaceID": "ChIJO_MDTbmrQjQR9kY38FEBbro",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C5753E3EF",
+      "branchEvidence": "The original Instagram Reel names We & Me Cafe and lists No. 188-2, Section 1, Keelung Road and phone 02-2763-8767. The article embeds that exact Reel. The Taipei City friendly-store directory (https://friendlystore.taipei/store/tw/pg1/3/company/8298) and exact Apple Maps POI confirm the address. The independently confirmed Google ID matches the number and phone and supplies the WGS84 pin."
+    },
+    {
+      "googlePlaceID": "ChIJx9kLTcCrQjQReOhQ7rph6sY",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F996BBB1D238",
+      "branchEvidence": "The original Instagram caption specifies the Milk Tea Mansion at 17 Songzhi Road, Breeze Nan Shan 2F. The author embeds this original and repeats its branch address. The exact Apple listing identifies the Breeze NanShan shop; the confirmed Google ID and WGS84 pin resolve the same retail floor, address and phone 02-2722-0876."
+    }
+  ],
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9A3DC84C790",
+        "name": "台北君悅酒店 凱菲屋",
+        "address": "台北市信義區松壽路2號1樓",
+        "latitude": 25.0351708,
+        "longitude": 121.5628669,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DEzpGLmtFWf/",
+          "authorHandle": "grandhyatttpe",
+          "title": "凱菲屋新春下午茶活動（2025）",
+          "review": {
+            "checkedAt": "2026-11-18T17:53:44.272Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The official Hyatt post names Café and gives the restaurant phone. Hyatt and Taipei Food Tracer confirm Songshou Road No. 2, 1F. MapKit returned the restaurant's place ID; use FunNow's checked WGS84 venue pin because the local MapKit search returned an offset coordinate.",
+            "contentFingerprint": "7b8cbbbf2c51d37f9627c9f2d71b0987bb40b4f0c4b696e5915aa9f9b5236840"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@makan.tw.food/post/DeZTko_k3-V",
+          "authorHandle": "makan.tw.food",
+          "title": "凱菲屋馬來西亞美食節",
+          "review": {
+            "checkedAt": "2026-11-18T17:53:44.272Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The public Threads embed names Grand Hyatt Taipei Café and gives the same venue phone as the Hyatt post.",
+            "contentFingerprint": "3ebe32b6b1d2ac42e9b0c7e47f44f4cecd3ed13f17fbc4743651fedfa95aa264"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9267AE96F0E",
+        "name": "台北101觀景台",
+        "address": "台北市信義區信義路五段7號89樓",
+        "latitude": 25.033976,
+        "longitude": 121.56453,
+        "coordinateSystem": "WGS84",
+        "category": "attraction"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/BwZKjQ_Al_a/",
+          "authorHandle": "taipei_101_observatory",
+          "title": "台北101觀景台的風阻尼球",
+          "review": {
+            "checkedAt": "2026-11-18T17:53:44.272Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The observatory's official Instagram account explicitly names Taipei 101 Observatory and the wind damper. The official venue page identifies the 89F address and the Taiwan Tourism Administration's public listing supplies the WGS84 point. MapKit returned a separate ID for the observatory and the main tower.",
+            "contentFingerprint": "4f28a3ecdda398e7791b6d54382ece8cd171f0a906b784538555eba73158bc96"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@chei.yang/post/DcY0fiKGvzh",
+          "authorHandle": "chei.yang",
+          "title": "台北101觀景台夜景與室內反光",
+          "review": {
+            "checkedAt": "2026-11-18T17:53:44.272Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The public Threads original explicitly describes buying a ticket to visit the 101 observatory and names its wind-damper mascot. The post's original link was cross-checked through United Daily News.",
+            "contentFingerprint": "b0ce5d13a0d79fdbe699a0d93767f6d92d8ef8939536ad6dc48fd1cdcf193914"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@rosaceae_chang/post/DVFcGXAk4YC",
+          "authorHandle": "rosaceae_chang",
+          "title": "帶小孩去台北101觀景台吃糖葫蘆",
+          "observedIn": "https://udn.com/news/story/120912/9341739",
+          "review": {
+            "checkedAt": "2026-11-18T17:53:44.272Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public original describes paying NT$900 to go up Taipei 101 and getting a NT$290 candied strawberry skewer there. The UDN article embeds this exact post. Era News visited the shop and identifies the skewer as sold inside the paid Taipei 101 Observatory (https://www.eracom.com.tw/EraNews/Home/Life/2026-02-25/2271819.html). The official observatory site identifies the 89F venue separately from the mall.",
+            "contentFingerprint": "33c50ecae07b1188b606e9894269afedbd4fb0a73db8ba90d08dd4bd5dd47236"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@janet_chia_/post/DTebl3EDxPl",
+          "authorHandle": "janet_chia_",
+          "title": "台北101登高活動",
+          "review": null
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C580EA694",
+        "name": "螺螄福 Rose food 信義店",
+        "address": "台北市信義區忠孝東路五段175號",
+        "latitude": 25.041222,
+        "longitude": 121.5689824,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DPncwzoEevc/",
+          "authorHandle": "rosefood__laozhou",
+          "title": "螺螄福官方門市介紹（含信義店）",
+          "observedIn": "https://www.instagram.com/rosefood__laozhou/",
+          "review": {
+            "checkedAt": "2026-11-18T18:25:11.048Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public Instagram Reel by the brand explicitly lists its Xinyi branch at 175 Zhongxiao East Road Section 5 with phone 02-27564526. MapKit returns the Xinyi-specific Rose Food POI at that address. The on-site review at https://ifoodie.tw/post/6804ed8feb74c4d1095f3a29 corroborates the same street number and phone. The original also lists other branches, so it is shown as a brand directory, not a branch-specific diner endorsement. The pin uses the exact Google storefront's verified WGS84 coordinates.",
+            "contentFingerprint": "9696adc1c399545c864579f6e93147495b699e04ef09895da826a0c1750dcf76",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DXOuXVNz4Bm/",
+          "authorHandle": "scthaen1ey",
+          "title": "螺螄福信義店的老鴨湯粉與炸蛋",
+          "observedIn": "https://www.instagram.com/rosefood__laozhou/",
+          "review": {
+            "checkedAt": "2026-11-18T18:46:56.397Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The visible original Reel caption by scthaen1ey names 螺螄福信義店 and gives No. 175, Section 5, Zhongxiao East Road. That door number resolves to the exact Xinyi venue in MapKit. The review title describes the dishes and excludes the promotion mentioned in the original. The pin uses the exact Google storefront's verified WGS84 coordinates.",
+            "contentFingerprint": "346c2b733ea696315dec06a44bc8a1ecf512c85874ad6dd5ed3649c8b5a721a8"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJL5kTRGWrQjQR446uZhPFRSs",
+        "name": "竣師父牛肉麵-101店",
+        "address": "台北市信義區市府路45號 台北101 B1 06櫃",
+        "latitude": 25.0341712,
+        "longitude": 121.5639057,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DdQltSzCW1_/",
+          "authorHandle": "masterjimbeefnoodle101",
+          "title": "竣師父官方番茄牛肉麵介紹（含 101 店）",
+          "observedIn": "https://imreadygo.com/249389/",
+          "review": {
+            "checkedAt": "2026-11-18T19:06:01.961Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The official public IG post lists 101 B1 stall 06 at 45 City Hall Road and telephone 0913-888-913, separately from the Da'an and Dunhua shops. ReadyGo embeds that same original in its 101 branch section. The public Google Maps listing independently shows the 101 branch name, number, B1 address and an exact store-specific Place ID. The post describes a dish and lists multiple branches.",
+            "contentFingerprint": "da77b01929ece73e98464eeb98b51ec5f82a5d449eba5dc83ecb3e0659399f3c"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJha0xT-mrQjQR9qN3D-NSx2M",
+        "name": "初魚｜鮨 · 鉄板料亭-台北101",
+        "address": "台北市信義區市府路45號4樓",
+        "latitude": 25.0341222,
+        "longitude": 121.5640212,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DGMrciCzf3Y/",
+          "authorHandle": "chuyuteppanyaki",
+          "title": "初魚鉄板料亭台北101店開箱",
+          "observedIn": "https://www.kkday.com/zh-tw/blog/29005/asia-taiwan-taipei-101-guide",
+          "review": {
+            "checkedAt": "2026-11-18T20:13:54.754Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original public reel explicitly names the Taipei 101 teppanyaki restaurant and links to the official booking site https://www.chu-yu.com.tw/. The official locator confirms City Hall Road 45, 4F, and the exact Google listing identifies the combined sushi and teppanyaki storefront on that floor. The original covers teppanyaki. The KKday article embeds that exact original in its branch section.",
+            "contentFingerprint": "fedaff4872b9f9cf077a39de9ad2f0cb2aaf8e591b39fd799a4bd638f886ce2d"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJ63nn3u6rQjQR1rBe4f2Ro4A",
+        "name": "承繼 CHENG JI 台北101",
+        "address": "台北市信義區市府路45號B1",
+        "latitude": 25.0338211,
+        "longitude": 121.5644443,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DO3DSclEXhi/",
+          "authorHandle": "chengjitw",
+          "title": "承繼台北101店與招牌甜點介紹",
+          "observedIn": "https://www.kkday.com/zh-tw/blog/29005/asia-taiwan-taipei-101-guide",
+          "review": {
+            "checkedAt": "2026-11-18T20:13:54.754Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The brand’s public opening post names its Taipei 101 location and explicitly gives 45 City Hall Road, B1. The official store locator https://www.cheng-ji.com/pages/home independently confirms that address and specifies the escalator and elevator 2. The exact public Google listing matches both. The KKday article embeds the same original in its CHENG JI section. The title avoids presenting the original opening date or offers as current.",
+            "contentFingerprint": "5650ac650487ad92a79b066e107122cfe5cdbe14d38a7b03759e61b7357649b0"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJraeA2rarQjQRPBBjyR3RxKw",
+        "name": "台北101購物中心",
+        "address": "台北市信義區市府路45號",
+        "latitude": 25.0341222,
+        "longitude": 121.5640212,
+        "coordinateSystem": "WGS84",
+        "category": "shopping"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DfZO7fKBT-A/",
+          "authorHandle": "zero.dailynotes",
+          "title": "2026 台北101都會廣場卡地亞聖誕展（11/6–11/21）",
+          "review": {
+            "checkedAt": "2026-11-18T20:25:56.935Z",
+            "origin": "public_web_index",
+            "branchEvidence": "The visible public original names the Cartier Panther event in Taipei 101 4F City Square, a mall common area. The mall’s event announcement (2026/11/06 to 11/21) and shopping floor guide identify this same event and venue. The mall contact page lists 45 City Hall Road and 02-8101-8800, both corroborated by the exact Google Shopping Center listing independently of the Observatory, offices and tenants. References: https://www.taipei-101.com.tw/tw/event/center and https://www.taipei-101.com.tw/contact . The dated title describes the event in the original without implying it recurs.",
+            "contentFingerprint": "cb0e80ede1fb5ba0e3f26595a47ecb23756f5f4744fc4c0d9581d89b73a5ce3f"
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@yayosharon_food/post/DeHfCiPEhew",
+          "authorHandle": "yayosharon_food",
+          "title": "從信義商圈走空橋到台北 101 購物中心",
+          "observedIn": "https://travel.udn.com/travel/story/7160/9806288",
+          "review": {
+            "checkedAt": "2026-11-19T05:04:09.276Z",
+            "origin": "publisher_reference",
+            "contentFingerprint": "bb615bceb225f06edec1ea9dd7a2f6006ac9d1fe42b58d79932cdeedf0fc71b0",
+            "multiVenue": true,
+            "branchEvidence": "The readable exact original describes a route across public mall skywalks and ends at Taipei 101 after Breeze Nanshan. UDN links to this exact post. The city public works footbridge inventory lists the bridge between Taipei Financial Center and Breeze Nanshan Plaza. The Breeze access map (https://breeze-assets.breeze.com.tw/navigation/f7c5d04c5ac65f6d64d2697dc678daf598a96eda.pdf) labels the Taipei 101 shopping center on the public skyway network; the official venue guide https://www.taipei-101.com.tw/tw/shopping distinguishes the mall at No. 45 City Hall Road from the observatory. Scope is access to the public mall, not the other stops, indoor access, the observatory, or a weather guarantee."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C28F5DB7B",
+        "name": "GreenHouse早午餐",
+        "address": "台北市信義區信義路四段395巷6弄8號1樓",
+        "latitude": 25.0335167,
+        "longitude": 121.5588445,
+        "coordinateSystem": "WGS84",
+        "category": "cafe"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DCYoX3lvYRs/",
+          "authorHandle": "mamahuhu.blog",
+          "title": "GreenHouse 信義早午餐與甜點",
+          "observedIn": "https://mamahuhu.blog/twfood/green-house/",
+          "review": {
+            "checkedAt": "2026-11-18T21:24:23.878Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original Instagram caption explicitly lists GreenHouse and No. 8, Alley 6, Lane 395, Section 4, Xinyi Road, 1F. The author's article embeds this original and repeats the street address. The exact Apple Maps result names Green House and the same house number; the confirmed Google place lists the same 1F address and supplies the pin’s WGS84 coordinate.",
+            "contentFingerprint": "9affde5304046b629cf3295da36e489da05fe24a3d0a9490fb5ae4ed57a53eac"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F996BD8055AF",
+        "name": "食令shabu 台北101店",
+        "address": "台北市信義區市府路45號 台北101 4樓",
+        "latitude": 25.0334929,
+        "longitude": 121.564101,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CCyVBUnpbpU/",
+          "authorHandle": "hannahyen0703",
+          "title": "食令shabu 台北101店用餐記錄",
+          "observedIn": "https://yenstagram.com/food/819/",
+          "review": {
+            "checkedAt": "2026-11-18T21:24:23.878Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original Instagram caption names 食令shabu and specifies Taipei 101, 4F, at 45 City Hall Road. The author's article embeds the original. The mall's own venue article (https://stage.taipei101mall.com.tw/article/309) identifies the 4F branch. MapKit returns this venue separately from Dazhi; the independently confirmed Google ID and WGS84 pin resolve the same floor and public branch phone 02-8101-7989.",
+            "contentFingerprint": "4d0fd648b5d9b96ab21a7c577ec04904d72e0441cdd2072374766c83d6513652"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C5753E3EF",
+        "name": "We & Me Cafe 好好文化創意",
+        "address": "台北市信義區基隆路一段188-2號",
+        "latitude": 25.0420002,
+        "longitude": 121.5647139,
+        "coordinateSystem": "WGS84",
+        "category": "cafe"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/C8KKelMh7IH/",
+          "authorHandle": "s.waa02",
+          "title": "We & Me Cafe 的信義區早午餐",
+          "observedIn": "https://nowhot01.com/wemecafe/",
+          "review": {
+            "checkedAt": "2026-11-18T21:24:23.878Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original Instagram Reel names We & Me Cafe and lists No. 188-2, Section 1, Keelung Road and phone 02-2763-8767. The article embeds that exact Reel. The Taipei City friendly-store directory (https://friendlystore.taipei/store/tw/pg1/3/company/8298) and exact Apple Maps POI confirm the address. The independently confirmed Google ID matches the number and phone and supplies the WGS84 pin.",
+            "contentFingerprint": "664d35c0812ce8f1540c7595650321b00979cda0d1ecb47e81f0167e47d20730"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F996BBB1D238",
+        "name": "永心鳳茶奶茶專門所 微風南山店",
+        "address": "台北市信義區松智路17號 微風南山2樓",
+        "latitude": 25.0343139,
+        "longitude": 121.5663463,
+        "coordinateSystem": "WGS84",
+        "category": "cafe"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CVckLk9hK0f/",
+          "authorHandle": "mamahuhu.blog",
+          "title": "永心鳳茶微風南山店的鍋煮奶茶",
+          "observedIn": "https://mamahuhu.blog/twfood/yonshinmilkteamansion/",
+          "review": {
+            "checkedAt": "2026-11-18T21:24:23.878Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original Instagram caption specifies the Milk Tea Mansion at 17 Songzhi Road, Breeze Nan Shan 2F. The author embeds this original and repeats its branch address. The exact Apple listing identifies the Breeze NanShan shop; the confirmed Google ID and WGS84 pin resolve the same retail floor, address and phone 02-2722-0876.",
+            "contentFingerprint": "3ff18d4855f55a5665f27bf1142dcefc9e0d7823c394159819a4be6f3aa09553"
+          }
+        }
+      ]
+    }
+  ]
+}

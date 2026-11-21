@@ -1,0 +1,93 @@
+{
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJ9XETlwWsQjQRc5UAMLHnZNo",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9968D8DBC79",
+      "branchEvidence": "The public Google Place ID opens the independently confirmed 大直小館 listing at 535-1 Beian Road, Dazhi, Zhongshan, with phone 02-2533-1717. MapKit's dedicated Dazhi Restaurant item resolves the same address. The shop listing at https://news.ustv.com.tw/food/shop/3051 corroborates that address."
+    }
+  ],
+  "venues": [
+    {
+      "place": {
+        "provider": "google_places",
+        "providerPlaceID": "ChIJZyQRewCpQjQRQ2lYvYmbSTU",
+        "name": "螺螄福 Rose food 雙連店",
+        "address": "台北市中山區民生西路66巷17-1號",
+        "latitude": 25.05705,
+        "longitude": 121.5208274,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DPncwzoEevc/",
+          "authorHandle": "rosefood__laozhou",
+          "title": "螺螄福官方門市介紹（含雙連店）",
+          "observedIn": "https://www.instagram.com/rosefood__laozhou/",
+          "review": {
+            "checkedAt": "2026-11-18T19:42:27.254Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The brand's public Instagram Reel explicitly lists its Shuanglian branch at 17-1, Lane 66, Minsheng West Road with the 02-2541-1121 phone. The exact public Google Place ID resolves the same branch name, street number and phone independently. The source lists other branches and is presented as a branch directory.",
+            "contentFingerprint": "08ae77b0684500ef32b45c2a9d65124b5e37cacfdb48fffa0cab5cf366948e6d",
+            "multiVenue": true
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/reel/DdLrywQRu3_/",
+          "authorHandle": "dinny_725",
+          "title": "螺螄福雙連店經典螺螄粉食記",
+          "observedIn": "https://www.instagram.com/rosefood__laozhou/",
+          "review": {
+            "checkedAt": "2026-11-18T19:42:27.254Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original caption explicitly names the Shuanglian branch and its full Minsheng West Road, Lane 66, No. 17-1 address. The restaurant's public profile grid lists the original, and its exact verified Google listing confirms the storefront. The preview title describes the dining report and does not promote its dated offer.",
+            "contentFingerprint": "cea64596655a7757997e426a559190abece9cf8bf504c0e6b02cac394621d156"
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9968D8DBC79",
+        "name": "大直小館",
+        "address": "台北市中山區北安路535之1號",
+        "latitude": 25.0801815,
+        "longitude": 121.5472474,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@drewlittlehuang/post/DFbFreBTSHv",
+          "authorHandle": "drewlittlehuang",
+          "title": "台北炒飯推薦串裡的大直小館",
+          "observedIn": "https://www.threads.com/@molly_chiang/post/DFZ4szRST5E",
+          "review": {
+            "checkedAt": "2026-11-18T19:46:01.550Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public parent thread asks for Taipei fried rice recommendations. The selected reply's own author and permalink are visible in its public embed, and its body explicitly names 大直小館. Its address comes independently from MapKit, the matching Google listing and the restaurant listing at https://news.ustv.com.tw/food/shop/3051. The reply itself does not give an address. The pin uses the exact Google storefront's verified WGS84 coordinates.",
+            "contentFingerprint": "06422917d524a28cb17f6bd350131dcb2daf03c01e4c6807fbaab9f6b81f2cc2"
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CYdP4pNP0Hg/",
+          "authorHandle": "hektor_tung",
+          "title": "大直小館的紙包雞與煲仔飯",
+          "observedIn": "https://www.kkday.com/zh-tw/blog/101267/asia-taiwan-taipei-neihu-food",
+          "review": {
+            "checkedAt": "2026-11-18T23:12:18.962Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The public Instagram embed names 大直小館 in its visible venue tag and caption and mentions paper-wrapped chicken and claypot rice. KKday embeds this exact post within its 大直小館 section, which lists No. 535-1 Beian Road. The post itself contains no street number. The exact MapKit and Google storefronts corroborate that Beian Road address, as does https://news.ustv.com.tw/food/shop/3051.",
+            "contentFingerprint": "021625ff3a2b1143c5a66d6d97abe3d5894a444eb1a951fc0de5847c22e22eae"
+          }
+        }
+      ]
+    }
+  ]
+}

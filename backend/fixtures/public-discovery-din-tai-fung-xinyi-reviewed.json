@@ -1,0 +1,85 @@
+{
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJwQWwVe6rQjQRRGA4WzYdO2U",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F98C599035A5",
+      "branchEvidence": "The exact, independently reopened Google listing and the dedicated Apple MapKit result resolve the same Din Tai Fung branch, street number and floor. The brand confirms that address at https://www.dintaifung.com.tw/store_list.php. The WGS84 pin comes from the exact Google venue listing."
+    },
+    {
+      "googlePlaceID": "ChIJ01XRzrurQjQRnp5ZsHbAAuE",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F97A78C4A05A",
+      "branchEvidence": "The exact, independently reopened Google listing and the dedicated Apple MapKit result resolve the same Din Tai Fung branch, street number and floor. The brand confirms that address at https://www.dintaifung.com.tw/store_list.php. The WGS84 pin comes from the exact Google venue listing."
+    }
+  ],
+  "venues": [
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C599035A5",
+        "name": "鼎泰豐 A13店",
+        "address": "台北市信義區松仁路58號1樓（遠百信義A13）",
+        "latitude": 25.0368737,
+        "longitude": 121.5679503,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@mrstrong5/post/DUvOi3pk2Jx",
+          "authorHandle": "mrstrong5",
+          "title": "Threads 食客分享鼎泰豐 A13 店的候位經驗",
+          "observedIn": "https://www.threads.com/@xhpt48291/post/DUvHs_aEnz_",
+          "review": {
+            "checkedAt": "2026-11-19T00:24:08.395Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The parent public thread explicitly names Din Tai Fung. The original selected reply names Xinyi A13 and relates one visit by seven diners. It also mentions Banqiao. The association is scoped to the explicitly named A13 experience. No current wait estimate is inferred. The official brand directory at https://www.dintaifung.com.tw/store_list.php corroborates the branch address, with independent Apple and Google venue matches.",
+            "contentFingerprint": "threads-parent-v1:28423d61646458ec658a21d2f6df518f89f0cfae46cf3c1026d0ebb2d1f47dde"
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/CAR7BLUDiKX/",
+          "observedIn": "https://www.popdaily.com.tw/forum/food/687468?is_app=true",
+          "authorHandle": "jjloveats",
+          "title": "鼎泰豐 A13 店的絲瓜蝦仁小籠包食記",
+          "review": {
+            "origin": "publisher_reference",
+            "checkedAt": "2026-11-19T04:42:05.185Z",
+            "contentFingerprint": "b7ae1b6cfe328fdb180147a3991b8f039ff0a388b431507a14fcd61d3ef94f89",
+            "branchEvidence": "The public original explicitly gives No. 58 Songren Road, Far Eastern Xinyi 1F and labels 鼎泰豐遠百a13店. The same author embeds this exact post in the PopDaily article with the same address. The mall lists this Din Tai Fung on 1F at https://origin.feds.com.tw/tw/55/MallInfo/FloorRestaurant?FloorId=172&RestaurantId=270&tab=floor-1F. Keep the existing exact Apple venue and Google alias; title omits historical wait and pricing."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F97A78C4A05A",
+        "name": "鼎泰豐 A4店",
+        "address": "台北市信義區松高路19號B2（新光三越信義新天地A4）",
+        "latitude": 25.0397398,
+        "longitude": 121.5665985,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@xhpt48291/post/DUvtgbvkpGq",
+          "authorHandle": "xhpt48291",
+          "title": "Threads 鼎泰豐分店討論提到信義 A4 店",
+          "observedIn": "https://www.threads.com/@xhpt48291/post/DUvHs_aEnz_",
+          "review": {
+            "checkedAt": "2026-11-19T00:24:08.395Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The parent public thread explicitly names Din Tai Fung. This selected author reply summarizes recommendations in the thread, listing A4 and A13 by name. Other public replies independently specify Xinyi A4 and downstairs. The title presents this as a discussion, without attributing a visit or a current waiting time to the author. The official brand directory at https://www.dintaifung.com.tw/store_list.php corroborates the branch address, with independent Apple and Google venue matches.",
+            "contentFingerprint": "threads-parent-v1:474445ddb4c55acc78c208457a364d243b7b822310c255c25ac757f3ea420e51"
+          }
+        }
+      ]
+    }
+  ]
+}
