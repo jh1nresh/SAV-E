@@ -2181,7 +2181,7 @@ function isRedirectResponse(response: Response): boolean {
   return response.status >= 300 && response.status < 400;
 }
 
-async function boundedResponseText(response: Response, maxBytes: number): Promise<string> {
+export async function boundedResponseText(response: Response, maxBytes: number): Promise<string> {
   const length = Number(response.headers.get("content-length") ?? "0");
   if (length > maxBytes) throw new Error("Response too large");
   if (!response.body) return "";
