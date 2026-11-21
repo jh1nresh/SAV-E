@@ -2284,8 +2284,13 @@ function canonicalSearchURL(url?: URL): string | undefined {
 function normalizeDuckDuckGoURL(value: string): string | undefined {
   try {
     const url = new URL(value, "https://duckduckgo.com");
-    const uddg = url.searchParams.get("uddg");
-    return uddg ? decodeURIComponent(uddg) : url.toString();
+    if (url.protocol === "https:" && !url.username && !url.password && !url.port
+      && ["duckduckgo.com", "www.duckduckgo.com", "html.duckduckgo.com"].includes(url.hostname)
+      && (url.pathname === "/l/" || url.pathname === "/l")) {
+      const targets = url.searchParams.getAll("uddg");
+      if (targets.length !== 0) return targets.length === 1 ? targets[0] || undefined : undefined;
+    }
+    return url.toString();
   } catch (error) {
     if(error instanceof AnalysisControlError) throw error;
     return undefined;

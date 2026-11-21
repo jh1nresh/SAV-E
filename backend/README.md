@@ -84,11 +84,14 @@ Build the backend and use the current reviewed manifest plus an explicit public 
 ```sh
 npm run build
 node dist/publicDiscoveryThreadsDrafts.js public-venues.json current-index.json
+node dist/publicDiscoveryThreadsDrafts.js --public-web public-venues.json current-index.json
 ```
 
 The optional third argument is the offset returned as `coverage.nextOffset`. Each batch queries at most 20 missing branches. An authorized Threads token with public keyword search access can be supplied through the operator environment as `SAVE_THREADS_KEYWORD_SEARCH_TOKEN`. An unset token returns `not_configured` without network requests.
 
-The JSON output includes provider search outcomes and a `draft.venues` array. Each new candidate has a canonical permalink and `review: null`. Review the original and its exact branch before including a candidate in a public manifest. A successful provider response covers only the requested search page. The CLI reports when more results exist and leaves public-access verification to a separately authorized live check.
+The explicit `--public-web` mode sends the name and address from each missing public venue to the existing web search provider. It queries one result page per venue without a Meta token and stops on provider errors or verification challenges. The mode returns pending Threads links, including indexed URLs with a caption slug. Search snippets are discarded and the links still require original and branch review.
+
+The JSON output includes provider search outcomes and a `draft.venues` array. Each new candidate has a canonical permalink and `review: null`. Review the original and its exact branch before including a candidate in a public manifest. A successful provider response covers only the requested search page. Meta keyword mode reports when the provider advertises more results. Both modes leave original access verification to a separate check.
 
 ## Deploy checklist
 

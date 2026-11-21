@@ -1610,3 +1610,17 @@ test("public web search reports a provider challenge instead of an empty result"
   const empty = '<div class="no-results">No results found</div>';
   assert.deepEqual(await searchPublicWebResults("凱菲屋", async () => empty), []);
 });
+
+test("public search unwraps only the search provider's redirect path", async () => {
+  const target = "https://www.threads.com/@sample/post/ExactCode/%E6%B8%AC%E8%A9%A6";
+  const wrapped = encodeURIComponent(target);
+  const foreign = `https://foreign.example/?uddg=${wrapped}`;
+  const otherPath = `https://duckduckgo.com/privacy?uddg=${wrapped}`;
+  const html = [
+    `//duckduckgo.com/l/?uddg=${wrapped}`,
+    foreign,
+    otherPath,
+  ].map(link => `<div class="result"><a class="result__a" href="${link}">Example</a></div>`).join("");
+  const results = await searchPublicWebResults("site:threads.com Example", async () => html);
+  assert.deepEqual(results.map(({url}) => url), [target, foreign, otherPath]);
+});

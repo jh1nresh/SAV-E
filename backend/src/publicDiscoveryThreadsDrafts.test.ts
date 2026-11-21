@@ -73,6 +73,73 @@ test("a missing token records each search as unconfigured and never requests dat
     Array(4).fill("not_configured"));
 });
 
+test("public web search covers canonical missing branches and keeps search hits pending", async () => {
+  const queries: string[] = [];
+  const out = await collectThreadsDiscoveryDrafts({ publicVenues: [alias, place, second] }, manifest, {
+    now, fetchImpl: async () => assert.fail("public web mode does not call Meta"),
+    webSearch: async query => {
+      queries.push(query);
+      return [
+        "https://threads.net/@sample/post/SourceOne/%E5%B0%8F%E5%90%83?xmt=tracking",
+        "https://www.threads.com/@sample/post/SourceOne",
+        "https://www.threads.com/@sample/post/SourceTwo?access_token=private",
+        "https://www.threads.com.example.org/@sample/post/SourceOther/caption",
+        "https://www.threads.com/@sample/post/SourceConflict/",
+        "https://www.threads.com/@other/post/SourceConflict",
+        "https://www.threads.com/@sample",
+      ].map(url => ({ query, url, title: "unchecked search text" }));
+    },
+  });
+  assert.deepEqual(queries, [
+    "site:threads.com Second sample 10 Example Road 3F",
+    "site:threads.com Sample cafe 10 Example Road 2F",
+  ]);
+  assert.deepEqual(out.draft.venues.map(({ place }) => place.providerPlaceID), ["SecondBranch", "ExactBranch"]);
+  for (const { candidates } of out.draft.venues) {
+    assert.deepEqual(candidates, [{ platform: "threads",
+      sourceURL: "https://www.threads.com/@sample/post/SourceOne", authorHandle: "sample", title: "", review: null }]);
+  }
+  assert.equal(compileReviewedPublicBatch(out.draft, now).withheld, 2);
+  assert.equal(out.coverage.publicSearchAccessVerified, false);
+  assert.deepEqual(out.coverage.searches.map(x => x.modes[0]?.mode), ["PUBLIC_WEB", "PUBLIC_WEB"]);
+  assert.doesNotMatch(JSON.stringify(out), /tracking|private|unchecked search text/);
+});
+
+test("a web search challenge, rate limit, or failure stops further requests and preserves pending hits", async () => {
+  for (const [message, expected] of [
+    ["Public search requires verification", "access_required"],
+    ["HTTP 429", "rate_limited"],
+    ["Provider unavailable", "unavailable"],
+  ] as const) {
+    let calls = 0;
+    const third = { ...second, providerPlaceID: "ThirdBranch" };
+    const result = await collectThreadsDiscoveryDrafts({ publicVenues: [place, second, third] }, manifest, {
+      now, webSearch: async query => {
+        if (++calls > 1) throw new Error(message);
+        return [{ query, url: secondPost.permalink, title: "known pending result" }];
+      },
+    });
+    assert.equal(calls, 2);
+    assert.equal(result.draft.venues.length, 1);
+    assert.deepEqual(result.coverage.searches.map(x => x.modes[0]?.status),
+      ["searched", expected, "not_attempted"]);
+    assert.equal(result.coverage.nextOffset, null);
+    assert.doesNotMatch(JSON.stringify(result), /known pending result|Provider unavailable/);
+  }
+});
+
+test("web drafts with conflicting authors for one shortcode are withheld across branches", async () => {
+  const result = await collectThreadsDiscoveryDrafts({ publicVenues: [place, second] }, manifest, {
+    now, webSearch: async query => [{
+      query, title: "unchecked",
+      url: `https://www.threads.com/@${query.includes(place.name) ? "alpha" : "beta"}/post/SameCode`,
+    }, { query, title: "unchanged", url: secondPost.permalink }],
+  });
+  assert.equal(result.draft.venues.length, 2);
+  assert(result.draft.venues.every(venue => venue.candidates.length === 1
+    && venue.candidates[0]?.sourceURL === secondPost.permalink));
+});
+
 test("access and rate errors stop the rest of the batch while preserving earlier pending candidates", async () => {
   for (const [status, code, expected] of [
     [400, 190, "access_required"], [403, 10, "access_required"], [429, 4, "rate_limited"],
