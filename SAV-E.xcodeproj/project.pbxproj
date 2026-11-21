@@ -25,6 +25,8 @@
 		EECDF0885DAB4A0A441DE560 /* LivePublicDiscoveryData.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */; };
 		84EB06F6384ACBC4092DCD6A /* LivePublicDiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */; };
 		55038F2DD4E9F45BDE1D31EE /* LivePublicDiscoveryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29A167ED3A8F63FF3230B311 /* LivePublicDiscoveryViews.swift */; };
+		EDE79B62A828CF73B2CAC5E2 /* LiveSourcePost.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5586C8DBF24695823C4269B /* LiveSourcePost.swift */; };
+		4ACB2BDB79ADCC2A13079B3D /* LiveSourcePostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55D040E284D44F8C4745B84D /* LiveSourcePostView.swift */; };
 		B2587C43F73BA71184D01ABC /* LivePublicGuideChooser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1D87A6FDCA01E5112B5064 /* LivePublicGuideChooser.swift */; };
 		902226D778C57F64D8ED3AC1 /* LivePublicGuideModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C96D854EEF5DAC76EDA3F1A /* LivePublicGuideModel.swift */; };
 		A1F4C79B9877FF6A820D42C6 /* LiveRoutePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19F5FDDB9F1488AA7491B500 /* LiveRoutePlan.swift */; };
@@ -42,6 +44,7 @@
 		36711F3D00A6485778138A5C /* LivePlanningReviewFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F33DDDA27A5FCFB4F188B0 /* LivePlanningReviewFixtureTests.swift */; };
 		54B8CE8842DA5CF8072E364F /* LivePlanningSurfaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 265604D05D5006242E5C058B /* LivePlanningSurfaceTests.swift */; };
 		57E0F4C69AA62D316B0EE2FE /* LivePublicDiscoveryDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25A8F38EDD50D9E66C89C6E5 /* LivePublicDiscoveryDataTests.swift */; };
+		17318F89C375E87F1E1ED29D /* LiveSourcePostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 252BEDB6656358433823BE96 /* LiveSourcePostTests.swift */; };
 		D815E83BDF03E54AC233EF5D /* LivePublicDiscoveryModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E16BAF563220BD6D8AF6DA72 /* LivePublicDiscoveryModelTests.swift */; };
 		CD9D954ED2419AE39C61E3F0 /* LivePublicGuideModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6967B34E702DB05E41E6592C /* LivePublicGuideModelTests.swift */; };
 		5F2042215980D90A1D474679 /* LiveRoutePlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E744F3AAD02178BF9A8BA9 /* LiveRoutePlanTests.swift */; };
@@ -415,6 +418,8 @@
 		BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryData.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryData.swift"; sourceTree = SOURCE_ROOT; };
 		A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryModel.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryModel.swift"; sourceTree = SOURCE_ROOT; };
 		29A167ED3A8F63FF3230B311 /* LivePublicDiscoveryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryViews.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryViews.swift"; sourceTree = SOURCE_ROOT; };
+		F5586C8DBF24695823C4269B /* LiveSourcePost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveSourcePost.swift; path = "Prototypes/DatePlanDemo/Main/LiveSourcePost.swift"; sourceTree = SOURCE_ROOT; };
+		55D040E284D44F8C4745B84D /* LiveSourcePostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveSourcePostView.swift; path = "Prototypes/DatePlanDemo/Main/LiveSourcePostView.swift"; sourceTree = SOURCE_ROOT; };
 		FC1D87A6FDCA01E5112B5064 /* LivePublicGuideChooser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicGuideChooser.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicGuideChooser.swift"; sourceTree = SOURCE_ROOT; };
 		6C96D854EEF5DAC76EDA3F1A /* LivePublicGuideModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicGuideModel.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicGuideModel.swift"; sourceTree = SOURCE_ROOT; };
 		19F5FDDB9F1488AA7491B500 /* LiveRoutePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveRoutePlan.swift; path = "Prototypes/DatePlanDemo/Main/LiveRoutePlan.swift"; sourceTree = SOURCE_ROOT; };
@@ -432,6 +437,7 @@
 		20F33DDDA27A5FCFB4F188B0 /* LivePlanningReviewFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningReviewFixtureTests.swift; path = "Tests/SAVETests/LivePlanningReviewFixtureTests.swift"; sourceTree = SOURCE_ROOT; };
 		265604D05D5006242E5C058B /* LivePlanningSurfaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningSurfaceTests.swift; path = "Tests/SAVETests/LivePlanningSurfaceTests.swift"; sourceTree = SOURCE_ROOT; };
 		25A8F38EDD50D9E66C89C6E5 /* LivePublicDiscoveryDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryDataTests.swift; path = "Tests/SAVETests/LivePublicDiscoveryDataTests.swift"; sourceTree = SOURCE_ROOT; };
+		252BEDB6656358433823BE96 /* LiveSourcePostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveSourcePostTests.swift; path = "Tests/SAVETests/LiveSourcePostTests.swift"; sourceTree = SOURCE_ROOT; };
 		E16BAF563220BD6D8AF6DA72 /* LivePublicDiscoveryModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryModelTests.swift; path = "Tests/SAVETests/LivePublicDiscoveryModelTests.swift"; sourceTree = SOURCE_ROOT; };
 		6967B34E702DB05E41E6592C /* LivePublicGuideModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicGuideModelTests.swift; path = "Tests/SAVETests/LivePublicGuideModelTests.swift"; sourceTree = SOURCE_ROOT; };
 		24E744F3AAD02178BF9A8BA9 /* LiveRoutePlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveRoutePlanTests.swift; path = "Tests/SAVETests/LiveRoutePlanTests.swift"; sourceTree = SOURCE_ROOT; };
@@ -744,9 +750,12 @@
 				265604D05D5006242E5C058B /* LivePlanningSurfaceTests.swift */,
 				BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */,
 				25A8F38EDD50D9E66C89C6E5 /* LivePublicDiscoveryDataTests.swift */,
+				252BEDB6656358433823BE96 /* LiveSourcePostTests.swift */,
 				A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */,
 				E16BAF563220BD6D8AF6DA72 /* LivePublicDiscoveryModelTests.swift */,
 				29A167ED3A8F63FF3230B311 /* LivePublicDiscoveryViews.swift */,
+				F5586C8DBF24695823C4269B /* LiveSourcePost.swift */,
+				55D040E284D44F8C4745B84D /* LiveSourcePostView.swift */,
 				FC1D87A6FDCA01E5112B5064 /* LivePublicGuideChooser.swift */,
 				6C96D854EEF5DAC76EDA3F1A /* LivePublicGuideModel.swift */,
 				6967B34E702DB05E41E6592C /* LivePublicGuideModelTests.swift */,
@@ -1831,6 +1840,7 @@
 				36711F3D00A6485778138A5C /* LivePlanningReviewFixtureTests.swift in Sources */,
 				54B8CE8842DA5CF8072E364F /* LivePlanningSurfaceTests.swift in Sources */,
 				57E0F4C69AA62D316B0EE2FE /* LivePublicDiscoveryDataTests.swift in Sources */,
+				17318F89C375E87F1E1ED29D /* LiveSourcePostTests.swift in Sources */,
 				D815E83BDF03E54AC233EF5D /* LivePublicDiscoveryModelTests.swift in Sources */,
 				CD9D954ED2419AE39C61E3F0 /* LivePublicGuideModelTests.swift in Sources */,
 				5F2042215980D90A1D474679 /* LiveRoutePlanTests.swift in Sources */,
@@ -1958,6 +1968,8 @@
 				EECDF0885DAB4A0A441DE560 /* LivePublicDiscoveryData.swift in Sources */,
 				84EB06F6384ACBC4092DCD6A /* LivePublicDiscoveryModel.swift in Sources */,
 				55038F2DD4E9F45BDE1D31EE /* LivePublicDiscoveryViews.swift in Sources */,
+				EDE79B62A828CF73B2CAC5E2 /* LiveSourcePost.swift in Sources */,
+				4ACB2BDB79ADCC2A13079B3D /* LiveSourcePostView.swift in Sources */,
 				B2587C43F73BA71184D01ABC /* LivePublicGuideChooser.swift in Sources */,
 				902226D778C57F64D8ED3AC1 /* LivePublicGuideModel.swift in Sources */,
 				A1F4C79B9877FF6A820D42C6 /* LiveRoutePlan.swift in Sources */,

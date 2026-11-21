@@ -522,6 +522,11 @@ struct LivePlanningMapRoot: View {
                     guard sessionIsCurrent, scenePhase == .active else { return }
                     pendingGuideDestination = target
                     selected = nil
+                }, canReadPost: { post in
+                    guard sessionIsCurrent, scenePhase == .active,
+                          selected?.id == pin.id, let page = discovery.page,
+                          Date() < page.expiresAt else { return false }
+                    return page.venues.first(where: { $0.id == venue.id })?.posts.contains(post) == true
                 })
         } else if pin.origin != .publicPost {
           LivePlaceDetail(
