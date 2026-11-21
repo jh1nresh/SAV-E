@@ -117,6 +117,23 @@
             "contentFingerprint": "0faae839ee2d23d8e6fd1b6f1ca5cbe83ab0e5da730273407340e87bfe7be07d",
             "multiVenue": true
           }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/De2CwwmmS4L/",
+          "authorHandle": "goose.86082008",
+          "title": "師大夜市大台北平價滷味",
+          "review": {
+            "origin": "public_web_index",
+            "checkedAt": "2026-11-19T22:37:36.945Z",
+            "publishedAt": "2026-10-23T16:59:38.000Z",
+            "publicLikes": {
+              "count": 2,
+              "observedAt": "2026-11-19T22:43:50.203Z"
+            },
+            "contentFingerprint": "614d898a2417067784cb821854e3e4da52f3221141aca2c91dad92542c964647",
+            "branchEvidence": "The public Instagram original names 大台北平價滷味 at 龍泉街54號. The Taipei City merchant list confirms the business and door number (https://www-ws.gov.taipei/001/Upload/409/relfile/10162/9492232/b748dd21-6e8e-4c34-84ff-c67692aae2ac.pdf). This is the exact reviewed storefront, separate from 燈籠滷味."
+          }
         }
       ]
     }
