@@ -23,7 +23,7 @@ python3 -m http.server 42101 --bind 127.0.0.1 --directory Prototypes/Taipei101Po
 - 渲染工具來自 [April Zhu 的 Pocket City](https://april-zhu.com/pocketcity)。MIT 授權全文保留於 HTML 內。
 - 嵌入的街景資料源自 [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)，採 [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/)。建築外觀經插畫簡化，塔樓高度經縮放。
 - 觀景台照片 [Cathexi，CC BY-SA 2.0](https://commons.wikimedia.org/wiki/File:Sunset_from_Taipei_101_(1280152346).jpg)。
-- 購物中心照片 [eugene o，CC BY 2.0](https://commons.wikimedia.org/wiki/File:2017-10-23_Interior_of_Taipei_101_Mall.jpg)。
+- 購物中心照片 [eugene_o，CC BY 2.0](https://commons.wikimedia.org/wiki/File:2017-10-23_Interior_of_Taipei_101_Mall.jpg)。
 - 台北 101 街景照片 [Pauloleong2002，CC BY-SA 4.0](https://commons.wikimedia.org/wiki/File:Taipei_101_in_blue_sky.jpg)。
 
 照片已縮放，並在收藏卡中裁切顯示。頁面附有各照片的來源與授權連結。
