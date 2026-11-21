@@ -64,6 +64,42 @@
             "branchEvidence": "The original identifies 香雞城's Taipei Ximen launch and the March 13 opening date. NOWnews embeds and credits that exact original, reports the same branch and opening, and gives the numbered storefront. The brand's official store directory confirms 台北市萬華區漢口街二段54-33號. The public Google Maps result gives that exact street and the matching Place ID and WGS84 coordinates. The title describes the dated opening without presenting historical hours as current.",
             "contentFingerprint": "94e6c1bc3bb6ab0b1979064b2f042aad700387b187d2979c17f80ac05aba5b98"
           }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/DeyoWHKDH2V/",
+          "authorHandle": "chickenxhouse",
+          "title": "香雞城西門店的鹹酥雞飯",
+          "observedIn": "https://www.instagram.com/chickenxhouse/",
+          "review": {
+            "checkedAt": "2026-11-19T19:28:33.412Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The official Instagram original explicitly names the Ximen branch while announcing its individual fried-chicken rice meal. The originating brand profile links this exact post. The brand directory https://www.chickenhouse.com.tw/%E9%96%80%E5%B8%82%E8%B3%87%E8%A8%8A confirms the Ximen storefront at 台北市萬華區漢口街二段54-33號, consistent with the existing exact Google place ID.",
+            "contentFingerprint": "998f2d41d1775416f97d2ba379b5f7effdcf682ef609e12e6d8fdfb8e2bfec79",
+            "publishedAt": "2026-10-22T09:11:06.000Z",
+            "publicLikes": {
+              "count": 7,
+              "observedAt": "2026-11-19T19:31:30.084Z"
+            }
+          }
+        },
+        {
+          "platform": "instagram",
+          "sourceURL": "https://www.instagram.com/p/Da43lGJDu7c/",
+          "authorHandle": "chickenxhouse",
+          "title": "香雞城西門店的內用麻辣醬",
+          "observedIn": "https://www.instagram.com/chickenxhouse/",
+          "review": {
+            "checkedAt": "2026-11-19T19:28:33.412Z",
+            "origin": "publisher_reference",
+            "branchEvidence": "The original distinguishes historical Xinzhuang and Xindian branches from the current sauce service explicitly at its Ximen branch. The originating brand profile links this exact post. Only its Ximen service is associated here. The brand directory https://www.chickenhouse.com.tw/%E9%96%80%E5%B8%82%E8%B3%87%E8%A8%8A confirms the Ximen storefront at 台北市萬華區漢口街二段54-33號, consistent with the existing exact Google place ID.",
+            "contentFingerprint": "22d67f31b1ea30d2ede58ba8519695bd2a91048bc368384dba3e637aea9d0c32",
+            "publishedAt": "2026-07-17T09:14:05.000Z",
+            "publicLikes": {
+              "count": 6,
+              "observedAt": "2026-11-19T19:31:30.048Z"
+            }
+          }
         }
       ]
     }
