@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { collectPublicProfileDiscoveryDrafts } from "./publicDiscoveryProfileDrafts.js";
 import { compileReviewedPublicBatch } from "./publicDiscoveryReviewedBatch.js";
 
@@ -28,6 +33,28 @@ const script = (data: unknown, attributes = 'type="application/json"') =>
 const html = (handle: string, posts: unknown[], platform = "threads", isPrivate = false) =>
   title(handle) + script(profileData(handle, posts, platform, isPrivate));
 const page = (body: string, status = 200) => new Response(body, { status, headers: { "content-type": "text/html" } });
+
+test("runs CLI argument validation when the executable path is a symlink", async t => {
+  const directory = await mkdtemp(join(tmpdir(), "public-profile-command-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const alias = join(directory, "profile-drafts.js");
+  await symlink(fileURLToPath(new URL("./publicDiscoveryProfileDrafts.js", import.meta.url)), alias);
+
+  const result = spawnSync(process.execPath, [alias], { encoding: "utf8", timeout: 5_000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /Check the batch file/);
+
+  const module = new URL("./publicDiscoveryProfileDrafts.js", import.meta.url).href;
+  const imported = spawnSync(process.execPath, [
+    "--input-type=module", "--eval", `await import(${JSON.stringify(module)})`, alias,
+  ], { encoding: "utf8", timeout: 5_000 });
+  assert.ifError(imported.error);
+  assert.equal(imported.status, 0);
+  assert.equal(imported.stdout, "");
+  assert.equal(imported.stderr, "");
+});
 
 test("stages same-owner originals from both platforms with one request per profile", async () => {
   const seen: string[] = [];
