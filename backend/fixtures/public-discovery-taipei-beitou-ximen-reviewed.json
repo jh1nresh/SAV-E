@@ -2,8 +2,8 @@
   "venues": [
     {
       "place": {
-        "provider": "google_places",
-        "providerPlaceID": "ChIJC_nw4E6uQjQRc1J6TLpf-W8",
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9A3EE0FB231",
         "name": "雞の專家 北投總店",
         "address": "台北市北投區中和街333號",
         "latitude": 25.140947,
@@ -22,7 +22,7 @@
             "checkedAt": "2026-11-19T08:25:47.861Z",
             "origin": "publisher_reference",
             "branchEvidence": "The public original by aga_food_photo names 雞の專家 北投總店 and gives 台北市北投區中和街333號 in its main-store block. It labels the other branches separately. WalkerLand embeds the same original. Its sidebar lists 335號. The public Google Maps embed returns the exact Beitou main store at 333號 with the Place ID, CID, and coordinates. FooTinder independently links the same Place ID and 333號 address. Only 北投總店 is associated.",
-            "contentFingerprint": "9beca8c21041f3fc27fc43c4a3a28b3859e700beba519ad9e4e783c798dc5a7b",
+            "contentFingerprint": "710874368ebf8e5c7de54c57510188a05c554a5a3cf0dbc652df0d5cdba6e435",
             "publishedAt": "2022-04-12T08:50:46.000Z"
           }
         },
@@ -36,7 +36,7 @@
             "checkedAt": "2026-11-19T11:07:43.274Z",
             "origin": "publisher_reference",
             "branchEvidence": "The originating Threads profile is named 雞の專家 北投總店, uses the same handle and shop name as its public Instagram profile, and displays the exact post. The post confirms the shop is at 中和街333號 and describes ordering in person. Its Beitou main-store address is independently confirmed by the exact Google Maps listing and a storefront visit reported by hanblog.tw/masterg. The title omits dated weather and operating information.",
-            "contentFingerprint": "d440bb463b2965a69f9c931ffbc05e1f31a5d0cec291b6e47fe58e18de5e336f",
+            "contentFingerprint": "44a9ac1c36648451689fe1555e7c6a73fb972793decd6548842bc928f2df1f1e",
             "publishedAt": "2026-07-10T06:52:13.000Z",
             "publicLikes": {
               "count": 10,
@@ -48,8 +48,8 @@
     },
     {
       "place": {
-        "provider": "google_places",
-        "providerPlaceID": "ChIJN9uYYQCpQjQRmIi-Db1nWY0",
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9A3C103D137",
         "name": "香雞城西門店",
         "address": "台北市萬華區漢口街二段54-33號",
         "latitude": 25.0458568,
@@ -68,7 +68,7 @@
             "checkedAt": "2026-11-19T11:07:43.281Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original identifies 香雞城's Taipei Ximen launch and the March 13 opening date. NOWnews embeds and credits that exact original, reports the same branch and opening, and gives the numbered storefront. The brand's official store directory confirms 台北市萬華區漢口街二段54-33號. The public Google Maps result gives that exact street and the matching Place ID and WGS84 coordinates. The title describes the dated opening without presenting historical hours as current.",
-            "contentFingerprint": "94e6c1bc3bb6ab0b1979064b2f042aad700387b187d2979c17f80ac05aba5b98",
+            "contentFingerprint": "ea746026828bb18381349be2e146f8e86e7a04cd3ba6d90a6135323511cb7bd4",
             "publishedAt": "2026-03-13T06:08:06.000Z",
             "publicLikes": {
               "count": 286,
@@ -86,7 +86,7 @@
             "checkedAt": "2026-11-19T19:28:33.412Z",
             "origin": "publisher_reference",
             "branchEvidence": "The official Instagram original explicitly names the Ximen branch while announcing its individual fried-chicken rice meal. The originating brand profile links this exact post. The brand directory https://www.chickenhouse.com.tw/%E9%96%80%E5%B8%82%E8%B3%87%E8%A8%8A confirms the Ximen storefront at 台北市萬華區漢口街二段54-33號, consistent with the existing exact Google place ID.",
-            "contentFingerprint": "998f2d41d1775416f97d2ba379b5f7effdcf682ef609e12e6d8fdfb8e2bfec79",
+            "contentFingerprint": "429b33b5597d2d761df1d00fa0ce711078ae6b151a94d79618a8daccb7a8325e",
             "publishedAt": "2026-10-22T09:11:06.000Z",
             "publicLikes": {
               "count": 7,
@@ -104,7 +104,7 @@
             "checkedAt": "2026-11-19T19:28:33.412Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original distinguishes historical Xinzhuang and Xindian branches from the current sauce service explicitly at its Ximen branch. The originating brand profile links this exact post. Only its Ximen service is associated here. The brand directory https://www.chickenhouse.com.tw/%E9%96%80%E5%B8%82%E8%B3%87%E8%A8%8A confirms the Ximen storefront at 台北市萬華區漢口街二段54-33號, consistent with the existing exact Google place ID.",
-            "contentFingerprint": "22d67f31b1ea30d2ede58ba8519695bd2a91048bc368384dba3e637aea9d0c32",
+            "contentFingerprint": "411910f69d67b255dabeb37c74c09bf5d79878d6824568cd89d970cbc3cae3a3",
             "publishedAt": "2026-07-17T09:14:05.000Z",
             "publicLikes": {
               "count": 6,
@@ -113,6 +113,20 @@
           }
         }
       ]
+    }
+  ],
+  "googlePlaceAliases": [
+    {
+      "googlePlaceID": "ChIJC_nw4E6uQjQRc1J6TLpf-W8",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9A3EE0FB231",
+      "branchEvidence": "Native Apple Maps returns and reopens Chicken Expert, Beitou, Zhonghe Street No. 333, with this exact identifier. The shop’s own Threads original identifies 雞の專家 北投總店 and 中和街333號. The existing Google storefront ID and numbered address independently match. The same-address Guishifu marker names a different business. The reviewed WGS84 Google storefront pin is retained."
+    },
+    {
+      "googlePlaceID": "ChIJN9uYYQCpQjQRmIi-Db1nWY0",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9A3C103D137",
+      "branchEvidence": "Native Apple Maps returns and reopens the Xiangji Chengxi Salesroom at Wanhua Hankou Street Section 2 No. 54-33 with this exact identifier. The brand store directory at https://www.chickenhouse.com.tw/%E9%96%80%E5%B8%82%E8%B3%87%E8%A8%8A identifies Chicken House Ximen at that number. The existing exact Google place ID matches the same storefront. The reviewed WGS84 Google storefront pin is retained."
     }
   ]
 }
