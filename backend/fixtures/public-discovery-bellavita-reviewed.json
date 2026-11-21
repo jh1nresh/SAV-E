@@ -22,7 +22,12 @@
             "checkedAt": "2026-11-18T23:51:19.321Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original is the venue’s tenth-anniversary Instagram post. Its visible location tag names 合‧shabu, and the caption names BELLAVITA and gives the restaurant’s 02-2723-9222 phone. The linked article embeds this exact post in its BELLAVITA 4F venue section. BELLAVITA’s own floor guide (https://www.bellavita.com.tw/cht/store.php?d=95) confirms the floor and phone. The exact Google listing’s address field gives 4F, No. 28 Songren Road, and the matching phone and WGS84 pin. The title describes a past event.",
-            "contentFingerprint": "a594af02758d8a464b5650bf0bd70e083d5ce4fc4f7b39a181c38a905f124457"
+            "contentFingerprint": "a594af02758d8a464b5650bf0bd70e083d5ce4fc4f7b39a181c38a905f124457",
+            "publishedAt": "2022-04-08T10:41:15.000Z",
+            "publicLikes": {
+              "count": 29,
+              "observedAt": "2026-11-19T23:01:55.074Z"
+            }
           }
         },
         {
@@ -35,7 +40,8 @@
             "checkedAt": "2026-11-18T23:51:19.321Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original location tag names 合‧shabu. The visible caption explicitly gives BELLAVITA, 4F at No. 28 Songren Road, Xinyi, and 02-2723-9222. GOMAJI embeds the exact original in its 合.shabu section. BELLAVITA’s floor guide (https://www.bellavita.com.tw/cht/store.php?d=95) and the exact Google listing’s address field independently agree on this restaurant and floor. The Google storefront supplies the WGS84 pin. No current price or hours are inferred from the post.",
-            "contentFingerprint": "fced49ab5c9bfd71e9a0cce287d58bfe05e921129c45672be394ec3a8ebb6cdc"
+            "contentFingerprint": "fced49ab5c9bfd71e9a0cce287d58bfe05e921129c45672be394ec3a8ebb6cdc",
+            "publishedAt": "2019-11-26T10:00:10.000Z"
           }
         },
         {

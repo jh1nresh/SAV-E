@@ -31,7 +31,8 @@
             "origin": "publisher_reference",
             "branchEvidence": "The brand's public Instagram Reel explicitly lists its Shuanglian branch at 17-1, Lane 66, Minsheng West Road with the 02-2541-1121 phone. The exact public Google Place ID resolves the same branch name, street number and phone independently. The source lists other branches and is presented as a branch directory.",
             "contentFingerprint": "08ae77b0684500ef32b45c2a9d65124b5e37cacfdb48fffa0cab5cf366948e6d",
-            "multiVenue": true
+            "multiVenue": true,
+            "publishedAt": "2025-10-10T05:13:08.000Z"
           }
         },
         {
@@ -44,7 +45,12 @@
             "checkedAt": "2026-11-18T19:42:27.254Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original caption explicitly names the Shuanglian branch and its full Minsheng West Road, Lane 66, No. 17-1 address. The restaurant's public profile grid lists the original, and its exact verified Google listing confirms the storefront. The preview title describes the dining report and does not promote its dated offer.",
-            "contentFingerprint": "cea64596655a7757997e426a559190abece9cf8bf504c0e6b02cac394621d156"
+            "contentFingerprint": "cea64596655a7757997e426a559190abece9cf8bf504c0e6b02cac394621d156",
+            "publishedAt": "2026-09-12T09:41:28.000Z",
+            "publicLikes": {
+              "count": 470,
+              "observedAt": "2026-11-19T23:02:14.270Z"
+            }
           }
         }
       ]
@@ -71,7 +77,12 @@
             "checkedAt": "2026-11-18T19:46:01.550Z",
             "origin": "publisher_reference",
             "branchEvidence": "The public parent thread asks for Taipei fried rice recommendations. The selected reply's own author and permalink are visible in its public embed, and its body explicitly names 大直小館. Its address comes independently from MapKit, the matching Google listing and the restaurant listing at https://news.ustv.com.tw/food/shop/3051. The reply itself does not give an address. The pin uses the exact Google storefront's verified WGS84 coordinates.",
-            "contentFingerprint": "06422917d524a28cb17f6bd350131dcb2daf03c01e4c6807fbaab9f6b81f2cc2"
+            "contentFingerprint": "06422917d524a28cb17f6bd350131dcb2daf03c01e4c6807fbaab9f6b81f2cc2",
+            "publishedAt": "2025-01-29T20:40:47.000Z",
+            "publicLikes": {
+              "count": 2,
+              "observedAt": "2026-11-19T23:02:15.593Z"
+            }
           }
         },
         {
@@ -84,7 +95,12 @@
             "checkedAt": "2026-11-18T23:12:18.962Z",
             "origin": "publisher_reference",
             "branchEvidence": "The public Instagram embed names 大直小館 in its visible venue tag and caption and mentions paper-wrapped chicken and claypot rice. KKday embeds this exact post within its 大直小館 section, which lists No. 535-1 Beian Road. The post itself contains no street number. The exact MapKit and Google storefronts corroborate that Beian Road address, as does https://news.ustv.com.tw/food/shop/3051.",
-            "contentFingerprint": "021625ff3a2b1143c5a66d6d97abe3d5894a444eb1a951fc0de5847c22e22eae"
+            "contentFingerprint": "021625ff3a2b1143c5a66d6d97abe3d5894a444eb1a951fc0de5847c22e22eae",
+            "publishedAt": "2022-01-08T05:15:43.000Z",
+            "publicLikes": {
+              "count": 51,
+              "observedAt": "2026-11-19T23:02:16.140Z"
+            }
           }
         }
       ]

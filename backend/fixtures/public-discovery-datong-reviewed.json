@@ -68,7 +68,8 @@
             "origin": "publisher_reference",
             "branchEvidence": "The public Instagram Reel by the brand lists its locations, explicitly naming the Chifeng branch at 14-1 Chifeng Street with phone 02-2558-0568. MapKit resolves an exact Rose food POI at 14-1 in Datong, and https://leafyeh.com/rose-food/ corroborates its street number and phone. This is a brand directory post, not a single-branch visit or user endorsement. The pin uses the exact Google storefront's verified WGS84 coordinates.",
             "contentFingerprint": "6d83a6635a70e64249e5605ea4e76885bd5d297cdb761f9aa99663eb40ca171f",
-            "multiVenue": true
+            "multiVenue": true,
+            "publishedAt": "2025-10-10T05:13:08.000Z"
           }
         }
       ]

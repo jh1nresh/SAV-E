@@ -36,7 +36,12 @@
             "checkedAt": "2026-11-19T00:24:08.395Z",
             "origin": "publisher_reference",
             "branchEvidence": "The parent public thread explicitly names Din Tai Fung. The original selected reply names Xinyi A13 and relates one visit by seven diners. It also mentions Banqiao. The association is scoped to the explicitly named A13 experience. No current wait estimate is inferred. The official brand directory at https://www.dintaifung.com.tw/store_list.php corroborates the branch address, with independent Apple and Google venue matches.",
-            "contentFingerprint": "threads-parent-v1:28423d61646458ec658a21d2f6df518f89f0cfae46cf3c1026d0ebb2d1f47dde"
+            "contentFingerprint": "threads-parent-v1:28423d61646458ec658a21d2f6df518f89f0cfae46cf3c1026d0ebb2d1f47dde",
+            "publishedAt": "2026-02-14T12:13:59.000Z",
+            "publicLikes": {
+              "count": 18,
+              "observedAt": "2026-11-19T23:02:08.055Z"
+            }
           }
         },
         {
@@ -81,7 +86,12 @@
             "checkedAt": "2026-11-19T00:24:08.395Z",
             "origin": "publisher_reference",
             "branchEvidence": "The parent public thread explicitly names Din Tai Fung. This selected author reply summarizes recommendations in the thread, listing A4 and A13 by name. Other public replies independently specify Xinyi A4 and downstairs. The title presents this as a discussion, without attributing a visit or a current waiting time to the author. The official brand directory at https://www.dintaifung.com.tw/store_list.php corroborates the branch address, with independent Apple and Google venue matches.",
-            "contentFingerprint": "threads-parent-v1:474445ddb4c55acc78c208457a364d243b7b822310c255c25ac757f3ea420e51"
+            "contentFingerprint": "threads-parent-v1:474445ddb4c55acc78c208457a364d243b7b822310c255c25ac757f3ea420e51",
+            "publishedAt": "2026-02-14T16:44:32.000Z",
+            "publicLikes": {
+              "count": 49,
+              "observedAt": "2026-11-19T23:02:09.596Z"
+            }
           }
         },
         {

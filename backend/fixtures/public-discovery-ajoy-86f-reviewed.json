@@ -22,7 +22,12 @@
             "origin": "publisher_reference",
             "checkedAt": "2026-11-19T06:07:42.587Z",
             "contentFingerprint": "b12ab014da36910b1456333b0ebaf5e229ffcc369a4a603c8be3467758bab914",
-            "branchEvidence": "The restaurant’s own Instagram post explicitly names 饗 A Joy, Taipei 101 and 86F. Taiwan Plus embeds the same original in its section for this specific venue. The official contact page https://www.ajoy.com.tw/zh-TW/contact-us and exact Apple and Google listings corroborate Taipei 101, No. 7, Section 5, Xinyi Road, 86F. The exact Google listing supplies WGS84."
+            "branchEvidence": "The restaurant’s own Instagram post explicitly names 饗 A Joy, Taipei 101 and 86F. Taiwan Plus embeds the same original in its section for this specific venue. The official contact page https://www.ajoy.com.tw/zh-TW/contact-us and exact Apple and Google listings corroborate Taipei 101, No. 7, Section 5, Xinyi Road, 86F. The exact Google listing supplies WGS84.",
+            "publishedAt": "2023-08-05T13:00:07.000Z",
+            "publicLikes": {
+              "count": 75,
+              "observedAt": "2026-11-19T23:02:21.811Z"
+            }
           }
         },
         {
@@ -35,7 +40,12 @@
             "origin": "publisher_reference",
             "checkedAt": "2026-11-19T17:42:44.237Z",
             "contentFingerprint": "a65dc33278bfbeccd8f323d14c9b454a376cae9056a137318649fd454490ae82",
-            "branchEvidence": "The Threads original names the distinctive 饗 A Joy venue. The linked report embeds this exact original. The restaurant’s official contact page https://www.ajoy.com.tw/zh-TW/contact-us identifies the exact venue at Taipei 101 86F, No. 7, Section 5, Xinyi Road."
+            "branchEvidence": "The Threads original names the distinctive 饗 A Joy venue. The linked report embeds this exact original. The restaurant’s official contact page https://www.ajoy.com.tw/zh-TW/contact-us identifies the exact venue at Taipei 101 86F, No. 7, Section 5, Xinyi Road.",
+            "publishedAt": "2025-12-16T04:25:05.000Z",
+            "publicLikes": {
+              "count": 3308,
+              "observedAt": "2026-11-19T23:02:23.888Z"
+            }
           }
         }
       ]

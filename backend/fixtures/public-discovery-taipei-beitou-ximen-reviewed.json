@@ -22,7 +22,8 @@
             "checkedAt": "2026-11-19T08:25:47.861Z",
             "origin": "publisher_reference",
             "branchEvidence": "The public original by aga_food_photo names 雞の專家 北投總店 and gives 台北市北投區中和街333號 in its main-store block. It labels the other branches separately. WalkerLand embeds the same original. Its sidebar lists 335號. The public Google Maps embed returns the exact Beitou main store at 333號 with the Place ID, CID, and coordinates. FooTinder independently links the same Place ID and 333號 address. Only 北投總店 is associated.",
-            "contentFingerprint": "9beca8c21041f3fc27fc43c4a3a28b3859e700beba519ad9e4e783c798dc5a7b"
+            "contentFingerprint": "9beca8c21041f3fc27fc43c4a3a28b3859e700beba519ad9e4e783c798dc5a7b",
+            "publishedAt": "2022-04-12T08:50:46.000Z"
           }
         },
         {
@@ -67,7 +68,12 @@
             "checkedAt": "2026-11-19T11:07:43.281Z",
             "origin": "publisher_reference",
             "branchEvidence": "The original identifies 香雞城's Taipei Ximen launch and the March 13 opening date. NOWnews embeds and credits that exact original, reports the same branch and opening, and gives the numbered storefront. The brand's official store directory confirms 台北市萬華區漢口街二段54-33號. The public Google Maps result gives that exact street and the matching Place ID and WGS84 coordinates. The title describes the dated opening without presenting historical hours as current.",
-            "contentFingerprint": "94e6c1bc3bb6ab0b1979064b2f042aad700387b187d2979c17f80ac05aba5b98"
+            "contentFingerprint": "94e6c1bc3bb6ab0b1979064b2f042aad700387b187d2979c17f80ac05aba5b98",
+            "publishedAt": "2026-03-13T06:08:06.000Z",
+            "publicLikes": {
+              "count": 286,
+              "observedAt": "2026-11-19T23:01:58.864Z"
+            }
           }
         },
         {
