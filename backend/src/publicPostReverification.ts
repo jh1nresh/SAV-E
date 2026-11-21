@@ -33,7 +33,9 @@ function isHiddenStaticTag(tag: string, markup: string): boolean {
     || /(?:^|;)(?:display:none|visibility:(?:hidden|collapse)|opacity:[+-]?(?:0+(?:\.0*)?|\.0+)%?)(?:!important)?(?:;|$)/i.test(style);
 }
 
-function visibleStaticPostMarkup(html: string): string {
+function visibleStaticPostMarkup(
+  html: string, readInertTag?: (tag: string, markup: string, body: string) => void,
+): string {
   const tags = staticMarkupTagPattern();
   const inert = new Set(["script", "style", "noscript", "iframe", "textarea", "title", "xmp", "noembed", "noframes"]);
   const voidTags = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
@@ -49,7 +51,11 @@ function visibleStaticPostMarkup(html: string): string {
       if (tag) {
         const end = new RegExp(`</${tag}(?=[\\s/>])[^>]*>`, "ig");
         end.lastIndex = tags.lastIndex;
-        tags.lastIndex = end.exec(html) ? end.lastIndex : html.length;
+        const closingTag = end.exec(html);
+        if (closingTag && readInertTag && !hidden && !isHiddenStaticTag(tag, match[0])) {
+          readInertTag(tag, match[0], html.slice(tags.lastIndex, closingTag.index));
+        }
+        tags.lastIndex = closingTag ? end.lastIndex : html.length;
       }
       start = tags.lastIndex;
       continue;
@@ -70,6 +76,18 @@ function visibleStaticPostMarkup(html: string): string {
   }
   if (!hidden) parts.push(html.slice(start));
   return parts.join("");
+}
+
+export function staticPublicProfileMarkup(html: string) {
+  const scripts: string[] = [];
+  let title: string | undefined;
+  const markup = visibleStaticPostMarkup(html, (tag, opening, body) => {
+    if (tag === "title" && title === undefined) title = decodeHTML(body);
+    if (tag === "script" && staticMarkupAttributes(opening).get("type")?.toLowerCase() === "application/json") {
+      scripts.push(body);
+    }
+  });
+  return { markup, title, scripts };
 }
 
 // Read the provider's named, static embed elements. Missing or changed layouts are inconclusive.
