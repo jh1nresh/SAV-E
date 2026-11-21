@@ -41,6 +41,12 @@
       "provider": "apple_maps",
       "providerPlaceID": "H2710I3F996BBB1D238",
       "branchEvidence": "The original Instagram caption specifies the Milk Tea Mansion at 17 Songzhi Road, Breeze Nan Shan 2F. The author embeds this original and repeats its branch address. The exact Apple listing identifies the Breeze NanShan shop; the confirmed Google ID and WGS84 pin resolve the same retail floor, address and phone 02-2722-0876."
+    },
+    {
+      "googlePlaceID": "ChIJraeA2rarQjQRPBBjyR3RxKw",
+      "provider": "apple_maps",
+      "providerPlaceID": "H2710I3F9267AE6AC6E",
+      "branchEvidence": "Native MapKit returns and reopens the distinct Taipei 101 Shopping Centre ID and mall service line 02-8101-8800. The Tourism Administration's shopping directory https://www.tad.gov.tw/m1.aspx?sNo=0027004 lists Taipei 101 shopping at 7 Xinyi Road Section 5, the complex address in MapKit. The mall's own contact page https://www.taipei-101.com.tw/tw/contact gives its City Hall Road No. 45 address and the same service number, matching the exact Google shopping-center listing. MapKit returns separate tower and observatory IDs. The verified WGS84 mall pin and official mall address remain."
     }
   ],
   "venues": [
@@ -302,8 +308,8 @@
     },
     {
       "place": {
-        "provider": "google_places",
-        "providerPlaceID": "ChIJraeA2rarQjQRPBBjyR3RxKw",
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F9267AE6AC6E",
         "name": "台北101購物中心",
         "address": "台北市信義區市府路45號",
         "latitude": 25.0341222,
@@ -321,7 +327,7 @@
             "checkedAt": "2026-11-18T20:25:56.935Z",
             "origin": "public_web_index",
             "branchEvidence": "The visible public original names the Cartier Panther event in Taipei 101 4F City Square, a mall common area. The mall’s event announcement (2026/11/06 to 11/21) and shopping floor guide identify this same event and venue. The mall contact page lists 45 City Hall Road and 02-8101-8800, both corroborated by the exact Google Shopping Center listing independently of the Observatory, offices and tenants. References: https://www.taipei-101.com.tw/tw/event/center and https://www.taipei-101.com.tw/contact . The dated title describes the event in the original without implying it recurs.",
-            "contentFingerprint": "cb0e80ede1fb5ba0e3f26595a47ecb23756f5f4744fc4c0d9581d89b73a5ce3f",
+            "contentFingerprint": "0dfc8e9143b3976ab5d988af8a7abc563a908c639e5141f2dcd395058c37bf07",
             "publishedAt": "2026-11-06T09:02:37.000Z"
           }
         },
@@ -334,7 +340,7 @@
           "review": {
             "checkedAt": "2026-11-19T05:04:09.276Z",
             "origin": "publisher_reference",
-            "contentFingerprint": "bb615bceb225f06edec1ea9dd7a2f6006ac9d1fe42b58d79932cdeedf0fc71b0",
+            "contentFingerprint": "84dc64c568803f100322ee8665dff634a29444f8f711cd2330567389704cd87f",
             "multiVenue": true,
             "branchEvidence": "The readable exact original describes a route across public mall skywalks and ends at Taipei 101 after Breeze Nanshan. UDN links to this exact post. The city public works footbridge inventory lists the bridge between Taipei Financial Center and Breeze Nanshan Plaza. The Breeze access map (https://breeze-assets.breeze.com.tw/navigation/f7c5d04c5ac65f6d64d2697dc678daf598a96eda.pdf) labels the Taipei 101 shopping center on the public skyway network; the official venue guide https://www.taipei-101.com.tw/tw/shopping distinguishes the mall at No. 45 City Hall Road from the observatory. Scope is access to the public mall, not the other stops, indoor access, the observatory, or a weather guarantee.",
             "publishedAt": "2026-10-05T15:02:26.000Z",
