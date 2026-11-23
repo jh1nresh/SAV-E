@@ -1,0 +1,28 @@
+{
+  "name": "南投",
+  "landmark": "日月潭慈恩塔",
+  "center": [
+    120.9208,
+    23.84187
+  ],
+  "bounds": [
+    120.91969855,
+    23.84085575,
+    120.92190145,
+    23.84288425
+  ],
+  "sizeMeters": 175,
+  "landmarkIds": [
+    "w1198896246"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・建物、街道與地物",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.917340,23.838120,120.923740,23.843520"
+    },
+    {
+      "title": "慈恩塔現地立面與翠瓦、白欄杆",
+      "url": "https://commons.wikimedia.org/wiki/File:Ci_En_Pagoda_01.jpg"
+    }
+  ]
+}

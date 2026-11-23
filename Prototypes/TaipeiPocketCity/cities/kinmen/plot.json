@@ -1,0 +1,18 @@
+{
+ "lat": 24.4249899,
+ "lon": 118.3190427,
+ "rotation": 0.0,
+ "size": 170.0,
+ "asked": {
+  "lat": 24.4249899,
+  "lon": 118.31904265
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "莒光樓"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "莒光樓",
+ "osm_base": null
+}

@@ -1,0 +1,41 @@
+{
+  "name": "連江",
+  "landmark": "東湧燈塔",
+  "center": [
+    120.51025,
+    26.36587
+  ],
+  "bounds": [
+    120.5093977850913,
+    26.365101284026988,
+    120.5111022149087,
+    26.366638715973014
+  ],
+  "sizeMeters": 170.0,
+  "landmarkIds": [],
+  "sources": [
+    {
+      "title": "OpenStreetMap 街區圖徵",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.5009739,26.3574563,120.5210261,26.3755437"
+    },
+    {
+      "title": "國定古蹟・東引島燈塔",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/monument/20160601000001"
+    },
+    {
+      "title": "地標原始位置與識別碼",
+      "url": "https://www.openstreetmap.org/node/5146186234"
+    }
+  ],
+  "landmarkSites": [
+    {
+      "osmType": "node",
+      "osmId": 5146186234,
+      "name": "東湧燈塔",
+      "point": [
+        120.5103445,
+        26.3657582
+      ]
+    }
+  ]
+}

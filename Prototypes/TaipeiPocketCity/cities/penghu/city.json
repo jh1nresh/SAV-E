@@ -1,0 +1,219 @@
+{
+  "name": "澎湖",
+  "title": "開臺澎湖天后宮",
+  "region": "澎湖",
+  "place": "開臺澎湖天后宮",
+  "timezone": "Asia/Taipei",
+  "level": 3.45,
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#d6be9c",
+        "#ceaa94",
+        "#ebd1ac"
+      ],
+      "roof": "hipped",
+      "roofColour": [
+        "#aa684d",
+        "#b36c4d",
+        "#8b7872"
+      ],
+      "roofTex": "pantile",
+      "levels": 2,
+      "pitch": 20,
+      "bay": 3.5,
+      "shop": "poi"
+    },
+    "rules": [
+      {
+        "if": {
+          "type": [
+            "school",
+            "university",
+            "office"
+          ]
+        },
+        "set": {
+          "facade": "civic",
+          "wall": [
+            "#d5bc98",
+            "#c79b7d"
+          ],
+          "roof": "flat",
+          "flatRoof": "#a69b90",
+          "levels": 3,
+          "bay": 3.5
+        }
+      }
+    ]
+  },
+  "buildings": {},
+  "palette": {
+    "ground": "#d8d0ac",
+    "road": "#a3958f",
+    "walk": "#c8b998",
+    "grass": "#89b96b",
+    "pavement": "#d4c1a1",
+    "slab": "#b6ad85",
+    "paving": "#b7a88d",
+    "water": "#6fa9ae"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 0.72,
+    "colour": "#a49d8d"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "height": 7.4,
+      "evergreen": true,
+      "colours": [
+        "#6b9959",
+        "#82b171",
+        "#9cc079",
+        "#517c51"
+      ]
+    },
+    "rules": [
+      {
+        "match": "Woodland",
+        "vary": 0.25,
+        "mix": [
+          {
+            "style": 2,
+            "height": 8.0,
+            "share": 3
+          },
+          {
+            "style": 3,
+            "height": 6.8,
+            "share": 2
+          },
+          {
+            "style": 6,
+            "height": 7,
+            "share": 1
+          }
+        ]
+      }
+    ]
+  },
+  "vehicles": {
+    "kinds": [
+      "hatch",
+      "small",
+      "sedan"
+    ],
+    "colours": [
+      "#e4ddcf",
+      "#9f7161",
+      "#7c928f",
+      "#586c75"
+    ],
+    "plate": "#e4e8dc"
+  },
+  "lamp": {
+    "height": 3.7,
+    "colour": "#665b55",
+    "head": "#f3e7c4"
+  },
+  "seasonLabel": "天氣",
+  "seasons": [
+    {
+      "id": "clear",
+      "label": "晴天",
+      "wx": "clear",
+      "note": {
+        "text": "可切換場景天氣以觀察街景光線和雨具。",
+        "source": "Pocket City",
+        "url": "https://april-zhu.com/pocketcity"
+      }
+    },
+    {
+      "id": "cloud",
+      "label": "陰天",
+      "wx": "cloud",
+      "note": {
+        "text": "可切換場景天氣以觀察街景光線和雨具。",
+        "source": "Pocket City",
+        "url": "https://april-zhu.com/pocketcity"
+      }
+    },
+    {
+      "id": "drizzle",
+      "label": "細雨",
+      "wx": "drizzle",
+      "wet": 0.35,
+      "note": {
+        "text": "可切換場景天氣以觀察街景光線和雨具。",
+        "source": "Pocket City",
+        "url": "https://april-zhu.com/pocketcity"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "大雨",
+      "wx": "rain",
+      "wet": 0.85,
+      "note": {
+        "text": "可切換場景天氣以觀察街景光線和雨具。",
+        "source": "Pocket City",
+        "url": "https://april-zhu.com/pocketcity"
+      }
+    }
+  ],
+  "occasions": [],
+  "cameras": {
+    "iso": {
+      "yaw": -37,
+      "pitch": 38,
+      "zoom": 0.91,
+      "x": 0,
+      "y": 0,
+      "z": 2
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "開臺澎湖天后宮",
+      "camera": {
+        "yaw": -31,
+        "pitch": 37,
+        "zoom": 2.2,
+        "x": 0,
+        "y": 0,
+        "z": 5
+      }
+    }
+  ],
+  "legend": [],
+  "notes": [
+    {
+      "title": "街區圖資",
+      "text": "地標定位、街道與已建檔建物取自 OpenStreetMap。立面和屋頂色彩為插畫。",
+      "links": [
+        {
+          "label": "OpenStreetMap 街區圖徵",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=119.5619537,23.5620086,119.5664863,23.5661914"
+        },
+        {
+          "label": "國定古蹟・澎湖天后宮",
+          "url": "https://nchdb.boch.gov.tw/assets/overview/monument/19831228000013"
+        },
+        {
+          "label": "地標原始位置與識別碼",
+          "url": "https://www.openstreetmap.org/way/330868213"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "OpenStreetMap contributors (ODbL)",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ]
+}
