@@ -1,0 +1,32 @@
+{
+  "name": "新竹縣",
+  "landmark": "湖口三元宮",
+  "landmarkIds": [
+    "r7290036"
+  ],
+  "center": [
+    121.05859,
+    24.87708
+  ],
+  "bounds": [
+    121.05759981158741,
+    24.876175628267042,
+    121.05958018841258,
+    24.877984371732957
+  ],
+  "sizeMeters": 200.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap 圖資",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.0561145,24.8748191,121.0610655,24.8793409"
+    },
+    {
+      "title": "內政部 · 湖口三元宮",
+      "url": "https://taiwangods.moi.gov.tw/html/cultural/3_0011.aspx?i=252"
+    },
+    {
+      "title": "客家委員會 · 湖口三元宮建築",
+      "url": "https://cloud.hakka.gov.tw/Details?p=62880&pid=274844"
+    }
+  ]
+}

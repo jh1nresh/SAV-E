@@ -1,0 +1,19 @@
+{
+ "lat": 24.8013076,
+ "lon": 120.9717189,
+ "rotation": 0.0,
+ "size": 220.0,
+ "asked": {
+  "lat": 24.801606,
+  "lon": 120.97161
+ },
+ "moved_m": 34.8,
+ "famous_inside": [
+  "新竹火車站",
+  "新竹轉運站"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "新竹市 · 新竹車站",
+ "osm_base": null
+}
