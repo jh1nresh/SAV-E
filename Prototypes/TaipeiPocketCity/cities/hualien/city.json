@@ -1,0 +1,171 @@
+{
+  "name": "花蓮縣",
+  "title": "花蓮縣 · 松園別館",
+  "region": "花蓮市",
+  "place": "松園別館",
+  "timezone": "Asia/Taipei",
+  "level": 3.2,
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#ccbfaa",
+        "#d6cab8",
+        "#e3d5bc"
+      ],
+      "roof": "auto",
+      "roofColour": [
+        "#916d61",
+        "#848580"
+      ],
+      "floor": 3.25,
+      "levels": 2,
+      "shop": "none",
+      "bay": 3.5,
+      "glass": [
+        "#759899",
+        "#9cb3a9",
+        "#71918c"
+      ]
+    }
+  },
+  "palette": {
+    "ground": "#e5dcc9",
+    "walk": "#e6d8bc",
+    "pavement": "#ddcfb4",
+    "paving": "#cabd9e",
+    "grass": "#90b379",
+    "water": "#8ac3c1",
+    "road": "#aca7a0",
+    "kerb": "#d6c6a6"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.2,
+    "colour": "#cdbfa3"
+  },
+  "trees": {
+    "default": {
+      "style": 2,
+      "height": 12,
+      "vary": 0.34,
+      "colours": [
+        "#90b379",
+        "#7a9d61"
+      ],
+      "evergreen": true
+    }
+  },
+  "seasons": [
+    {
+      "id": "clear",
+      "label": "晴日",
+      "grass": "#90b379",
+      "note": {
+        "text": "主館以淺色雙層拱廊、灰色斜屋頂和周邊松樹構成。主翼按地圖建物分件就位。",
+        "source": "松園別館外觀照片",
+        "url": "https://commons.wikimedia.org/wiki/File:松園別館1.jpg"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "雨日",
+      "grass": "#789d68",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "note": {
+        "text": "秋季花蓮仍可能受颱風及東北季風帶來降雨。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+      }
+    }
+  ],
+  "months": [
+    "clear",
+    "clear",
+    "clear",
+    "clear",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "clear",
+    "clear"
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -70,
+      "pitch": 38,
+      "zoom": 1.08,
+      "x": 0,
+      "y": 0,
+      "z": 3
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "松園別館",
+      "camera": {
+        "yaw": -70,
+        "pitch": 26,
+        "zoom": 4.25,
+        "x": -5.56,
+        "y": -8.47,
+        "z": 5
+      }
+    },
+    {
+      "id": "reverse",
+      "label": "轉看側面",
+      "camera": {
+        "yaw": 85,
+        "pitch": 34,
+        "zoom": 4.05,
+        "x": -5.56,
+        "y": -8.47,
+        "z": 5
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "松園別館",
+      "source": "OpenStreetMap / 現地照片",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -70,
+        "pitch": 26,
+        "zoom": 4.25,
+        "x": -5.56,
+        "y": -8.47,
+        "z": 5
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "花蓮縣文化局 · 松園別館",
+      "text": "主館以淺色雙層拱廊、灰色斜屋頂和周邊松樹構成。主翼按地圖建物分件就位。",
+      "links": [
+        {
+          "label": "花蓮縣文化局 · 松園別館",
+          "url": "https://www.hccc.gov.tw/zh-tw/CulturalHeritage/Detail/19"
+        }
+      ]
+    },
+    {
+      "title": "松園別館外觀照片",
+      "text": "屋頂、門窗和構造依現地影像手工重建。",
+      "links": [
+        {
+          "label": "松園別館外觀照片",
+          "url": "https://commons.wikimedia.org/wiki/File:松園別館1.jpg"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "嘉義市",
+  "landmark": "嘉義車站",
+  "center": [
+    120.44122,
+    23.47911
+  ],
+  "bounds": [
+    120.43994192,
+    23.47792983,
+    120.44249808,
+    23.48029017
+  ],
+  "sizeMeters": 185,
+  "landmarkIds": [
+    "w286891391"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・建物、街道與地物",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.437920,23.476400,120.444320,23.481800"
+    },
+    {
+      "title": "嘉義車站站前立面、入口雨棚與站名招牌",
+      "url": "https://commons.wikimedia.org/wiki/File:Chiayi_Railway_Station.JPG"
+    }
+  ]
+}

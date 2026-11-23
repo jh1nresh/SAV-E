@@ -1,0 +1,171 @@
+{
+  "name": "高雄市",
+  "title": "高雄市 · 打狗英國領事館官邸",
+  "region": "鼓山區",
+  "place": "打狗英國領事館官邸",
+  "timezone": "Asia/Taipei",
+  "level": 3.2,
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#b97a5d",
+        "#d6cab8",
+        "#e3d5bc"
+      ],
+      "roof": "auto",
+      "roofColour": [
+        "#916d61",
+        "#848580"
+      ],
+      "floor": 3.25,
+      "levels": 2,
+      "shop": "none",
+      "bay": 3.5,
+      "glass": [
+        "#759899",
+        "#9cb3a9",
+        "#71918c"
+      ]
+    }
+  },
+  "palette": {
+    "ground": "#dfd5be",
+    "walk": "#e6d8bc",
+    "pavement": "#ddcfb4",
+    "paving": "#cabd9e",
+    "grass": "#8eb871",
+    "water": "#7cbdc4",
+    "road": "#aca7a0",
+    "kerb": "#d6c6a6"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.2,
+    "colour": "#cdbfa3"
+  },
+  "trees": {
+    "default": {
+      "style": 7,
+      "height": 5.5,
+      "vary": 0.34,
+      "colours": [
+        "#8eb871",
+        "#7a9d61"
+      ],
+      "evergreen": true
+    }
+  },
+  "seasons": [
+    {
+      "id": "clear",
+      "label": "晴日",
+      "grass": "#8eb871",
+      "note": {
+        "text": "坡頂官邸以紅磚拱廊、迴廊與橘紅瓦頂呈現。建物平面沿用 OpenStreetMap。",
+        "source": "官邸正面與拱廊照片",
+        "url": "https://commons.wikimedia.org/wiki/File:Former_British_Consulate_at_Takao.jpg"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "雨日",
+      "grass": "#789d68",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "note": {
+        "text": "高雄的雨季集中在暖季。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+      }
+    }
+  ],
+  "months": [
+    "clear",
+    "clear",
+    "clear",
+    "clear",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "clear",
+    "clear"
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -48,
+      "pitch": 38,
+      "zoom": 1.08,
+      "x": 0,
+      "y": 0,
+      "z": 3
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "打狗英國領事館官邸",
+      "camera": {
+        "yaw": -48,
+        "pitch": 26,
+        "zoom": 4.5,
+        "x": 1.47,
+        "y": 12.7,
+        "z": 7
+      }
+    },
+    {
+      "id": "reverse",
+      "label": "轉看側面",
+      "camera": {
+        "yaw": 107,
+        "pitch": 34,
+        "zoom": 3.75,
+        "x": 1.47,
+        "y": 12.7,
+        "z": 7
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "打狗英國領事館官邸",
+      "source": "OpenStreetMap / 現地照片",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -48,
+        "pitch": 26,
+        "zoom": 4.5,
+        "x": 1.47,
+        "y": 12.7,
+        "z": 7
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "文化部文化資產局 · 打狗英國領事館及官邸",
+      "text": "坡頂官邸以紅磚拱廊、迴廊與橘紅瓦頂呈現。建物平面沿用 OpenStreetMap。",
+      "links": [
+        {
+          "label": "文化部文化資產局 · 打狗英國領事館及官邸",
+          "url": "https://nchdb.boch.gov.tw/assets/overview/monument/20190223000001"
+        }
+      ]
+    },
+    {
+      "title": "官邸正面與拱廊照片",
+      "text": "屋頂、門窗和構造依現地影像手工重建。",
+      "links": [
+        {
+          "label": "官邸正面與拱廊照片",
+          "url": "https://commons.wikimedia.org/wiki/File:Former_British_Consulate_at_Takao.jpg"
+        }
+      ]
+    }
+  ]
+}

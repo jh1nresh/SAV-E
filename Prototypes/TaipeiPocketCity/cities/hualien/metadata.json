@@ -1,0 +1,37 @@
+{
+  "name": "花蓮縣",
+  "area": "花蓮縣",
+  "landmark": "松園別館",
+  "landmarkIds": [
+    "w1350032556"
+  ],
+  "center": [
+    121.6154999,
+    23.9826822
+  ],
+  "bounds": [
+    121.61430318139531,
+    23.98158141931007,
+    121.61669661860469,
+    23.983782980689927
+  ],
+  "sizeMeters": 180.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap contributors · 實地輪廓",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.6139591,23.9811960,121.6191209,23.9859440"
+    },
+    {
+      "title": "花蓮縣文化局 · 松園別館",
+      "url": "https://www.hccc.gov.tw/zh-tw/CulturalHeritage/Detail/19"
+    },
+    {
+      "title": "松園別館外觀照片",
+      "url": "https://commons.wikimedia.org/wiki/File:松園別館1.jpg"
+    },
+    {
+      "title": "中央氣象署 · 氣候統計",
+      "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+    }
+  ]
+}

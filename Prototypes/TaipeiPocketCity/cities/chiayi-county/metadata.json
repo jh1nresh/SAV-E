@@ -1,0 +1,37 @@
+{
+  "name": "嘉義縣",
+  "area": "嘉義縣",
+  "landmark": "高跟鞋教堂",
+  "landmarkIds": [
+    "w1352427633"
+  ],
+  "center": [
+    120.1487714,
+    23.3778148
+  ],
+  "bounds": [
+    120.14795502362283,
+    23.37706038568623,
+    120.14958777637717,
+    23.378569214313767
+  ],
+  "sizeMeters": 164.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap contributors · 實地輪廓",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.1478440,23.3753269,120.1537160,23.3807531"
+    },
+    {
+      "title": "交通部觀光署雲嘉南濱海國家風景區",
+      "url": "https://swcoast-nsa.travel/zh-tw"
+    },
+    {
+      "title": "高跟鞋教堂現地照片",
+      "url": "https://commons.wikimedia.org/wiki/File:高跟鞋教堂.jpg"
+    },
+    {
+      "title": "中央氣象署 · 氣候統計",
+      "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+    }
+  ]
+}
