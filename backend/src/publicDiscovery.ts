@@ -23,18 +23,21 @@ export type PublicDiscoveryCoverage = {
   platform: PublicDiscoveryPlatform; status: "connected" | "not_connected"; indexedPostCount: number;
 };
 export type PublicDiscoveryGoogleAlias = {
-  googlePlaceID: string; provider: Exclude<PublicDiscoveryPlace["provider"], "google_places">; providerPlaceID: string;
+  googlePlaceID: string; provider: PublicDiscoveryPlace["provider"]; providerPlaceID: string;
 };
+type PublicDiscoveryAppleAlias = { applePlaceID: string; providerPlaceID: string };
 export type PublicDiscoveryCapabilities = { multiVenue?: boolean; googleVenues?: boolean };
 export type PublicDiscoveryIndex = {
   schemaVersion: 1; generatedAt: string; expiresAt: string;
   coverage: PublicDiscoveryCoverage[]; posts: PublicDiscoveryPost[];
   googlePlaceAliases?: PublicDiscoveryGoogleAlias[];
+  applePlaceAliases?: PublicDiscoveryAppleAlias[];
 };
-export type PublicDiscoveryResponse = Omit<PublicDiscoveryIndex, "googlePlaceAliases"> & {
+export type PublicDiscoveryResponse = Omit<PublicDiscoveryIndex, "googlePlaceAliases" | "applePlaceAliases"> & {
   indexRevision: string; nextCursor: string | null; googlePlaceMatch?: PublicDiscoveryGoogleAlias;
 };
 export const publicDiscoveryMaxFileBytes = 6 * 1_024 * 1_024;
+export const publicDiscoveryMaxPosts = 5_000;
 const day = 24 * 60 * 60 * 1_000;
 
 export class PublicDiscoveryError extends Error {
@@ -176,13 +179,13 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
                                       mode: "strict" | "published" | "reviewArchive" | "serving"): PublicDiscoveryIndex {
   const time = now.getTime();
   if (!Number.isFinite(time)) return invalid();
-  const input = record(value, ["schemaVersion", "generatedAt", "expiresAt", "coverage", "posts"], ["googlePlaceAliases"]);
+  const input = record(value, ["schemaVersion", "generatedAt", "expiresAt", "coverage", "posts"], ["googlePlaceAliases", "applePlaceAliases"]);
   const generatedAt = timestamp(input.generatedAt), expiresAt = timestamp(input.expiresAt);
   const generated = Date.parse(generatedAt), expires = Date.parse(expiresAt);
   if (input.schemaVersion !== 1 || generated > time || generated + day <= time
     || expires <= time || expires <= generated || expires > generated + day
     || !Array.isArray(input.coverage) || input.coverage.length !== 3
-    || !Array.isArray(input.posts) || input.posts.length > 5_000) return invalid();
+    || !Array.isArray(input.posts) || input.posts.length > publicDiscoveryMaxPosts) return invalid();
   // Validate the entire artifact as it existed at publication before omitting old rows.
   const sourceValidationTime = mode === "published" || mode === "serving" ? generated : time;
   const statuses = new Map<PublicDiscoveryPlatform, PublicDiscoveryCoverage["status"]>();
@@ -241,6 +244,7 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
       ...(highlightRank === undefined ? {} : { highlightRank }) };
   });
   const validatedAliases = validatedGoogleAliases(input.googlePlaceAliases, identities);
+  const validatedAppleAliases = validateAppleAliases(input.applePlaceAliases, identities);
   const scheduledPosts = mode === "strict" ? validatedPosts
     : validatedPosts.filter(post => !publicDiscoveryPostHasEnded(post, time));
   const posts = mode === "strict" ? scheduledPosts : scheduledPosts
@@ -253,8 +257,10 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
     indexedPostCount: posts.filter(post => post.platform === platform).length }));
   const activeVenues = new Set(posts.map(({ place }) => JSON.stringify([place.provider, place.providerPlaceID])));
   const googlePlaceAliases = validatedAliases.filter(alias => activeVenues.has(JSON.stringify([alias.provider, alias.providerPlaceID])));
+  const applePlaceAliases = validatedAppleAliases.filter(alias => activeVenues.has(JSON.stringify(["apple_maps", alias.providerPlaceID])));
   return { schemaVersion: 1, generatedAt, expiresAt, coverage, posts,
-    ...(googlePlaceAliases.length ? { googlePlaceAliases } : {}) };
+    ...(googlePlaceAliases.length ? { googlePlaceAliases } : {}),
+    ...(applePlaceAliases.length ? { applePlaceAliases } : {}) };
 }
 
 function compareText(a: string, b: string): number { return a < b ? -1 : a > b ? 1 : 0; }
@@ -277,13 +283,28 @@ function validatedGoogleAliases(value: unknown, venues: Map<string, string>): Pu
   const aliases = value.map((entry): PublicDiscoveryGoogleAlias => {
     const { googlePlaceID, provider, providerPlaceID } = record(entry, ["googlePlaceID", "provider", "providerPlaceID"]);
     if (!isPublicDiscoveryGoogleID(googlePlaceID) || ids.has(googlePlaceID)
-      || (provider !== "apple_maps" && provider !== "amap") || !isPublicDiscoveryVenueID(providerPlaceID)
+      || (provider !== "apple_maps" && provider !== "amap" && provider !== "google_places") || !isPublicDiscoveryVenueID(providerPlaceID)
       || venues.has(JSON.stringify(["google_places", googlePlaceID]))
       || !venues.has(JSON.stringify([provider, providerPlaceID]))) return invalid();
     ids.add(googlePlaceID);
     return { googlePlaceID, provider, providerPlaceID };
   });
   return aliases.sort((a, b) => a.googlePlaceID < b.googlePlaceID ? -1 : a.googlePlaceID > b.googlePlaceID ? 1 : 0);
+}
+
+function validateAppleAliases(value: unknown, venues: Map<string, string>): PublicDiscoveryAppleAlias[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 5_000) return invalid();
+  const ids = new Set<string>();
+  const aliases = value.map((entry): PublicDiscoveryAppleAlias => {
+    const { applePlaceID, providerPlaceID } = record(entry, ["applePlaceID", "providerPlaceID"]);
+    if (!isPublicDiscoveryVenueID(applePlaceID) || !isPublicDiscoveryVenueID(providerPlaceID) || ids.has(applePlaceID)
+      || venues.has(JSON.stringify(["apple_maps", applePlaceID]))
+      || !venues.has(JSON.stringify(["apple_maps", providerPlaceID]))) return invalid();
+    ids.add(applePlaceID);
+    return { applePlaceID, providerPlaceID };
+  });
+  return aliases.sort((a, b) => compareText(a.applePlaceID, b.applePlaceID));
 }
 
 function query(url: URL): { bounds: Bounds; venue: VenueFilter | null; limit: number; cursor: string | null } {
@@ -371,9 +392,14 @@ export async function listPublicDiscoveryPosts(
     const indexedPostCount = options.multiVenue ? entries.length : new Set(entries.map(post => post.id)).size;
     return { ...item, indexedPostCount };
   });
-  const googlePlaceMatch = venue?.[0] === "google_places"
+  const savedAlias = venue?.[0] === "google_places"
     ? index.googlePlaceAliases?.find(alias => alias.googlePlaceID === venue[1]) : undefined;
-  const filter = googlePlaceMatch ? [googlePlaceMatch.provider, googlePlaceMatch.providerPlaceID] : venue;
+  const appleAlias = venue?.[0] === "apple_maps"
+    ? index.applePlaceAliases?.find(alias => alias.applePlaceID === venue[1]) : undefined;
+  const filter = appleAlias ? ["apple_maps", appleAlias.providerPlaceID]
+    : savedAlias ? [savedAlias.provider, savedAlias.providerPlaceID] : venue;
+  const retiredGoogleID = savedAlias?.provider === "google_places" ? savedAlias.googlePlaceID : undefined;
+  const retiredPlaceID = appleAlias?.applePlaceID ?? retiredGoogleID;
   const scoped = visiblePosts.filter(post => inBounds(post, bounds)
     && (filter === null || (post.place.provider === filter[0] && post.place.providerPlaceID === filter[1])));
   // Older clients validate globally unique post IDs. Scoped reads still select the requested branch.
@@ -396,7 +422,12 @@ export async function listPublicDiscoveryPosts(
     ...visiblePosts.map(post => Date.parse(post.verifiedAt) + day),
     ...visiblePosts.flatMap(post => post.visibleUntil ? [Date.parse(post.visibleUntil)] : []),
     ...visiblePosts.flatMap(post => post.cover ? [Date.parse(post.cover.expiresAt)] : []));
+  // Keep the requested identity in same-provider Saved responses for existing clients.
+  const responsePosts = retiredPlaceID ? posts.map(post => ({
+    ...post, place: { ...post.place, providerPlaceID: retiredPlaceID },
+  })) : posts;
+  const googlePlaceMatch = retiredGoogleID === undefined ? savedAlias : undefined;
   return { schemaVersion: 1, indexRevision, generatedAt: index.generatedAt, expiresAt: new Date(deadline).toISOString(),
-    coverage, posts, ...(googlePlaceMatch ? { googlePlaceMatch } : {}),
+    coverage, posts: responsePosts, ...(googlePlaceMatch ? { googlePlaceMatch } : {}),
     nextCursor: offset + posts.length < filtered.length ? cursorFor(indexRevision, bounds, venue, limit, offset + posts.length) : null };
 }
