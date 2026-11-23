@@ -237,7 +237,7 @@ async function readPack(id, signal){
   return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
 }
 
-export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},surveyTiles){
+export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},surveyTiles,onPickMiss=()=>{}){
   const cache=new Map(),loading=new Map(),failures=new Map();
   const matrix=new Float32Array(16);
   let active=new Set(),enabled=true,removed=false,dirty=true;
@@ -283,13 +283,14 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   const terrain=event=>{if(event.sourceId==='dem')dirty=true;};
   const cameraMove=()=>{tap=null;if(queries.length)unloadQueries();};
   const click=event=>{
-    if(!enabled||map.getZoom()<minZoom||!shown.length||event.defaultPrevented)return;
+    unloadQueries();
+    if(event.defaultPrevented)return;
+    if(!enabled||map.getZoom()<minZoom||!shown.length){onPickMiss(event.point);return;}
     const {clientWidth,clientHeight}=map.getCanvas();
     if(!shown.some(shop=>hitShop(shop,matrix,event.point,clientWidth,clientHeight))){
       lastPick={tested:0,visible:0,id:null};
-      return;
+      onPickMiss(event.point);return;
     }
-    unloadQueries();
     tap={point:event.point,deadline:performance.now()+750};
     map.triggerRepaint();
   };
@@ -333,9 +334,14 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
     dirty=false;
   }
 
+  function missTap(){
+    const point=tap?.point;
+    unloadQueries();
+    if(point)onPickMiss(point);
+  }
   function resolveTap(){
     if(!queries.length)return;
-    if(performance.now()>=tap.deadline){unloadQueries();return;}
+    if(performance.now()>=tap.deadline){missTap();return;}
     if(queries.some(({query})=>!gl.getQueryParameter(query,gl.QUERY_RESULT_AVAILABLE))){
       map.triggerRepaint();
       return;
@@ -343,14 +349,15 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
     const visible=queries.filter(({query})=>gl.getQueryParameter(query,gl.QUERY_RESULT));
     const winner=visible[0];
     lastPick={tested:queries.length,visible:visible.length,id:winner?.shop.row.id??null};
+    if(!winner){missTap();return;}
     unloadQueries();
-    if(winner)openPlace(cardFor(winner.shop.row),winner.shop.row);
+    openPlace(cardFor(winner.shop.row),winner.shop.row);
   }
 
   function depthPick(){
     const {clientWidth,clientHeight}=map.getCanvas();
     const picked=shown.filter(shop=>hitShop(shop,matrix,tap.point,clientWidth,clientHeight));
-    if(!picked.length){tap=null;return;}
+    if(!picked.length){missTap();return;}
     const [left,bottom,width,height]=gl.getParameter(gl.VIEWPORT);
     const x=left+Math.floor(tap.point.x*width/clientWidth);
     const y=bottom+height-1-Math.floor(tap.point.y*height/clientHeight);
@@ -373,7 +380,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
     gl.scissor(...scissor);
     if(!hadScissor)gl.disable(gl.SCISSOR_TEST);
     if(queries.length)map.triggerRepaint();
-    else tap=null;
+    else missTap();
   }
 
   map.addLayer({
@@ -458,6 +465,12 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   },firstLabel);
   return {
     setNames(value){showNames=value;map.triggerRepaint();},
+    openNamedPlace(id){
+      const shop=shown.find(shop=>shop.row.id===id);
+      if(!shop)return false;
+      openPlace(cardFor(shop.row),shop.row);
+      return true;
+    },
     setFuxing(value){
       if(value===fuxingEnabled)return;
       fuxingEnabled=value;dirty=true;unloadQueries();map.triggerRepaint();

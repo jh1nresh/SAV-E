@@ -1,16 +1,17 @@
+import {cityPlaceLayers} from './city-place-index.js';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei-frontages-2';
-import {addStreetDetail} from './street-detail.js?v=store-cards';
+import {addStreetDetail} from './street-detail.js?v=category-badges-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=fuxing';
-import {addCity170,dihuaSearch} from './city170.js?v=city-retail-nature-3';
-import {addCityShopfronts} from './city-shopfronts.js?v=fuxing';
+import {addShopSearch} from './city-shop-search.js?v=photo-pins-1';
+import {addCity170,dihuaSearch} from './city170.js?v=category-badges-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=named-pins-1';
 import {CityNature} from './city-nature.js?v=inventory-3';
 
 const $=query=>document.querySelector(query);
@@ -45,6 +46,13 @@ let map, layer, streetDetail, metroState, weather;
 let streetDistricts=new Map();
 let cityDistricts=[], cityGrids, cityGridLoad;
 let atlas170,shopfronts,cityNature;
+let preparedGroundReady=false;
+function setPreparedGround(ready=preparedGroundReady){
+  preparedGroundReady=ready;
+  for(const id of ['pocket-city-crossing','pocket-city-lane','pocket-city-skill-paving','pocket-city-paving-joints']){
+    if(map.getLayer(id))map.setLayoutProperty(id,'visibility',ready?'none':'visible');
+  }
+}
 let previousFronts=preview.get('fuxing')==='before', quietFronts=false, bookWallReady=false;
 let labelOrder=[],applyLocalNames;
 function updateFrontageView(){
@@ -61,7 +69,7 @@ function updateFrontageView(){
       // Ground labels draw before the solid facades and trees, so uncovered points remain visible.
       const layers=map.getStyle().layers;
       labelOrder=layers.flatMap((layer,i)=>{
-        const place=['city170-poi-labels','city170-poi-dots','poi_r1'].includes(layer.id);
+        const place=['city170-poi-dots','poi_r1'].includes(layer.id);
         const road=layer['source-layer']==='transportation_name'||layer.id==='city170-road-names'||layer.id.endsWith('-road-labels');
         return place||road?[[layer.id,layers[i+1]?.id]]:[];
       });
@@ -451,16 +459,14 @@ try{
         records=[{objects:{},paths:{'dihua-arcade':dihuaWalk}},...records];
       streetDetail.setLocalLife(records);
     };
-    const setPrepared = ready => {
-      for(const id of ['pocket-city-crossing','pocket-city-lane','pocket-city-skill-paving','pocket-city-paving-joints']){
-        if(map.getLayer(id))map.setLayoutProperty(id,'visibility',ready?'none':'visible');
-      }
+    const openMapLabel=place=>{
+      if(!place.placeId || !shopfronts?.openNamedPlace(place.placeId))streetDetail.openMappedPlace(place);
     };
-    atlas170=addCity170(map,firstLabel,streetDetail.openMappedPlace,setPrepared,streetDetail.setMappedStores,localLife,streetDetail.authoredRoads,streetDetail.hasFocalPin,preview.get('dihua')!=='before'?layer:null,cityNature,ids=>shopfronts?.setPacks(ids));
+    atlas170=addCity170(map,firstLabel,openMapLabel,setPreparedGround,streetDetail.setMappedStores,localLife,streetDetail.authoredRoads,streetDetail.hasFocalPin,preview.get('dihua')!=='before'?layer:null,cityNature,ids=>shopfronts?.setPacks(ids));
     const focusFront=(card,x,y,angle)=>{
       if(previousFronts||!inFuxing(x,y))return false;
       locate(frontageCamera(x,y,angle));
-      streetDetail.openMappedPlace(card.id===bookstoreId?bookshopEvidence:card);
+      streetDetail.openMappedPlace({...card,...(card.id===bookstoreId?bookshopEvidence:{}),point:[x,y]});
       return true;
     };
     addShopSearch(map,locate,dihuaSearch,streetDetail.openMappedPlace,row=>{
@@ -470,12 +476,11 @@ try{
         source:osm?'OpenStreetMap':undefined,url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:undefined},x,y,angle);
     });
     shopfronts=addCityShopfronts(map,(card,row)=>{
-      if(!focusFront(card,...row.center,row.angle))streetDetail.openMappedPlace(card);
+      if(!focusFront(card,...row.center,row.angle))streetDetail.openMappedPlace({...card,point:row.center});
     },firstLabel,ids=>{
-      atlas170.setBuiltShops(ids);
       const ready=ids.includes(bookstoreId);
       if(ready!==bookWallReady){bookWallReady=ready;requestAnimationFrame(updateFrontageView);}
-    },()=>layer.visibleWallTiles);
+    },()=>layer.visibleWallTiles,atlas170.openNearbyPlace);
     $('#fuxing-frame').addEventListener('click',()=>{
       if(!$('#place-card').hidden)$('#place-close').click();
       locate(map.getZoom()>=21?shopRowView:bookshopView);
@@ -499,6 +504,8 @@ try{
   }
   if(rerun&&streetDetail)weather=addPocketCityWeather(map,stage,streetDetail.setRain,preview.get('weather'));
   if(skillAtlas)addPocketCityPaint(map,()=>{
+    // The legacy tiles may arrive after the cell-prepared street surface.
+    setPreparedGround();
     for(const {key,data} of streets){
       if(!priorGround.has(key))continue;
       data.ground.features.length=priorGround.get(key);
@@ -532,7 +539,7 @@ try{
     const visible=inside?localNames:globalNames;
     if(visible===appliedNames)return;
     appliedNames=visible;
-    for(const id of ['city170-shop-names','city170-poi-labels','city170-poi-dots','poi_r1']){
+    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','poi_r1']){
       if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     }
     shopfronts?.setNames(visible);

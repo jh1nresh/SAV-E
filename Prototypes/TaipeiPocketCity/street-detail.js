@@ -1,3 +1,7 @@
+import {bouncePhotoPin} from './photo-pin-motion.js';
+import {createPlaceCallout} from './place-callout.js';
+import {originalPlacePhoto,photoPlaces} from './place-photos.js';
+import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
 import {StreetPeople} from './street-people.js';
 import {StreetScenery} from './street-scenery.js';
 
@@ -118,48 +122,53 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     },'survey');
   }
 
-  const card=document.querySelector('#place-card');
-  const close=document.querySelector('#place-close');
+  const photoButtons=new Map();
+  const callout=createPlaceCallout(map,(src,rebound)=>{
+    for(const [button,image] of photoButtons){
+      const returning=rebound&&button.classList.contains('photo-open');
+      button.classList.toggle('photo-open',image===src);
+      if(returning&&button.isConnected)bouncePhotoPin(button.querySelector('.photo-badge'),.82);
+    }
+  });
   const pause=document.querySelector('#street-motion');
   let mappedStores=new Set();
-  let selected,paused=false;
+  let paused=false;
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
-  function closePlace(restoreFocus=false){
-    card.hidden=true;
-    selected?.setAttribute('aria-expanded','false');
-    if(restoreFocus)selected?.focus();
-    selected=null;
-  }
-  close.addEventListener('click',()=>closePlace(true));
-  card.addEventListener('keydown',event=>{
-    if(event.key==='Escape'){event.stopPropagation();closePlace(true);}
-  });
   const pinsFor=({key,data})=>data.places.map(place=>{
     const button=document.createElement('button');
     button.type='button';
     button.className='street-pin';
     button.dataset.kind=place.kind;
-    button.dataset.place=place.id;
-    button.textContent=place.name;
+    button.dataset.place=place.id??place.name;
+    button.dataset.name=place.name;
+    const {canvas,color}=placeButtonIcon(place.kind);
+    button.style.setProperty('--pin',color);
+    button.append(canvas,document.createTextNode(place.name));
     button.setAttribute('aria-controls','place-card');
     button.setAttribute('aria-expanded','false');
+    const photo=originalPlacePhoto(place,place.point);
+    if(photo){
+      photoButtons.set(button,photo.src);
+      button.classList.add('photo-pin');
+      button.setAttribute('aria-label',place.name+'，查看照片');
+      const thumb=document.createElement('img');
+      thumb.alt='';
+      thumb.src=photo.src;
+      const badge=document.createElement('span');
+      badge.className='photo-badge';
+      badge.append(thumb);
+      thumb.onerror=()=>badge.replaceChildren(canvas);
+      const label=document.createElement('span');
+      label.className='photo-title';
+      label.textContent=place.name;
+      button.replaceChildren(badge,label);
+    }
     button.addEventListener('click',event=>{
       event.stopPropagation();
-      if(selected===button){closePlace();return;}
-      closePlace();
-      selected=button;
-      button.setAttribute('aria-expanded','true');
-      card.querySelector('h3').textContent=place.name;
-      card.querySelector('.place-kind').textContent=place.kind;
-      card.querySelector('.place-detail').textContent=place.detail;
-      const source=card.querySelector('a');
-      source.hidden=false;
-      source.href=place.url;
-      source.textContent=place.source?'OpenStreetMap 資料 ↗':'官方資訊 ↗';
-      card.hidden=false;
-      close.focus({preventScroll:true});
+      if(callout.trigger===button){callout.dismiss();return;}
+      callout.open(place,button);
     });
-    return {key,button,point:place.point,minZoom:place.minZoom??16.65,priority:place.priority??0,marker:new Marker({element:button,anchor:'bottom'}).setLngLat(place.point)};
+    return {key,button,point:place.point,minZoom:place.minZoom??16.65,priority:place.priority??0,marker:new Marker({element:button,anchor:photo?'bottom':'left',offset:photo?[0,0]:[-15.5,0]}).setLngLat(place.point)};
   });
 
   function update(){
@@ -172,11 +181,11 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     const near=allScenes().some(({model})=>model.isActive(bounds));
     pause.hidden=!near||motion.matches;
     for(const pin of pins){
-      let visible=zoom>=pin.minZoom&&bounds.contains(pin.point)&&!mappedStores.has(pin.button.dataset.place);
+      let visible=zoom>=pin.minZoom&&bounds.contains(pin.point)&&(pin.key==='photos'||!mappedStores.has(pin.button.dataset.place));
       if(visible){
         const {x,y}=map.project(pin.point), extent=pin.button.textContent.length*7+24;
-        const rectangle=[x-extent/2,y-36,x+extent/2,y];
-        if(limitsStreetLabels(pin.key)&&selected!==pin.button){
+        const rectangle=[x-16,y-14,x+Math.max(extent,pin.button.textContent.length*12+20),y+14];
+        if(limitsStreetLabels(pin.key)&&callout.trigger!==pin.button){
           visible=rectangle[0]>=9&&rectangle[2]<=width-9&&rectangle[1]>=0&&rectangle[3]<=height
             &&!available.some(([x1,y1,x2,y2])=>rectangle[0]<x2&&rectangle[2]>x1&&rectangle[1]<y2&&rectangle[3]>y1);
         }
@@ -184,9 +193,12 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
       }
       if(visible===pin.active)continue;
       pin.active=visible;
-      if(visible)pin.marker.addTo(map);
+      if(visible){
+        pin.marker.addTo(map);
+        if(photoButtons.has(pin.button))bouncePhotoPin(pin.button.querySelector('.photo-badge'),0);
+      }
       else{
-        if(selected===pin.button)closePlace();
+        if(callout.trigger===pin.button)callout.close();
         pin.marker.remove();
       }
     }
@@ -224,7 +236,9 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     for(const {model} of allScenes())model.paused=paused;
     map.triggerRepaint();
   });
+  pins.push(...pinsFor({key:'photos',data:{places:photoPlaces.map(place=>({...place,kind:place.categoryLabel,minZoom:15.8}))}}));
   addStreets(districts);
+  update();
   function state(){
     const details=Object.fromEntries(allScenes().map(({key,model,scenery})=>[key,{
       people:model.count,umbrellas:model.umbrellas,playing:model.playing,firstPosition:model.firstPosition,scenery:scenery.drawnTriangles,
@@ -237,18 +251,6 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
       pins:states.reduce((n,state)=>n+state.pins,0),scenery:states.reduce((n,state)=>n+state.scenery,0),
       scenes:details,
     };
-  }
-  function openMappedPlace(place){
-    closePlace();
-    card.querySelector('h3').textContent=place.name || place.categoryLabel || '地點';
-    card.querySelector('.place-kind').textContent=place.kind==='school-label'?'學校':place.categoryLabel??'地點';
-    const detail=place.detail??'';
-    card.querySelector('.place-detail').textContent=detail.replace(/[０-９0-9]+(?:[之－-][０-９0-9]+)?\s*號.*$/u,'').trim()||place.categoryLabel||'';
-    const source=card.querySelector('a');
-    source.hidden=!place.url;
-    if(place.url){source.href=place.url;source.textContent=(place.source??'OpenStreetMap')+' 資料 ↗';}
-    card.hidden=false;
-    close.focus({preventScroll:true});
   }
   function setLocalLife(records){
     if(localLife){
@@ -279,12 +281,12 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     if(!label)return false;
     return pins.some(pin=>{
       if(!pin.active || Math.hypot((pin.point[0]-lng)*100850,(pin.point[1]-lat)*110800)>=12)return false;
-      const title=normalize(pin.button.textContent);
+      const title=normalize(pin.button.dataset.name);
       const [short,long]=title.length<label.length?[title,label]:[label,title];
       return title===label || (short.length>=3 && long.startsWith(short) && long.slice(short.length).endsWith('店'));
     });
   }
-  return {state,addStreets,openMappedPlace,setLocalLife,hasFocalPin,authoredRoads:focalRoads.length>3?focalRoads:false,setMappedStores(ids){
+  return {state,addStreets,openMappedPlace:callout.open,setLocalLife,hasFocalPin,authoredRoads:focalRoads.length>3?focalRoads:false,setMappedStores(ids){
     mappedStores=new Set(ids.map(id=>id.replace(/^poi\/(node|way|relation)\//,'osm-$1-')));
     update();
   },setRain(share){

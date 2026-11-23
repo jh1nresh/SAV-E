@@ -1,8 +1,76 @@
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=shop-names-2';
+import {pinLabelColor} from './place-pins.js?v=category-badges-1';
+import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=category-badges-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 
 const collection = features => ({type: 'FeatureCollection', features});
 const overlaps = ([w,s,e,n], [left,bottom,right,top]) => w <= right && e >= left && s <= top && n >= bottom;
+
+function clipStreetSegment(a,b,view){
+  let start=0,end=1;
+  for(let axis=0;axis<2;axis++){
+    const span=b[axis]-a[axis],min=view[axis],max=view[axis+2];
+    if(!span){
+      if(a[axis]<min||a[axis]>max)return null;
+      continue;
+    }
+    const low=(min-a[axis])/span, high=(max-a[axis])/span;
+    start=Math.max(start,Math.min(low,high));
+    end=Math.min(end,Math.max(low,high));
+    if(start>=end)return null;
+  }
+  return [start,end];
+}
+
+function along(a,b,t){
+  return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+}
+
+// Use the longest on-screen run per name. MapLibre follows its direction
+// and keeps the resulting caption upright as the user rotates the map.
+export function cityStreetLabels(features,map,geographicBounds){
+  const {clientWidth:width,clientHeight:height}=map.getContainer();
+  if(width<=8||height<=8)return [];
+  const screen=[4,4,width-4,height-4];
+  const chosen=new Map();
+  for(const feature of features){
+    const {name,kind,category}=feature.properties;
+    if(!name||(kind!=='road'&&kind!=='walk'))continue;
+    const key=name.normalize('NFKC').replaceAll('台','臺').replace(/([一二三四五六七八九])段/g,(_,n)=>`${'一二三四五六七八九'.indexOf(n)+1}段`);
+    const {type,coordinates}=feature.geometry;
+    const lines=type==='LineString'?[coordinates]:type==='MultiLineString'?coordinates:[];
+    const rank=['motorway','trunk','primary','secondary'].includes(category)?0:kind==='road'?1:2;
+    for(const line of lines){
+      let points=[];
+      let length=0;
+      const flush=()=>{
+        if(length>(chosen.get(key)?.length??0))chosen.set(key,{name,rank,length,points});
+        points=[];
+        length=0;
+      };
+      for(let i=1;i<line.length;i++){
+        const a=line[i-1],b=line[i];
+        const bounds=clipStreetSegment(a,b,geographicBounds);
+        if(!bounds){flush();continue;}
+        const left=map.project(along(a,b,bounds[0])),right=map.project(along(a,b,bounds[1]));
+        const start=[left.x,left.y],end=[right.x,right.y];
+        const visible=clipStreetSegment(start,end,screen);
+        if(!visible){flush();continue;}
+        const from=along(start,end,visible[0]),to=along(start,end,visible[1]);
+        const pixels=Math.hypot(to[0]-from[0],to[1]-from[1]);
+        if(!pixels)continue;
+        const last=points.at(-1);
+        if(last&&Math.hypot(last[0]-from[0],last[1]-from[1])>.05)flush();
+        if(!points.length)points.push(from);
+        points.push(to);
+        length+=pixels;
+      }
+      flush();
+    }
+  }
+  return [...chosen.values()].map(({name,rank,points})=>({type:'Feature',properties:{name,rank},
+    geometry:{type:'LineString',coordinates:points.map(point=>map.unproject(point).toArray())}}));
+}
 
 const heritagePage=id=>'https://tcmb.culture.tw/zh-tw/detail?id='+id+'&indexCode=BOCH_CountryCulture_12';
 const cityRoster='https://www.travel.taipei/file/34265/';
@@ -16,7 +84,7 @@ const dihuaPlaces=[
 ];
 
 export const dihuaSearch=[
-  ...dihuaPlaces.map(([id,x,y,name])=>[name,'大同區','迪化街一段',x,y,185,'dihua/'+id]),
+  ...dihuaPlaces.map(([id,x,y,name,categoryLabel,source,url])=>[name,'大同區','迪化街一段',x,y,185,'dihua/'+id,{categoryLabel,source,url}]),
   ['爵林堅果','大同區','迪化街一段',121.509911,25.056479,185,'commerce/153'],
   ['度小月擔仔麵','大同區','迪化街一段',121.509866,25.056424,5,'poi/node/6681493385'],
 ];
@@ -25,10 +93,14 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const data = 'city170-detail';
   const paint = 'city170-prepared';
   const schools = 'city170-schools';
+  const roadAnchors = 'city170-road-anchors';
   for (const id of [data, paint, schools]) {
     map.addSource(id, {type:'geojson', data:collection([]), maxzoom:19});
   }
-  addCity170Style(map, data, firstLabel);
+  // Keep short visible label lines intact across a native vector tile edge.
+  map.addSource(roadAnchors,{type:'geojson',data:collection([]),maxzoom:16,buffer:512});
+  const pin=addCity170Style(map, data, firstLabel);
+  addCityPlaceIndex(map,pin);
   const baseRoads=map.getStyle().layers.filter(l=>l['source-layer']==='transportation_name');
   let boundary,roadLabelsActive=false;
   function cityRoadLabels(active){
@@ -39,21 +111,21 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       map.setFilter(layer.id,active?['all',layer.filter??true,rule]:layer.filter??null);
     }
   }
-  // Existing landmark and road labels get first choice of screen space.
+  // Road captions follow the ground's draw order and can be occluded by buildings.
   map.addLayer({
-    id:'city170-road-names',type:'symbol',source:data,minzoom:16.9,
-    filter:['all',['in',['get','kind'],['literal',['road','walk']]],['has','name'],['!',authoredRoads]],
-    layout:{'symbol-placement':'line','symbol-spacing':360,'text-field':['get','name'],
-      'text-font':['Noto Sans Regular'],'text-size':['interpolate',['linear'],['zoom'],16.9,11,19.0,14],'text-padding':5,'text-max-angle':30,
-      'text-pitch-alignment':'viewport','text-keep-upright':true},
+    id:'city170-road-names',type:'symbol',source:roadAnchors,minzoom:16.9,
+    filter:['!',authoredRoads],
+    layout:{'symbol-placement':'line-center','text-field':['get','name'],
+      'text-font':['Noto Sans Regular'],'text-size':['interpolate',['linear'],['zoom'],16.9,11,19.0,14],
+      'text-padding':6,'text-pitch-alignment':'viewport','text-rotation-alignment':'map','text-keep-upright':true,
+      'text-max-angle':30,'symbol-sort-key':['get','rank']},
     paint:{'text-color':'#4b5a51','text-halo-color':'#fff5dd','text-halo-width':1.4},
-  },firstLabel);
+  },'survey');
   map.addSource('city170-markets',{type:'geojson',data:collection([])});
   map.addLayer({id:'city170-market-names',source:'city170-markets',type:'symbol',minzoom:15.6,
-    layout:{'text-field':['get','name'],'text-font':['Noto Sans Bold'],'text-size':12,
-      'text-offset':[0,.65],'text-anchor':'top','text-max-width':9,'text-padding':6},
-    paint:{'text-color':'#883e2a','text-halo-color':'#fff0d8','text-halo-width':1.6}});
-  map.addLayer({id:'city170-market-points',source:'city170-markets',type:'circle',minzoom:15.6,
+    layout:{...pin.layout,'icon-image':'place-pin-market','text-size':13},
+    paint:{'text-color':pinLabelColor('market'),'text-halo-color':'#fff0d8','text-halo-width':1.6}});
+  map.addLayer({id:'city170-market-points',source:'city170-markets',type:'circle',minzoom:15.6,filter:['!', ['has','name']],
     paint:{'circle-color':'#bd6749','circle-radius':4.6,'circle-stroke-color':'#fff3d9','circle-stroke-width':1.5}});
   let marketData;
   async function loadMarkets(){
@@ -64,35 +136,67 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   map.on('moveend',loadMarkets);
   loadMarkets();
   const entranceCards=new Map();
-  // At close scale a built shop has a sign on its wall and can be tapped directly.
-  const placeLayers=['city170-poi-labels','city170-poi-dots'].map(id=>[id,map.getFilter(id)]);
-  let builtIds=[],previousIds='',useShopSigns=false,useDihuaSigns=false;
-  function applySignFilter(){
-    for(const [id,filter] of placeLayers){
-      const tests=[filter];
-      if(useDihuaSigns)tests.push(['!', ['has','entranceId']]);
-      if(useShopSigns && builtIds.length)tests.push(['!', ['in',['get','placeId'],['literal',builtIds]]]);
-      map.setFilter(id,tests.length===1?filter:['all',...tests]);
-    }
+  const basePlaces=['poi_r1','poi_transit','airport'];
+  const hitLayers=[...city170PlaceLayers,'city170-school-names','city170-market-points','city170-market-names',...basePlaces,...cityPlaceLayers.filter(id=>id!=='taipei-place-neighbors')]
+    .filter(id=>map.getLayer(id));
+  function basePlaceName(props){
+    return props['name:zh-Hant']||props['name:zh']||props['name:nonlatin']||props.name||props.name_en||props['name:latin'];
   }
-  map.on('render',()=>{
-    const close=map.getZoom()>=19;
-    const dihua=Boolean(dihuaLayer?.dihuaDrawn && dihuaLayer.dihua?.entrances && map.getZoom()>=19.25);
-    if(close===useShopSigns && dihua===useDihuaSigns)return;
-    useShopSigns=close;useDihuaSigns=dihua;applySignFilter();
-  });
-  map.on('click', event => {
-    const card=entranceCards.get(dihuaLayer?.pickDihuaEntrance(event.point));
-    if(card){event.preventDefault();openPlace(card);return;}
-    const layers = [...city170PlaceLayers, 'city170-school-names','city170-market-points','city170-market-names'].filter(id => map.getLayer(id));
-    const feature = map.queryRenderedFeatures(event.point, {layers})[0];
-    if (feature?.properties) {
-      const properties = {...feature.properties};
-      const match = String(properties.placeId ?? feature.id ?? '').match(/(?:^|\/)(node|way|relation)\/(\d+)$/);
-      if (!properties.url && match) properties.url='https://www.openstreetmap.org/'+match[1]+'/'+match[2];
-      event.preventDefault();openPlace(properties);
+  function hitPlace(point,padding=0){
+    const area=padding?[[point.x-padding,point.y-padding],[point.x+padding,point.y+padding]]:point;
+    const hits=map.queryRenderedFeatures(area,{layers:hitLayers});
+    return hits.find(f=>!basePlaces.includes(f.layer.id)||basePlaceName(f.properties));
+  }
+  function openFeature(feature,point){
+    const props={...feature.properties};
+    if(props.placeId && feature.geometry.type==='Point'){
+      const choices=nearbyPlaces(map,feature.geometry.coordinates);
+      if(choices.length>1 && choices.some(p=>p.placeId===props.placeId)){
+        openPlace({name:'選擇地點',choices,point:feature.geometry.coordinates});return;
+      }
     }
+    if(props.entranceId && entranceCards.has(props.entranceId)){
+      openPlace(entranceCards.get(props.entranceId));return;
+    }
+    if(basePlaces.includes(feature.layer.id)){
+      const geometry=feature.geometry;
+      const points=geometry.type==='MultiPoint'?geometry.coordinates:geometry.type==='Point'?[geometry.coordinates]:[map.unproject(point).toArray()];
+      const [lng,lat]=points.reduce((best,next)=>map.project(next).dist(point)<map.project(best).dist(point)?next:best);
+      openPlace({point:[lng,lat],name:basePlaceName(props),categoryLabel:feature.layer.id==='airport'?'機場':feature.layer.id==='poi_transit'?'交通設施':'地點',
+        source:'OpenStreetMap',url:'https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lng+'#map=19/'+lat+'/'+lng});
+      return;
+    }
+    const match=String(props.placeId??feature.id??'').match(/(?:^|\/)(node|way|relation)\/(\d+)$/);
+    if(!props.url && match)props.url='https://www.openstreetmap.org/'+match[1]+'/'+match[2];
+    props.point=feature.geometry.type==='Point'?feature.geometry.coordinates:map.unproject(point).toArray();
+    openPlace(props);
+  }
+  map.on('click',event=>{
+    const feature=hitPlace(event.point);
+    if(!['city170-shop-names','city170-poi-labels'].includes(feature?.layer.id)){
+      const entrance=entranceCards.get(dihuaLayer?.pickDihuaEntrance(event.point));
+      if(entrance){event.preventDefault();openPlace(entrance);return;}
+    }
+    if(feature){event.preventDefault();openFeature(feature,event.point);}
   });
+  // Called after an exact label, illustrated entrance and visible shopfront all miss.
+  function openNearbyPlace(point){
+    let feature=hitPlace(point,13);
+    if(!feature)return;
+    let low=0,high=13;
+    while(high-low>1){
+      const mid=Math.floor((low+high)/2);
+      const closer=hitPlace(point,mid);
+      if(closer){feature=closer;high=mid;}else low=mid;
+    }
+    openFeature(feature,point);
+  }
+  const canvas=map.getCanvas();
+  map.on('mousemove',event=>{
+    if(!map.isMoving() && !event.originalEvent?.buttons)canvas.classList.toggle('over-place',Boolean(hitPlace(event.point)));
+  });
+  canvas.addEventListener('mouseleave',()=>canvas.classList.remove('over-place'));
+  map.on('movestart',()=>canvas.classList.remove('over-place'));
 
   let index, schoolData, grid, pendingGrid, current = 0, timer, failures = 0;
   let lifeKey='';
@@ -165,6 +269,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       if (map.getZoom() < 13) {
         map.getSource(data).setData(collection([]));
         map.getSource(paint).setData(collection([]));
+        map.getSource(roadAnchors).setData(collection([]));
         cityRoadLabels(false);
         resetLife();
         setPrepared(false);
@@ -182,6 +287,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         const features = landscape.features.filter(feature => overlaps(feature.bbox, view));
         map.getSource(data).setData(collection(features));
         map.getSource(paint).setData(collection([]));
+        map.getSource(roadAnchors).setData(collection([]));
         updateStores([]);
         cityRoadLabels(false);
         resetLife();
@@ -292,13 +398,14 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       }
       entranceCards.clear();
       for(const f of features){
-        if(f.properties.entranceId)entranceCards.set(f.properties.entranceId,f.properties);
+        if(f.properties.entranceId)entranceCards.set(f.properties.entranceId,{...f.properties,point:f.geometry.coordinates});
       }
       updateStores(map.getZoom() >= 18.15 ? features.filter(f => f.properties.kind === 'poi').map(f => f.id) : []);
       const mapped=features.filter(f=>!hasFocalPin(f) &&
         (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
         ?{...f,properties:{...f.properties,placeId:f.id}}:f)));
+      map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
       cityRoadLabels(cells.length>0);
       status = {cells:cells.length, features:features.length, prepared:0};
       const paintPacks = await Promise.all(visible.map(item => markings(item.id)));
@@ -327,12 +434,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   map.on('resize', refresh);
   refresh();
   return {
-    setBuiltShops(ids){
-      const key=ids.join('|');
-      if(key===previousIds)return;
-      previousIds=key;builtIds=ids;
-      if(useShopSigns)applySignFilter();
-    },
+    openNearbyPlace,
     state:() => ({...status,cellSize:170,coverage:index?.stats??null}),
     grid(show) {
       if (show && !grid && !pendingGrid) {

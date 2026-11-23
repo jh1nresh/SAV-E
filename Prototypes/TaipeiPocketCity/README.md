@@ -4,6 +4,16 @@
 
 ![復興南路同一手機鏡位，關閉店名後的舊版與新版](examples/fuxing-mobile-comparison.jpg)
 
+## Savvy App 地點與貼文接入
+
+[101 周邊的分類 pin 預覽](http://127.0.0.1:42418/index.html?view=121.5657,25.0348,17.65&bearing=-8)。城市、街區和街口依縮放層級顯示地點。下圖為同一鏡位，左為前版、右為本版。
+
+![101 周邊同一鏡位的 pin 對照](examples/xinyi-place-pins.jpg)
+
+- 首次執行下方的 `prepare_data.py` 後，透過 [loadCityPlaces](city-place-index.js) 取得 GeoJSON FeatureCollection。這個快照收錄台北 12 區共 39,664 筆。每筆以 `properties.placeId` 識別，Point 座標順序為經度、緯度。行政區和分類在 `district`、`category` 與 `categoryLabel`，部分地點沒有名稱。如果已有舊版 `data/`，可在本次提交的新工作目錄重新還原。
+- App 接入時，請把已確認的 Savvy 分店識別碼和地圖的 `placeId` 建立對應，再帶入該分店的已審核貼文。開啟 pin、瀏覽公開來源或找到同名分店都不會建立使用者收藏。無法確認分店的貼文留待核對。
+- [地點卡](place-callout.js) 與 [照片解析](place-photos.js) 是網頁原型的接入位置。目前只有三筆附來源的示範照片。接入貼文時，有可展示的原圖就顯示圖片及來源，只有原文連結就保留文字卡與連結。請用有圖、無圖、同名不同分店三種情境驗收。
+
 ## Mac 上看 Apple 地點
 
 在 macOS 15 以上，安裝 Xcode 命令列工具後，從專案根目錄執行以下指令。開啟的視窗從大安區復興南路出發。拖曳可移到附近街口，點選地點標記可看 Apple 提供的詳細資訊。原生版先查詢目前視野內的地點。若附近查詢不提供結果，則查詢視野內的餐廳。可在下方輸入店名、書店或咖啡等類別。原生版直接使用系統 MapKit，無須設定網頁 token。地圖、地點與地點卡需要連線。

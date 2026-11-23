@@ -7,7 +7,7 @@
   <title>台北 Pocket City · Savvy</title>
   <link rel="icon" href="./assets/icon.png">
   <link rel="stylesheet" href="./assets/maplibre-gl.css">
-  <link rel="stylesheet" href="./style.css?v=fuxing-block">
+  <link rel="stylesheet" href="./style.css?v=category-badges-1">
 </head>
 <body>
   <header>
@@ -19,7 +19,7 @@
     <aside aria-label="台北市行政區">
       <h1>台北市</h1>
       <div class="districts" id="districts"></div>
-      <div class="shop-search"><input type="search" placeholder="找店家" aria-label="找店家" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
+      <div class="shop-search"><input type="search" placeholder="找店家或地點" aria-label="找店家或地點" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
       <input type="search" list="school-list" class="school-find" placeholder="找學校" aria-label="找學校"><datalist id="school-list"></datalist>
       <div class="landmarks" aria-label="地標">
         <button type="button" data-landmark="101">台北 101</button>
@@ -82,12 +82,23 @@
         <small>市區路網示意 · 列車動畫為模擬</small>
       </section>
       <section id="place-card" aria-labelledby="place-name" hidden>
-        <button type="button" id="place-close" aria-label="關閉地點資訊">×</button>
-        <span class="place-kind"></span>
-        <h3 id="place-name"></h3>
-        <p class="place-detail"></p>
-        <a target="_blank" rel="noopener">官方資訊 ↗</a>
+        <span class="place-morph" aria-hidden="true"></span>
+        <button type="button" id="place-close" aria-label="關閉地點資訊"><span class="close-cross" aria-hidden="true"></span></button>
+        <button type="button" class="place-photo" hidden><img alt=""><span aria-hidden="true">⤢</span></button>
+        <div class="place-copy">
+          <span class="place-kind"></span>
+          <h3 id="place-name"></h3>
+          <p class="place-detail" hidden></p>
+          <div class="place-choices" hidden></div>
+          <div class="place-links"><a class="photo-credit" target="_blank" rel="noopener" hidden></a>
+          <a class="place-source" target="_blank" rel="noopener" hidden></a></div>
+        </div>
       </section>
+      <dialog id="place-original" aria-labelledby="original-name">
+        <form method="dialog"><button aria-label="關閉完整照片"><span class="close-cross" aria-hidden="true"></span></button></form>
+        <img alt="">
+        <footer><strong id="original-name"></strong><a target="_blank" rel="noopener"></a></footer>
+      </dialog>
       <button type="button" id="street-motion" aria-pressed="false" hidden>暫停行人</button>
       <div id="progress" role="status"></div>
       <p class="hint"><span class="mouse">拖曳移動 · 滾輪縮放 · 右鍵拖曳旋轉</span><span class="touch">拖曳移動 · 雙指縮放和旋轉</span></p>
@@ -99,7 +110,7 @@
           <button type="button" data-landmark="songshan">松菸</button>
         <button type="button" data-dihua>迪化街店屋</button>
         <button type="button" data-fuxing>復興南路書店</button>
-          <div class="shop-search"><input type="search" placeholder="找店家" aria-label="找店家" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
+          <div class="shop-search"><input type="search" placeholder="找店家或地點" aria-label="找店家或地點" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
       <input type="search" list="school-list" class="school-find" placeholder="找學校" aria-label="找學校">
           <label for="mobile-district">行政區</label><select id="mobile-district"><option value="">全市</option></select>
           <label><input id="mobile-models" type="checkbox" checked> 2025 LOD1 量體</label>
@@ -110,6 +121,6 @@
       </details>
     </section>
   </main>
-  <script type="module" src="./app.js?v=fuxing-block-3"></script>
+  <script type="module" src="./app.js?v=category-badges-1"></script>
 </body>
 </html>

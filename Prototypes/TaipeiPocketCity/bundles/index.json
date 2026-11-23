@@ -178,5 +178,10 @@
     "file": "taipei-23bb.tar.xz",
     "sha256": "1784cef87bc0c82c62aef2bb0d53d099024419cec731dd72d9c2711d3fb24c4d",
     "entries": 47
+  },
+  {
+    "file": "taipei-place-index.tar.xz",
+    "sha256": "cda82a4598f8f0780ceb80947431beee9090e04d52cf831a3b201d95fd0370d2",
+    "entries": 1
   }
 ]

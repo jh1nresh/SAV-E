@@ -1,3 +1,4 @@
+import {placePinStyle,pinLabelColor} from './place-pins.js?v=category-badges-1';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
 
 const name = ['coalesce', ['get', 'name'], ''];
@@ -348,8 +349,8 @@ export function addCity170Style(map, sourceId, firstLabel) {
         type: 'fill',
         minzoom: zoom,
         filter: kinds(kind),
-        paint: { 'fill-color': color, 'fill-opacity': fade(zoom, fullZoom, opacity) },
-      }, underBuildings);
+        paint: { 'fill-color': color, 'fill-antialias': false, 'fill-opacity': fade(zoom, fullZoom, opacity) },
+      }, kind === 'skill-paving' ? 'city170-road-edge' : underBuildings);
     }
     groveTrees.forEach((tree, i) => addSprite(map, 'city170-grove-' + i, ctx => drawGroveTree(ctx, tree)));
     add({
@@ -408,6 +409,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
 
   // Street names use the base map and the existing authored road-name layer.
   // Campus and shop labels share the map's collision pass with those labels.
+  const pin=placePinStyle(map);
   add({
     id: 'city170-school-names',
     source: schools,
@@ -415,6 +417,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     minzoom: 15.7,
     filter: ['all', kinds(schools === sourceId ? 'school' : 'school-label'), named],
     layout: {
+      ...pin.layout,'icon-image':'place-pin-school',
       'text-field': name,
       'text-font': ['Noto Sans Bold'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 15.7, 12, 19, 16],
@@ -423,7 +426,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'symbol-sort-key': ['to-number', ['get', 'rank'], 1],
     },
     paint: {
-      'text-color': '#66482e',
+      'text-color': pinLabelColor('school'),
       'text-halo-color': '#fff4df',
       'text-halo-width': 1.45,
     },
@@ -436,7 +439,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-poi-dots',
     type: 'circle',
     minzoom: 17.8,
-    filter: places,
+    filter: ['all',places,['!',named]],
     paint: {
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 17.8, 2.6, 20, 4.7],
       'circle-color': ['case', isVendor, '#c16d52', ['match', category,
@@ -469,35 +472,20 @@ export function addCity170Style(map, sourceId, firstLabel) {
   }, underLabels);
   // Street-scale labels use the same collision system as road and school names.
   add({
-    id:'city170-shop-names', type:'symbol', minzoom:16.95, maxzoom:18.15,
+    id:'city170-shop-names', type:'symbol', minzoom:16.95, maxzoom:17.8,
     filter:['all',places,named,['any',['==',['get','commerceListed'],true],['in',category,['literal',[
       'commerce_store','inspection_store','restaurant','cafe','bakery','convenience','fast_food','clothes',
       'hairdresser','pharmacy','beverages','supermarket','deli','optician','beauty','books',
       'ice_cream','tea','bar','shoes','florist','gift','jewelry','electronics','hardware'
     ]]]]],
-    layout:{'text-field':name,'text-font':['Noto Sans Bold'],'text-size':11.5,
-      'text-max-width':9,'text-padding':9,'symbol-sort-key':['case',['==',category,'commerce_store'],-1,['to-number',['get','rank'],1]]},
-    paint:{'text-color':'#6f5037','text-halo-color':'#fff6e5','text-halo-width':1.4}
+    layout:{...pin.layout,'text-padding':9},paint:pin.paint,
   },underLabels);
   add({
     id: 'city170-poi-labels',
     type: 'symbol',
-    minzoom: 18.15,
+    minzoom: 17.8,
     filter: ['all', places, named],
-    layout: {
-      'text-field': name,
-      'text-font': ['Noto Sans Bold'],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 18.15, 10.5, 20, 13],
-      'text-anchor': 'top',
-      'text-offset': [0, 0.55],
-      'text-max-width': 11,
-      'text-padding': 7,
-      'symbol-sort-key': ['to-number', ['get', 'rank'], 1],
-    },
-    paint: {
-      'text-color': '#374d43',
-      'text-halo-color': '#fff6e5',
-      'text-halo-width': 1.35,
-    },
+    ...pin,
   }, underLabels);
+  return pin;
 }
