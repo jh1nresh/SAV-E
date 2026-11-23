@@ -70,6 +70,26 @@ test("renewal protects a venue's last source and reads a shared original only on
   assert.equal(posts.length, 7);
 });
 
+test("equal renewal deadlines prioritize originals that protect more uncovered places", async t => {
+  const early = venue("Early");
+  const singles = Array.from({ length: 4 }, (_, i) => venue(`Single_${i}`));
+  const shared = Array.from({ length: 3 }, (_, i) => venue(`Shared_${i}`));
+  const later = Array.from({ length: 4 }, (_, i) => venue(`Later_${i}`));
+  const { root, descriptor } = await fixture(t, [
+    { place: early, candidates: [reviewed(early, "EARLY", 22)] },
+    ...singles.map((place, i) => ({ place, candidates: [reviewed(place, `A_${i}`, 20)] })),
+    ...shared.map((place, i) => ({ place, candidates: [reviewed(place, "Z_SHARED", 20, true),
+      ...(i < 2 ? [reviewed(place, "Z_OVERLAP", 20, true)] : [])] })),
+    ...later.map(place => ({ place, candidates: [reviewed(place, "LATER", 19, true)] })),
+  ]);
+  const calls: string[] = [];
+  const result = await renewApprovedSources(root, descriptor, {
+    clock, providerPaused: () => false, fetchEmbed: async url => { calls.push(url); return markup(url); },
+  });
+  assert.deepEqual(calls, ["EARLY", "Z_SHARED", "A_0", "A_1"].map(id => original(id) + "embed/captioned/"));
+  assert.equal(result.renewed, 6);
+});
+
 test("quarantines confirmed removal and changed originals while preserving temporarily unavailable posts", async t => {
   const place = venue("Branch");
   const { root, state, descriptor } = await fixture(t, [{

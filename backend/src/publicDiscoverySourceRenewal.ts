@@ -85,15 +85,31 @@ function selectOriginals(raw: unknown, held: ReadonlySet<string>, now: number, r
   }
   const due = [...originals.values()].filter(group => group.due && !retries.has(originalID(group.url))).sort((a, b) =>
     (a.liveExpiry === b.liveExpiry ? a.expiry - b.expiry : a.liveExpiry - b.liveExpiry) || a.url.localeCompare(b.url, "en"));
+  const coverage = due.map(group => ({
+    group,
+    venues: new Set(group.rows.filter(row => row.expiry > now && row.expiry <= now + lead && !held.has(row.key)
+      && row.end > now + lead && (lastsUntil.get(row.venue) ?? 0) <= now + lead).map(row => row.venue)),
+  })).filter(entry => entry.venues.size > 0);
   const selected = new Set<Original>();
   const protectedVenues = new Set<string>();
-  for (const group of due) {
-    if (selected.size === budget) break;
-    const atRisk = group.rows.filter(row => row.expiry > now && row.expiry <= now + lead && !held.has(row.key)
-      && row.end > now + lead && (lastsUntil.get(row.venue) ?? 0) <= now + lead);
-    if (!atRisk.some(row => !protectedVenues.has(row.venue))) continue;
-    selected.add(group);
-    for (const row of atRisk) protectedVenues.add(row.venue);
+  while (selected.size < budget) {
+    let next: typeof coverage[number] | undefined;
+    let mostUnprotected = 0;
+    for (const entry of coverage) {
+      const { group, venues } = entry;
+      // The due list is ordered by deadline. Compare coverage only within a deadline.
+      if (next && group.liveExpiry !== next.group.liveExpiry) break;
+      if (selected.has(group)) continue;
+      let unprotected = 0;
+      for (const venue of venues) if (!protectedVenues.has(venue)) unprotected++;
+      if (unprotected > mostUnprotected) {
+        next = entry;
+        mostUnprotected = unprotected;
+      }
+    }
+    if (!next) break;
+    selected.add(next.group);
+    for (const venue of next.venues) protectedVenues.add(venue);
   }
   for (const group of due) {
     if (selected.size === budget) break;
