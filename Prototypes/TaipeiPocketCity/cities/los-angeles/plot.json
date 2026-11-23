@@ -1,0 +1,18 @@
+{
+ "lat": 34.1184,
+ "lon": -118.30036,
+ "rotation": 0.0,
+ "size": 250,
+ "asked": {
+  "lat": 34.1184,
+  "lon": -118.30036
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "Griffith Observatory"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "Los Angeles · Griffith Observatory",
+ "osm_base": null
+}

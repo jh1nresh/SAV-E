@@ -1,0 +1,263 @@
+{
+  "name": "Los Angeles",
+  "title": "Los Angeles · Griffith Observatory",
+  "region": "Griffith Park",
+  "place": "Mount Hollywood · Griffith Observatory",
+  "timezone": "America/Los_Angeles",
+  "level": 3.2,
+  "styles": {
+    "default": {
+      "wall": "#ede0c4",
+      "facade": "civic",
+      "roof": "flat",
+      "flatRoof": "#c9bba3",
+      "levels": 1,
+      "shop": "none",
+      "rooftop": "none"
+    }
+  },
+  "palette": {
+    "ground": "#e1c89e",
+    "road": "#b2a28f",
+    "pavement": "#e8d3ac",
+    "walk": "#e8d3ac",
+    "grass": "#a3ba68",
+    "paving": "#c3af97",
+    "kerb": "#c6b28f",
+    "slab": "#d8be9c",
+    "rail": "#777c68"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.18,
+    "colour": "#c2ad96",
+    "stone": "#e5d1af"
+  },
+  "trees": {
+    "default": {
+      "style": 2,
+      "colours": [
+        "#86a356",
+        "#73954c",
+        "#9bb45e"
+      ],
+      "height": 6.0,
+      "evergreen": true,
+      "vary": 0.45
+    },
+    "rules": [
+      {
+        "match": "Woodland",
+        "mix": [
+          {
+            "style": 6,
+            "height": 4.2,
+            "colours": [
+              "#829653",
+              "#90a55c"
+            ],
+            "share": 5
+          },
+          {
+            "style": 2,
+            "height": 6.8,
+            "colours": [
+              "#7e9755",
+              "#6d914b"
+            ],
+            "share": 2
+          }
+        ]
+      }
+    ]
+  },
+  "people": {
+    "clothes": [
+      "#54758a",
+      "#b96652",
+      "#668458",
+      "#e2b366",
+      "#ebd4ba",
+      "#615a72"
+    ],
+    "skin": [
+      "#e5b690",
+      "#bb885f",
+      "#995d43",
+      "#754a3a"
+    ],
+    "pants": [
+      "#4b5963",
+      "#675d59",
+      "#405f58"
+    ],
+    "hair": [
+      "#342e2a",
+      "#574539",
+      "#875f42"
+    ]
+  },
+  "lamp": {
+    "colour": "#665d50",
+    "height": 4.2,
+    "head": "#f5dfad",
+    "auto": false
+  },
+  "seasonLabel": "Weather",
+  "seasons": [
+    {
+      "id": "dry",
+      "label": "Dry season",
+      "icon": "summer",
+      "leaves": "summer",
+      "grass": "#a8ad61",
+      "note": {
+        "text": "Los Angeles summers are generally dry.",
+        "source": "National Weather Service",
+        "url": "https://www.weather.gov/media/wrh/online_publications/TMs/TM-261.pdf"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "Rainy season",
+      "icon": "winter",
+      "leaves": "summer",
+      "grass": "#95bb74",
+      "wet": true,
+      "wx": "drizzle",
+      "umbrellas": true,
+      "note": {
+        "text": "Pacific storms deliver most of the region’s rain from November through April.",
+        "source": "National Weather Service",
+        "url": "https://www.weather.gov/media/wrh/online_publications/TMs/TM-261.pdf"
+      }
+    }
+  ],
+  "occasionLabel": "Events",
+  "occasions": [
+    {
+      "id": "star-party",
+      "label": "Public star party",
+      "night": 0.75,
+      "crowd": 1.35,
+      "note": {
+        "text": "The Observatory hosts a monthly public star party that continues into the evening.",
+        "source": "Griffith Observatory",
+        "url": "https://griffithobservatory.lacity.gov/visit/calendar/star-parties/"
+      }
+    }
+  ],
+  "months": [
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "dry",
+    "dry",
+    "dry",
+    "dry",
+    "dry",
+    "dry",
+    "rain",
+    "rain"
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": 62,
+      "pitch": 33,
+      "zoom": 0.83,
+      "x": 0,
+      "y": -6,
+      "z": 3
+    }
+  },
+  "views": [
+    {
+      "id": "observatory",
+      "label": "Observatory",
+      "camera": {
+        "yaw": 71,
+        "pitch": 24,
+        "zoom": 1.94,
+        "x": -0.8,
+        "y": -14,
+        "z": 10
+      }
+    },
+    {
+      "id": "monument",
+      "label": "Astronomers’ Monument",
+      "camera": {
+        "yaw": 66,
+        "pitch": 24,
+        "zoom": 2.16,
+        "x": -1.4,
+        "y": 48,
+        "z": 3
+      }
+    },
+    {
+      "id": "terrace",
+      "label": "South terrace",
+      "camera": {
+        "yaw": -114,
+        "pitch": 26,
+        "zoom": 1.96,
+        "x": -0.9,
+        "y": -27,
+        "z": 8
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "Griffith Observatory",
+      "source": "OSM / City of Los Angeles",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 71,
+        "pitch": 24,
+        "zoom": 1.94,
+        "x": -0.8,
+        "y": -14,
+        "z": 10
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "Three copper domes",
+      "text": "The central planetarium sits between the Zeiss telescope dome to the east and the solar telescope dome to the west. The rounded outlines and north portal follow the Observatory’s plan.",
+      "links": [
+        {
+          "label": "Observatory plan and elevation",
+          "url": "https://griffithobservatory.lacity.gov/wp-content/uploads/2025/12/Griffith-Observatory-Maps_digital.pdf"
+        },
+        {
+          "label": "City of Los Angeles restoration",
+          "url": "https://griffithobservatory.lacity.gov/about/observatory-history/renovation-and-expansion/renovation/"
+        },
+        {
+          "label": "Los Angeles Public Library rear photo",
+          "url": "https://tessa2.lapl.org/digital/collection/photos/id/84359"
+        }
+      ]
+    },
+    {
+      "title": "Map and illustration",
+      "text": "Footprints, paths and mapped places come from OpenStreetMap. Terrain is flattened, and facade measurements, planting and visitors are illustrated.",
+      "links": [
+        {
+          "label": "OpenStreetMap",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=-118.3030400,34.1161600,-118.2976800,34.1206400"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "Griffith Observatory / City of Los Angeles",
+      "url": "https://griffithobservatory.lacity.gov/about/observatory-history/renovation-and-expansion/renovation/"
+    }
+  ]
+}

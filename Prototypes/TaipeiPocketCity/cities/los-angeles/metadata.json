@@ -1,0 +1,44 @@
+{
+  "name": "Los Angeles",
+  "landmark": "Griffith Observatory",
+  "landmarkIds": [
+    "w422130705"
+  ],
+  "center": [
+    -118.30036,
+    34.1184
+  ],
+  "bounds": [
+    -118.30171634226261,
+    34.117269535333804,
+    -118.29900365773739,
+    34.1195304646662
+  ],
+  "sizeMeters": 250,
+  "sources": [
+    {
+      "title": "OpenStreetMap contributors · bbox API",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=-118.3030400,34.1161600,-118.2976800,34.1206400"
+    },
+    {
+      "title": "Griffith Observatory official plan and elevation",
+      "url": "https://griffithobservatory.lacity.gov/wp-content/uploads/2025/12/Griffith-Observatory-Maps_digital.pdf"
+    },
+    {
+      "title": "City of Los Angeles restoration and photographic record",
+      "url": "https://griffithobservatory.lacity.gov/about/observatory-history/renovation-and-expansion/renovation/"
+    },
+    {
+      "title": "Los Angeles Public Library exterior photograph",
+      "url": "https://tessa2.lapl.org/digital/collection/photos/id/84359"
+    },
+    {
+      "title": "National Weather Service Los Angeles climate",
+      "url": "https://www.weather.gov/media/wrh/online_publications/TMs/TM-261.pdf"
+    },
+    {
+      "title": "Griffith Observatory public star parties",
+      "url": "https://griffithobservatory.lacity.gov/visit/calendar/star-parties/"
+    }
+  ]
+}

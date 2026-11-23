@@ -1,0 +1,248 @@
+{
+  "name": "上海",
+  "title": "上海外灘",
+  "region": "上海 · 黃浦江",
+  "place": "中山東一路 · 海關大樓",
+  "timezone": "Asia/Shanghai",
+  "level": 3.65,
+  "styles": {
+    "default": {
+      "facade": "civic",
+      "wall": [
+        "#c4ae95",
+        "#c7b4a0",
+        "#d3bca3"
+      ],
+      "roof": "flat",
+      "flatRoof": [
+        "#ada197",
+        "#9c9188"
+      ],
+      "levels": 4,
+      "floor": 3.6,
+      "trim": "#d9c6ad",
+      "bay": 3.85,
+      "glass": [
+        "#889b98",
+        "#7f8a8a"
+      ],
+      "shop": "poi",
+      "parapet": 0.52
+    }
+  },
+  "palette": {
+    "ground": "#d4c7af",
+    "road": "#aba0a0",
+    "pavement": "#e0ceb7",
+    "walk": "#d8c7b0",
+    "paving": "#b7a896",
+    "rail": "#817e79",
+    "slab": "#b8a58d",
+    "quay": "#cbbb9f",
+    "water": "#809c9b"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 0.8,
+    "colour": "#b0a59b"
+  },
+  "vehicles": {
+    "kinds": [
+      "sedan",
+      "hatch",
+      "mpv"
+    ],
+    "colours": [
+      "#5c6d7b",
+      "#ddd1bf",
+      "#85938e",
+      "#96766a"
+    ],
+    "plate": "#396b93"
+  },
+  "lamp": {
+    "height": 4.6,
+    "colour": "#625c55",
+    "head": "#f0d6a2"
+  },
+  "seasonLabel": "季節",
+  "seasons": [
+    {
+      "id": "spring",
+      "label": "春日",
+      "wx": "fluff",
+      "note": {
+        "text": "上海的春季回暖，雨水漸增。",
+        "source": "上海市人民政府",
+        "url": "https://english.shanghai.gov.cn/en-Overview/20241225/ce046a2a1e754fde8c02804d6d66db18.html"
+      }
+    },
+    {
+      "id": "summer",
+      "label": "初夏梅雨",
+      "wx": "drizzle",
+      "wet": 0.78,
+      "umbrellas": 0.62,
+      "note": {
+        "text": "上海的梅雨期通常在六月中旬至七月上旬。",
+        "source": "上海市文化和旅遊局",
+        "url": "https://cmp.whlyj.sh.gov.cn/CMP/sho_init.ac?type=8"
+      }
+    },
+    {
+      "id": "winter",
+      "label": "冬日",
+      "wx": "overcast",
+      "coats": true,
+      "note": {
+        "text": "上海冬季常有濕冷天氣。",
+        "source": "上海市文化和旅遊局",
+        "url": "https://cmp.whlyj.sh.gov.cn/CMP/sho_init.ac?type=8"
+      }
+    }
+  ],
+  "occasions": [
+    {
+      "id": "lights",
+      "label": "外灘點燈",
+      "night": true,
+      "litShare": 0.65,
+      "crowd": 1.5,
+      "note": {
+        "text": "外灘沿江的歷史建築會在入夜後亮起景觀照明。",
+        "source": "上海市人民政府",
+        "url": "https://www.shanghai.gov.cn/nw4411/20260820/f441a5da943447e79613ab4d5dbcc0a5.html"
+      }
+    }
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -13,
+      "pitch": 37,
+      "zoom": 0.83,
+      "x": -17,
+      "y": 7,
+      "z": 9
+    }
+  },
+  "views": [
+    {
+      "id": "clock",
+      "label": "海關鐘樓",
+      "camera": {
+        "yaw": -9,
+        "pitch": 24,
+        "zoom": 1.89,
+        "x": -23,
+        "y": 68,
+        "z": 41
+      }
+    },
+    {
+      "id": "bank",
+      "label": "匯豐銀行舊址",
+      "camera": {
+        "yaw": -21,
+        "pitch": 26,
+        "zoom": 1.58,
+        "x": -43,
+        "y": 3,
+        "z": 21
+      }
+    },
+    {
+      "id": "bund",
+      "label": "外灘臨江立面",
+      "camera": {
+        "yaw": -7,
+        "pitch": 26,
+        "zoom": 0.91,
+        "x": -20,
+        "y": 7,
+        "z": 14
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "海關大樓",
+      "source": "上海市政府新聞辦",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -9,
+        "pitch": 24,
+        "zoom": 1.89,
+        "x": -23,
+        "y": 68,
+        "z": 41
+      }
+    },
+    {
+      "name": "前匯豐銀行",
+      "source": "上海市民政局",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -21,
+        "pitch": 26,
+        "zoom": 1.58,
+        "x": -43,
+        "y": 3,
+        "z": 21
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "海關與鐘樓",
+      "text": "海關立面、四面鐘盤與塔頂依實景照片繪製。海關官方記錄整體高度為 79.2 公尺。",
+      "links": [
+        {
+          "label": "上海市政府新聞辦・海關大樓高度與鐘樓",
+          "url": "https://touch.shio.gov.cn/jsp/zfxw_detail.jsp?id=20250929181837586"
+        },
+        {
+          "label": "Diomidis Spinellis・海關大樓正立面照片",
+          "url": "https://commons.wikimedia.org/wiki/File:ShanghaiBundCustomsHouse.jpg"
+        },
+        {
+          "label": "Hermann Luyken・匯豐銀行和海關大樓臨江立面",
+          "url": "https://commons.wikimedia.org/wiki/File:2014.11.16.144825_HSBC_Building_Customs_House_The_Bund_Shanghai.jpg"
+        }
+      ]
+    },
+    {
+      "title": "臨江建築",
+      "text": "匯豐銀行舊址的圓頂、騎柱前廊，以及招商局與旗昌洋行舊址依公開照片和歷史資料繪製。",
+      "links": [
+        {
+          "label": "Hermann Luyken・匯豐銀行和海關大樓臨江立面",
+          "url": "https://commons.wikimedia.org/wiki/File:2014.11.16.144825_HSBC_Building_Customs_House_The_Bund_Shanghai.jpg"
+        },
+        {
+          "label": "上海市民政局・外灘歷史建築檔案",
+          "url": "https://mzj.sh.gov.cn/lnb-wsws/20200518/MZ_LNB12_9104.html"
+        },
+        {
+          "label": "上海城管・福州路旗昌洋行舊址",
+          "url": "https://cgzf.sh.gov.cn/channel_50/20210604/23faf82582e94125ab5f3fb61d745076.html"
+        }
+      ]
+    },
+    {
+      "title": "方格與比例",
+      "text": "地圖使用 OpenStreetMap。未標註的樓高、外牆細節和往來行人為插畫比例。",
+      "links": [
+        {
+          "label": "OpenStreetMap・185 m 外灘街區建築、河岸與巷道",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.4807000,31.2353000,121.4893000,31.2420000"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "OpenStreetMap contributors (ODbL)",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ]
+}
