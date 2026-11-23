@@ -37,3 +37,27 @@ test('every registered landmark opens inside a cached street tile and labels act
     }
   }
 });
+
+test('surrounding streets expose named places while authored plots keep their own pins',async()=>{
+  const {addCityContext}=await import('../city-context.js');
+  const {placePinStyle}=await import('../place-pins.js');
+  assert.equal(typeof placePinStyle,'function');
+  const source={setData(data){this.features=data.features;}},handlers=new Map(),layers=[];
+  const map={addSource(){},addLayer(l){layers.push(l);},hasImage:()=>true,getZoom:()=>19,
+    getSource:()=>source,getCenter:()=>({lng:121.43,lat:25.17}),getBounds:()=>({
+      getWest:()=>121.4,getSouth:()=>25.14,getEast:()=>121.46,getNorth:()=>25.2}),
+    querySourceFeatures(_,{sourceLayer}){return sourceLayer==='building'?[]:
+      [[121.43,25.17],[121.44,25.18],[121.44,25.18]].map(coordinates=>({
+        geometry:{type:'Point',coordinates},properties:{name:'街邊測試店',subclass:'cafe',rank:9}}));},
+    on(event,layer,callback){handlers.set(event,callback||layer);}};
+  let tapped;
+  addCityContext(map,[{center:[121.43,25.17],bounds:[121.429,25.169,121.431,25.171]}],
+    undefined,()=>false,p=>{tapped=p;});
+  await new Promise(resolve=>setTimeout(resolve,135));
+  assert.equal(source.features.length,1);
+  assert.deepEqual(source.features[0].geometry.coordinates,[121.44,25.18]);
+  handlers.get('click')({features:source.features});
+  assert.equal(tapped.category,'cafe');assert.equal(tapped.placeId,undefined);
+  assert.equal(layers.find(l=>l.type==='symbol').minzoom,16.6);
+  handlers.get('remove')();
+});

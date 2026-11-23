@@ -71,7 +71,7 @@ function updateFrontageView(){
       // Ground labels draw before the solid facades and trees, so uncovered points remain visible.
       const layers=map.getStyle().layers;
       labelOrder=layers.flatMap((layer,i)=>{
-        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-locators','poi_r1'].includes(layer.id);
+        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','poi_r1'].includes(layer.id);
         const road=layer['source-layer']==='transportation_name'||layer.id==='city170-road-names'||layer.id.endsWith('-road-labels');
         return place||road?[[layer.id,layers[i+1]?.id]]:[];
       });
@@ -569,7 +569,7 @@ try{
     const visible=inside?localNames:globalNames;
     if(visible===appliedNames)return;
     appliedNames=visible;
-    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-locators','poi_r1']){
+    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','poi_r1']){
       if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     }
     shopfronts?.setNames(visible);
@@ -587,7 +587,7 @@ try{
   }
   try{
     worldAtlas=await addCityAtlas(map,firstLabel,place=>streetDetail?.openMappedPlace(place),updateUI);
-    addCityContext(map,worldAtlas.rows,firstLabel,districtAt);
+    addCityContext(map,worldAtlas.rows,firstLabel,districtAt,place=>streetDetail?.openMappedPlace(place));
     weather?.refresh();
     appliedNames=undefined;applyLocalNames(false);
     $('#retry-landmark').addEventListener('click',e=>worldAtlas.retry(e.currentTarget.dataset.city));
