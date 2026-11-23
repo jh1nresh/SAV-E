@@ -163,6 +163,43 @@ export function compileReviewedPublicBatch(raw: unknown, now = new Date()) {
   return result;
 }
 
+/** Replay a maintenance approval, including associations withheld by the reviewer. */
+export function compileApprovedPublicBatch(raw: unknown, held: ReadonlySet<string>, now: Date) {
+  const batch = fields(raw, ["venues"], ["googlePlaceAliases", "applePlaceAliases"]);
+  const reviewed = new Set<string>();
+  const venues = reviewedVenueRows(batch.venues).map(({ place: rawPlace, candidates }) => {
+    const place = validatePublicDiscoveryPlace(rawPlace);
+    const key = venueKey(place.provider, place.providerPlaceID);
+    return { place, candidates: candidates.map(rawCandidate => {
+      const candidate = fields(rawCandidate, ["platform", "sourceURL", "authorHandle", "title", "review"], ["observedIn"]);
+      const platform = candidate.platform;
+      if (platform !== "instagram" && platform !== "threads") throw new Error("Unsupported platform");
+      const { postID } = canonicalSource(candidate.sourceURL, platform);
+      if (held.has(`${key}:${platform}:${postID}`)) return { ...candidate, review: null };
+      if (candidate.review !== null) reviewed.add(key);
+      return candidate;
+    }) };
+  });
+  const aliases = (value: unknown, idField: "applePlaceID" | "googlePlaceID") => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) throw new Error("Invalid approved aliases");
+    const keys = idField === "applePlaceID"
+      ? [idField, "providerPlaceID", "branchEvidence"]
+      : [idField, "provider", "providerPlaceID", "branchEvidence"];
+    return value.filter((rawAlias: unknown) => {
+      const alias = fields(rawAlias, keys);
+      const provider = idField === "applePlaceID" ? "apple_maps" : alias.provider;
+      if (typeof provider !== "string" || typeof alias.providerPlaceID !== "string") throw new Error("Invalid approved alias");
+      return reviewed.has(`${provider}:${alias.providerPlaceID}`);
+    });
+  };
+  return projectReviewArchive({
+    venues,
+    googlePlaceAliases: aliases(batch.googlePlaceAliases, "googlePlaceID"),
+    applePlaceAliases: aliases(batch.applePlaceAliases, "applePlaceID"),
+  }, now).manifest;
+}
+
 function projectReviewArchive(raw: unknown, now: Date) {
   const batch = fields(raw, ["venues"], ["googlePlaceAliases", "applePlaceAliases"]);
   const reviewedVenues = reviewedVenueRows(batch.venues);

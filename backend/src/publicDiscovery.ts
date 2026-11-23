@@ -351,7 +351,7 @@ function cursorFor(indexRevision: string, bounds: Bounds, venue: VenueFilter | n
   const scope = venue === null ? [indexRevision, bounds, limit, offset] : [indexRevision, bounds, venue, limit, offset];
   return createHash("sha256").update(JSON.stringify(scope)).digest("base64url");
 }
-async function readPublicDiscoveryBytes(filePath: string, digest?: string): Promise<Buffer> {
+export async function readPublicDiscoveryBytes(filePath: string, digest?: string): Promise<Buffer> {
   const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await handle.stat();
