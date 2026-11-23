@@ -1,4 +1,4 @@
-#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+#if SAVVY_MAIN_APP && ((DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW) || SAVVY_PUBLIC_DISCOVERY_BACKEND)
 import Combine
 import Foundation
 
@@ -64,7 +64,20 @@ final class LivePublicDiscoveryModel: ObservableObject {
         unavailable = false; paginationFailed = false
     }
 
+    func refreshMap(_ viewport: LivePublicDiscoveryViewport) async {
+        let longitudeSpan = viewport.east >= viewport.west
+            ? viewport.east - viewport.west : 360 - viewport.west + viewport.east
+        // Keep wide-area browsing to one initial request and keep manual continuation available.
+        let isNeighborhood = longitudeSpan > 0 && longitudeSpan <= 0.01 && viewport.north - viewport.south <= 0.01
+        await refresh(viewport, venue: nil, automaticContinuations: isNeighborhood ? 2 : 0)
+    }
+
     func refresh(_ viewport: LivePublicDiscoveryViewport, venue: LivePublicDiscoveryVenueKey? = nil) async {
+        await refresh(viewport, venue: venue, automaticContinuations: 0)
+    }
+
+    private func refresh(_ viewport: LivePublicDiscoveryViewport, venue: LivePublicDiscoveryVenueKey?,
+                         automaticContinuations: Int) async {
         clear()
         guard sessionIsCurrent(), !Task.isCancelled else { return }
         self.viewport = viewport
@@ -83,10 +96,22 @@ final class LivePublicDiscoveryModel: ObservableObject {
             guard ticket == revision else { return }
             guard sessionIsCurrent(), !Task.isCancelled else { clear(); return }
             page = nil; unavailable = true
+            return
+        }
+        // Publish the first page immediately, then use the same continuation checks as manual loading.
+        isLoading = false
+        for _ in 0..<automaticContinuations {
+            guard ticket == revision, sessionIsCurrent(), !Task.isCancelled,
+                  !isLoadingMore, !paginationFailed, page?.nextCursor != nil else { return }
+            await loadMore(automatic: true)
         }
     }
 
     func loadMore() async {
+        await loadMore(automatic: false)
+    }
+
+    private func loadMore(automatic: Bool) async {
         guard sessionIsCurrent(), !Task.isCancelled, !isLoading, !isLoadingMore,
               let previous = page, previous.expiresAt > now(),
               let cursor = previous.nextCursor, let viewport else { return }
@@ -102,6 +127,14 @@ final class LivePublicDiscoveryModel: ObservableObject {
         } catch {
             guard ticket == revision else { return }
             guard sessionIsCurrent(), !Task.isCancelled else { clear(); return }
+            if automatic, previous.expiresAt > now(),
+               let serviceError = error as? SupabaseError, case .networkError(let underlying) = serviceError,
+               let transport = underlying as? URLError,
+               [.timedOut, .networkConnectionLost, .notConnectedToInternet].contains(transport.code) {
+                // The still-valid first page can remain visible and be continued manually.
+                paginationFailed = true
+                return
+            }
             // A replacement index may have withdrawn a post, so do not retain old pins.
             page = nil; unavailable = true; paginationFailed = true
             expiryTask?.cancel(); expiryTask = nil

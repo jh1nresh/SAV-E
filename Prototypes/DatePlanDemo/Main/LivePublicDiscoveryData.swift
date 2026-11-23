@@ -1,4 +1,4 @@
-#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+#if SAVVY_MAIN_APP && ((DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW) || SAVVY_PUBLIC_DISCOVERY_BACKEND)
 import Foundation
 
 enum LivePublicDiscoveryValidationError: Error, Equatable {
@@ -22,6 +22,20 @@ struct LivePublicDiscoveryViewport: Equatable, Sendable {
         self.north = north == 0 ? 0 : north
     }
 
+    static func mapRegion(latitude: Double, longitude: Double, latitudeSpan: Double,
+                          longitudeSpan: Double) -> Self? {
+        guard [latitude, longitude, latitudeSpan, longitudeSpan].allSatisfy(\.isFinite),
+              (-90...90).contains(latitude), (-180...180).contains(longitude),
+              latitudeSpan > 0, longitudeSpan > 0 else { return nil }
+        func wrap(_ value: Double) -> Double { (value + 540).truncatingRemainder(dividingBy: 360) - 180 }
+        return try? Self(
+            west: longitudeSpan >= 360 ? -180 : wrap(longitude - longitudeSpan / 2),
+            south: max(-90, latitude - latitudeSpan / 2),
+            east: longitudeSpan >= 360 ? 180 : wrap(longitude + longitudeSpan / 2),
+            north: min(90, latitude + latitudeSpan / 2)
+        )
+    }
+
     var queryValue: String { [west, south, east, north].map { String($0) }.joined(separator: ",") }
 
     func contains(latitude: Double, longitude: Double) -> Bool {
@@ -41,6 +55,17 @@ struct LivePublicDiscoveryCoverage: Codable, Equatable, Sendable {
 }
 
 struct LivePublicDiscoveryVenueKey: Hashable, Sendable {
+    static let requestHeaders = [
+        "x-savvy-discovery-associations": "1",
+        "x-savvy-discovery-google-venues": "1",
+        "x-savvy-discovery-catalog-venues": "1"
+    ]
+
+    private static let catalogCategories = [
+        "Attraction_379000000A_002265": "area",
+        "Attraction_379000000A_000008": "route"
+    ]
+
     let provider: String
     let id: String
 
@@ -50,6 +75,8 @@ struct LivePublicDiscoveryVenueKey: Hashable, Sendable {
             guard (1...180).contains(id.utf8.count), id.utf8.allSatisfy({
                 (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
             }) else { return nil }
+        } else if provider == "taipei_catalog" {
+            guard Self.catalogCategories[id] != nil else { return nil }
         } else {
             guard ["apple_maps", "amap"].contains(provider), (1...200).contains(id.utf8.count),
                   id.utf8.allSatisfy({ (33...126).contains($0) && $0 != 44 }) else { return nil }
@@ -65,8 +92,20 @@ struct LivePublicDiscoveryVenueKey: Hashable, Sendable {
             self = existing
             return
         }
+        // Catalog destinations use the existing provider-ID field. They do
+        // not advertise a navigation provider or borrow nearby Apple POIs.
+        if savedPlace.locationProvider == nil, savedPlace.googlePlaceId == nil,
+           savedPlace.coordinateSystem == .wgs84, savedPlace.isMapKitMappable,
+           let catalog = Self(provider: "taipei_catalog", id: savedPlace.providerPlaceId) {
+            self = catalog
+            return
+        }
         guard savedPlace.locationProvider == nil || savedPlace.locationProvider == .googlePlaces else { return nil }
         self.init(provider: "google_places", id: savedPlace.googlePlaceId)
+    }
+
+    static func matchesCatalogCategory(id: String, category: String) -> Bool {
+        catalogCategories[id] == category
     }
 
     func matches(_ place: LivePublicDiscoveryPlace) -> Bool {
@@ -111,6 +150,11 @@ struct LivePublicDiscoveryPost: Codable, Equatable, Identifiable, Sendable {
         )
     }
 
+    func formattedPublicationDate(locale: Locale) -> String? {
+        formattedPublicationDay(locale: locale)
+            ?? publishedAt.flatMap(LivePublicDiscoveryPolicy.date)?.formatted(.dateTime.year().month().day().locale(locale))
+    }
+
     fileprivate var associationKey: [String] { [id, place.provider, place.providerPlaceID] }
 
     fileprivate func matchesSharedOriginal(_ other: Self) -> Bool {
@@ -133,9 +177,15 @@ struct LivePublicDiscoveryPlace: Codable, Equatable, Sendable {
     var identity: String { "\(provider):\(providerPlaceID)" }
 
     fileprivate func normalized() throws -> Self {
-        let validProvider = provider == "google_places"
-            ? LivePublicDiscoveryVenueKey(provider: provider, id: providerPlaceID) != nil
-            : ["apple_maps", "amap"].contains(provider)
+        let validProvider: Bool
+        switch provider {
+        case "taipei_catalog":
+            validProvider = LivePublicDiscoveryVenueKey.matchesCatalogCategory(id: providerPlaceID, category: category)
+        case "google_places":
+            validProvider = LivePublicDiscoveryVenueKey(provider: provider, id: providerPlaceID) != nil
+        default:
+            validProvider = ["apple_maps", "amap"].contains(provider)
+        }
         guard validProvider, coordinateSystem == "WGS84",
               LivePublicDiscoveryPolicy.text(providerPlaceID, limit: 200),
               LivePublicDiscoveryPolicy.text(name, limit: 80), LivePublicDiscoveryPolicy.text(address, limit: 500),
@@ -339,6 +389,35 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
             groups[id, default: []].append(post)
         }
         return order.map { Self(id: $0, place: places[$0]!, posts: groups[$0]!) }
+    }
+}
+
+/// Several venues can share a building or a single map tap target.
+struct LivePublicDiscoveryPinGroup: Identifiable {
+    private(set) var venues: [LivePublicDiscoveryVenue]
+    var id: String { venues[0].id }
+
+    static func grouping(_ venues: [LivePublicDiscoveryVenue], hitSize: CGFloat = 44,
+                         project: (LivePublicDiscoveryPlace) -> CGPoint?) -> [Self] {
+        var groups: [Self] = []
+        var anchors: [CGPoint?] = []
+        for venue in venues {
+            let point = project(venue.place)
+            if let index = groups.indices.first(where: { index in
+                let first = groups[index].venues[0].place
+                let longitudeDelta = abs(first.longitude - venue.place.longitude)
+                let nearLongitude = min(longitudeDelta, 360 - longitudeDelta) < 0.000009
+                if nearLongitude && abs(first.latitude - venue.place.latitude) < 0.000009 { return true }
+                guard let firstPoint = anchors[index], let point else { return false }
+                return abs(firstPoint.x - point.x) < hitSize && abs(firstPoint.y - point.y) < hitSize
+            }) {
+                groups[index].venues.append(venue)
+            } else {
+                groups.append(Self(venues: [venue]))
+                anchors.append(point)
+            }
+        }
+        return groups
     }
 }
 

@@ -699,6 +699,12 @@ struct SaveInkLiveMap: View {
     var showsRoute: Bool
     var onSelect: (String) -> Void
 
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+    var publicVenues: [LivePublicDiscoveryVenue]?
+    var onPublicViewport: ((LivePublicDiscoveryViewport) -> Void)?
+    var onPublicSelect: ((LivePublicDiscoveryPinGroup) -> Void)?
+#endif
+
     @State private var position: MapCameraPosition = .automatic
     @StateObject private var routeState = SaveInkMapRouteState()
 
@@ -721,33 +727,32 @@ struct SaveInkLiveMap: View {
     }
 
     var body: some View {
-        Map(position: $position) {
-            UserAnnotation()
-            ForEach(pins) { pin in
-                Annotation(pin.name, coordinate: pin.coordinate, anchor: .bottom) {
-                    Button {
-                        onSelect(pin.id)
-                    } label: {
-                        SaveInkMapPin(visited: pin.visited)
-                            .frame(width: 22, height: 30)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(pin.visited ? languageSettings.localized(english: "\(pin.name), visited", traditionalChinese: "\(pin.name)，去過") : languageSettings.localized(english: "\(pin.name), saved, not visited", traditionalChinese: "\(pin.name)，存了還沒去"))
+        MapReader { proxy in
+            Map(position: $position) {
+                UserAnnotation()
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+                if let publicVenues {
+                    publicPins(publicVenues, proxy: proxy)
+                } else {
+                    savedPins
+                }
+#else
+                savedPins
+#endif
+                if let route = routeState.route, route.points.count >= 2 {
+                    MapPolyline(MKPolyline(coordinates: route.points, count: route.points.count))
+                        .stroke(
+                            SaveInkPalette.ink.opacity(0.82),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [7, 5])
+                        )
                 }
             }
-            if let route = routeState.route, route.points.count >= 2 {
-                MapPolyline(MKPolyline(coordinates: route.points, count: route.points.count))
-                    .stroke(
-                        SaveInkPalette.ink.opacity(0.82),
-                        style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [7, 5])
-                    )
-            }
-        }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
-        .mapFeatureSelectionDisabled { _ in true }
-        .mapControls {
-            MapCompass()
+            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
+            .mapFeatureSelectionDisabled { _ in true }
+            .mapControls { MapCompass() }
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+            .onMapCameraChange(frequency: .onEnd) { context in reportPublicViewport(context.region) }
+#endif
         }
         .overlay {
             Image("PaperTexture")
@@ -781,11 +786,84 @@ struct SaveInkLiveMap: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(focusPlaceID == nil ? "ink.home.map" : "ink.place.map")
-        .accessibilityLabel(focusPlaceID == nil ? languageSettings.localized(english: "Saved places map", traditionalChinese: "已存地點地圖") : languageSettings.localized(english: "Walking map", traditionalChinese: "步行地圖"))
+        .accessibilityLabel(mapAccessibilityLabel)
         .onAppear(perform: fit)
-        .onChange(of: cameraToken) { _, _ in fit() }
+        .onChange(of: cameraToken) { _, _ in
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+            if onPublicViewport != nil, position.positionedByUser { return }
+#endif
+            fit()
+        }
         .task(id: routeToken) { await loadRoute() }
     }
+
+
+    private var mapAccessibilityLabel: String {
+        if focusPlaceID != nil {
+            return languageSettings.localized(english: "Walking map", traditionalChinese: "步行地圖")
+        }
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        if publicVenues != nil {
+            return languageSettings.localized(english: "Explore public posts map", traditionalChinese: "公開貼文探索地圖")
+        }
+#endif
+        return languageSettings.localized(english: "Saved places map", traditionalChinese: "已存地點地圖")
+    }
+
+    @MapContentBuilder
+    private var savedPins: some MapContent {
+        ForEach(pins) { pin in
+            Annotation(pin.name, coordinate: pin.coordinate, anchor: .bottom) {
+                Button {
+                    onSelect(pin.id)
+                } label: {
+                    SaveInkMapPin(visited: pin.visited)
+                        .frame(width: 22, height: 30)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(pin.visited ? languageSettings.localized(english: "\(pin.name), visited", traditionalChinese: "\(pin.name)，去過") : languageSettings.localized(english: "\(pin.name), saved, not visited", traditionalChinese: "\(pin.name)，存了還沒去"))
+            }
+        }
+    }
+
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+    @MapContentBuilder
+    private func publicPins(_ venues: [LivePublicDiscoveryVenue], proxy: MapProxy) -> some MapContent {
+        ForEach(LivePublicDiscoveryPinGroup.grouping(venues, project: { place in
+            proxy.convert(CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude), to: .local)
+        })) { group in
+            let place = group.venues[0].place
+            let location = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
+            let isTopic = group.venues.contains { $0.recentTopicAccountCount(at: Date()) != nil }
+            let label = group.venues.count == 1 ? place.name
+                : languageSettings.localized(english: "\(group.venues.count) public places", traditionalChinese: "\(group.venues.count) 個公開地點")
+            Annotation(label, coordinate: location, anchor: .bottom) {
+                Button { onPublicSelect?(group) } label: {
+                    Image(systemName: isTopic ? "flame" : group.venues.count > 1 ? "bubble.left.and.bubble.right" : "bubble.left")
+                        .foregroundStyle(SaveInkPalette.ink)
+                        .padding(7)
+                        .background(SaveInkPalette.paper, in: Circle())
+                        .overlay(Circle().strokeBorder(SaveInkPalette.ink, lineWidth: 1.3))
+                        .frame(width: 44, height: 44, alignment: .bottom)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isTopic ? languageSettings.localized(english: "\(label), recent topic",
+                    traditionalChinese: "\(label)，近期話題") : label)
+                .accessibilityIdentifier("ink.map.public.\(group.id)")
+            }
+            .annotationTitles(.hidden)
+        }
+    }
+
+    private func reportPublicViewport(_ region: MKCoordinateRegion) {
+        if let viewport = LivePublicDiscoveryViewport.mapRegion(
+            latitude: region.center.latitude, longitude: region.center.longitude,
+            latitudeSpan: region.span.latitudeDelta, longitudeSpan: region.span.longitudeDelta
+        ) { onPublicViewport?(viewport) }
+    }
+#endif
 
     private var cameraToken: String {
         let points = pins.map { "\($0.coordinate.latitude),\($0.coordinate.longitude)" }
@@ -820,9 +898,23 @@ struct SaveInkLiveMap: View {
             focused: focusedCoordinate
         ) {
             position = .region(region)
-        } else if userCoordinate != nil {
-            position = .userLocation(fallback: .automatic)
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+            reportPublicViewport(region)
+#endif
+            return
         }
+        if userCoordinate != nil {
+            position = .userLocation(fallback: .automatic)
+            return
+        }
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        if onPublicViewport != nil {
+            let region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 25.0394, longitude: 121.5482),
+                                            span: MKCoordinateSpan(latitudeDelta: 0.028, longitudeDelta: 0.034))
+            position = .region(region)
+            reportPublicViewport(region)
+        }
+#endif
     }
 
     private func loadRoute() async {
