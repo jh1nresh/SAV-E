@@ -460,6 +460,14 @@ async function readPublicDiscoveryIndex(filePath: string, requestedTime?: Date) 
   return { now, index, sharded: true, revisions };
 }
 
+export async function indexedPublicPlatforms(
+  filePath: string, place: PublicDiscoveryPlace, now?: Date,
+): Promise<ReadonlySet<PublicDiscoveryPlatform>> {
+  const { index } = await readPublicDiscoveryIndex(filePath, now);
+  return new Set(index.posts.filter(post => post.place.provider === place.provider
+    && post.place.providerPlaceID === place.providerPlaceID).map(post => post.platform));
+}
+
 export async function listPublicDiscoveryPosts(
   url: URL, options: PublicDiscoveryCapabilities & { filePath?: string; now?: Date } = {},
 ): Promise<PublicDiscoveryResponse> {

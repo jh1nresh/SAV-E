@@ -262,6 +262,7 @@ import {
 import { sharedPostBodyMaxBytes } from "./sharedPostPhotos.js";
 import { listSharedPosts, getSharedPostPhoto, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
 import { evaluatePublicDiscoveryRequest } from "./publicDiscoveryEndpoint.js";
+import { loadPublicDiscoverySaveIntake } from "./publicDiscoverySaveIntake.js";
 import {
   normalizeShareAnalyzeInput,
   normalizeShareInstallationId,
@@ -288,6 +289,14 @@ const relatedPlaceSourcesRateLimiter = new RelatedPlaceSourcesOwnerRateLimiter()
 const verifyRelatedSourcesPublicVenue = createCachedGooglePublicVenueVerifier({
   apiKey: process.env.GOOGLE_PLACES_API_KEY,
 });
+
+const publicSourceIntakeDirectory = process.env.SAVE_PUBLIC_DISCOVERY_DRAFT_INTAKE_DIR;
+const publicSourceIntake = publicSourceIntakeDirectory
+  ? await loadPublicDiscoverySaveIntake(publicSourceIntakeDirectory, process.env.SAVE_PUBLIC_DISCOVERY_INDEX_FILE).catch(() => {
+    console.warn("[public-discovery] Save-source intake could not start");
+    return undefined;
+  })
+  : undefined;
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -1736,6 +1745,7 @@ async function handlePlaces(
         if (!canonicalPlace) {
           throw new Error("Friend share insert returned no place");
         }
+        if (created === true) await publicSourceIntake?.afterSave(canonicalPlace);
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
           outcome: created === true ? "saved" : "already_saved",
@@ -1770,6 +1780,7 @@ async function handlePlaces(
       // coordinates). Gate actual stored rows, not a raw-request approximation.
       await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
+      await publicSourceIntake?.afterSave(asObject(rows[0]));
       return sendJson(response, formatPlace(rows[0]), 201);
     } catch (error) {
       await client.query("rollback");
@@ -1884,6 +1895,7 @@ async function saveClipListPlaces(
 
     await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
     await client.query("commit");
+    await publicSourceIntake?.afterSave(...inserted);
     return sendJson(response, clipListSaveResponse(plan, inserted), 201);
   } catch (error) {
     await client.query("rollback");
