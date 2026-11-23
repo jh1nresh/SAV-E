@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { compileReviewedPublicBatch, compileReviewedPublicFiles,
   makeReviewedPublicPreview, publicVenueSourceCoverage, recheckReviewedPublicBatch,
-  refreshReviewedPublicFiles } from "./publicDiscoveryReviewedBatch.js";
+  refreshReviewedPublicFiles, writeShardedPublicIndex } from "./publicDiscoveryReviewedBatch.js";
 import { listPublicDiscoveryPosts, type PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { publicPostEvidenceFingerprint } from "./publicPostReverification.js";
 import { evaluatePublicDiscoveryRequest } from "./publicDiscoveryEndpoint.js";
@@ -20,6 +20,29 @@ const place = { provider: "apple_maps", providerPlaceID: "BranchA", name: "Store
   address: "10 Example Rd, ground floor", latitude: 25.03, longitude: 121.56, coordinateSystem: "WGS84", category: "cafe" };
 const other = { ...place, providerPlaceID: "Branch+B", name: "Store B", address: "10 Example Rd, basement" };
 const batch = (...candidates: object[]) => ({ venues: [{ place, candidates }] });
+
+test("sharded compiler publishes one readable catalog after validating the entire set", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-review-shards-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const first = join(root, "approved-a.json");
+  const second = join(root, "approved-b.json");
+  await writeFile(first, JSON.stringify(batch(threads)));
+  await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [instagram] }] }));
+  const output = join(root, "catalog");
+  const result = await writeShardedPublicIndex(output, [first, second], now);
+  assert.deepEqual(result, { filePath: join(output, "index.json"), shards: 2, associations: 2 });
+  const endpoint = new URL("http://localhost/v0/discovery/posts?bbox=121,25,122,26");
+  const read = await listPublicDiscoveryPosts(endpoint, { filePath: result.filePath, now });
+  assert.deepEqual(read.posts.map(row => row.id), ["instagram:IG_1", "threads:TER_1"]);
+  endpoint.searchParams.set("provider", "apple_maps");
+  endpoint.searchParams.set("placeID", other.providerPlaceID);
+  assert.deepEqual((await listPublicDiscoveryPosts(endpoint, { filePath: result.filePath, now })).posts.map(row => row.id),
+    ["instagram:IG_1"]);
+  const rejectedOutput = join(root, "rejected");
+  await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [threads] }] }));
+  await assert.rejects(writeShardedPublicIndex(rejectedOutput, [first, second], now));
+  await assert.rejects(access(rejectedOutput), { code: "ENOENT" });
+});
 
 test("Threads reply fingerprints bind the selected reply and optionally require its embedded parent", async () => {
   const permalink = "https://www.threads.com/@reply.author/post/REPLY";

@@ -6,6 +6,7 @@ export async function evaluatePublicDiscoveryRequest(input: {
   multiVenue?: boolean;
   googleVenues?: boolean;
   catalogVenues?: boolean;
+  largeIndex?: boolean;
   url: URL;
   verifySubject: (token: string) => Promise<string>;
   readPosts?: (url: URL, options: PublicDiscoveryCapabilities) => Promise<PublicDiscoveryResponse>;
@@ -22,6 +23,7 @@ export async function evaluatePublicDiscoveryRequest(input: {
     return { statusCode: 200, body: await (input.readPosts ?? listPublicDiscoveryPosts)(input.url, {
       multiVenue: input.multiVenue, googleVenues: input.googleVenues,
       ...(input.catalogVenues ? {catalogVenues: true} : {}),
+      ...(input.largeIndex ? {largeIndex: true} : {}),
     }) };
   } catch (error) {
     if (error instanceof PublicDiscoveryError) return { statusCode: error.statusCode, body: { error: error.code } };

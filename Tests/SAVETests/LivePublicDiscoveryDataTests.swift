@@ -360,6 +360,21 @@ final class LivePublicDiscoveryDataTests: XCTestCase {
         XCTAssertThrowsError(try raw.validated(at: now))
     }
 
+    func testIndexTotalsAboveFiveThousandKeepPageAndNonnegativeCountValidation() throws {
+        var coverage: [[String: Any]] = [
+            ["platform": "threads", "status": "connected", "indexedPostCount": 5_001],
+            ["platform": "instagram", "status": "not_connected", "indexedPostCount": 0],
+            ["platform": "xiaohongshu", "status": "not_connected", "indexedPostCount": 0]
+        ]
+        let valid = try decode(page(overrides: ["coverage": coverage])).validated(at: now)
+        XCTAssertEqual(valid.posts.count, 1)
+        XCTAssertEqual(valid.coverage.first?.indexedPostCount, 5_001)
+        XCTAssertThrowsError(try decode(page(posts: [post(), post(id: "FixtureB")],
+            overrides: ["coverage": coverage])).validated(at: now, limit: 1))
+        coverage[0]["indexedPostCount"] = -1
+        XCTAssertThrowsError(try decode(page(posts: [], overrides: ["coverage": coverage])).validated(at: now))
+    }
+
     private func decode(_ object: [String: Any]) throws -> LivePublicDiscoveryPage {
         try JSONDecoder().decode(LivePublicDiscoveryPage.self, from: JSONSerialization.data(withJSONObject: object))
     }

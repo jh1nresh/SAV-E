@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  canonicalSource, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes, publicDiscoveryMaxPosts,
+  canonicalSource, combinePublicDiscoveryShards, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes, publicDiscoveryMaxPosts,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
   publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, timestamp,
   validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
@@ -398,6 +399,28 @@ export async function compileReviewedPublicFiles(files: string[], now = new Date
   return compileReviewedPublicBatch(await readReviewedPublicFiles(files), now);
 }
 
+/** Compile each review shard and write the catalog only after the complete snapshot passes validation. */
+export async function writeShardedPublicIndex(directory: string, files: string[], now = new Date()) {
+  const parts = [];
+  const shards = new Map<string, string>();
+  for (const file of files) {
+    const { manifest } = await compileReviewedPublicFiles([file], now);
+    const data = `${JSON.stringify(manifest)}\n`;
+    if (Buffer.byteLength(data) > publicDiscoveryMaxFileBytes) throw new Error("Manifest shard is too large");
+    const digest = createHash("sha256").update(data).digest("hex");
+    if (shards.has(digest)) throw new Error("Duplicate manifest shard");
+    shards.set(digest, data);
+    parts.push(validatePublicDiscoveryManifest(manifest, now));
+  }
+  const { posts } = combinePublicDiscoveryShards(parts, now);
+  const catalog = `${JSON.stringify({ schemaVersion: 2, shards: [...shards.keys()] })}\n`;
+  if (Buffer.byteLength(catalog) > publicDiscoveryMaxFileBytes) throw new Error("Manifest catalog is too large");
+  await mkdir(directory);
+  for (const [digest, data] of shards) await writeFile(join(directory, digest + ".json"), data, { flag: "wx" });
+  await writeFile(join(directory, "index.json"), catalog, { flag: "wx" });
+  return { filePath: join(directory, "index.json"), shards: parts.length, associations: posts.length };
+}
+
 /** Validate the whole archive before any provider read, then compile one fresh snapshot. */
 export async function refreshReviewedPublicFiles(files: string[], options: RecheckOptions = {}) {
   const now = options.now ?? new Date();
@@ -435,6 +458,11 @@ async function readReviewedPublicFiles(files: string[]) {
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   void (async () => {
     const args = process.argv.slice(2);
+    if (args[0] === "--sharded-index" && args[1] && args.length >= 3) {
+      const result = await writeShardedPublicIndex(args[1], args.slice(2));
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      return;
+    }
     const recheckOptions: RecheckOptions = {};
     const budgetArgument = args[1];
     if (budgetArgument?.startsWith("--max-originals=")) {

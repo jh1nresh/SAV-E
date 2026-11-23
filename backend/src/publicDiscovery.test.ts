@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test, type TestContext } from "node:test";
 import {
   listPublicDiscoveryPosts, PublicDiscoveryError, publicDiscoveryMaxFileBytes,
@@ -158,6 +159,56 @@ test("dedicated file is required; empty/missing configuration is not a seeded su
   t.after(() => { if (prior === undefined) delete process.env.SAVE_PUBLIC_DISCOVERY_INDEX_FILE; else process.env.SAVE_PUBLIC_DISCOVERY_INDEX_FILE = prior; });
   process.env.SAVE_PUBLIC_DISCOVERY_INDEX_FILE = path;
   assert.equal((await listPublicDiscoveryPosts(url(), { now })).posts.length, 1);
+});
+
+async function shardedIndex(t: TestContext, manifests: unknown[]) {
+  const filePath = await indexFile(t, "");
+  const shards = [];
+  for (const value of manifests) {
+    const bytes = JSON.stringify(value);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    await writeFile(join(dirname(filePath), digest + ".json"), bytes);
+    shards.push(digest);
+  }
+  await writeFile(filePath, JSON.stringify({ schemaVersion: 2, shards }));
+  return { filePath, shards };
+}
+
+test("one configured index has no aggregate 5000-post limit", async t => {
+  const first = Array.from({ length: 5_000 }, (_, index) => post(`A${String(index).padStart(4, "0")}`));
+  const last = post("Z_END");
+  const second = { ...manifest([last]), googlePlaceAliases: [
+    { googlePlaceID: "last_google_alias", provider: "apple_maps", providerPlaceID: last.place.providerPlaceID },
+  ] };
+  const { filePath } = await shardedIndex(t, [manifest(first), second]);
+  const largeRead = (query: string) => listPublicDiscoveryPosts(url(query), { filePath, now, largeIndex: true });
+  const firstPage = await largeRead("bbox=121,25,122,26&limit=50");
+  assert.deepEqual(firstPage.posts.map(row => row.id), first.slice(0, 50).map(row => row.id));
+  assert.equal(firstPage.coverage.find(row => row.platform === "threads")?.indexedPostCount, 5_001);
+  const cursor = createHash("sha256").update(JSON.stringify([firstPage.indexRevision, [121, 25, 122, 26], 50, 5_000])).digest("base64url");
+  const lastPage = await largeRead(`bbox=121,25,122,26&limit=50&cursor=${cursor}`);
+  assert.deepEqual(lastPage.posts, [last]);
+  assert.equal(lastPage.nextCursor, null);
+  assert.deepEqual((await read(filePath, "bbox=121,25,122,26&provider=google_places&placeID=last_google_alias")).posts, [last]);
+  const legacy = await read(filePath, "bbox=121,25,122,26&limit=50");
+  assert.equal(legacy.coverage.find(row => row.platform === "threads")?.indexedPostCount, 5_000);
+  assert.ok(firstPage.nextCursor);
+  await assert.rejects(read(filePath, `bbox=121,25,122,26&limit=50&cursor=${firstPage.nextCursor}`), failure(400));
+  await assert.rejects(largeRead(`bbox=121,25,122,27&limit=50&cursor=${cursor}`), failure(400));
+});
+
+test("sharded index rejects missing or changed files and cross-shard identity conflicts", async t => {
+  const sharedPlace = post("ONE").place;
+  const conflicting = post("TWO", { place: { ...sharedPlace, address: "Different branch" } });
+  const failed = await shardedIndex(t, [manifest([post("ONE")]), manifest([conflicting])]);
+  await assert.rejects(read(failed.filePath), failure(503));
+  const index = await shardedIndex(t, [manifest([post("ONE")]), manifest([post("TWO")])]);
+  assert.equal((await read(index.filePath)).posts.length, 2);
+  const secondPath = join(dirname(index.filePath), index.shards[1]! + ".json");
+  await writeFile(secondPath, JSON.stringify(manifest([post("CHANGED")])));
+  await assert.rejects(read(index.filePath), failure(503));
+  await rm(secondPath);
+  await assert.rejects(read(index.filePath), failure(503));
 });
 
 test("malformed JSON, invalid UTF-8, unsupported schema and oversized files fail closed", async t => {
