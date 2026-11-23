@@ -1,0 +1,42 @@
+{
+  "name": "淡水",
+  "landmark": "紅毛城、前清英國領事官邸與南門",
+  "center": [
+    121.4328251,
+    25.1752279
+  ],
+  "bounds": [
+    121.43165874,
+    25.17416521,
+    121.43399146,
+    25.17629059
+  ],
+  "sizeMeters": 190,
+  "landmarkIds": [
+    "r3986680",
+    "w290499654",
+    "w297301287"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・190 m 方格周邊街道與建築",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.4297000,25.1719000,121.4371000,25.1785000"
+    },
+    {
+      "title": "文化部文化資產局・淡水紅毛城國定古蹟資料",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/monument/20060811000001"
+    },
+    {
+      "title": "新北市立淡水古蹟博物館・前清英國領事官邸",
+      "url": "https://www.tshs.ntpc.gov.tw/xmdoc/cont?sid=0g256572147454082193&xsmsid=0g245655848901208901"
+    },
+    {
+      "title": "新北市觀光旅遊網・紅毛城園區正面與空拍",
+      "url": "https://newtaipei.travel/zh-tw/attractions/detail/109672"
+    },
+    {
+      "title": "淡水古蹟博物館・紅毛城導覽與領事官邸平面",
+      "url": "https://www.tshs.ntpc.gov.tw/xmdoc?xsmsid=0G245648947557916498"
+    }
+  ]
+}

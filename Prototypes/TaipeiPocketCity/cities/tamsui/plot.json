@@ -1,0 +1,20 @@
+{
+ "lat": 25.1752279,
+ "lon": 121.4328251,
+ "rotation": -16,
+ "size": 190.0,
+ "asked": {
+  "lat": 25.17508,
+  "lon": 121.43322
+ },
+ "moved_m": 43.0,
+ "famous_inside": [
+  "前清英國領事官邸",
+  "南門",
+  "淡水紅毛城"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "淡水紅毛城",
+ "osm_base": null
+}
