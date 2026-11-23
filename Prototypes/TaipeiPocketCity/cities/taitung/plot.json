@@ -1,0 +1,18 @@
+{
+ "lat": 22.7572943,
+ "lon": 121.1549028,
+ "rotation": 0.0,
+ "size": 170.0,
+ "asked": {
+  "lat": 22.7572943,
+  "lon": 121.1549028
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "臺東天后宮"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "臺東天后宮",
+ "osm_base": null
+}
