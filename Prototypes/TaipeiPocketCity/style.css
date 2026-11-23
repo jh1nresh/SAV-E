@@ -246,3 +246,8 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 .place-choices {display:grid;gap:2px;max-height:145px;overflow-y:auto;margin-top:5px}
 .place-choices button {text-align:left;background:transparent;color:var(--green);border:0;border-top:1px solid var(--line);padding:6px 2px}
 .place-choices button:hover,.place-choices button:focus-visible {background:#e4eadb}
+
+.cities-link {color:var(--green);font-size:.8rem;font-weight:650;white-space:nowrap}
+@media(max-width:480px){header:has(.cities-link) .preview{display:none}.cities-link{margin-left:auto}}
+
+#city-jump{max-width:min(36vw,225px);border:1px solid var(--line);border-radius:6px;background:#fcfaf3;padding:4px;color:#365246} #city-panel p{line-height:1.5;color:#655c4f}

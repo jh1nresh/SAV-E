@@ -1,3 +1,5 @@
+import {buildPalaceModel} from './palace-museum.js';
+
 const vertexSource=`#version 300 es
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_building;
@@ -487,16 +489,19 @@ export class SurveyLayer {
     this.#pending.set(k,ctl);
     const url=new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
-    unpack(url,ctl.signal).then(data=>{
+    const palace=level==='city-streets/landmark'&&tile.id==='palace-museum';
+    const payload=palace?Promise.resolve().then(()=>buildPalaceModel().buffer):unpack(url,ctl.signal);
+    payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
-      if(data.byteLength!==tile.verts*24)throw Error('Building tile has invalid size');
+      const verts=data.byteLength/24;
+      if(palace?verts===0||verts%3!==0:verts!==tile.verts)throw Error('Building tile has invalid size');
       const gl=this.gl, vao=gl.createVertexArray(), buffer=gl.createBuffer();
       gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
       gl.bufferData(gl.ARRAY_BUFFER,new Uint8Array(data),gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
       gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
       gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
-      this.#fetched.set(k,{vao,buffer,bytes:data.byteLength,seen:performance.now()});
+      this.#fetched.set(k,{vao,buffer,verts,bytes:data.byteLength,seen:performance.now()});
       this.#failures.delete(k);
     }).catch(error=>{
       if(!ctl.signal.aborted){
@@ -553,8 +558,9 @@ export class SurveyLayer {
     if(this.dihuaDrawn)this.#displayed.push({...dihua.tile,key:dihua.key});
     this.#cityLandmarksVisible.fill(0);
     for(const {key,tile} of heritage){
-      if(!this.#fetched.has(key))continue;
-      this.#displayed.push({...tile,key});
+      const asset=this.#fetched.get(key);
+      if(!asset)continue;
+      this.#displayed.push({...tile,key,verts:asset.verts});
       this.#cityLandmarksVisible[tile.style]=1;
     }
     for(const t of wanted){

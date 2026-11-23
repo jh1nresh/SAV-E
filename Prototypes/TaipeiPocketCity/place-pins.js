@@ -81,6 +81,7 @@ export function placeButtonIcon(category){
 }
 export function placePinStyle(map){
   for(const type of Object.keys(styles)){
+    if(map.hasImage?.('place-pin-'+type))continue;
     const canvas=pinCanvas(type);
     map.addImage('place-pin-'+type,canvas.getContext('2d').getImageData(0,0,72,72),{pixelRatio:3});
   }

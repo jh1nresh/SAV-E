@@ -1,7 +1,9 @@
+import {addCityContext} from './city-context.js';
+import {addCityAtlas} from './city-atlas-layer.js?v=continuous-5';
 import {cityPlaceLayers} from './city-place-index.js';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei-frontages-2';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=palace-alignment-1';
 import {addStreetDetail} from './street-detail.js?v=category-badges-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
@@ -23,7 +25,7 @@ const hybrid=look==='hybrid';
 const rerun=hybrid&&preview.get('detail')!=='prior';
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const taipei=[[121.454,24.954],[121.673,25.218]];
-const taiwan=[[119.77,21.84],[122.12,25.36]];
+const taiwan=[[118.10,21.75],[122.13,26.43]];
 const dihuaCamera={center:[121.509939,25.056432],pitch:43,mobilePitch:41,bearing:70,zoom:21.35,mobileZoom:20.28};
 const landmarks={
   '101':{name:'台北 101',center:[121.56481,25.03367]},
@@ -45,7 +47,7 @@ const nativeStatus=$('#progress');
 let map, layer, streetDetail, metroState, weather;
 let streetDistricts=new Map();
 let cityDistricts=[], cityGrids, cityGridLoad;
-let atlas170,shopfronts,cityNature;
+let atlas170,shopfronts,cityNature,worldAtlas;
 let preparedGroundReady=false;
 function setPreparedGround(ready=preparedGroundReady){
   preparedGroundReady=ready;
@@ -69,7 +71,7 @@ function updateFrontageView(){
       // Ground labels draw before the solid facades and trees, so uncovered points remain visible.
       const layers=map.getStyle().layers;
       labelOrder=layers.flatMap((layer,i)=>{
-        const place=['city170-poi-dots','poi_r1'].includes(layer.id);
+        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-locators','poi_r1'].includes(layer.id);
         const road=layer['source-layer']==='transportation_name'||layer.id==='city170-road-names'||layer.id.endsWith('-road-labels');
         return place||road?[[layer.id,layers[i+1]?.id]]:[];
       });
@@ -225,6 +227,9 @@ function inside(ring,x,y){
 function regionAt(){
   if(map.getZoom()<11)return null;
   const {lng,lat}=map.getCenter();
+  return districtAt(lng,lat);
+}
+function districtAt(lng,lat){
   return districtShapes.find(d=>{
     const [w,s,e,n]=d.bounds;
     return lng>=w&&lng<=e&&lat>=s&&lat<=n
@@ -241,8 +246,19 @@ function updateUI(){
   const city=z>=10&&lng>=taipei[0][0]&&lng<=taipei[1][0]&&lat>=taipei[0][1]&&lat<=taipei[1][1];
   const active=!!district&&showModels&&z>=buildingZoom;
   const zoomed=active&&z>=16.4;
-  const label=district??(city?'台北市':'台灣');
-  $('#parent').textContent=district?'台北市':city?'台灣':'';
+  const patch=worldAtlas?.at(lng,lat);
+  const inTaiwan=lng>=118&&lng<=122.2&&lat>=21.7&&lat<=26.5;
+  const label=patch?.name??district??(city?'台北市':inTaiwan?'台灣':'世界地圖');
+  $('#taipei-panel').hidden=!!patch||(!city&&!district&&z>=10);
+  $('#city-panel').hidden=!patch;
+  const retry=$('#retry-landmark');
+  retry.hidden=!patch||!worldAtlas.failed(patch.id);
+  if(patch)retry.dataset.city=patch.id;
+  if(patch){
+    $('#city-panel h1').textContent=patch.name;
+    $('#city-panel p').textContent=patch.landmark;
+  }
+  $('#parent').textContent=patch?(patch.area??''):district?'台北市':city?'台灣':'';
   $('#region').textContent=label;
   const nearby=z>=16&&Object.entries(landmarks).find(([key,item])=>{
     const bounds=streetDistricts.get(key)?.bounds;
@@ -253,7 +269,7 @@ function updateUI(){
   const link=streetDistricts.get('xinyi-link');
   const inLink=link&&inside(link.footprint.coordinates[0],lng,lat);
   const illustrated=hasStreetDistrict(district);
-  $('#resolution').textContent=z<10?'全台總覽':zoomed
+  $('#resolution').textContent=patch&&z>=15?(worldAtlas.failed(patch.id)?'街區載入失敗':worldAtlas.ready(patch.id)?patch.sizeMeters+' 公尺街區':'載入街區…'):z<10?(inTaiwan?'全台總覽':'地圖總覽'):zoomed
     ?atlas170?`${nearby?nearby[1].name+' · ':''}170 公尺街區`:(nearby?`${nearby[1].name} · ${nearby[0]!=='101'&&streetDistricts.has(nearby[0])?'220':'200'} 公尺街區`:illustrated||inLink?'街廓 · 220 公尺':'200 公尺 · 插畫立面')
     :active?'2025 LOD1 量體':'地圖總覽';
   $('#pitch').setAttribute('aria-pressed',String(map.getPitch()>=23));
@@ -364,7 +380,7 @@ $('#taipei').addEventListener('click',()=>fit(taipei,true));
 
 message('載入地圖…');
 try{
-  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,...loadedStreets]=await Promise.all([
+  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,liveTiles,...loadedStreets]=await Promise.all([
     get('./assets/base-style.json'),get('./data/districts.geojson'),get('./data/survey-index.json'),
     get('./data/landmark-101.json').catch(()=>null),
     loadImage(hybrid?'./data/street-hybrid-material-mask.png':'./data/street-atlas-material-mask.png').catch(()=>null),
@@ -375,6 +391,9 @@ try{
     rerun?readPocketCityAsset('street-pocket-city')
       .then(data=>data?.summary&&data?.districts?data:null).catch(()=>null):null,
     rerun?get(`./data/city-streets/index.json${terrainRevision}`).catch(()=>null):null,
+    get('./cities/map-tiles/index.json').catch(()=>null),
+    fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
+      .then(res=>res.ok?res.json():null).catch(()=>null),
     ...streetDataKeys.filter(key=>!rerun||!key.endsWith('-district')).map(key=>get(`./data/street-${key}.json`)
       .then(data=>({key,data})).catch(error=>{console.warn(error.message);return null;})),
   ]);
@@ -400,9 +419,20 @@ try{
     localTerrain.set(`${terrainSource}14/${tile}.png`,
       new URL(`./data/city-streets/terrain/14-${tile.replace('/','-')}.png${terrainRevision}`,import.meta.url).href);
   }
+  if(tileIndex){
+    const vectorTemplate=liveTiles?.tiles?.[0]??tileIndex.vectorTemplate;
+    base.sources.openmaptiles={type:'vector',tiles:[vectorTemplate],minzoom:0,maxzoom:14,
+      attribution:tileIndex.attribution};
+    for(const [x,y] of tileIndex.tiles){
+      for(const [key,ext] of [[terrainSource+'14/'+x+'/'+y+'.png','png'],
+          [vectorTemplate.replace('{z}',14).replace('{x}',x).replace('{y}',y),'pbf']]){
+        localTerrain.set(key,new URL('./cities/map-tiles/'+x+'-'+y+'.'+ext,import.meta.url).href);
+      }
+    }
+  }
   map=new ml.Map({
     container:'map',style:mapStyle(base,districts),center:[121.547,25.083],zoom:11.4,bearing:0,pitch:18,
-    minZoom:6,maxZoom:21.6,maxPitch:65,maxBounds:[[116.5,19.7],[124.5,27.5]],
+    minZoom:2,maxZoom:21.6,maxPitch:65,
     transformRequest:url=>({url:localTerrain.get(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
     canvasContextAttributes:{antialias:true},
@@ -449,7 +479,7 @@ try{
   layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
   map.addLayer(layer,firstLabel);
-  map.getCanvas().setAttribute('aria-label','台北市地圖，可拖曳、縮放及旋轉');
+  map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);
   if(rerun && streetDetail){
     cityNature=new CityNature();
@@ -502,7 +532,7 @@ try{
   if(cityIndex && preview.get('dihua')!=='before'){
     get('./data/city-streets/dihua-fronts.json?v=shop-names').then(asset=>{layer.dihua=asset;map.triggerRepaint();}).catch(e=>console.warn('迪化街街屋',e));
   }
-  if(rerun&&streetDetail)weather=addPocketCityWeather(map,stage,streetDetail.setRain,preview.get('weather'));
+  if(rerun&&streetDetail)weather=addPocketCityWeather(map,stage,share=>{streetDetail.setRain(share);worldAtlas?.setRain(share);},preview.get('weather'));
   if(skillAtlas)addPocketCityPaint(map,()=>{
     // The legacy tiles may arrive after the cell-prepared street surface.
     setPreparedGround();
@@ -539,7 +569,7 @@ try{
     const visible=inside?localNames:globalNames;
     if(visible===appliedNames)return;
     appliedNames=visible;
-    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','poi_r1']){
+    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-locators','poi_r1']){
       if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     }
     shopfronts?.setNames(visible);
@@ -555,16 +585,41 @@ try{
   for(const button of document.querySelectorAll('[data-dihua]')){
     button.addEventListener('click',()=>{locate(dihuaViews.get(button.dataset.dihua||'dihua'));$('.mobile').open=false;});
   }
+  try{
+    worldAtlas=await addCityAtlas(map,firstLabel,place=>streetDetail?.openMappedPlace(place),updateUI);
+    addCityContext(map,worldAtlas.rows,firstLabel,districtAt);
+    weather?.refresh();
+    appliedNames=undefined;applyLocalNames(false);
+    $('#retry-landmark').addEventListener('click',e=>worldAtlas.retry(e.currentTarget.dataset.city));
+    const select=$('#city-jump');
+    for(const row of worldAtlas.rows)select.add(new Option(row.name+' · '+row.landmark,row.id));
+    select.addEventListener('change',()=>{
+      const id=select.value;
+      if(!id)return;
+      const url=new URL(location.href);
+      for(const key of ['view','street','campus','landmark','bearing'])url.searchParams.delete(key);
+      url.searchParams.set('city',id);
+      history.replaceState(null,'',url);
+      if(id==='taipei')fit(taipei,true);
+      else locate(atlasCamera(worldAtlas.rows.find(r=>r.id===id)),false);
+      select.value='';
+    });
+  }catch(error){console.warn('City catalog unavailable',error);}
+  function atlasCamera(row){
+    return {center:row.center,zoom:row.id==='tamsui'?18.32:17.95,mobileZoom:17.45,pitch:52,mobilePitch:49,bearing:row.id==='tamsui'?18:row.bearing??-17};
+  }
+  const startCity=worldAtlas?.rows.find(row=>row.id===preview.get('city'));
   const street=preview.get('street');
   const cityLandmark=cityLandmarks.find(row=>row.id===preview.get('landmark'));
   const campusView=preview.get('campus');
   const coordinate=(preview.get('view')??'').split(',').map(Number);
   const facing=Number(preview.get('bearing')??-17);
   if(coordinate.length===3 && coordinate.every(Number.isFinite) &&
-      coordinate[0]>=taipei[0][0] && coordinate[0]<=taipei[1][0] &&
-      coordinate[1]>=taipei[0][1] && coordinate[1]<=taipei[1][1]){
+      Math.abs(coordinate[0])<=180 &&
+      Math.abs(coordinate[1])<=85){
     locate({center:coordinate.slice(0,2),zoom:Math.max(10,Math.min(21.6,coordinate[2])),mobileZoom:Math.max(10,Math.min(21.6,coordinate[2]-.35)),pitch:42,bearing:Number.isFinite(facing)?facing:-17},false);
-  }else if(street==='fuxing')locate(bookshopView,false);
+  }else if(startCity)locate(atlasCamera(startCity),false);
+  else if(street==='fuxing')locate(bookshopView,false);
   else if(street==='fuxing-row')locate(shopRowView,false);
   else if(dihuaViews.has(street))locate(dihuaViews.get(street),false);
   else if(campusView==='ntu')locate({center:[121.53555,25.01657],zoom:16.75,pitch:38,bearing:-18},false);
@@ -607,6 +662,7 @@ try{
       detail:layer.diagnostics,street:streetDetail?.state(),metro:metroState?.(),weather:weather?.state(),
       pocketCity:skillAtlas?.summary??null,
       atlas170:atlas170?.state(),shopfronts:shopfronts?.state(),inventoryTreesDrawn:cityNature?.drawn,
+      landmarkAtlas:worldAtlas?.state(),
       cityAtlas:atlas170?atlas170.state().coverage:cityIndex?.cityCoverage??null,
     }),
   };

@@ -52,3 +52,7 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 - 3D 街景使用 OpenFreeMap、OpenMapTiles、Mapzen 地形及 MapLibre GL JS。插畫參考 April Zhu 的 Pocket City 與 Pocket Nature。[Pocket City](https://april-zhu.com/pocketcity) · [Pocket Nature](https://april-zhu.com/pocketnature) · [Pocket City 授權](assets/Pocket-City-LICENSE.txt) · [MapLibre 授權](assets/MapLibre-LICENSE.txt)
 
 `prepare_data.py` 會查核每包 SHA-256，還原完成才建立 `data/`。可用 `tools/bundle_data.py <準備好的圖資資料夾> <輸出資料夾>` 重新封裝。封裝與還原會保留每份資料解壓後的內容，gzip 壓縮位元組可能不同。`scripts/` 保留地圖資料與模型的製作工具，各自使用原始來源與額外的製圖相依套件。
+
+## 在同一張地圖移到其他縣市
+
+從上方「移至街區」選擇地標，或直接拖曳並放大到它的座標。建築、街道、樹木、行人和可點選的地點共用台北地圖的鏡頭。從網址開啟時也可指定街區，例如 [淡水紅毛城](http://127.0.0.1:42418/index.html?city=tamsui)。每個手繪街區的範圍和來源可查閱 [城市索引](cities/catalog.json)。[街區製作與驗收流程](CITY-WORKFLOW.md)
