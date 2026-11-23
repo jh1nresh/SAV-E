@@ -1,0 +1,37 @@
+{
+  "name": "屏東縣",
+  "area": "屏東縣",
+  "landmark": "鵝鑾鼻燈塔",
+  "landmarkIds": [
+    "w310320724"
+  ],
+  "center": [
+    120.8526587,
+    21.9022365
+  ],
+  "bounds": [
+    120.85159317068616,
+    21.9012412089423,
+    120.85372422931385,
+    21.903231791057703
+  ],
+  "sizeMeters": 190.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap contributors · 實地輪廓",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.8502185,21.8999960,120.8553015,21.9047440"
+    },
+    {
+      "title": "交通部航港局 · 鵝鑾鼻燈塔",
+      "url": "https://lighthouse.motcmpb.gov.tw/lighthouse_3_20.html"
+    },
+    {
+      "title": "燈塔、燈室與欄杆照片",
+      "url": "https://commons.wikimedia.org/wiki/File:Eluanbi_Lighthouse_20240918-3.jpg"
+    },
+    {
+      "title": "中央氣象署 · 氣候統計",
+      "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+    }
+  ]
+}
