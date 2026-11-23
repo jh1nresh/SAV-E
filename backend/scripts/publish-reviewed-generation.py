@@ -1,4 +1,4 @@
-"""Publish an approved public-source generation under the maintenance lock."""
+"""Publish or maintain public-source drafts under the maintenance lock."""
 import argparse
 import fcntl
 import os
@@ -8,7 +8,9 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path, help="absolute, initialized source maintenance root")
-    root = parser.parse_args().root
+    parser.add_argument("--maintain-drafts", action="store_true", help="run one bounded draft maintenance cycle")
+    args = parser.parse_args()
+    root = args.root
     state = root / "state"
     if not root.is_absolute() or any(
         path.is_symlink() or not path.is_dir() for path in (root, state, state / "generations")
@@ -26,7 +28,8 @@ def main():
         descriptor = lock.fileno()
         # Keep the flock and process identity when handing control to the publisher.
         os.set_inheritable(descriptor, True)
-        os.execvp("node", ["node", str(entry), str(root), str(descriptor)])
+        mode = ["--maintain-drafts"] if args.maintain_drafts else []
+        os.execvp("node", ["node", str(entry), str(root), str(descriptor), *mode])
 
 
 if __name__ == "__main__":

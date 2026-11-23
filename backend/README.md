@@ -110,6 +110,20 @@ already holds the same lock calls `publishApprovedGeneration` with its inherited
 descriptor. Re-running after an interruption can publish the already approved
 snapshot without reading Instagram or Threads again.
 
+A bounded draft maintenance cycle uses the same intake directory as
+`SAVE_PUBLIC_DISCOVERY_DRAFT_INTAKE_DIR`. It reads the trusted venues in
+`inventory.json` and the reports in `drafts/`. It can read up to two public
+originals, saves its retry window and publishes the approved result.
+
+```bash
+python3 backend/scripts/publish-reviewed-generation.py --maintain-drafts /absolute/path/to/source-root
+```
+
+The receipt includes `nextAllowedAt` for a scheduler. An interrupted draft can
+resume while the provider is in cooldown if its trusted inventory is still
+current. Existing source revalidation is separate and must use the same lock
+and provider hold to keep approved posts current.
+
 A draft maintenance runner can call `approveReviewedDrafts` under the same
 lock with its candidate verifier. Before scheduling provider reads, it calls
 `resumePendingDraftApproval` so an interrupted approval can finish while the

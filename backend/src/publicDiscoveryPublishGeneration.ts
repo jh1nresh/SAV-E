@@ -42,7 +42,7 @@ export async function readReviewEnvelope(path: string, digest: string) {
     }));
     return { archive: envelope.archive, held, quarantine: envelope.quarantine as unknown[],
       retainedManifest: envelope.retainedManifest, receipt: envelope.receipt, managedBy: envelope.managedBy,
-      activationComplete: envelope.activationComplete };
+      activationComplete: envelope.activationComplete, inventoryRevision: envelope.inventoryRevision };
   } finally {
     await handle.close();
   }
@@ -141,13 +141,17 @@ export async function publishApprovedGeneration(root: string, descriptor: number
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  const [root, descriptor, ...extra] = process.argv.slice(2);
+  const [root, descriptor, mode, ...extra] = process.argv.slice(2);
   void (async () => {
-    if (!root || !descriptor || extra.length) throw new Error("Expected source root and lock descriptor");
-    const receipt = await publishApprovedGeneration(root, Number(descriptor));
+    if (!root || !descriptor || extra.length || (mode !== undefined && mode !== "--maintain-drafts")) {
+      throw new Error("Expected source root and lock descriptor");
+    }
+    const receipt = mode === "--maintain-drafts"
+      ? await (await import("./publicDiscoveryDraftMaintenance.js")).maintainPublicSourceDrafts(root, Number(descriptor))
+      : await publishApprovedGeneration(root, Number(descriptor));
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
   })().catch(() => {
-    process.stderr.write("Approved generation publication failed. Check the source lock, review envelope and serving catalog.\n");
+    process.stderr.write("Public source maintenance failed. Check the source lock, inputs and review generation.\n");
     process.exitCode = 1;
   });
 }
