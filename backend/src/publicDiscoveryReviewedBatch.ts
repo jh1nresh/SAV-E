@@ -3,6 +3,7 @@ import { lstat, mkdir } from "node:fs/promises";
 import { isIP } from "node:net";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import {
   canonicalSource, combinePublicDiscoveryShards, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes, publicDiscoveryMaxPosts,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
@@ -405,10 +406,25 @@ export async function writeShardedPublicIndex(
   directory: string, files: string[], now = new Date(),
   options: { replace?: boolean; clock?: () => Date } = {},
 ) {
-  const parts = [];
-  const shards = new Map<string, ReturnType<typeof compileReviewedPublicBatch>["manifest"]>();
+  const projections = [];
   for (const file of files) {
     const { manifest } = await compileReviewedPublicFiles([file], now);
+    projections.push(manifest);
+  }
+  return writeShardedPublicProjection(directory, projections, now, options);
+}
+
+type ReviewedProjection = ReturnType<typeof compileReviewedPublicBatch>["manifest"];
+
+/** Publish slices of a reviewed projection without recomputing its highlights. */
+export async function writeShardedPublicProjection(
+  directory: string, projections: readonly ReviewedProjection[], now = new Date(),
+  options: { replace?: boolean; clock?: () => Date } = {},
+) {
+  const parts = [];
+  const shards = new Map<string, ReviewedProjection>();
+  for (const projection of projections) {
+    const manifest = structuredClone(projection);
     const data = `${JSON.stringify(manifest)}\n`;
     if (Buffer.byteLength(data) > publicDiscoveryMaxFileBytes) throw new Error("Manifest shard is too large");
     const digest = createHash("sha256").update(data).digest("hex");
@@ -416,7 +432,7 @@ export async function writeShardedPublicIndex(
     shards.set(digest, manifest);
     parts.push(validatePublicDiscoveryManifest(manifest, now));
   }
-  combinePublicDiscoveryShards(parts, now);
+  const approved = combinePublicDiscoveryShards(parts, now);
   const catalog = { schemaVersion: 2, shards: [...shards.keys()] };
   if (Buffer.byteLength(JSON.stringify(catalog) + "\n") > publicDiscoveryMaxFileBytes) {
     throw new Error("Manifest catalog is too large");
@@ -439,9 +455,11 @@ export async function writeShardedPublicIndex(
   }
   // A single publisher owns this directory. Leave prior leaves in place for
   // requests already reading the previous pointer.
-  const { posts } = combinePublicDiscoveryShards(parts, options.clock?.() ?? now);
+  if (options.clock && !isDeepStrictEqual(combinePublicDiscoveryShards(parts, options.clock()), approved)) {
+    throw new Error("Reviewed snapshot changed before publication");
+  }
   await writePublicSourceJSON(filePath, catalog);
-  return { filePath, shards: parts.length, associations: posts.length };
+  return { filePath, shards: parts.length, associations: approved.posts.length };
 }
 
 /** Validate the whole archive before any provider read, then compile one fresh snapshot. */
