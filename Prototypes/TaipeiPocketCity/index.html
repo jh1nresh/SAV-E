@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f6f2e8">
+  <title>台北 Pocket City · Savvy</title>
+  <link rel="icon" href="./assets/icon.png">
+  <link rel="stylesheet" href="./assets/maplibre-gl.css">
+  <link rel="stylesheet" href="./style.css?v=fuxing-block">
+</head>
+<body>
+  <header>
+    <a class="wordmark" href="./">Savvy</a>
+    <span class="divider"></span><strong>Pocket City</strong><span class="preview">本機預覽</span>
+    <a id="apple-places-link" href="./apple.html">Apple 地點</a>
+  </header>
+  <main>
+    <aside aria-label="台北市行政區">
+      <h1>台北市</h1>
+      <div class="districts" id="districts"></div>
+      <div class="shop-search"><input type="search" placeholder="找店家" aria-label="找店家" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
+      <input type="search" list="school-list" class="school-find" placeholder="找學校" aria-label="找學校"><datalist id="school-list"></datalist>
+      <div class="landmarks" aria-label="地標">
+        <button type="button" data-landmark="101">台北 101</button>
+        <button type="button" data-street-101 hidden>101 街道</button>
+        <button type="button" data-landmark="yongchun">永春</button>
+        <button type="button" data-landmark="songshan">松菸</button>
+        <button type="button" data-dihua>迪化街店屋</button>
+        <button type="button" data-fuxing>復興南路書店</button>
+      </div>
+      <div class="settings">
+        <label><input id="models" type="checkbox" checked> 2025 LOD1 量體</label>
+        <label><input id="grid" type="checkbox"> 170 公尺格網</label>
+        <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
+        <small>建物採臺北市 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。店面位置、外觀與天氣為插畫示意。</small>
+      </div>
+    </aside>
+    <section id="stage" aria-label="台北市 3D 地圖">
+      <div id="map"></div>
+      <div id="rain" aria-hidden="true" hidden></div>
+      <div class="geography">
+        <span id="parent">台灣</span>
+        <h2 id="region">台北市</h2>
+        <span id="resolution">全市總覽</span>
+      </div>
+      <div class="toolbar" aria-label="地圖工具">
+        <div class="extent-actions">
+          <button type="button" id="taiwan">全台</button>
+          <button type="button" id="taipei">台北</button>
+          <button type="button" id="metro-toggle" aria-controls="metro-panel" aria-pressed="false" hidden>捷運</button>
+          <select id="weather-select" aria-label="場景天氣" title="切換場景天氣" hidden>
+            <option value="day">晴天</option>
+            <option value="cloudy">陰天</option>
+            <option value="drizzle">細雨</option>
+            <option value="rain">大雨</option>
+          </select>
+        </div>
+        <div class="camera-actions">
+          <button type="button" id="rotate-left" title="向左旋轉 30°" aria-label="向左旋轉 30°">↶</button>
+          <button type="button" id="rotate-right" title="向右旋轉 30°" aria-label="向右旋轉 30°">↷</button>
+          <button type="button" id="pitch" title="切換俯視與斜視" aria-label="斜視" aria-pressed="false">∠</button>
+        </div>
+      </div>
+      <nav id="fuxing-controls" aria-label="復興南路街景比較" hidden>
+        <button type="button" id="fuxing-frame">看整排</button>
+        <button type="button" id="fuxing-compare" aria-pressed="false">舊版對照</button>
+        <button type="button" id="fuxing-names" aria-pressed="true">店名</button>
+      </nav>
+      <nav id="dihua-views" aria-label="迪化街店面鏡位" hidden>
+        <button type="button" data-dihua="dihua">南段街屋</button>
+        <button type="button" data-dihua="dihua-north">北段藥行</button>
+        <button type="button" data-dihua="dihua-noodles">對街麵店</button>
+      </nav>
+      <section id="metro-panel" aria-label="捷運路線預覽" hidden>
+        <strong>台北捷運</strong>
+        <p id="metro-status" role="status"></p>
+        <div class="metro-actions">
+          <button type="button" id="metro-reset" hidden>清除</button>
+          <button type="button" id="metro-play" aria-pressed="false" hidden>播放路線</button>
+        </div>
+        <small>市區路網示意 · 列車動畫為模擬</small>
+      </section>
+      <section id="place-card" aria-labelledby="place-name" hidden>
+        <button type="button" id="place-close" aria-label="關閉地點資訊">×</button>
+        <span class="place-kind"></span>
+        <h3 id="place-name"></h3>
+        <p class="place-detail"></p>
+        <a target="_blank" rel="noopener">官方資訊 ↗</a>
+      </section>
+      <button type="button" id="street-motion" aria-pressed="false" hidden>暫停行人</button>
+      <div id="progress" role="status"></div>
+      <p class="hint"><span class="mouse">拖曳移動 · 滾輪縮放 · 右鍵拖曳旋轉</span><span class="touch">拖曳移動 · 雙指縮放和旋轉</span></p>
+      <details class="mobile">
+        <summary>街區與圖層</summary>
+        <div class="mobile-controls">
+          <button type="button" data-street-101 hidden>101 街道</button>
+          <button type="button" data-landmark="yongchun">永春</button>
+          <button type="button" data-landmark="songshan">松菸</button>
+        <button type="button" data-dihua>迪化街店屋</button>
+        <button type="button" data-fuxing>復興南路書店</button>
+          <div class="shop-search"><input type="search" placeholder="找店家" aria-label="找店家" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
+      <input type="search" list="school-list" class="school-find" placeholder="找學校" aria-label="找學校">
+          <label for="mobile-district">行政區</label><select id="mobile-district"><option value="">全市</option></select>
+          <label><input id="mobile-models" type="checkbox" checked> 2025 LOD1 量體</label>
+          <label><input id="mobile-grid" type="checkbox"> 170 公尺格網</label>
+        <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
+          <small>建物採臺北市 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。店面位置、外觀與天氣為插畫示意。</small>
+        </div>
+      </details>
+    </section>
+  </main>
+  <script type="module" src="./app.js?v=fuxing-block-3"></script>
+</body>
+</html>

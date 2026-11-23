@@ -1,0 +1,7 @@
+/apple-config.js
+/data/
+/.restore-*/
+__pycache__/
+*.p8
+*.pem
+*.key

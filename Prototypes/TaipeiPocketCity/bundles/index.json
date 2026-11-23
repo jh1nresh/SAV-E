@@ -1,0 +1,182 @@
+[
+  {
+    "file": "taipei-01.tar.xz",
+    "sha256": "e5c40b5e5176587ed4cb5631d9949b185c2b4349834cd53fcc51789b5835392e",
+    "entries": 36
+  },
+  {
+    "file": "taipei-02.tar.xz",
+    "sha256": "696e1d4279a9fa89c0b8a8a589e33b6cc47522270f01311a478f4b19e5e88f91",
+    "entries": 15
+  },
+  {
+    "file": "taipei-03.tar.xz",
+    "sha256": "5cc91cb8e605507366282bac705a9a1eb4655b0c708e97b21523cda689917aad",
+    "entries": 15
+  },
+  {
+    "file": "taipei-04.tar.xz",
+    "sha256": "d1e64763228753a240393787de59f7a030d3cee1e887085de13a6be271faa396",
+    "entries": 16
+  },
+  {
+    "file": "taipei-05.tar.xz",
+    "sha256": "41d79bcc7b88ea8a3f81996a88b9f9c7f554613a341339b7c09b929564ecfd87",
+    "entries": 19
+  },
+  {
+    "file": "taipei-06.tar.xz",
+    "sha256": "b1157e665ff16e649c6fe77340982f7525254a938a327cfec1d5e769560f42e5",
+    "entries": 25
+  },
+  {
+    "file": "taipei-07.tar.xz",
+    "sha256": "43744b362c80c5943544118e3699ea1b181e2fd96e3552fd7c1cdc7c090e9976",
+    "entries": 24
+  },
+  {
+    "file": "taipei-08.tar.xz",
+    "sha256": "5cc6f8744b7133ca6ac82aa35b5599335886d76ff88f3ab636f591f74f8a4b57",
+    "entries": 28
+  },
+  {
+    "file": "taipei-09.tar.xz",
+    "sha256": "745bfa51af70a7260397a7a06aff8066abcc8a64abb788eca4f8ed623f14d720",
+    "entries": 32
+  },
+  {
+    "file": "taipei-10.tar.xz",
+    "sha256": "440fc8a48da37c0887e8dd9d14f2c239e662abbdc5ed615c4cb4168e221966f3",
+    "entries": 58
+  },
+  {
+    "file": "taipei-11.tar.xz",
+    "sha256": "6c5cd5921342455776b508241abe62775625e1613b67e65cc8a568da99c70aa2",
+    "entries": 446
+  },
+  {
+    "file": "taipei-12.tar.xz",
+    "sha256": "942c94c242311d98286a239d26390094e8fab9937f7fce5787f7ec7f03543058",
+    "entries": 318
+  },
+  {
+    "file": "taipei-13.tar.xz",
+    "sha256": "4009499702acf3e6e0f071a9e8ec3fe84bdae514b234e128c3d5281f1c1ad8cf",
+    "entries": 332
+  },
+  {
+    "file": "taipei-14.tar.xz",
+    "sha256": "6adbb6f780809288379b3e8d8a230a7cf2d39cb123911e335270e59ece0d06dd",
+    "entries": 284
+  },
+  {
+    "file": "taipei-15.tar.xz",
+    "sha256": "630eb47571f172e54abf3fb0357ac78c789561868eb25bdad93a2e8656ae402e",
+    "entries": 361
+  },
+  {
+    "file": "taipei-16.tar.xz",
+    "sha256": "e0ece64909a08afbfb31e46c5196060c8242254114efa4da976668bdd630e6a5",
+    "entries": 452
+  },
+  {
+    "file": "taipei-17.tar.xz",
+    "sha256": "faa5aea22893398761416dd8587377fe866ed91de85c45d905a5f31683bc6188",
+    "entries": 430
+  },
+  {
+    "file": "taipei-18.tar.xz",
+    "sha256": "4bc92ad2968523795e4287e3f8b9fb220c2c2385eeab56fc827ee59562a09ce7",
+    "entries": 541
+  },
+  {
+    "file": "taipei-19.tar.xz",
+    "sha256": "90e62d60059f4251ff9e9c8aa8c24d5db3c93d9a71f1ab94f2ea9a26dd4c0b8f",
+    "entries": 639
+  },
+  {
+    "file": "taipei-20.tar.xz",
+    "sha256": "2cb51853a561f5c47b200d257f5d7e3e51e27b019ab009536e5059a9e0480fa2",
+    "entries": 806
+  },
+  {
+    "file": "taipei-21a.tar.xz",
+    "sha256": "61d1f6771a95e3b8056ad8f6d40dd4144a9e9f8f20b9810108d3ebe0568eb4dc",
+    "entries": 184
+  },
+  {
+    "file": "taipei-21baa.tar.xz",
+    "sha256": "31d3f91da30f1a93c25a0de82e38b449c073b86ff894c2a2d8c79f80d3e8eae0",
+    "entries": 46
+  },
+  {
+    "file": "taipei-21babaa.tar.xz",
+    "sha256": "366bfd96cabd8b6b57f568fc2ade983f69fd8698cb89f009867afa868ff9d8e9",
+    "entries": 11
+  },
+  {
+    "file": "taipei-21babab.tar.xz",
+    "sha256": "70fc236094c9d4bc54ca196c519d19152b1255164d95cce24704afa0d857a46b",
+    "entries": 12
+  },
+  {
+    "file": "taipei-21babb.tar.xz",
+    "sha256": "656b5ff8b5fdb7103d2c918d813847bbbb6fab8c8b92b0116da6d4d976f17f76",
+    "entries": 23
+  },
+  {
+    "file": "taipei-21bba.tar.xz",
+    "sha256": "cff6e957e85b0cc63a735c0de4bef3e53189276ee7930e6adafe9d09f7e512f9",
+    "entries": 46
+  },
+  {
+    "file": "taipei-21bbb.tar.xz",
+    "sha256": "c81a3a47e7875a4c75387c6ffeff149c17fa4506adfc5adfdbd082339a11e2ac",
+    "entries": 46
+  },
+  {
+    "file": "taipei-22aa.tar.xz",
+    "sha256": "b179514c41d3b935588973030a69c843311277d63f614e6902a3156c7cf11fe5",
+    "entries": 213
+  },
+  {
+    "file": "taipei-22ab.tar.xz",
+    "sha256": "ea85b8f6e05639a6d02354200205eea971ad33f4edf936027d7f479c86395d8e",
+    "entries": 214
+  },
+  {
+    "file": "taipei-22ba.tar.xz",
+    "sha256": "644ff06e375be05c4ec48bb4e9352b26d05dbe665ba10bf065c06b18c474dbb9",
+    "entries": 214
+  },
+  {
+    "file": "taipei-22bba.tar.xz",
+    "sha256": "100c917f47e43627fa4e42f602dcdce3a1313698743654f60010ba9ecc897b35",
+    "entries": 107
+  },
+  {
+    "file": "taipei-22bbba.tar.xz",
+    "sha256": "d714a6ed874fbe78b685a76f6f420faaccae0974ba9f26886e9b22c357bf0199",
+    "entries": 53
+  },
+  {
+    "file": "taipei-22bbbb.tar.xz",
+    "sha256": "6e04b50494740a98ea2a43842ca7d030866e1265943ef9034ee88eb9c8216b1c",
+    "entries": 54
+  },
+  {
+    "file": "taipei-23a.tar.xz",
+    "sha256": "c4eec44c99e7ecdaf9150a277aa69790715fa8fad03dd73ef00ae5ad37efd6cf",
+    "entries": 94
+  },
+  {
+    "file": "taipei-23ba.tar.xz",
+    "sha256": "117cdb215ba79ee5434a1a43fab27a212cdc4ebc0d07ee936ff43b8d711c5479",
+    "entries": 47
+  },
+  {
+    "file": "taipei-23bb.tar.xz",
+    "sha256": "1784cef87bc0c82c62aef2bb0d53d099024419cec731dd72d9c2711d3fb24c4d",
+    "entries": 47
+  }
+]
