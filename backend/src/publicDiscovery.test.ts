@@ -43,6 +43,32 @@ async function read(filePath: string, query?: string) {
   return listPublicDiscoveryPosts(url(query), { filePath, now });
 }
 
+test("official destination posts require a capability and stay distinct from provider pins", async t => {
+  const areaID = "Attraction_379000000A_002265";
+  const routeID = "Attraction_379000000A_000008";
+  const area: PublicDiscoveryPost["place"] = {
+    provider: "taipei_catalog", providerPlaceID: areaID, name: "白石湖休閒農業區",
+    address: "臺北市內湖區", latitude: 25.105136, longitude: 121.594043, coordinateSystem: "WGS84", category: "area",
+  };
+  const instagram = post("Area", {
+    id: "instagram:Area", platform: "instagram", sourceURL: "https://www.instagram.com/p/Area/", place: area,
+  });
+  const ordinary = [post("A"), post("B"), post("C")];
+  const baseline = await indexFile(t, manifest(ordinary));
+  const candidate = await indexFile(t, manifest([...ordinary, instagram]));
+  const legacy = await read(baseline);
+  assert.deepEqual(await read(candidate), legacy);
+  const modern = (query: string) => listPublicDiscoveryPosts(url(query), { filePath: candidate, now, catalogVenues: true });
+  const exact = "bbox=121,25,122,26&provider=taipei_catalog&placeID=";
+  await assert.rejects(read(candidate, exact + areaID), failure(400));
+  await assert.rejects(modern(exact + "Attraction_379000000A_999999"), failure(400));
+  assert.deepEqual((await modern(exact + routeID)).posts, []);
+  assert.deepEqual((await modern(exact + areaID)).posts, [instagram]);
+  await assert.rejects(modern("bbox=121,25,122,26&limit=2&cursor=" + legacy.nextCursor), failure(400));
+  assert.throws(() => validate(manifest([{ ...instagram, place: { ...area, category: "route" } }])), failure(503));
+  assert.throws(() => validate(manifest([{ ...instagram, place: { ...area, latitude: 25 } }])), failure(503));
+});
+
 test("exact Google venues are opt-in, scoped by ID and incompatible with alias collisions", async t => {
   const apple = post("APPLE");
   const googleID = "ChIJ_exact_101";

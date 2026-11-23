@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
+import { isCatalogDestinationID, matchesCatalogDestination } from "./publicDiscoveryCatalog.js";
 
 const platforms = ["instagram", "threads", "xiaohongshu"] as const;
 export type PublicDiscoveryPlatform = typeof platforms[number];
 export type PublicDiscoveryPlace = {
-  provider: "apple_maps" | "amap" | "google_places"; providerPlaceID: string; name: string; address: string;
+  provider: "apple_maps" | "amap" | "google_places" | "taipei_catalog"; providerPlaceID: string; name: string; address: string;
   latitude: number; longitude: number; coordinateSystem: "WGS84"; category: string;
 };
 export type PublicDiscoveryPost = {
@@ -23,10 +24,10 @@ export type PublicDiscoveryCoverage = {
   platform: PublicDiscoveryPlatform; status: "connected" | "not_connected"; indexedPostCount: number;
 };
 export type PublicDiscoveryGoogleAlias = {
-  googlePlaceID: string; provider: PublicDiscoveryPlace["provider"]; providerPlaceID: string;
+  googlePlaceID: string; provider: Exclude<PublicDiscoveryPlace["provider"], "taipei_catalog">; providerPlaceID: string;
 };
 type PublicDiscoveryAppleAlias = { applePlaceID: string; providerPlaceID: string };
-export type PublicDiscoveryCapabilities = { multiVenue?: boolean; googleVenues?: boolean };
+export type PublicDiscoveryCapabilities = { multiVenue?: boolean; googleVenues?: boolean; catalogVenues?: boolean };
 export type PublicDiscoveryIndex = {
   schemaVersion: 1; generatedAt: string; expiresAt: string;
   coverage: PublicDiscoveryCoverage[]; posts: PublicDiscoveryPost[];
@@ -145,11 +146,13 @@ function cover(value: unknown, platform: PublicDiscoveryPlatform, now: number): 
 export function validatePublicDiscoveryPlace(value: unknown): PublicDiscoveryPlace {
   const input = record(value, ["provider", "providerPlaceID", "name", "address", "latitude", "longitude", "coordinateSystem", "category"]);
   const provider = input.provider;
-  if ((provider !== "apple_maps" && provider !== "amap" && provider !== "google_places") || input.coordinateSystem !== "WGS84"
+  if ((provider !== "apple_maps" && provider !== "amap" && provider !== "google_places" && provider !== "taipei_catalog")
+    || input.coordinateSystem !== "WGS84"
     || typeof input.latitude !== "number" || typeof input.longitude !== "number"
     || !Number.isFinite(input.latitude) || !Number.isFinite(input.longitude)
     || input.latitude < -90 || input.latitude > 90 || input.longitude < -180 || input.longitude > 180
     || (input.latitude === 0 && input.longitude === 0)) return invalid();
+  if (provider === "taipei_catalog" && !matchesCatalogDestination(input)) return invalid();
   const providerPlaceID = text(input.providerPlaceID, 200);
   if (provider === "google_places" && !isPublicDiscoveryGoogleID(input.providerPlaceID)) return invalid();
   return {
@@ -266,7 +269,7 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
 function compareText(a: string, b: string): number { return a < b ? -1 : a > b ? 1 : 0; }
 
 type Bounds = [number, number, number, number];
-type VenueFilter = ["apple_maps" | "amap" | "google_places", string];
+type VenueFilter = [PublicDiscoveryPlace["provider"], string];
 
 export function isPublicDiscoveryVenueID(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && value.length <= 200 && !/[^!-~]|,/.test(value);
@@ -307,7 +310,7 @@ function validateAppleAliases(value: unknown, venues: Map<string, string>): Publ
   return aliases.sort((a, b) => compareText(a.applePlaceID, b.applePlaceID));
 }
 
-function query(url: URL): { bounds: Bounds; venue: VenueFilter | null; limit: number; cursor: string | null } {
+function query(url: URL, catalogVenues: boolean): { bounds: Bounds; venue: VenueFilter | null; limit: number; cursor: string | null } {
   const keys = [...url.searchParams.keys()];
   if (keys.some(key => !["bbox", "provider", "placeID", "limit", "cursor"].includes(key))
     || new Set(keys).size !== keys.length) return queryInvalid();
@@ -315,7 +318,9 @@ function query(url: URL): { bounds: Bounds; venue: VenueFilter | null; limit: nu
   let venue: VenueFilter | null = null;
   if (provider !== null || placeID !== null) {
     if (provider === "google_places" && isPublicDiscoveryGoogleID(placeID)) venue = [provider, placeID];
-    else if ((provider === "apple_maps" || provider === "amap") && isPublicDiscoveryVenueID(placeID)) {
+    else if (catalogVenues && provider === "taipei_catalog" && isCatalogDestinationID(placeID)) {
+      venue = [provider, placeID];
+    } else if ((provider === "apple_maps" || provider === "amap") && isPublicDiscoveryVenueID(placeID)) {
       venue = [provider, placeID];
     } else return queryInvalid();
   }
@@ -373,7 +378,7 @@ export function publicDiscoveryPagePost({ visibleUntil: _visibleUntil, ...post }
 export async function listPublicDiscoveryPosts(
   url: URL, options: PublicDiscoveryCapabilities & { filePath?: string; now?: Date } = {},
 ): Promise<PublicDiscoveryResponse> {
-  const { bounds, venue, limit, cursor } = query(url);
+  const { bounds, venue, limit, cursor } = query(url, options.catalogVenues === true);
   const filePath = options.filePath ?? process.env.SAVE_PUBLIC_DISCOVERY_INDEX_FILE;
   if (!filePath?.trim()) return invalid();
   let now: Date;
@@ -383,11 +388,20 @@ export async function listPublicDiscoveryPosts(
     now = options.now ?? new Date();
     index = parsePublicDiscoveryManifest(contents, now, "serving");
   } catch { return invalid(); }
-  const revisionPayload = options.googleVenues ? [index, "googleVenues", options.multiVenue === true]
-    : options.multiVenue ? [index, "multiVenue"] : index;
+  const permittedPosts = options.catalogVenues ? index.posts : index.posts.filter(post => post.place.provider !== "taipei_catalog");
+  const compatibleIndex = permittedPosts.length === index.posts.length ? index : {
+    ...index, posts: permittedPosts, coverage: index.coverage.map(item => {
+      const indexedPostCount = permittedPosts.filter(post => post.platform === item.platform).length;
+      const status = indexedPostCount === 0 && item.indexedPostCount > 0 ? "not_connected" as const : item.status;
+      return { ...item, status, indexedPostCount };
+    }),
+  };
+  const revisionPayload = options.catalogVenues ? [index, "catalogVenues", !!options.googleVenues, !!options.multiVenue]
+    : options.googleVenues ? [compatibleIndex, "googleVenues", options.multiVenue === true]
+    : options.multiVenue ? [compatibleIndex, "multiVenue"] : compatibleIndex;
   const indexRevision = createHash("sha256").update(JSON.stringify(revisionPayload)).digest("hex");
-  const visiblePosts = options.googleVenues ? index.posts : index.posts.filter(post => post.place.provider !== "google_places");
-  const coverage = index.coverage.map(item => {
+  const visiblePosts = options.googleVenues ? permittedPosts : permittedPosts.filter(post => post.place.provider !== "google_places");
+  const coverage = compatibleIndex.coverage.map(item => {
     const entries = visiblePosts.filter(post => post.platform === item.platform);
     const indexedPostCount = options.multiVenue ? entries.length : new Set(entries.map(post => post.id)).size;
     return { ...item, indexedPostCount };
