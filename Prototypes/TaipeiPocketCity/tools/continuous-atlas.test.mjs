@@ -27,7 +27,7 @@ test('every registered landmark opens inside a cached street tile and labels act
     const x=Math.floor((lon+180)/360*16384),y=Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)*8192);
     assert.ok(keys.has(x+'/'+y),row.id+' local context');
     const scene=await read('cities/'+row.id+'/scene.json');
-    const features=geographicScene(scene,row.landmarkIds,row.landmarkSites);
+    const features=geographicScene(scene,row.landmarkIds,row.landmarkSites,row.landmarkPlaceIds);
     assert.ok(features.some(f=>f.properties.kind==='pin'&&f.properties.name),row.id+' readable pin');
     for(const f of features.filter(f=>f.geometry.type==='Polygon')){
       assert.ok(f.geometry.coordinates.every(r=>r.length>=4&&r[0][0]===r.at(-1)[0]&&r[0][1]===r.at(-1)[1]));
@@ -60,4 +60,10 @@ test('surrounding streets expose named places while authored plots keep their ow
   assert.equal(tapped.category,'cafe');assert.equal(tapped.placeId,undefined);
   assert.equal(layers.find(l=>l.type==='symbol').minzoom,16.6);
   handlers.get('remove')();
+});
+
+test('a named parent museum owns the pin even when its 3D model uses an unnamed part',()=>{
+  const parents=[['hualien','w1350032556','poi/way/712411693'],['keelung','w253032621','poi/relation/7667653'],
+    ['miaoli','w200028241','poi/way/355386414']];
+  for(const [city,footprint,place] of parents)assert.equal(rows.find(r=>r.id===city).landmarkPlaceIds[footprint],place);
 });

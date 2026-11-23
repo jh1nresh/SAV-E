@@ -143,7 +143,7 @@ export async function addCityAtlas(map,before,open,onChange){
         const plants=scene.trees.map(([x,y,i])=>[...xy([x,y]),5.5,/palm/i.test(scene.species[i])?'palm':'broad']);
         mesh.put(id,scene.meta,index.parts,bytes);
         if(people){people.umbrellaShare=rain;map.addLayer(people,before);}
-        loaded.set(id,{features:geographicScene(scene,row.landmarkIds,row.landmarkSites),trees:plants,people});
+        loaded.set(id,{features:geographicScene(scene,row.landmarkIds,row.landmarkSites,row.landmarkPlaceIds),trees:plants,people});
         errors.delete(id);refresh();
       }).catch(e=>{if(!task.signal.aborted){errors.set(id,Date.now());console.warn('Pocket City',id,e);onChange();}})
         .finally(()=>{if(pending.get(id)===task)pending.delete(id);});

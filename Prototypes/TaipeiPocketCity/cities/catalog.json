@@ -2,6 +2,11 @@
   {
     "id": "tamsui",
     "area": "新北市",
+    "landmarkPlaceIds": {
+      "w290499654": "poi/way/290499654",
+      "w297301287": "poi/way/297301287",
+      "r3986680": "poi/relation/3986680"
+    },
     "name": "淡水",
     "landmark": "紅毛城、前清英國領事官邸與南門",
     "center": [
@@ -24,6 +29,9 @@
   {
     "id": "keelung",
     "area": "基隆市",
+    "landmarkPlaceIds": {
+      "w253032621": "poi/relation/7667653"
+    },
     "name": "基隆",
     "landmark": "海港大樓",
     "center": [
@@ -44,6 +52,10 @@
   {
     "id": "taoyuan",
     "area": "桃園市",
+    "landmarkPlaceIds": {
+      "w405959857": "poi/way/405959857",
+      "w405959863": "poi/way/405959863"
+    },
     "name": "桃園",
     "landmark": "大溪武德殿",
     "center": [
@@ -65,6 +77,9 @@
   {
     "id": "hsinchu-city",
     "area": "新竹市",
+    "landmarkPlaceIds": {
+      "w293504390": "poi/way/293504390"
+    },
     "name": "新竹市",
     "landmark": "新竹車站",
     "center": [
@@ -85,6 +100,9 @@
   {
     "id": "hsinchu-county",
     "area": "新竹縣",
+    "landmarkPlaceIds": {
+      "r7290036": "poi/relation/7290036"
+    },
     "name": "新竹縣",
     "landmark": "湖口三元宮",
     "center": [
@@ -105,6 +123,9 @@
   {
     "id": "miaoli",
     "area": "苗栗縣",
+    "landmarkPlaceIds": {
+      "w200028241": "poi/way/355386414"
+    },
     "name": "苗栗",
     "landmark": "臺灣客家文化館",
     "center": [
@@ -125,6 +146,9 @@
   {
     "id": "taichung",
     "area": "臺中市",
+    "landmarkPlaceIds": {
+      "w569913342": "poi/way/569913342"
+    },
     "name": "台中",
     "landmark": "臺中市役所",
     "center": [
@@ -145,6 +169,10 @@
   {
     "id": "changhua",
     "area": "彰化縣",
+    "landmarkPlaceIds": {
+      "w220285047": "poi/way/220285047",
+      "w307329570": "poi/way/307329570"
+    },
     "name": "彰化",
     "landmark": "彰化扇形車庫",
     "center": [
@@ -166,6 +194,9 @@
   {
     "id": "nantou",
     "area": "南投縣",
+    "landmarkPlaceIds": {
+      "w1198896246": "poi/way/1198896246"
+    },
     "name": "南投",
     "landmark": "日月潭慈恩塔",
     "center": [
@@ -186,6 +217,24 @@
   {
     "id": "yunlin",
     "area": "雲林縣",
+    "landmarkPlaceIds": {
+      "w1274037894": "poi/way/1274037894",
+      "w1274037895": "poi/way/1274037895",
+      "w1274037896": "poi/way/1274037896",
+      "w1274037897": "poi/way/1274037897",
+      "w1274037898": "poi/way/1274037898",
+      "w1274037899": "poi/way/1274037899",
+      "w1274037900": "poi/way/1274037900",
+      "w1274037901": "poi/way/1274037901",
+      "w1274037903": "poi/way/1274037903",
+      "w1274037904": "poi/way/1274037904",
+      "w1274037905": "poi/way/1274037905",
+      "w1274037910": "poi/way/1274037910",
+      "w1274037912": "poi/way/1274037912",
+      "w1274037913": "poi/way/1274037913",
+      "w1274037914": "poi/way/1274037914",
+      "w1274037915": "poi/way/1274037915"
+    },
     "name": "雲林",
     "landmark": "北港朝天宮",
     "center": [
@@ -226,6 +275,9 @@
   {
     "id": "chiayi-city",
     "area": "嘉義市",
+    "landmarkPlaceIds": {
+      "w286891391": "poi/way/286891391"
+    },
     "name": "嘉義市",
     "landmark": "嘉義車站",
     "center": [
@@ -246,6 +298,9 @@
   {
     "id": "chiayi-county",
     "area": "嘉義縣",
+    "landmarkPlaceIds": {
+      "w1352427633": "poi/way/1352427633"
+    },
     "name": "嘉義縣",
     "landmark": "高跟鞋教堂",
     "center": [
@@ -266,6 +321,12 @@
   {
     "id": "tainan",
     "area": "臺南市",
+    "landmarkPlaceIds": {
+      "w183052614": "poi/way/183052614",
+      "w561994806": "poi/way/561994806",
+      "w561994807": "poi/way/561994807",
+      "w561994812": "poi/way/561994812"
+    },
     "name": "台南",
     "landmark": "赤崁樓",
     "center": [
@@ -289,6 +350,9 @@
   {
     "id": "kaohsiung",
     "area": "高雄市",
+    "landmarkPlaceIds": {
+      "w205060859": "poi/way/205060859"
+    },
     "name": "高雄市",
     "landmark": "打狗英國領事館官邸",
     "center": [
@@ -309,6 +373,9 @@
   {
     "id": "pingtung",
     "area": "屏東縣",
+    "landmarkPlaceIds": {
+      "w310320724": "poi/way/310320724"
+    },
     "name": "屏東縣",
     "landmark": "鵝鑾鼻燈塔",
     "center": [
@@ -329,6 +396,9 @@
   {
     "id": "yilan",
     "area": "宜蘭縣",
+    "landmarkPlaceIds": {
+      "w196842735": "poi/way/196842735"
+    },
     "name": "宜蘭",
     "landmark": "蘭陽博物館",
     "center": [
@@ -349,6 +419,9 @@
   {
     "id": "hualien",
     "area": "花蓮縣",
+    "landmarkPlaceIds": {
+      "w1350032556": "poi/way/712411693"
+    },
     "name": "花蓮縣",
     "landmark": "松園別館",
     "center": [
@@ -369,6 +442,9 @@
   {
     "id": "taitung",
     "area": "臺東縣",
+    "landmarkPlaceIds": {
+      "w1112414810": "poi/way/1112414810"
+    },
     "name": "臺東",
     "landmark": "臺東天后宮",
     "center": [
@@ -389,6 +465,7 @@
   {
     "id": "penghu",
     "area": "澎湖縣",
+    "landmarkPlaceIds": {},
     "name": "澎湖",
     "landmark": "開臺澎湖天后宮",
     "center": [
@@ -418,6 +495,9 @@
   {
     "id": "kinmen",
     "area": "金門縣",
+    "landmarkPlaceIds": {
+      "w363490447": "poi/way/363490447"
+    },
     "name": "金門",
     "landmark": "莒光樓",
     "center": [
@@ -438,6 +518,7 @@
   {
     "id": "lienchiang",
     "area": "連江縣",
+    "landmarkPlaceIds": {},
     "name": "連江",
     "landmark": "東湧燈塔",
     "center": [
@@ -467,6 +548,11 @@
   {
     "id": "shanghai",
     "area": "上海",
+    "landmarkPlaceIds": {
+      "w178407318": "poi/way/178407318",
+      "w178408820": "poi/way/178408820",
+      "r2380996": "poi/relation/2380996"
+    },
     "name": "上海",
     "landmark": "外灘海關大樓鐘樓、前匯豐銀行與招商局",
     "center": [
@@ -495,6 +581,9 @@
   {
     "id": "beijing",
     "area": "北京",
+    "landmarkPlaceIds": {
+      "w43921139": "poi/way/43921139"
+    },
     "name": "北京",
     "landmark": "天壇祈年殿",
     "center": [
@@ -515,6 +604,9 @@
   {
     "id": "los-angeles",
     "area": "洛杉磯",
+    "landmarkPlaceIds": {
+      "w422130705": "poi/way/422130705"
+    },
     "name": "Los Angeles",
     "landmark": "Griffith Observatory",
     "center": [

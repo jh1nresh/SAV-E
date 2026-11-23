@@ -6,7 +6,7 @@ export function geographicPoint(meta,[x,y]){
   return [meta.lon+east/(111320*Math.cos(meta.lat*Math.PI/180)),meta.lat+north/110574];
 }
 
-export function geographicScene(scene,landmarkIds,sites=[]){
+export function geographicScene(scene,landmarkIds,sites=[],placeIds={}){
   const featured=new Set(landmarkIds),features=[];
   const project=point=>geographicPoint(scene.meta,point);
   function add(type,coordinates,properties){features.push({type:'Feature',properties,geometry:{type,coordinates}});}
@@ -23,10 +23,10 @@ export function geographicScene(scene,landmarkIds,sites=[]){
   for(const way of scene.centerlines)if(way.name&&way.p.length>1)add('LineString',way.p.map(project),{kind:'street',name:way.name});
   for(const b of scene.buildings){
     if(!b.n||!featured.has(b.id))continue;
-    const osmType={w:'way',r:'relation'}[b.id[0]];
+    const placeId=placeIds[b.id];
     const edge=b.ring.reduce((best,p)=>p[1]<best[1]?p:best,b.ring[0]);
     const labelAt=[(b.obb.c[0]+edge[0])*.5,edge[1]];
-    add('Point',project(labelAt),{kind:'pin',name:b.n,category:'museum',categoryLabel:'地標',rank:0,placeId:'poi/'+osmType+'/'+b.id.slice(1)});
+    add('Point',project(labelAt),{kind:'pin',name:b.n,category:'museum',categoryLabel:'地標',rank:0,...(placeId&&{placeId})});
   }
   for(const site of sites)add('Point',site.point,{kind:'pin',name:site.name,category:'museum',categoryLabel:'地標',rank:0,placeId:'poi/'+site.osmType+'/'+site.osmId});
   for(const poi of scene.pois){

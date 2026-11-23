@@ -12,6 +12,24 @@ PLACES = {
     'penghu':'澎湖縣','kinmen':'金門縣','lienchiang':'連江縣',
     'shanghai':'上海','beijing':'北京','los-angeles':'洛杉磯',
 }
+def verified_landmark_places(folder, meta):
+    source = next(folder.glob('osm*.json'))
+    data = json.loads(source.read_text())
+    refs = {row['type'][0]+str(row['id']): row for row in data['elements']}
+    scene = json.loads((folder/'scene.json').read_text())
+    result = {}
+    for building in scene['buildings']:
+        key, name = building['id'], building.get('n')
+        if key not in meta['landmarkIds'] or not name:
+            continue
+        for candidate in (meta.get('placeReferences', {}).get(key), building.get('of'), key):
+            row = refs.get(candidate)
+            if row and any(row['tags'].get(tag)==name for tag in ('name','name:zh','name:zh-Hant','name:en')):
+                result[key] = 'poi/'+row['type']+'/'+str(row['id'])
+                break
+    return result
+
+
 def catalog():
     rows = []
     for key, area in PLACES.items():
@@ -19,7 +37,7 @@ def catalog():
         if not all((folder/f).is_file() for f in ('metadata.json','scene.json','map-mesh.bin','map-mesh.json')):
             continue
         meta = json.loads((folder/'metadata.json').read_text())
-        rows.append(dict(id=key,area=area,**{k:meta[k] for k in ('name','landmark','center','bounds','sizeMeters','landmarkIds','landmarkSites') if k in meta}))
+        rows.append(dict(id=key,area=area,landmarkPlaceIds=verified_landmark_places(folder,meta),**{k:meta[k] for k in ('name','landmark','center','bounds','sizeMeters','landmarkIds','landmarkSites') if k in meta}))
     return rows
 if __name__=='__main__':
     (ROOT/'catalog.json').write_text(json.dumps(catalog(),ensure_ascii=False,indent=2)+'\n')
