@@ -851,6 +851,20 @@
             "branchEvidence": "Savvy’s Threads editorial names this venue and branch address in its individual recommendation. The matching Instagram recommendation and exact Apple Maps venue H2710I3F98C28F564B3 are already indexed.",
             "multiVenue": true
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 鼎元豆漿",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "320ec34d9f57e368347c8670f853555738f826c26accd9684ef5bcfc2618ceb7",
+            "branchEvidence": "The exact public post lists 鼎元豆漿 at 中正區金華街 30-1 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C28F564B3."
+          }
         }
       ]
     },
@@ -1551,6 +1565,20 @@
             "branchEvidence": "Both Savvy originals name 劉媽媽飯糰 in the 古亭站 guide. The reviewed address is 台北市中正區杭州南路二段88號1樓, with exact Apple venue H2710I3F98C5A58261F.",
             "multiVenue": true
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 劉媽媽飯糰",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "b10991deac52bece2bdc88c951038b29b86ef5a2503bbe432d7b555bab89146b",
+            "branchEvidence": "The exact public post lists 劉媽媽飯糰 at 中正區杭州南路二段 88 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C5A58261F."
+          }
         }
       ]
     },
@@ -1760,6 +1788,20 @@
             "contentFingerprint": "20e9fecb7922c42645ceac2855c70028d21ce8869f7111a4c389c155d3797077",
             "branchEvidence": "Both Savvy originals name 永和豆漿大王 in the 大安站 guide. The reviewed address is 台北市大安區復興南路二段102號, with exact Apple venue H2710I3F98C5923E18F. https://shotfunlady.com/yong-he-dou-jiang-da-wang/ identifies the branch and opening hours cited in the original.",
             "multiVenue": true
+          }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 大安永和豆漿大王",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "e6505587ba945b8342dd2bb4ef0938ac8ee11216331cc4d9b491c1ad9219a7d3",
+            "branchEvidence": "The exact public post lists 大安永和豆漿大王 at 大安區復興南路二段 102 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C5923E18F."
           }
         }
       ]
@@ -4309,6 +4351,20 @@
             "branchEvidence": "The Michelin entry calls this Zhongshan branch by its exact address and explains its move to the alley by Xingtian Temple. The public Maps listing calls it the Xingtian Temple location, with the same exact address. https://guide.michelin.com/tw/zh_TW/taipei-region/taipei/restaurant/soft-power The independently resolved Google listing agrees with the normalized Apple point within 0.64 meters.",
             "multiVenue": true
           }
+        },
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 軟食力",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "258ddcb9e428c6125cbee0f35f4eb73aea74944b660b735eec350f856b823304",
+            "branchEvidence": "The exact public post lists 軟食力 at 中山區民權東路二段 135 巷 30 弄 21 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C58256733."
+          }
         }
       ]
     },
@@ -4364,6 +4420,174 @@
             "contentFingerprint": "1f168ed6638c8195e8b2019a318c19c77dd65e11899c281235d754d84141757b",
             "branchEvidence": "Both the Taipei Food Tracer and Wanhua District office match the exact Google listing at Kangding No. 79 with phone 02-2311-5241. The Apple candidate provides a conflicting Changsha Road address; it is excluded. https://whdo.gov.taipei/News_Content.aspx?n=19CABBEF3F991E9E&s=761B8F4A0ACF2FC5&sms=FE5F0DE8FA424CE8 The WGS84 coordinates are taken from the exact Google map listing.",
             "multiVenue": true
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F996BB33EE7F",
+        "name": "阜杭豆漿",
+        "address": "台北市中正區忠孝東路一段108號2樓",
+        "latitude": 25.0442148,
+        "longitude": 121.5248424,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 阜杭豆漿",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "9fa3d9507f1ea2f05c8f566fc115d1fe50b2fc5f6da9456ed68e59c869f278d2",
+            "branchEvidence": "The exact public post lists 阜杭豆漿 at 中正區忠孝東路一段 108 號 2 樓. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F996BB33EE7F."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C28F5640E",
+        "name": "陳根找茶",
+        "address": "台北市信義區莊敬路391巷7號",
+        "latitude": 25.0284298,
+        "longitude": 121.5657238,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 陳根找茶",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "6263121d3dd211f9c61b1e34048f20811fad95c17827113fc22f3bdc2a46262e",
+            "branchEvidence": "The exact public post lists 陳根找茶 at 信義區莊敬路 391 巷 7 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C28F5640E."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C2A28890E",
+        "name": "四海豆漿大王",
+        "address": "台北市大同區長安西路29號",
+        "latitude": 25.0503586,
+        "longitude": 121.519838,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 四海豆漿大王",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "b8ed53e554ea3dc20672b5f4982a3a309d7868a089995ffba5a026110500c557",
+            "branchEvidence": "The exact public post lists 四海豆漿大王 at 大同區長安西路 29 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C2A28890E."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F996BE336413",
+        "name": "秦小姐豆漿店",
+        "address": "台北市松山區延吉街7-6號",
+        "latitude": 25.0472484,
+        "longitude": 121.5535914,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 秦小姐豆漿店",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "22eed1e3b3e472a4ad4eb9856968ebb7d0377b046f554bd6e4e9d2698b9ae421",
+            "branchEvidence": "The exact public post lists 秦小姐豆漿店 at 松山區延吉街 7-6 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F996BE336413."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C578E883B",
+        "name": "來來豆漿",
+        "address": "台北市內湖區內湖路一段93號",
+        "latitude": 25.0845971,
+        "longitude": 121.561438,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 來來豆漿",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "cb1467e8b0566cb5f27923eb958770366ccd219706b91426cc9bd5dc868d0db1",
+            "branchEvidence": "The exact public post lists 來來豆漿 at 內湖區內湖路一段 93 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C578E883B."
+          }
+        }
+      ]
+    },
+    {
+      "place": {
+        "provider": "apple_maps",
+        "providerPlaceID": "H2710I3F98C578E9525",
+        "name": "津津豆漿",
+        "address": "台北市大同區延平北路四段5號",
+        "latitude": 25.0689315,
+        "longitude": 121.5109844,
+        "coordinateSystem": "WGS84",
+        "category": "food"
+      },
+      "candidates": [
+        {
+          "platform": "threads",
+          "sourceURL": "https://www.threads.com/@savvysave_/post/DgCCMLSFSzW",
+          "authorHandle": "savvysave_",
+          "title": "Savvy 推薦｜台北傳統早餐 · 津津豆漿",
+          "review": {
+            "checkedAt": "2026-11-22T21:34:53.976Z",
+            "origin": "public_web_index",
+            "publishedAt": "2026-11-22T05:16:56.000Z",
+            "multiVenue": true,
+            "contentFingerprint": "27c011765a68bb1ded9f3d46273227cad8bc9f513850a94bf319cf4656cd22b4",
+            "branchEvidence": "The exact public post lists 津津豆漿 at 大同區延平北路四段 5 號. Exact Apple Maps identifier readback matched the documented business and branch: H2710I3F98C578E9525."
           }
         }
       ]
