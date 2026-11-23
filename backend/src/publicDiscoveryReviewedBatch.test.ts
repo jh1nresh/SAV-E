@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -42,6 +42,56 @@ test("sharded compiler publishes one readable catalog after validating the entir
   await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [threads] }] }));
   await assert.rejects(writeShardedPublicIndex(rejectedOutput, [first, second], now));
   await assert.rejects(access(rejectedOutput), { code: "ENOENT" });
+});
+
+test("keeps the serving pointer through failed replacement and reuses verified partitions", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-republish-shards-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const first = join(root, "approved-old.json");
+  const second = join(root, "approved-new.json");
+  await writeFile(first, JSON.stringify(batch(threads)));
+  await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [instagram] }] }));
+  const directory = join(root, "catalog");
+  const { filePath } = await writeShardedPublicIndex(directory, [first], now);
+  const before = await readFile(filePath, "utf8");
+  const query = new URL("http://localhost/v0/discovery/posts?bbox=121,25,122,26");
+  const list = () => listPublicDiscoveryPosts(query, { filePath, now });
+  assert.deepEqual((await list()).posts.map(row => row.id), ["threads:TER_1"]);
+
+  const staged = await writeShardedPublicIndex(join(root, "comparison"), [second], now);
+  const [digest] = JSON.parse(await readFile(staged.filePath, "utf8")).shards;
+  const corrupt = join(directory, digest + ".json");
+  await writeFile(corrupt, "{corrupt");
+  await assert.rejects(writeShardedPublicIndex(directory, [first, second], now, { replace: true }));
+  assert.equal(await readFile(filePath, "utf8"), before);
+  assert.deepEqual((await list()).posts.map(row => row.id), ["threads:TER_1"]);
+  await rm(corrupt);
+
+  const afterExpiry = new Date(now.getTime() + 86_400_000);
+  await assert.rejects(writeShardedPublicIndex(directory, [first, second], now,
+    { replace: true, clock: () => afterExpiry }));
+  assert.equal(await readFile(filePath, "utf8"), before);
+  assert.deepEqual((await list()).posts.map(row => row.id), ["threads:TER_1"]);
+
+  const result = await writeShardedPublicIndex(directory, [first, second], now, { replace: true });
+  assert.equal(result.associations, 2);
+  assert.deepEqual((await list()).posts.map(row => row.id), ["instagram:IG_1", "threads:TER_1"]);
+  await assert.rejects(writeShardedPublicIndex(directory, [first], now), { code: "EEXIST" });
+  await writeShardedPublicIndex(directory, [first], now, { replace: true });
+  assert.equal(await readFile(filePath, "utf8"), before);
+  await access(corrupt); // Leave the prior leaves for readers that captured their pointer.
+});
+
+test("explicit replacement refuses a non-v2 pointer", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-republish-legacy-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const review = join(root, "approved.json");
+  await writeFile(review, JSON.stringify(batch(threads)));
+  const index = join(root, "index.json");
+  const legacy = JSON.stringify(compileReviewedPublicBatch(batch(threads), now).manifest);
+  await writeFile(index, legacy);
+  await assert.rejects(writeShardedPublicIndex(root, [review], now, { replace: true }));
+  assert.equal(await readFile(index, "utf8"), legacy);
 });
 
 test("Threads reply fingerprints bind the selected reply and optionally require its embedded parent", async () => {

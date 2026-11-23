@@ -425,15 +425,20 @@ type CatalogProjection = {
 
 let cachedProjection: CatalogProjection | undefined;
 
+export function publicDiscoveryShardDigests(value: unknown): string[] {
+  const { schemaVersion, shards } = record(value, ["schemaVersion", "shards"]);
+  if (schemaVersion !== 2 || !Array.isArray(shards) || shards.length === 0 || new Set(shards).size !== shards.length
+    || !shards.every(digest => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest))) return invalid();
+  return shards;
+}
+
 async function readPublicDiscoveryIndex(filePath: string, requestedTime?: Date) {
   const contents = await readPublicDiscoveryFile(filePath);
   if (!contents || typeof contents !== "object" || !("schemaVersion" in contents) || contents.schemaVersion !== 2) {
     const now = requestedTime ?? new Date();
     return { now, index: parsePublicDiscoveryManifest(contents, now, "serving"), sharded: false };
   }
-  const { shards } = record(contents, ["schemaVersion", "shards"]);
-  if (!Array.isArray(shards) || shards.length === 0 || new Set(shards).size !== shards.length
-    || !shards.every(digest => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest))) return invalid();
+  const shards = publicDiscoveryShardDigests(contents);
   const shardKey = JSON.stringify(shards);
   const directory = dirname(filePath);
   const cached = cachedProjection;

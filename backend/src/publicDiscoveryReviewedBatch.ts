@@ -1,16 +1,17 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { isIP } from "node:net";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   canonicalSource, combinePublicDiscoveryShards, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes, publicDiscoveryMaxPosts,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
-  publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, timestamp,
+  publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, publicDiscoveryShardDigests, timestamp,
   validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
   type PublicDiscoveryPlace, type PublicDiscoveryPost,
 } from "./publicDiscovery.js";
 import { addVenueHighlights, type PublicLikesObservation } from "./publicDiscoveryHighlights.js";
+import { writePublicSourceJSON } from "./publicDiscoverySaveQueue.js";
 import { defaultFetchText } from "./sourceSearchWorker.js";
 import { publicPostEvidenceFingerprint, publicReviewEmbedURL, threadsParentFingerprintPrefix } from "./publicPostReverification.js";
 
@@ -400,25 +401,47 @@ export async function compileReviewedPublicFiles(files: string[], now = new Date
 }
 
 /** Compile each review shard and write the catalog only after the complete snapshot passes validation. */
-export async function writeShardedPublicIndex(directory: string, files: string[], now = new Date()) {
+export async function writeShardedPublicIndex(
+  directory: string, files: string[], now = new Date(),
+  options: { replace?: boolean; clock?: () => Date } = {},
+) {
   const parts = [];
-  const shards = new Map<string, string>();
+  const shards = new Map<string, ReturnType<typeof compileReviewedPublicBatch>["manifest"]>();
   for (const file of files) {
     const { manifest } = await compileReviewedPublicFiles([file], now);
     const data = `${JSON.stringify(manifest)}\n`;
     if (Buffer.byteLength(data) > publicDiscoveryMaxFileBytes) throw new Error("Manifest shard is too large");
     const digest = createHash("sha256").update(data).digest("hex");
     if (shards.has(digest)) throw new Error("Duplicate manifest shard");
-    shards.set(digest, data);
+    shards.set(digest, manifest);
     parts.push(validatePublicDiscoveryManifest(manifest, now));
   }
-  const { posts } = combinePublicDiscoveryShards(parts, now);
-  const catalog = `${JSON.stringify({ schemaVersion: 2, shards: [...shards.keys()] })}\n`;
-  if (Buffer.byteLength(catalog) > publicDiscoveryMaxFileBytes) throw new Error("Manifest catalog is too large");
-  await mkdir(directory);
-  for (const [digest, data] of shards) await writeFile(join(directory, digest + ".json"), data, { flag: "wx" });
-  await writeFile(join(directory, "index.json"), catalog, { flag: "wx" });
-  return { filePath: join(directory, "index.json"), shards: parts.length, associations: posts.length };
+  combinePublicDiscoveryShards(parts, now);
+  const catalog = { schemaVersion: 2, shards: [...shards.keys()] };
+  if (Buffer.byteLength(JSON.stringify(catalog) + "\n") > publicDiscoveryMaxFileBytes) {
+    throw new Error("Manifest catalog is too large");
+  }
+  const filePath = join(directory, "index.json");
+  if (options.replace) {
+    if (!(await lstat(directory)).isDirectory()) throw new Error("Expected a public discovery catalog directory");
+    // Replacing an existing serving index is intentional and limited to this format.
+    publicDiscoveryShardDigests(await readPublicDiscoveryFile(filePath));
+  } else {
+    await mkdir(directory, { mode: 0o700 });
+  }
+  for (const [digest, manifest] of shards) {
+    const path = join(directory, digest + ".json");
+    const exists = await readPublicDiscoveryFile(path, digest).then(() => true).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    });
+    if (!exists) await writePublicSourceJSON(path, manifest);
+  }
+  // A single publisher owns this directory. Leave prior leaves in place for
+  // requests already reading the previous pointer.
+  const { posts } = combinePublicDiscoveryShards(parts, options.clock?.() ?? now);
+  await writePublicSourceJSON(filePath, catalog);
+  return { filePath, shards: parts.length, associations: posts.length };
 }
 
 /** Validate the whole archive before any provider read, then compile one fresh snapshot. */
@@ -458,8 +481,10 @@ async function readReviewedPublicFiles(files: string[]) {
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   void (async () => {
     const args = process.argv.slice(2);
-    if (args[0] === "--sharded-index" && args[1] && args.length >= 3) {
-      const result = await writeShardedPublicIndex(args[1], args.slice(2));
+    if ((args[0] === "--sharded-index" || args[0] === "--publish-sharded-index") && args[1] && args.length >= 3) {
+      const result = await writeShardedPublicIndex(args[1], args.slice(2), new Date(), {
+        replace: args[0] === "--publish-sharded-index", clock: () => new Date(),
+      });
       process.stdout.write(`${JSON.stringify(result)}\n`);
       return;
     }
