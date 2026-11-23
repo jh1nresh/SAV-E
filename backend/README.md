@@ -119,10 +119,12 @@ originals, saves its retry window and publishes the approved result.
 python3 backend/scripts/publish-reviewed-generation.py --maintain-drafts /absolute/path/to/source-root
 ```
 
-The receipt includes `nextAllowedAt` for a scheduler. An interrupted draft can
-resume while the provider is in cooldown if its trusted inventory is still
-current. Existing source revalidation is separate and must use the same lock
-and provider hold to keep approved posts current.
+Use `--maintain-sources` for a cycle that also rechecks up to four approved
+originals. It prioritizes places that could lose their last source, then
+checks pending drafts. Both steps share the provider hold.
+
+The receipt includes `nextAllowedAt` for a scheduler. Completed checks can
+resume during a cooldown. Draft recovery also confirms its trusted inventory.
 
 A draft maintenance runner can call `approveReviewedDrafts` under the same
 lock with its candidate verifier. Before scheduling provider reads, it calls

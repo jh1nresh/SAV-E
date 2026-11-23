@@ -143,11 +143,11 @@ export async function publishApprovedGeneration(root: string, descriptor: number
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   const [root, descriptor, mode, ...extra] = process.argv.slice(2);
   void (async () => {
-    if (!root || !descriptor || extra.length || (mode !== undefined && mode !== "--maintain-drafts")) {
+    if (!root || !descriptor || extra.length || (mode !== undefined && mode !== "--maintain-drafts" && mode !== "--maintain-sources")) {
       throw new Error("Expected source root and lock descriptor");
     }
-    const receipt = mode === "--maintain-drafts"
-      ? await (await import("./publicDiscoveryDraftMaintenance.js")).maintainPublicSourceDrafts(root, Number(descriptor))
+    const receipt = mode
+      ? await (await import("./publicDiscoveryDraftMaintenance.js")).maintainPublicSourceDrafts(root, Number(descriptor), { renewExisting: mode === "--maintain-sources" })
       : await publishApprovedGeneration(root, Number(descriptor));
     process.stdout.write(`${JSON.stringify(receipt)}\n`);
   })().catch(() => {

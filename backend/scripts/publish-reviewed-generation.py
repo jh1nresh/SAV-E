@@ -8,7 +8,9 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path, help="absolute, initialized source maintenance root")
-    parser.add_argument("--maintain-drafts", action="store_true", help="run one bounded draft maintenance cycle")
+    maintenance = parser.add_mutually_exclusive_group()
+    maintenance.add_argument("--maintain-drafts", action="store_true", help="run one bounded draft maintenance cycle")
+    maintenance.add_argument("--maintain-sources", action="store_true", help="renew approved sources and maintain drafts")
     args = parser.parse_args()
     root = args.root
     state = root / "state"
@@ -28,7 +30,7 @@ def main():
         descriptor = lock.fileno()
         # Keep the flock and process identity when handing control to the publisher.
         os.set_inheritable(descriptor, True)
-        mode = ["--maintain-drafts"] if args.maintain_drafts else []
+        mode = ["--maintain-sources"] if args.maintain_sources else ["--maintain-drafts"] if args.maintain_drafts else []
         os.execvp("node", ["node", str(entry), str(root), str(descriptor), *mode])
 
 
