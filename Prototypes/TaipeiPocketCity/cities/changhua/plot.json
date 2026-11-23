@@ -1,0 +1,20 @@
+{
+ "lat": 24.0858312,
+ "lon": 120.5400647,
+ "rotation": -31,
+ "size": 200.0,
+ "asked": {
+  "lat": 24.08587,
+  "lon": 120.54009
+ },
+ "moved_m": 5.0,
+ "famous_inside": [
+  "way/537053316",
+  "彰化扇形車庫",
+  "彰化機務段"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "彰化扇形車庫",
+ "osm_base": null
+}
