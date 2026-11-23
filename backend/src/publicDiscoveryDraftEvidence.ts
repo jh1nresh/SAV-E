@@ -44,15 +44,9 @@ function source(candidate: Record<string, unknown>) {
   return { url, platform, post: `${platform}:${postID}` } as const;
 }
 
-function trustedInventory(raw: unknown, localized: unknown, features: unknown) {
-  if (!Array.isArray(raw)) throw new Error("Invalid trusted place inventory");
-  const inventory = new Map<string, PublicDiscoveryPlace>();
-  for (const value of raw) {
-    const place = validatePublicDiscoveryPlace(value);
-    const identity = placeKey(place);
-    if (inventory.has(identity)) throw new Error("Duplicate trusted place");
-    inventory.set(identity, place);
-  }
+export function localizedPublicDiscoveryPlaces(
+  inventory: ReadonlyMap<string, PublicDiscoveryPlace>, localized: unknown,
+) {
   if (!Array.isArray(localized) || localized.length > inventory.size) throw new Error("Invalid localized address inventory");
   const evidencePlaces = new Map(inventory);
   for (const value of localized) {
@@ -67,6 +61,19 @@ function trustedInventory(raw: unknown, localized: unknown, features: unknown) {
     if (!publicStreetKey(evidencePlace)) throw new Error("Localized address needs a full Taipei street number");
     evidencePlaces.set(identity, evidencePlace);
   }
+  return evidencePlaces;
+}
+
+function trustedInventory(raw: unknown, localized: unknown, features: unknown) {
+  if (!Array.isArray(raw)) throw new Error("Invalid trusted place inventory");
+  const inventory = new Map<string, PublicDiscoveryPlace>();
+  for (const value of raw) {
+    const place = validatePublicDiscoveryPlace(value);
+    const identity = placeKey(place);
+    if (inventory.has(identity)) throw new Error("Duplicate trusted place");
+    inventory.set(identity, place);
+  }
+  const evidencePlaces = localizedPublicDiscoveryPlaces(inventory, localized);
   if (!Array.isArray(features) || features.length > inventory.size) throw new Error("Invalid official feature inventory");
   const official = new Map<string, ReturnType<typeof readTaipeiFeatureProof>>();
   const catalogIDs = new Set<string>();

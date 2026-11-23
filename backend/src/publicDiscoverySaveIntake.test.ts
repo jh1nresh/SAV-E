@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createPublicDiscoverySaveIntake, loadPublicDiscoverySaveIntake } from "./publicDiscoverySaveIntake.js";
+import { createPublicDiscoverySaveIntake, loadPublicDiscoverySaveIntake, parsePublicSourceIntakeInventory } from "./publicDiscoverySaveIntake.js";
 import type { PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { parsePublicSourceQueue, type QueueState } from "./publicDiscoverySaveQueue.js";
 
@@ -15,6 +15,34 @@ const inventory = () => new Map<string, { place: PublicDiscoveryPlace; missing: 
   [identity, { place, missing: ["instagram", "threads"] }],
   [JSON.stringify([second.provider, second.providerPlaceID]), { place: second, missing: ["instagram"] }],
 ]);
+
+test("searches with the verified localized address while preserving the exact draft place", async () => {
+  const original = {
+    ...place, provider: "apple_maps" as const, name: "無店名魷魚羹",
+    address: "111 Taiwan Taibei City Shilin Renyongli Danan Road No.7, Shilin, Taibei, Taiwan China",
+  };
+  const localized = {
+    provider: original.provider, providerPlaceID: original.providerPlaceID,
+    expectedAddress: original.address, address: "台北市士林區大南路7號",
+  };
+  const rows = [{ place: original, missing: ["instagram", "threads"] }];
+  const queries: string[] = [];
+  const draftPlaces: PublicDiscoveryPlace[] = [];
+  // Reflect.apply also exercises the old one-argument parser in the regression check.
+  const worker = createPublicDiscoverySaveIntake({
+    inventory: Reflect.apply(parsePublicSourceIntakeInventory, undefined, [rows, [localized]]),
+    catalogScan: true,
+    async search(query) { queries.push(query); return []; },
+    async write(_identity, draft) { draftPlaces.push(draft.place); },
+  });
+  await worker.idle();
+  assert.equal(queries.length, 2);
+  assert.ok(queries.every(query => query.includes("台北市士林區大南路7號")), queries.join("\n"));
+  assert.ok(queries.every(query => !query.includes("Danan Road")));
+  assert.deepEqual(draftPlaces, [original]);
+  assert.throws(() => Reflect.apply(parsePublicSourceIntakeInventory, undefined,
+    [rows, [{ ...localized, expectedAddress: "stale provider address" }]]), /Invalid localized address evidence/);
+});
 
 test("loads new public venues during provider cooldown and drops removed pending venues", async () => {
   const at = Date.parse("2026-11-23T05:00:00Z");
