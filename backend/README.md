@@ -110,6 +110,11 @@ already holds the same lock calls `publishApprovedGeneration` with its inherited
 descriptor. Re-running after an interruption can publish the already approved
 snapshot without reading Instagram or Threads again.
 
+A draft maintenance runner can call `approveReviewedDrafts` under the same
+lock with its candidate verifier. Before scheduling provider reads, it calls
+`resumePendingDraftApproval` so an interrupted approval can finish while the
+provider is still in cooldown. Both use the existing generation archive.
+
 ## Deploy checklist
 
 Merge does not migrate. The backend does not auto-apply SQL on boot.

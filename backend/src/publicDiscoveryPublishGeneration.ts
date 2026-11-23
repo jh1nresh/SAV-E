@@ -26,7 +26,7 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-async function readReviewEnvelope(path: string, digest: string) {
+export async function readReviewEnvelope(path: string, digest: string) {
   // The private envelope can include both the archive and a retained 6 MiB snapshot.
   const handle = await open(path, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW);
   try {
@@ -40,7 +40,9 @@ async function readReviewEnvelope(path: string, digest: string) {
       if (typeof key !== "string") throw new Error("Invalid quarantined association");
       return key;
     }));
-    return { archive: envelope.archive, held };
+    return { archive: envelope.archive, held, quarantine: envelope.quarantine as unknown[],
+      retainedManifest: envelope.retainedManifest, receipt: envelope.receipt, managedBy: envelope.managedBy,
+      activationComplete: envelope.activationComplete };
   } finally {
     await handle.close();
   }
@@ -74,10 +76,9 @@ async function confirmedPublication(directory: string, pointerSHA256: string) {
   return true;
 }
 
-/** The caller must hold the supervisor's flock for the lifetime of this operation. */
-export async function publishApprovedGeneration(root: string, descriptor: number, clock = () => new Date()) {
+/** Check the inherited descriptor for an operation running under the writer's flock. */
+export function approvedSourceState(root: string, descriptor: number) {
   const state = join(root, "state");
-  const directory = join(root, "serving");
   if (!isAbsolute(root) || !Number.isSafeInteger(descriptor) || descriptor < 3
     || !lstatSync(root).isDirectory() || !lstatSync(state).isDirectory()
     || !lstatSync(join(state, "generations")).isDirectory()) throw new Error("Expected an initialized source root and inherited lock");
@@ -86,12 +87,23 @@ export async function publishApprovedGeneration(root: string, descriptor: number
   if (!inherited.isFile() || !lock.isFile() || inherited.dev !== lock.dev || inherited.ino !== lock.ino) {
     throw new Error("Expected the inherited source lock");
   }
+  return state;
+}
 
+export async function readActiveApprovedGeneration(state: string) {
   const bytes = await readPublicDiscoveryBytes(join(state, "active-index.json"));
   const indexSHA256 = sha(bytes);
   const raw = record(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
   const projectedAt = new Date(timestamp(raw.generatedAt));
-  const { archive, held } = await readReviewEnvelope(join(state, "generations", indexSHA256 + ".json"), indexSHA256);
+  const envelope = await readReviewEnvelope(join(state, "generations", indexSHA256 + ".json"), indexSHA256);
+  return { indexSHA256, raw, projectedAt, envelope };
+}
+
+/** The caller must hold the supervisor's flock for the lifetime of this operation. */
+export async function publishApprovedGeneration(root: string, descriptor: number, clock = () => new Date()) {
+  const state = approvedSourceState(root, descriptor);
+  const directory = join(root, "serving");
+  const { indexSHA256, raw, projectedAt, envelope: { archive, held } } = await readActiveApprovedGeneration(state);
   const checkpoint = join(state, "sharded-publication.json");
   const existing = await lstat(directory).catch(absent);
   if (existing && !existing.isDirectory()) throw new Error("Expected a serving catalog directory");

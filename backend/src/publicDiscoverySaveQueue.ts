@@ -45,9 +45,9 @@ export function parsePublicSourceQueue(value: unknown, currentIdentities: Readon
     ...(raw.catalogAfter === undefined ? {} : { catalogAfter: raw.catalogAfter }) };
 }
 
-export async function writePublicSourceJSON(path: string, value: unknown): Promise<void> {
+export async function writePublicSourceJSON(path: string, value: unknown, maxBytes = publicDiscoveryMaxFileBytes): Promise<void> {
   const data = JSON.stringify(value) + "\n";
-  if (Buffer.byteLength(data) > publicDiscoveryMaxFileBytes) throw new Error("Public source queue file is too large");
+  if (Buffer.byteLength(data) > maxBytes) throw new Error("Public source queue file is too large");
   const temporary = path + "." + randomUUID() + ".tmp";
   const handle = await open(temporary, "wx", 0o600);
   try {
