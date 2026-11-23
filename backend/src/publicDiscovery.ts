@@ -351,7 +351,7 @@ function cursorFor(indexRevision: string, bounds: Bounds, venue: VenueFilter | n
   const scope = venue === null ? [indexRevision, bounds, limit, offset] : [indexRevision, bounds, venue, limit, offset];
   return createHash("sha256").update(JSON.stringify(scope)).digest("base64url");
 }
-export async function readPublicDiscoveryFile(filePath: string, digest?: string): Promise<unknown> {
+async function readPublicDiscoveryBytes(filePath: string, digest?: string): Promise<Buffer> {
   const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await handle.stat();
@@ -367,8 +367,13 @@ export async function readPublicDiscoveryFile(filePath: string, digest?: string)
     if (length !== before.size || after.size !== before.size || after.mtimeMs !== before.mtimeMs) return invalid();
     const bytes = buffer.subarray(0, length);
     if (digest !== undefined && createHash("sha256").update(bytes).digest("hex") !== digest) return invalid();
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    return bytes;
   } finally { await handle.close(); }
+}
+
+export async function readPublicDiscoveryFile(filePath: string, digest?: string): Promise<unknown> {
+  const bytes = await readPublicDiscoveryBytes(filePath, digest);
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 }
 
 export function publicDiscoveryPostHasEnded(post: PublicDiscoveryPost, time: number): boolean {
@@ -399,6 +404,27 @@ export function combinePublicDiscoveryShards(parts: DiscoveryShard[], now: Date)
   }, now, "serving", true);
 }
 
+function projectionDeadline(index: PublicDiscoveryIndex, posts = index.posts): number {
+  let deadline = Date.parse(index.expiresAt);
+  for (const post of posts) {
+    deadline = Math.min(deadline, Date.parse(post.verifiedAt) + day);
+    if (post.visibleUntil) deadline = Math.min(deadline, Date.parse(post.visibleUntil));
+    if (post.cover) deadline = Math.min(deadline, Date.parse(post.cover.expiresAt));
+  }
+  return deadline;
+}
+
+type CatalogProjection = {
+  filePath: string;
+  shardKey: string;
+  projectedAt: number;
+  deadline: number;
+  index: PublicDiscoveryIndex;
+  revisions: Map<string, string>;
+};
+
+let cachedProjection: CatalogProjection | undefined;
+
 async function readPublicDiscoveryIndex(filePath: string, requestedTime?: Date) {
   const contents = await readPublicDiscoveryFile(filePath);
   if (!contents || typeof contents !== "object" || !("schemaVersion" in contents) || contents.schemaVersion !== 2) {
@@ -406,17 +432,32 @@ async function readPublicDiscoveryIndex(filePath: string, requestedTime?: Date) 
     return { now, index: parsePublicDiscoveryManifest(contents, now, "serving"), sharded: false };
   }
   const { shards } = record(contents, ["schemaVersion", "shards"]);
-  if (!Array.isArray(shards) || shards.length === 0 || new Set(shards).size !== shards.length) return invalid();
+  if (!Array.isArray(shards) || shards.length === 0 || new Set(shards).size !== shards.length
+    || !shards.every(digest => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest))) return invalid();
+  const shardKey = JSON.stringify(shards);
+  const directory = dirname(filePath);
+  const cached = cachedProjection;
+  if (cached?.filePath === filePath && cached.shardKey === shardKey) {
+    // Immutable filenames still need a byte-for-byte check. Missing, replaced,
+    // or unreadable files must not silently fall back to an older projection.
+    for (const digest of shards) await readPublicDiscoveryBytes(join(directory, digest + ".json"), digest);
+    const now = requestedTime ?? new Date();
+    if (cached.projectedAt <= now.getTime() && now.getTime() < cached.deadline) {
+      return { now, index: cached.index, sharded: true, revisions: cached.revisions };
+    }
+  }
   const parts: PublicDiscoveryIndex[] = [];
   for (const digest of shards) {
-    if (typeof digest !== "string" || !/^[a-f0-9]{64}$/.test(digest)) return invalid();
-    const raw = await readPublicDiscoveryFile(join(dirname(filePath), digest + ".json"), digest);
+    const raw = await readPublicDiscoveryFile(join(directory, digest + ".json"), digest);
     const { generatedAt } = record(raw, ["schemaVersion", "generatedAt", "expiresAt", "coverage", "posts"], ["googlePlaceAliases", "applePlaceAliases"]);
     // Check every shard at publication before dropping any old posts from the combined index.
     parts.push(validatePublicDiscoveryManifest(raw, new Date(timestamp(generatedAt))));
   }
   const now = requestedTime ?? new Date();
-  return { now, index: combinePublicDiscoveryShards(parts, now), sharded: true };
+  const index = combinePublicDiscoveryShards(parts, now);
+  const revisions = new Map<string, string>();
+  cachedProjection = { filePath, shardKey, projectedAt: now.getTime(), deadline: projectionDeadline(index), index, revisions };
+  return { now, index, sharded: true, revisions };
 }
 
 export async function listPublicDiscoveryPosts(
@@ -428,8 +469,9 @@ export async function listPublicDiscoveryPosts(
   let now: Date;
   let index: PublicDiscoveryIndex;
   let sharded: boolean;
+  let revisions: Map<string, string> | undefined;
   try {
-    ({ now, index, sharded } = await readPublicDiscoveryIndex(filePath, options.now));
+    ({ now, index, sharded, revisions } = await readPublicDiscoveryIndex(filePath, options.now));
   } catch { return invalid(); }
   const permittedPosts = options.catalogVenues ? index.posts : index.posts.filter(post => post.place.provider !== "taipei_catalog");
   const compatibleIndex = permittedPosts.length === index.posts.length ? index : {
@@ -442,8 +484,13 @@ export async function listPublicDiscoveryPosts(
   const revisionPayload = options.catalogVenues ? [index, "catalogVenues", !!options.googleVenues, !!options.multiVenue]
     : options.googleVenues ? [compatibleIndex, "googleVenues", options.multiVenue === true]
     : options.multiVenue ? [compatibleIndex, "multiVenue"] : compatibleIndex;
-  const indexRevision = createHash("sha256")
-    .update(JSON.stringify(sharded && options.largeIndex ? [revisionPayload, "largeIndex"] : revisionPayload)).digest("hex");
+  const revisionKey = JSON.stringify([!!options.catalogVenues, !!options.googleVenues, !!options.multiVenue, !!options.largeIndex]);
+  let indexRevision = revisions?.get(revisionKey);
+  if (indexRevision === undefined) {
+    indexRevision = createHash("sha256")
+      .update(JSON.stringify(sharded && options.largeIndex ? [revisionPayload, "largeIndex"] : revisionPayload)).digest("hex");
+    revisions?.set(revisionKey, indexRevision);
+  }
   const visiblePosts = options.googleVenues ? permittedPosts : permittedPosts.filter(post => post.place.provider !== "google_places");
   const savedAlias = venue?.[0] === "google_places"
     ? index.googlePlaceAliases?.find(alias => alias.googlePlaceID === venue[1]) : undefined;
@@ -480,18 +527,16 @@ export async function listPublicDiscoveryPosts(
     if (!found) return queryInvalid();
   }
   const posts = filtered.slice(offset, offset + limit).map(publicDiscoveryPagePost);
-  let deadline = Math.min(now.getTime() + 5 * 60 * 1_000, Date.parse(index.expiresAt));
-  for (const post of visiblePosts) {
-    deadline = Math.min(deadline, Date.parse(post.verifiedAt) + day);
-    if (post.visibleUntil) deadline = Math.min(deadline, Date.parse(post.visibleUntil));
-    if (post.cover) deadline = Math.min(deadline, Date.parse(post.cover.expiresAt));
-  }
+  const deadline = Math.min(now.getTime() + 5 * 60 * 1_000, projectionDeadline(index, visiblePosts));
   // Keep the requested identity in same-provider Saved responses for existing clients.
   const responsePosts = retiredPlaceID ? posts.map(post => ({
     ...post, place: { ...post.place, providerPlaceID: retiredPlaceID },
   })) : posts;
   const googlePlaceMatch = retiredGoogleID === undefined ? savedAlias : undefined;
-  return { schemaVersion: 1, indexRevision, generatedAt: index.generatedAt, expiresAt: new Date(deadline).toISOString(),
+  const response: PublicDiscoveryResponse = {
+    schemaVersion: 1, indexRevision, generatedAt: index.generatedAt, expiresAt: new Date(deadline).toISOString(),
     coverage, posts: responsePosts, ...(googlePlaceMatch ? { googlePlaceMatch } : {}),
-    nextCursor: offset + posts.length < filtered.length ? cursorFor(indexRevision, bounds, venue, limit, offset + posts.length) : null };
+    nextCursor: offset + posts.length < filtered.length ? cursorFor(indexRevision, bounds, venue, limit, offset + posts.length) : null,
+  };
+  return sharded ? structuredClone(response) : response;
 }

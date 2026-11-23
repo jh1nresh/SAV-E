@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test, type TestContext } from "node:test";
@@ -209,6 +209,59 @@ test("sharded index rejects missing or changed files and cross-shard identity co
   await assert.rejects(read(index.filePath), failure(503));
   await rm(secondPath);
   await assert.rejects(read(index.filePath), failure(503));
+});
+
+test("reused partition projections expire cover, event and verification independently", async t => {
+  const image = post("Image", {
+    id: "instagram:Image", platform: "instagram", sourceURL: "https://www.instagram.com/p/Image/",
+    cover: { url: "https://cdninstagram.com/fixture.jpg", expiresAt: iso(500), permission: "author" },
+  });
+  const event = post("Event", { visibleUntil: iso(1_000) });
+  const aged = post("Aged", { verifiedAt: iso(-day + 1_500) });
+  const { filePath } = await shardedIndex(t, [manifest([image, event]), manifest([aged])]);
+  const query = "bbox=121,25,122,26";
+  const at = (offset: number, input = query) =>
+    listPublicDiscoveryPosts(url(input), { filePath, now: new Date(iso(offset)), largeIndex: true });
+  const first = await at(0, query + "&limit=1");
+  assert.ok(first.nextCursor);
+  assert.equal(first.expiresAt, iso(500));
+  assert.deepEqual(await at(100, query + "&limit=1"), first);
+
+  const noCover = await at(500);
+  assert.equal(noCover.posts.find(row => row.id === image.id)?.cover, null);
+  assert.equal(noCover.expiresAt, iso(1_000));
+  await assert.rejects(at(500, query + "&limit=1&cursor=" + first.nextCursor), failure(400));
+
+  const noEvent = await at(1_000);
+  assert.ok(!noEvent.posts.some(row => row.id === event.id));
+  assert.equal(noEvent.expiresAt, iso(1_500));
+  assert.deepEqual((await at(1_500)).posts.map(row => row.id), [image.id]);
+  assert.deepEqual(await at(0, query + "&limit=1"), first);
+  await assert.rejects(at(day), failure(503));
+});
+
+test("partition snapshots accommodate atomic replacement and isolate returned rows", async t => {
+  const before = await shardedIndex(t, [manifest([post("A"), post("B")])]);
+  const after = await shardedIndex(t, [manifest([post("C"), post("D")])]);
+  const query = "bbox=121,25,122,26&limit=1";
+  const options = { filePath: before.filePath, now };
+  const first = await listPublicDiscoveryPosts(url(query), options);
+  assert.ok(first.nextCursor);
+  first.posts[0]!.place.name = "Caller-local change";
+  first.posts[0]!.title = "Caller-local change";
+  assert.deepEqual((await listPublicDiscoveryPosts(url(query), options)).posts, [post("A")]);
+
+  for (const digest of after.shards) {
+    const file = digest + ".json";
+    await writeFile(join(dirname(before.filePath), file), await readFile(join(dirname(after.filePath), file)));
+  }
+  const stage = before.filePath + ".next";
+  await writeFile(stage, await readFile(after.filePath));
+  await rename(stage, before.filePath);
+  const replies = await Promise.all(Array.from({ length: 4 }, () => listPublicDiscoveryPosts(url(query), options)));
+  assert.ok(replies.every(reply => reply.indexRevision !== first.indexRevision));
+  for (const reply of replies) assert.deepEqual(reply.posts, [post("C")]);
+  await assert.rejects(listPublicDiscoveryPosts(url(query + "&cursor=" + first.nextCursor), options), failure(400));
 });
 
 test("malformed JSON, invalid UTF-8, unsupported schema and oversized files fail closed", async t => {
