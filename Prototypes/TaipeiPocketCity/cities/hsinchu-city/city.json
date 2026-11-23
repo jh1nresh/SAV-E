@@ -1,0 +1,204 @@
+{
+  "name": "新竹市",
+  "title": "新竹市 · 新竹車站",
+  "region": "東區 · 中華路",
+  "place": "新竹車站",
+  "timezone": "Asia/Taipei",
+  "level": 3.15,
+  "styles": {
+    "default": {
+      "facade": "civic",
+      "roof": "flat",
+      "flatRoof": "#c5b7a0",
+      "wall": [
+        "#e0c69c",
+        "#e5d2b4",
+        "#c9b9ad"
+      ],
+      "levels": 3,
+      "shop": "poi",
+      "rooftop": "none"
+    }
+  },
+  "palette": {
+    "ground": "#ddc7a5",
+    "road": "#aaa7a6",
+    "pavement": "#e2ceb0",
+    "walk": "#e5d3b7",
+    "grass": "#a1bb76",
+    "paving": "#c4ac8c",
+    "kerb": "#ceb48e",
+    "slab": "#dfc199",
+    "water": "#79a9af"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.1,
+    "colour": "#c9b698",
+    "stone": "#e5d4b6"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "colours": [
+        "#82a65f",
+        "#769753",
+        "#9ab568"
+      ],
+      "height": 6,
+      "evergreen": true,
+      "vary": 0.4
+    }
+  },
+  "people": {
+    "clothes": [
+      "#b76853",
+      "#4b7575",
+      "#d29f5d",
+      "#516577",
+      "#748252"
+    ],
+    "skin": [
+      "#dfb292",
+      "#bf8863",
+      "#9e6249"
+    ],
+    "pants": [
+      "#4c5b62",
+      "#7e6659"
+    ],
+    "hair": [
+      "#453632",
+      "#5c483c"
+    ]
+  },
+  "seasons": [
+    {
+      "id": "spring",
+      "label": "晴日",
+      "leaves": "spring",
+      "grass": "#9fbe83",
+      "note": {
+        "text": "中央氣象署提供各測站的每月氣溫與日照資料。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      }
+    },
+    {
+      "id": "summer",
+      "label": "陣雨",
+      "leaves": "summer",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "grass": "#88aa70",
+      "note": {
+        "text": "中央氣象署的測站氣候資料也記錄每月雨量與降雨日數。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      }
+    }
+  ],
+  "months": [
+    "spring",
+    "spring",
+    "spring",
+    "spring",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "spring",
+    "spring",
+    "spring"
+  ],
+  "seasonLabel": "天候",
+  "cameras": {
+    "iso": {
+      "yaw": 120,
+      "pitch": 34,
+      "zoom": 0.86,
+      "x": 0,
+      "y": 0,
+      "z": 4
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "新竹車站",
+      "camera": {
+        "yaw": 121,
+        "pitch": 22,
+        "zoom": 2.7,
+        "x": -8.61,
+        "y": 32.15,
+        "z": 9
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "新竹車站",
+      "source": "OpenStreetMap",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 121,
+        "pitch": 22,
+        "zoom": 2.7,
+        "x": -8.61,
+        "y": 32.15,
+        "z": 9
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "新竹車站",
+      "text": "車站保留古典對稱兩翼、斜屋頂、中央拱門與盔甲式鐘塔。站前廣場、軌道及月台取自 OSM。",
+      "links": [
+        {
+          "label": "國家圖書館 · 新竹車站明信片及建築說明",
+          "url": "https://tm.ncl.edu.tw/article?u=001_002_0000362370"
+        },
+        {
+          "label": "臺鐵 · 鐵道生活文化專輯",
+          "url": "https://www.railway.gov.tw/tra-tip-web/tip/file/b2006bc7-94a2-46bf-865f-b562e20bb167"
+        }
+      ]
+    },
+    {
+      "title": "地圖與插畫",
+      "text": "地理位置和建物足印以 OSM 為準，建物立面、未測高度、路人、樹木與天候為插畫。",
+      "links": [
+        {
+          "label": "OpenStreetMap",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.9688886,24.7991190,120.9743314,24.8040930"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "國家圖書館 · 新竹車站明信片及建築說明",
+      "url": "https://tm.ncl.edu.tw/article?u=001_002_0000362370"
+    },
+    {
+      "label": "臺鐵 · 鐵道生活文化專輯",
+      "url": "https://www.railway.gov.tw/tra-tip-web/tip/file/b2006bc7-94a2-46bf-865f-b562e20bb167"
+    }
+  ],
+  "buildings": {
+    "w434337504": {
+      "facade": "glass",
+      "wall": "#dbcfb5",
+      "glass": [
+        "#93ada9",
+        "#789795"
+      ],
+      "roof": "flat",
+      "levels": 3
+    }
+  }
+}
