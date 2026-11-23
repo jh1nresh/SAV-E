@@ -1,0 +1,32 @@
+{
+  "name": "台中",
+  "landmark": "臺中市役所",
+  "center": [
+    120.6795,
+    24.13857
+  ],
+  "bounds": [
+    120.67861405,
+    24.13775607,
+    120.68038595,
+    24.13938393
+  ],
+  "sizeMeters": 180,
+  "landmarkIds": [
+    "w569913342"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・建物、街道與地物",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.676220,24.134400,120.682620,24.139800"
+    },
+    {
+      "title": "市役所與州廳街道現景",
+      "url": "https://commons.wikimedia.org/wiki/File:June_2023_Taichung_Prefectural_Hall_and_Taichung_Municipal_Office_Building.jpg"
+    },
+    {
+      "title": "市役所石砌圓拱入口近照",
+      "url": "https://commons.wikimedia.org/wiki/File:Taichung_Municipal_Office_Building_01.jpg"
+    }
+  ]
+}

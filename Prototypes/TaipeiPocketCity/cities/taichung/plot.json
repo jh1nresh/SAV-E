@@ -1,0 +1,18 @@
+{
+ "lat": 24.13857,
+ "lon": 120.6795,
+ "rotation": 0.0,
+ "size": 180.0,
+ "asked": {
+  "lat": 24.13857,
+  "lon": 120.6795
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "臺中市役所"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "臺中市役所",
+ "osm_base": null
+}
