@@ -1,0 +1,35 @@
+{
+  "name": "台南",
+  "landmark": "赤崁樓",
+  "center": [
+    120.2025698,
+    22.9976866
+  ],
+  "bounds": [
+    120.2013914,
+    22.99659454,
+    120.2037482,
+    22.99877866
+  ],
+  "sizeMeters": 190,
+  "landmarkIds": [
+    "w183052614",
+    "w561994806",
+    "w561994807",
+    "w561994812"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・建物、街道與地物",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.199450,22.994750,120.205850,23.000150"
+    },
+    {
+      "title": "歷史照片・赤崁樓雙重瓦簷、屋脊與磚大門",
+      "url": "https://commons.wikimedia.org/wiki/File:Buildings_of_the_Chihkan_Tower.jpg"
+    },
+    {
+      "title": "赤崁樓木造外廊與屋脊",
+      "url": "https://commons.wikimedia.org/wiki/File:Chihkan_Tower_night.JPG"
+    }
+  ]
+}
