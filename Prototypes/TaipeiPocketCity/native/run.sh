@@ -42,7 +42,7 @@ xcrun --sdk macosx swiftc -swift-version 5 -target "$(uname -m)-apple-macos15.0"
 codesign --force --sign - "$app"
 echo "$app"
 if [[ "$mode" == start ]]; then
-  open -n -a "$app" --args "$root" "$port"
+  open -a "$app" --args "$root" "$port"
 elif [[ "$mode" == background ]]; then
   open -g -n -a "$app" --args "$root" "$port" --background
 fi

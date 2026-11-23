@@ -24,7 +24,7 @@ assets = {
     "/fuxing-block.js": "text/javascript; charset=utf-8",
     "/data/city170/index.json": "application/json",
 }
-packs = re.compile(r"/data/(?:city170|city170-frontages)/p\d+_\d+\.json\.gz\Z")
+packs = re.compile(r"/data/(?:city170|city170-frontages)/p\d+_\d+\.json(?:\.gz)?\Z")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -44,7 +44,7 @@ class Handler(BaseHTTPRequestHandler):
         name = unquote(urlsplit(self.path).path)
         media = assets.get(name)
         if media is None and packs.fullmatch(name):
-            media = "application/gzip"
+            media = "application/gzip" if name.endswith(".gz") else "application/json"
         if media is None:
             self.send_error(404)
             return
