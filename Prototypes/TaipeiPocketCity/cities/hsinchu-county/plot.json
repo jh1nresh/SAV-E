@@ -1,0 +1,18 @@
+{
+ "lat": 24.87708,
+ "lon": 121.05859,
+ "rotation": 0.0,
+ "size": 200.0,
+ "asked": {
+  "lat": 24.87708,
+  "lon": 121.05859
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "湖口三元宮"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "新竹縣 · 湖口三元宮",
+ "osm_base": null
+}

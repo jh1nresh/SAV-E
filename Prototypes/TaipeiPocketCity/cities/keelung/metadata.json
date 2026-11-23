@@ -1,0 +1,32 @@
+{
+  "name": "基隆",
+  "landmark": "海港大樓",
+  "landmarkIds": [
+    "w253032621"
+  ],
+  "center": [
+    121.7411093,
+    25.132839
+  ],
+  "bounds": [
+    121.73999301635564,
+    25.131821581800423,
+    121.74222558364437,
+    25.133856418199578
+  ],
+  "sizeMeters": 225.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap 圖資",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.7378163,25.1302955,121.7433977,25.1353825"
+    },
+    {
+      "title": "基隆市政府文化局 · 海港大樓",
+      "url": "https://tcmb.culture.tw/zh-tw/detail?id=302545&indexCode=Culture_Place"
+    },
+    {
+      "title": "二二八事件紀念基金會 · 港西街與港面照片",
+      "url": "https://www.228.org.tw/en/courses-1/%E5%9F%BA%E9%9A%86%E6%B8%AF"
+    }
+  ]
+}
