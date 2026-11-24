@@ -3,6 +3,7 @@ import { canonicalSource, isPublicDiscoveryVenueID, validatePublicDiscoveryPlace
 import { readTaipeiFeatureProof, verifyPublicTaipeiCatalogCandidate } from "./publicDiscoveryCatalogEvidence.js";
 import { preflightTaipeiStreet, publicStreetKey, publicTaipeiStreetInventory,
   verifyPublicTaipeiStreetCandidate } from "./publicDiscoveryStreetEvidence.js";
+import { publicProfileCandidateLimit } from "./publicDiscoveryProfileDrafts.js";
 import { publicReviewEmbedURL } from "./publicPostReverification.js";
 import { defaultFetchText } from "./sourceSearchWorker.js";
 
@@ -124,7 +125,10 @@ export async function checkStreetDrafts(
     const report = record(value);
     const place = validatePublicDiscoveryPlace(report.place);
     const identity = placeKey(place);
-    if (!Array.isArray(report.candidates) || report.candidates.length > 20) throw new Error("Invalid public draft report");
+    // One saved-place report can combine profile results from Instagram and Threads.
+    if (!Array.isArray(report.candidates) || report.candidates.length > 2 * publicProfileCandidateLimit) {
+      throw new Error("Invalid public draft report");
+    }
     for (const value of report.candidates) {
       const candidate = record(value);
       const { authorHandle } = candidate;

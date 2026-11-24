@@ -344,8 +344,7 @@ function validateProfiles(input: unknown, place: PublicDiscoveryPlace): Profile[
   });
 }
 
-async function readInventory(path: string): Promise<Inventory> {
-  const input = await readPublicDiscoveryFile(path);
+export function parsePublicSourceIntakeInventory(input: unknown): Inventory {
   if (!Array.isArray(input)) throw new Error("Invalid public source intake inventory");
   const inventory: Inventory = new Map();
   for (const row of input) {
@@ -374,7 +373,7 @@ export async function loadPublicDiscoverySaveIntake(directory: string, indexFile
   if (!isAbsolute(directory)) throw new Error("Expected an absolute public source intake directory");
   const currentIndexFile = indexFile?.trim();
   if (!currentIndexFile) throw new Error("Expected a public discovery index for source intake");
-  const reloadInventory = () => readInventory(join(directory, "inventory.json"));
+  const reloadInventory = async () => parsePublicSourceIntakeInventory(await readPublicDiscoveryFile(join(directory, "inventory.json")));
   const inventory = await reloadInventory();
   const drafts = join(directory, "drafts");
   await mkdir(drafts, { recursive: true, mode: 0o700 });

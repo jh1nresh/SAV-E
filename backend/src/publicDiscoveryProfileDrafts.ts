@@ -8,7 +8,7 @@ import { boundedResponseText, sourceMetadataFromHTML } from "./sourceSearchWorke
 
 const maxProfiles = 30;
 const maxVenues = 20;
-const maxCandidatesPerVenue = 20;
+export const publicProfileCandidateLimit = 20;
 const maxResponseBytes = 3 * 1_024 * 1_024;
 const maxJSONNodes = 80_000;
 const handlePattern = /^(?=.*[a-z0-9_])[a-z0-9._]{1,30}$/i;
@@ -254,7 +254,7 @@ export async function collectPublicProfileDiscoveryDrafts(raw: unknown, fetchImp
         });
       }
     }
-    const candidates = [...matches.values()].slice(0, maxCandidatesPerVenue);
+    const candidates = [...matches.values()].slice(0, publicProfileCandidateLimit);
     return candidates.length ? [{ place, candidates }] : [];
   });
   return { draft: { venues: draft }, profiles };

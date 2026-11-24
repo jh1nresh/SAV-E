@@ -126,3 +126,15 @@ test("does not replay an activated approval after an explicit rollback to its ba
   assert.equal(await readFile(active, "utf8"), bytes);
   await assert.rejects(readFile(pending), { code: "ENOENT" });
 });
+
+test("an inventory-bound approval requires the same trusted inventory on recovery", async t => {
+  const { root, lock, active, pending, bytes, input } = await fixture(t);
+  const revision = "a".repeat(64);
+  await assert.rejects(approveReviewedDrafts(root, lock.fd, { now, clock: interruptedClock(), verify: input,
+    inventory: { revision, currentRevision: async () => revision },
+  }), /interrupted after staging/);
+  await assert.rejects(resumePendingDraftApproval(root, lock.fd, () => now), /requires a current trusted inventory/);
+  assert.equal(await readFile(active, "utf8"), bytes);
+  assert.equal(JSON.parse(await readFile(pending, "utf8")).inventoryRevision, revision);
+  assert.equal((await resumePendingDraftApproval(root, lock.fd, () => now, async () => revision))?.admitted, 1);
+});

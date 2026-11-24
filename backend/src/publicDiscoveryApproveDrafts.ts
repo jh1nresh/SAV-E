@@ -13,11 +13,13 @@ import { writePublicSourceJSON } from "./publicDiscoverySaveQueue.js";
 
 type DraftCheck = Awaited<ReturnType<typeof checkStreetDrafts>>;
 type Receipt = DraftCheck["counts"] & { checkedAt: string; baseIndexSHA256: string };
-type Pending = { baseIndexSHA256: string; indexSHA256: string; owner?: string };
+type Pending = { baseIndexSHA256: string; indexSHA256: string; owner?: string; inventoryRevision?: string };
+type ReadInventoryRevision = () => Promise<string | undefined>;
 type Options = {
   now: Date;
   clock?: () => Date;
   verify: (archive: unknown) => Promise<DraftCheck>;
+  inventory?: { revision: string; currentRevision: ReadInventoryRevision };
 };
 
 const digest = (value: unknown) => createHash("sha256").update(JSON.stringify(value) + "\n").digest("hex");
@@ -103,7 +105,7 @@ function mergeReviews(raw: unknown, verified: DraftCheck["verified"]) {
   return { archive: { ...existing, venues }, keys };
 }
 
-async function finishPending(state: string, pending: Pending, active: string, clock: () => Date) {
+async function finishPending(state: string, pending: Pending, active: string, clock: () => Date, currentInventory?: ReadInventoryRevision) {
   if (active !== pending.baseIndexSHA256 && active !== pending.indexSHA256) {
     // A newer active generation supersedes this journal, even after retention.
     await unlink(journalPath(state));
@@ -111,6 +113,7 @@ async function finishPending(state: string, pending: Pending, active: string, cl
   }
   const path = envelopePath(state, pending.indexSHA256);
   const envelope = await readReviewEnvelope(path, pending.indexSHA256);
+  if (envelope.inventoryRevision !== pending.inventoryRevision) throw new Error("Review inventory revision does not match the pending approval");
   if (envelope.activationComplete !== undefined && envelope.activationComplete !== true) {
     throw new Error("Invalid staged review activation marker");
   }
@@ -131,6 +134,13 @@ async function finishPending(state: string, pending: Pending, active: string, cl
     const replay = compileApprovedPublicBatch(envelope.archive, envelope.held, projectedAt);
     assert.deepEqual(replay, manifest, "Pending review snapshot does not match its archive");
     validatePublicDiscoveryManifest(manifest, projectedAt);
+    if (pending.inventoryRevision) {
+      if (!currentInventory) throw new Error("Pending approval requires a current trusted inventory");
+      if (await currentInventory() !== pending.inventoryRevision) {
+        await unlink(journalPath(state));
+        return;
+      }
+    }
     const now = clock();
     if (!Number.isFinite(now.getTime()) || now < projectedAt) throw new Error("Invalid draft publication clock");
     try {
@@ -148,36 +158,40 @@ async function finishPending(state: string, pending: Pending, active: string, cl
     const managedBy = pending.owner ?? envelope.managedBy;
     await writePublicSourceJSON(path, { indexSHA256: pending.indexSHA256, archive: envelope.archive,
       quarantine: envelope.quarantine, receipt, retainedManifest: manifest, activationComplete: true,
+      ...(pending.inventoryRevision ? { inventoryRevision: pending.inventoryRevision } : {}),
       ...(managedBy ? { managedBy } : {}) }, Infinity);
   }
   await unlink(journalPath(state));
   return { activated: true, indexSHA256: pending.indexSHA256, ...receipt };
 }
 
-async function resume(state: string, active: string, clock: () => Date) {
+async function resume(state: string, active: string, clock: () => Date, currentInventory?: ReadInventoryRevision) {
   const pending = await readPublicDiscoveryFile(journalPath(state)).catch(absent);
   if (pending === undefined) return;
-  const { baseIndexSHA256, indexSHA256, owner } = record(pending);
+  const { baseIndexSHA256, indexSHA256, owner, inventoryRevision } = record(pending);
   if (!isDigest(baseIndexSHA256) || !isDigest(indexSHA256) || baseIndexSHA256 === indexSHA256
-    || (owner !== undefined && !isOwner(owner))) {
+    || (owner !== undefined && !isOwner(owner)) || (inventoryRevision !== undefined && !isDigest(inventoryRevision))) {
     throw new Error("Invalid pending approval generation");
   }
-  return finishPending(state, { baseIndexSHA256, indexSHA256, ...(owner ? { owner } : {}) }, active, clock);
+  return finishPending(state, { baseIndexSHA256, indexSHA256, ...(owner ? { owner } : {}),
+    ...(inventoryRevision ? { inventoryRevision } : {}) }, active, clock, currentInventory);
 }
 
 /** Recover a durable approval without opening originals or changing provider cooldowns. */
-export async function resumePendingDraftApproval(root: string, descriptor: number, clock = () => new Date()) {
+export async function resumePendingDraftApproval(root: string, descriptor: number, clock = () => new Date(),
+  currentInventory?: ReadInventoryRevision) {
   const state = approvedSourceState(root, descriptor);
   const active = await readActiveApprovedGeneration(state);
-  return resume(state, active.indexSHA256, clock);
+  return resume(state, active.indexSHA256, clock, currentInventory);
 }
 
 /** Approve a verified draft batch. The caller holds the same lock as refresh and serving publication. */
 export async function approveReviewedDrafts(root: string, descriptor: number, options: Options) {
   const state = approvedSourceState(root, descriptor);
-  const { now, clock = () => new Date() } = options;
+  const { now, clock = () => new Date(), inventory } = options;
+  if (inventory && !isDigest(inventory.revision)) throw new Error("Invalid trusted draft inventory revision");
   const active = await readActiveApprovedGeneration(state);
-  const recovered = await resume(state, active.indexSHA256, clock);
+  const recovered = await resume(state, active.indexSHA256, clock, inventory?.currentRevision);
   if (recovered) return recovered;
 
   const { indexSHA256: baseIndexSHA256, raw, projectedAt, envelope } = active;
@@ -206,19 +220,21 @@ export async function approveReviewedDrafts(root: string, descriptor: number, op
     }
     owner = managed.owner;
   }
-  const metadata = { indexSHA256, archive, quarantine: envelope.quarantine, receipt, retainedManifest: manifest };
+  const inventoryBinding = inventory ? { inventoryRevision: inventory.revision } : {};
+  const metadata = { indexSHA256, archive, quarantine: envelope.quarantine, receipt, retainedManifest: manifest, ...inventoryBinding };
   const path = envelopePath(state, indexSHA256);
   const previous = await readReviewEnvelope(path, indexSHA256).catch(absent);
   if (previous) {
+    if (previous.inventoryRevision !== inventory?.revision) throw new Error("Existing draft approval has different inventory evidence");
     assert.deepEqual({ archive: previous.archive, quarantine: previous.quarantine, retainedManifest: previous.retainedManifest, receipt: previous.receipt },
       { archive, quarantine: envelope.quarantine, retainedManifest: manifest, receipt }, "Existing draft approval differs");
   } else {
     // Private review metadata includes the archive as well as the public snapshot.
     await writePublicSourceJSON(path, metadata, Infinity);
   }
-  const staged = { baseIndexSHA256, indexSHA256, ...(owner ? { owner } : {}) };
+  const staged = { baseIndexSHA256, indexSHA256, ...(owner ? { owner } : {}), ...inventoryBinding };
   await writePublicSourceJSON(journalPath(state), staged);
-  const activated = await finishPending(state, staged, baseIndexSHA256, clock);
-  if (!activated) throw new Error("Verified draft approval expired before activation");
+  const activated = await finishPending(state, staged, baseIndexSHA256, clock, inventory?.currentRevision);
+  if (!activated) throw new Error("Verified draft approval is no longer current");
   return activated;
 }
