@@ -435,6 +435,13 @@ try{
     '<a href="https://april-zhu.com/pocketnature" target="_blank" rel="noopener">Pocket Nature</a>',
     '<a href="https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer/layers/0?f=pjson" target="_blank" rel="noopener">臺北市都發局 2025</a>',
   ]}),'bottom-right');
+  const attributionCorner=map.getContainer().querySelector('.maplibregl-ctrl-bottom-right');
+  if(attributionCorner){
+    // Keep the search controls above the credits when they wrap or expand.
+    new ResizeObserver(([entry])=>{
+      stage.style.setProperty('--map-attribution-height',Math.ceil(entry.contentRect.height)+'px');
+    }).observe(attributionCorner);
+  }
   map.on('error',event=>{
     if(!map.isStyleLoaded())message('底圖暫時無法載入，請重新整理。');
     console.warn(event.error?.message??'Map data error');

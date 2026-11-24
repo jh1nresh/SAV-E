@@ -213,7 +213,7 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 #dihua-views button { background:transparent; padding:0 12px; min-height:38px; font-size:.8rem; }
 #dihua-views button+button { border-left:1px solid var(--line); }
 #dihua-views button:hover { background:#e4eadb; }
-@media(max-width:720px) { #dihua-views { bottom:96px; } }
+@media(max-width:720px) { #dihua-views { bottom:calc(var(--map-footer-bottom) + 52px); } }
 
 .shop-search { position:relative; }
 .shop-options { position:absolute; top:100%; z-index:6; width:100%; max-height:min(34vh,280px); overflow:auto; background:var(--pane); border:1px solid var(--line); border-radius:6px; font-size:.8rem; }
@@ -228,7 +228,7 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 #fuxing-controls button {min-height:42px;padding:0 12px;white-space:nowrap;background:transparent;font-size:.8rem;}
 #fuxing-controls button+button {border-left:1px solid var(--line);}
 #fuxing-controls button[aria-pressed="true"] {background:#dce7d9;}
-@media(max-width:720px){#fuxing-controls{bottom:87px;} .mobile[open] {z-index:3;}}
+@media(max-width:720px){#fuxing-controls{bottom:calc(var(--map-footer-bottom) + 43px);} .mobile[open] {z-index:3;}}
 
 #apple-places-link { margin-inline-start:10px; padding:6px 9px; color:var(--ink); font:600 .8rem system-ui,sans-serif; text-decoration:underline; text-underline-offset:3px; white-space:nowrap; }
 
@@ -252,7 +252,8 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 
 
 
-.mobile { display:block; left:12px; bottom:44px; border:1px solid var(--line); border-radius:7px; background:var(--pane); }
+#stage { --map-footer-bottom:max(44px,calc(var(--map-attribution-height, 0px) + 8px)); }
+.mobile { display:block; left:12px; bottom:var(--map-footer-bottom); border:1px solid var(--line); border-radius:7px; background:var(--pane); }
 .mobile summary { cursor:pointer; padding:10px 12px; font-size:.8rem; }
 .mobile[open] { z-index:3; width:min(260px,80%); }
 .mobile-controls { display:grid; gap:10px; padding:0 12px 12px; font-size:.8rem; }
