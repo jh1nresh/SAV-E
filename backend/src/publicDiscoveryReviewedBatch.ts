@@ -1,16 +1,18 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { isIP } from "node:net";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import {
   canonicalSource, combinePublicDiscoveryShards, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes, publicDiscoveryMaxPosts,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
-  publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, timestamp,
+  publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, publicDiscoveryShardDigests, timestamp,
   validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
   type PublicDiscoveryPlace, type PublicDiscoveryPost,
 } from "./publicDiscovery.js";
 import { addVenueHighlights, type PublicLikesObservation } from "./publicDiscoveryHighlights.js";
+import { writePublicSourceJSON } from "./publicDiscoverySaveQueue.js";
 import { defaultFetchText } from "./sourceSearchWorker.js";
 import { publicPostEvidenceFingerprint, publicReviewEmbedURL, threadsParentFingerprintPrefix } from "./publicPostReverification.js";
 
@@ -159,6 +161,43 @@ export function compileReviewedPublicBatch(raw: unknown, now = new Date()) {
   const { ended, ...result } = projectReviewArchive(raw, now);
   if (result.manifest.posts.length === 0 && result.expired > ended) throw new Error("No current reviewed posts");
   return result;
+}
+
+/** Replay a maintenance approval, including associations withheld by the reviewer. */
+export function compileApprovedPublicBatch(raw: unknown, held: ReadonlySet<string>, now: Date) {
+  const batch = fields(raw, ["venues"], ["googlePlaceAliases", "applePlaceAliases"]);
+  const reviewed = new Set<string>();
+  const venues = reviewedVenueRows(batch.venues).map(({ place: rawPlace, candidates }) => {
+    const place = validatePublicDiscoveryPlace(rawPlace);
+    const key = venueKey(place.provider, place.providerPlaceID);
+    return { place, candidates: candidates.map(rawCandidate => {
+      const candidate = fields(rawCandidate, ["platform", "sourceURL", "authorHandle", "title", "review"], ["observedIn"]);
+      const platform = candidate.platform;
+      if (platform !== "instagram" && platform !== "threads") throw new Error("Unsupported platform");
+      const { postID } = canonicalSource(candidate.sourceURL, platform);
+      if (held.has(`${key}:${platform}:${postID}`)) return { ...candidate, review: null };
+      if (candidate.review !== null) reviewed.add(key);
+      return candidate;
+    }) };
+  });
+  const aliases = (value: unknown, idField: "applePlaceID" | "googlePlaceID") => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) throw new Error("Invalid approved aliases");
+    const keys = idField === "applePlaceID"
+      ? [idField, "providerPlaceID", "branchEvidence"]
+      : [idField, "provider", "providerPlaceID", "branchEvidence"];
+    return value.filter((rawAlias: unknown) => {
+      const alias = fields(rawAlias, keys);
+      const provider = idField === "applePlaceID" ? "apple_maps" : alias.provider;
+      if (typeof provider !== "string" || typeof alias.providerPlaceID !== "string") throw new Error("Invalid approved alias");
+      return reviewed.has(`${provider}:${alias.providerPlaceID}`);
+    });
+  };
+  return projectReviewArchive({
+    venues,
+    googlePlaceAliases: aliases(batch.googlePlaceAliases, "googlePlaceID"),
+    applePlaceAliases: aliases(batch.applePlaceAliases, "applePlaceID"),
+  }, now).manifest;
 }
 
 function projectReviewArchive(raw: unknown, now: Date) {
@@ -400,25 +439,64 @@ export async function compileReviewedPublicFiles(files: string[], now = new Date
 }
 
 /** Compile each review shard and write the catalog only after the complete snapshot passes validation. */
-export async function writeShardedPublicIndex(directory: string, files: string[], now = new Date()) {
-  const parts = [];
-  const shards = new Map<string, string>();
+export async function writeShardedPublicIndex(
+  directory: string, files: string[], now = new Date(),
+  options: { replace?: boolean; clock?: () => Date } = {},
+) {
+  const projections = [];
   for (const file of files) {
     const { manifest } = await compileReviewedPublicFiles([file], now);
+    projections.push(manifest);
+  }
+  return writeShardedPublicProjection(directory, projections, now, options);
+}
+
+type ReviewedProjection = ReturnType<typeof compileReviewedPublicBatch>["manifest"];
+
+/** Publish slices of a reviewed projection without recomputing its highlights. */
+export async function writeShardedPublicProjection(
+  directory: string, projections: readonly ReviewedProjection[], now = new Date(),
+  options: { replace?: boolean; clock?: () => Date } = {},
+) {
+  const parts = [];
+  const shards = new Map<string, ReviewedProjection>();
+  for (const projection of projections) {
+    const manifest = structuredClone(projection);
     const data = `${JSON.stringify(manifest)}\n`;
     if (Buffer.byteLength(data) > publicDiscoveryMaxFileBytes) throw new Error("Manifest shard is too large");
     const digest = createHash("sha256").update(data).digest("hex");
     if (shards.has(digest)) throw new Error("Duplicate manifest shard");
-    shards.set(digest, data);
+    shards.set(digest, manifest);
     parts.push(validatePublicDiscoveryManifest(manifest, now));
   }
-  const { posts } = combinePublicDiscoveryShards(parts, now);
-  const catalog = `${JSON.stringify({ schemaVersion: 2, shards: [...shards.keys()] })}\n`;
-  if (Buffer.byteLength(catalog) > publicDiscoveryMaxFileBytes) throw new Error("Manifest catalog is too large");
-  await mkdir(directory);
-  for (const [digest, data] of shards) await writeFile(join(directory, digest + ".json"), data, { flag: "wx" });
-  await writeFile(join(directory, "index.json"), catalog, { flag: "wx" });
-  return { filePath: join(directory, "index.json"), shards: parts.length, associations: posts.length };
+  const approved = combinePublicDiscoveryShards(parts, now);
+  const catalog = { schemaVersion: 2, shards: [...shards.keys()] };
+  if (Buffer.byteLength(JSON.stringify(catalog) + "\n") > publicDiscoveryMaxFileBytes) {
+    throw new Error("Manifest catalog is too large");
+  }
+  const filePath = join(directory, "index.json");
+  if (options.replace) {
+    if (!(await lstat(directory)).isDirectory()) throw new Error("Expected a public discovery catalog directory");
+    // Replacing an existing serving index is intentional and limited to this format.
+    publicDiscoveryShardDigests(await readPublicDiscoveryFile(filePath));
+  } else {
+    await mkdir(directory, { mode: 0o700 });
+  }
+  for (const [digest, manifest] of shards) {
+    const path = join(directory, digest + ".json");
+    const exists = await readPublicDiscoveryFile(path, digest).then(() => true).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    });
+    if (!exists) await writePublicSourceJSON(path, manifest);
+  }
+  // A single publisher owns this directory. Leave prior leaves in place for
+  // requests already reading the previous pointer.
+  if (options.clock && !isDeepStrictEqual(combinePublicDiscoveryShards(parts, options.clock()), approved)) {
+    throw new Error("Reviewed snapshot changed before publication");
+  }
+  await writePublicSourceJSON(filePath, catalog);
+  return { filePath, shards: parts.length, associations: approved.posts.length };
 }
 
 /** Validate the whole archive before any provider read, then compile one fresh snapshot. */
@@ -458,8 +536,10 @@ async function readReviewedPublicFiles(files: string[]) {
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   void (async () => {
     const args = process.argv.slice(2);
-    if (args[0] === "--sharded-index" && args[1] && args.length >= 3) {
-      const result = await writeShardedPublicIndex(args[1], args.slice(2));
+    if ((args[0] === "--sharded-index" || args[0] === "--publish-sharded-index") && args[1] && args.length >= 3) {
+      const result = await writeShardedPublicIndex(args[1], args.slice(2), new Date(), {
+        replace: args[0] === "--publish-sharded-index", clock: () => new Date(),
+      });
       process.stdout.write(`${JSON.stringify(result)}\n`);
       return;
     }

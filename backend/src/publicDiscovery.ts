@@ -351,7 +351,7 @@ function cursorFor(indexRevision: string, bounds: Bounds, venue: VenueFilter | n
   const scope = venue === null ? [indexRevision, bounds, limit, offset] : [indexRevision, bounds, venue, limit, offset];
   return createHash("sha256").update(JSON.stringify(scope)).digest("base64url");
 }
-async function readPublicDiscoveryBytes(filePath: string, digest?: string): Promise<Buffer> {
+export async function readPublicDiscoveryBytes(filePath: string, digest?: string): Promise<Buffer> {
   const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const before = await handle.stat();
@@ -425,15 +425,20 @@ type CatalogProjection = {
 
 let cachedProjection: CatalogProjection | undefined;
 
+export function publicDiscoveryShardDigests(value: unknown): string[] {
+  const { schemaVersion, shards } = record(value, ["schemaVersion", "shards"]);
+  if (schemaVersion !== 2 || !Array.isArray(shards) || shards.length === 0 || new Set(shards).size !== shards.length
+    || !shards.every(digest => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest))) return invalid();
+  return shards;
+}
+
 async function readPublicDiscoveryIndex(filePath: string, requestedTime?: Date) {
   const contents = await readPublicDiscoveryFile(filePath);
   if (!contents || typeof contents !== "object" || !("schemaVersion" in contents) || contents.schemaVersion !== 2) {
     const now = requestedTime ?? new Date();
     return { now, index: parsePublicDiscoveryManifest(contents, now, "serving"), sharded: false };
   }
-  const { shards } = record(contents, ["schemaVersion", "shards"]);
-  if (!Array.isArray(shards) || shards.length === 0 || new Set(shards).size !== shards.length
-    || !shards.every(digest => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest))) return invalid();
+  const shards = publicDiscoveryShardDigests(contents);
   const shardKey = JSON.stringify(shards);
   const directory = dirname(filePath);
   const cached = cachedProjection;
