@@ -262,7 +262,7 @@ export function createPlaceCallout(map){
       const point=map.project(anchor);
       const top=viewport.clientHeight-Math.min(viewport.clientHeight*.58,560);
       if((nativeSheet||(point.x>=card.offsetLeft&&point.x<=card.offsetLeft+card.offsetWidth))&&point.y>top-20){
-        map.panBy([0,point.y-(top-20)],{duration:reduced.matches?0:260});
+        map.panBy([0,point.y-(top-20)],{duration:reduced.matches?0:260},{pocketPlaceReveal:true});
       }
     }
     if(!wasOpen){

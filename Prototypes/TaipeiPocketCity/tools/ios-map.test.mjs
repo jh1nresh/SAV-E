@@ -282,3 +282,29 @@ test('an exact saved branch shares its source card, bookmark and thumbnail, and 
   group.click({stopPropagation(){}});
   assert.deepEqual(selections.pop(),{event:'select',ids:[a.id,samePointOtherBranch.id]});
 });
+
+test('floor change hides only in-wing native pins before grouping, and restores the original IDs on exit',t=>{
+  const original=globalThis.document,visible=new Set(),messages=[];
+  globalThis.document={createElement:()=>({dataset:{},classList:{toggle(){}},setAttribute(){},addEventListener(){}})};
+  t.after(()=>{if(original===undefined)delete globalThis.document;else globalThis.document=original;});
+  class Marker {
+    constructor({element}){this.element=element;}
+    setLngLat(){return this;} getElement(){return this.element;}
+    addTo(){visible.add(this);return this;} remove(){visible.delete(this);}
+  }
+  const floorEvents=new EventTarget();
+  const map={getBounds:()=>({getEast:()=>122,getWest:()=>120,getNorth:()=>26,getSouth:()=>24}),
+    project:()=>({x:50,y:50}),on(){}};
+  let floor=null;
+  const native=connectIOSMap(map,Marker,{postMessage:m=>messages.push(m)},undefined,undefined,{floorEvents,
+    visiblePin:(point,id)=>!floor||point[0]>121.565||id==='known'&&floor==='B1'});
+  const pin=(id,lon)=>({id,kind:'post',name:id,label:id,point:[lon,25.034]});
+  native.update({pins:[pin('unknown',121.564),pin('known',121.564),pin('outside',121.567)]});
+  const ids=()=>[...visible].flatMap(m=>m.getElement().placeIDs).sort();
+  const turn=next=>{floor=next;floorEvents.dispatchEvent(new Event('mall101-floor'));};
+  assert.deepEqual(ids(),['known','outside','unknown']);
+  turn('1F');assert.deepEqual(ids(),['outside']);
+  turn('B1');assert.deepEqual(ids(),['known','outside']);
+  turn(null);assert.deepEqual(ids(),['known','outside','unknown']);
+  assert.deepEqual(messages,[]);
+});

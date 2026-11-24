@@ -39,7 +39,7 @@ def runtime_paths():
     def document(name):
         return json.loads(include(name).read_text())
 
-    for path in ('index.html', 'style.css', 'assets/icon.png', 'assets/maplibre-gl.css',
+    for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
                  'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz'):
         include(path)

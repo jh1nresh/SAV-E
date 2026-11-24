@@ -56,7 +56,7 @@ function renderPin(button, pin, photo, saved, shared) {
   button.replaceChildren(art,name);
 }
 
-export function connectIOSMap(map, Marker, channel, controls, explore) {
+export function connectIOSMap(map, Marker, channel, controls, explore, {floorEvents, visiblePin} = {}) {
   const markers = new Map();
   let pins = [], userMarker;
   let hiddenAtlasIDs = '';
@@ -113,6 +113,11 @@ export function connectIOSMap(map, Marker, channel, controls, explore) {
     for (const pin of pins) {
       if (pin.kind === 'post' && !showsPublicPins && !pin.isSaved) continue;
       const venueKey = pin.publicVenueID ?? (pin.kind === 'post' ? pin.id : undefined);
+      if (visiblePin) {
+        const venue = venueKey && explore?.venues.get(venueKey);
+        const placeID = venue && venue.expiresAt > now ? venue.placeId : pin.id;
+        if (!visiblePin(pin.point, placeID)) continue;
+      }
       const key = venueKey || pin.id;
       if (!byEntity.has(key)) byEntity.set(key, []);
       byEntity.get(key).push(pin);
@@ -162,6 +167,7 @@ export function connectIOSMap(map, Marker, channel, controls, explore) {
     const signature = ids.join('|');
     if (signature !== hiddenAtlasIDs) {
       hiddenAtlasIDs = signature;
+      map.savvyAccountPlaceIds = ids;
       map.fire('pocketaccountpins', {placeIds: ids});
     }
     if (explore) {
@@ -226,6 +232,8 @@ export function connectIOSMap(map, Marker, channel, controls, explore) {
     channel.postMessage(message);
   }
   map.on('moveend', reportViewport);
+  floorEvents?.addEventListener('mall101-floor', refresh);
+  if (floorEvents) map.on('remove', () => floorEvents.removeEventListener('mall101-floor', refresh));
   const host = {
     update(state) {
       if (Array.isArray(state.pins)) pins = state.pins;

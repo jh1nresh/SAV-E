@@ -22,6 +22,10 @@ flat in vec3 v_building;
 flat in vec2 v_wallDirection;
 uniform float u_zoom;
 uniform vec2 u_focusOffset;
+uniform int u_mallCorners;
+uniform vec3 u_mallTile;
+uniform vec4 u_mallBounds;
+uniform vec2 u_mallRing[48];
 uniform vec4 u_streetOffsets;
 uniform vec2 u_linkOffset;
 uniform vec4 u_linkRuns[6];
@@ -164,6 +168,17 @@ void main() {
   float base=v_building.x, height=v_building.y, tone=v_building.z;
   float level=v_position.z-base;
   vec2 site=v_position.xy+u_focusOffset;
+  vec2 mallSite=v_position.xy*u_mallTile.z+u_mallTile.xy;
+  if(u_mallCorners>0&&all(greaterThanEqual(mallSite,u_mallBounds.xy))&&all(lessThanEqual(mallSite,u_mallBounds.zw))){
+    bool inMall=false;
+    vec2 a=u_mallRing[u_mallCorners-1];
+    for(int i=0;i<u_mallCorners;i++){
+      vec2 b=u_mallRing[i];
+      if((a.y>mallSite.y)!=(b.y>mallSite.y)&&mallSite.x<(b.x-a.x)*(mallSite.y-a.y)/(b.y-a.y)+a.x)inMall=!inMall;
+      a=b;
+    }
+    if(inMall)discard;
+  }
   // Taipei 101's four survey strips are separate 129.06 m features within 32 m of its center.
   // The tower mesh already draws its own trim. Hide both the survey core and these strips.
   bool towerTrim=tone<1.0&&abs(height-129.06038)<.02&&abs(base-4.94)<.02&&dot(site,site)<1024.0;
@@ -465,6 +480,10 @@ export class SurveyLayer {
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
     this.zoomLocation=gl.getUniformLocation(this.program,'u_zoom');
     this.focusLocation=gl.getUniformLocation(this.program,'u_focusOffset');
+    this.mallCornersLocation=gl.getUniformLocation(this.program,'u_mallCorners');
+    this.mallTileLocation=gl.getUniformLocation(this.program,'u_mallTile');
+    this.mallBoundsLocation=gl.getUniformLocation(this.program,'u_mallBounds');
+    this.mallRingLocation=gl.getUniformLocation(this.program,'u_mallRing[0]');
     this.streetLocation=gl.getUniformLocation(this.program,'u_streetOffsets');
     this.linkOffsetLocation=gl.getUniformLocation(this.program,'u_linkOffset');
     this.linkRunsLocation=gl.getUniformLocation(this.program,'u_linkRuns[0]');
@@ -515,6 +534,17 @@ export class SurveyLayer {
   }
   setEnabled(value) {
     this.#enabled=value;
+    this.map?.triggerRepaint();
+  }
+  setMallCutaway(ring){
+    this.mallMask=null;
+    if(ring){
+      const {x:mx,y:my}=ring[0],m=ring[0].meterInMercatorCoordinateUnits();
+      const points=ring.slice(0,-1).map(p=>[(p.x-mx)/m,(my-p.y)/m]);
+      if(points.length<3||points.length>48)throw Error('Unsupported mall footprint');
+      const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+      this.mallMask={mx,my,m,ring:new Float32Array(points.flat()),bounds:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+    }
     this.map?.triggerRepaint();
   }
   setSongyan(asset){
@@ -677,6 +707,11 @@ export class SurveyLayer {
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
     gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);
     gl.uniform1f(this.zoomLocation,zoom);
+    gl.uniform1i(this.mallCornersLocation,this.mallMask?this.mallMask.ring.length/2:0);
+    if(this.mallMask){
+      gl.uniform2fv(this.mallRingLocation,this.mallMask.ring);
+      gl.uniform4fv(this.mallBoundsLocation,this.mallMask.bounds);
+    }
     gl.uniform4fv(this.linkRunsLocation,this.linkRuns);
     const activeTexture=gl.getParameter(gl.ACTIVE_TEXTURE);
     gl.activeTexture(gl.TEXTURE0);
@@ -693,6 +728,10 @@ export class SurveyLayer {
     }
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
+      if(this.mallMask){
+        const {mx,my,m}=this.mallMask;
+        gl.uniform3f(this.mallTileLocation,(tile.mx-mx)/m,(my-tile.my)/m,tile.m/m);
+      }
       gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'?1:0);
       gl.uniform3f(this.dihuaLocation,this.dihua?(tile.mx-this.dihua.mx)/tile.m:0,
         this.dihua?(this.dihua.my-tile.my)/tile.m:0,this.dihuaDrawn?1:0);

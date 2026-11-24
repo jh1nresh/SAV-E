@@ -130,7 +130,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
   });
   const callout=createPlaceCallout(map);
   const pause=document.querySelector('#street-motion');
-  let mappedStores=new Set();
+  let mappedStores=new Set(),visiblePlaceFilter;
   let paused=false;
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
   const photoIds=new Set(photoPlaces.map(place=>place.placeId));
@@ -188,7 +188,8 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     pause.hidden=!near||motion.matches;
     for(const pin of pins){
       const photo=pin.key==='photos';
-      let visible=!accountPlaceIds.has(cityPlaceID(pin.place))&&zoom>=pin.minZoom&&bounds.contains(pin.point)&&(photo||!mappedStores.has(pin.place.id??pin.place.name));
+      let visible=!accountPlaceIds.has(cityPlaceID(pin.place))&&zoom>=pin.minZoom&&bounds.contains(pin.point)&&
+        (!visiblePlaceFilter||visiblePlaceFilter(pin.point,cityPlaceID(pin.place)))&&(photo||!mappedStores.has(pin.place.id??pin.place.name));
       if(visible){
         const {x,y}=map.project(pin.point);
         const length=pin.place.name.length;
@@ -303,7 +304,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
       return title===label || (short.length>=3 && long.startsWith(short) && long.slice(short.length).endsWith('店'));
     });
   }
-  return {state,addStreets,openMappedPlace:callout.open,setLocalLife,hasFocalPin,authoredRoads:focalRoads.length>3?focalRoads:false,setMappedStores(ids){
+  return {state,addStreets,setVisiblePlaceFilter(filter){visiblePlaceFilter=filter;update();},closeMappedPlace:callout.close,openMappedPlace:callout.open,setLocalLife,hasFocalPin,authoredRoads:focalRoads.length>3?focalRoads:false,setMappedStores(ids){
     mappedStores=new Set(ids.map(id=>id.replace(/^poi\/(node|way|relation)\//,'osm-$1-')));
     update();
   },setRain(share){

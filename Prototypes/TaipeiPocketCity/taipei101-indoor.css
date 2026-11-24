@@ -1,0 +1,39 @@
+.mall101-guide{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mall101-guide polygon{fill:#dca64a;fill-opacity:.13;stroke:#bd882b;stroke-width:2.5;stroke-dasharray:6 4;stroke-linejoin:round;paint-order:stroke fill}
+.mall101-guide circle{fill:#fffaf0;stroke:#9f721f;stroke-width:2}
+.mall101-badge{display:flex;align-items:center;gap:5px;padding:5px 8px 5px 5px;border:1px solid #d5b570;border-radius:18px;background:#fff8e5;color:#795721;font:700 13px/1.1 system-ui,sans-serif;white-space:nowrap;cursor:pointer;box-shadow:0 2px 6px #4835162c}
+.mall101-badge[hidden],#mall101-control[hidden],#mall101-control [hidden]{display:none!important}
+.mall101-bag{position:relative;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#b18127}
+.mall101-bag:before{content:"";width:9px;height:8px;border-radius:1px;background:#fffae8;transform:translateY(2px)}
+.mall101-bag:after{position:absolute;content:"";top:4px;width:4px;height:5px;border:1.3px solid #fffae8;border-bottom:0;border-radius:4px 4px 0 0}
+#mall101-control{position:absolute;left:14px;bottom:calc(var(--map-footer-bottom,18px) + 52px);z-index:3;display:flex;align-items:flex-end;gap:7px;font:600 13px/1.3 system-ui,sans-serif;color:#4e432c}
+#mall101-control button{min-width:42px;min-height:42px;padding:0 10px;border:1px solid #cfc2a7;border-radius:12px;background:#fffaf0;color:inherit;font:inherit;cursor:pointer;box-shadow:0 2px 7px #48351620}
+#mall101-control [data-floor-toggle]{display:flex;align-items:center;justify-content:center;gap:7px;color:#67470f;font-size:16px;border-color:#b68c3b}
+#mall101-control [data-floor-toggle]:after{content:"";width:6px;height:6px;border-left:1.5px solid;border-top:1.5px solid;transform:translateY(2px) rotate(45deg)}
+#mall101-control [data-floor-toggle][aria-expanded=true]:after{transform:translateY(-2px) rotate(225deg)}
+#mall101-control [data-floor-list]{position:absolute;bottom:calc(100% + 6px);left:0;display:grid;max-height:min(48vh,340px);overflow:auto;border-radius:12px;background:#fffaf0;border:1px solid #cfbe9e;box-shadow:0 3px 12px #48351624}
+#mall101-control [data-floor-list] button{border:0;border-radius:0;box-shadow:none;min-height:36px}
+#mall101-control [data-floor-list] button[aria-pressed=true]{background:#ecd496;color:#624615}
+#mall101-control details{border-radius:12px;background:#fffaf0;border:1px solid #cfc2a7;box-shadow:0 2px 7px #48351620}
+#mall101-control summary{cursor:pointer;padding:12px 9px;min-height:40px;box-sizing:border-box}
+#mall101-control [data-directory]{list-style:none;position:absolute;left:0;bottom:calc(100% + 6px);margin:0;padding:5px 9px;background:#fffaf0;border:1px solid #cfbe9e;border-radius:12px;max-height:min(42vh,290px);overflow:auto;width:min(230px,76vw);box-shadow:0 3px 12px #48351624}
+#mall101-control li+li{border-top:1px solid #e5dac5}
+#mall101-control a{display:block;padding:9px 2px;color:#614d28;text-decoration:none}
+#mall101-control [data-floor-exit]{font-size:12px;color:#655c4a}
+
+#mall101-official-guide{position:absolute;z-index:2;right:12px;bottom:calc(var(--map-footer-bottom,44px) + 52px);width:clamp(158px,21vw,225px);max-height:65%;overflow:auto;box-sizing:border-box;background:#fcf9ef;border:1px solid #c9bca0;border-radius:12px;box-shadow:0 3px 12px #513b1d20;color:#584a31;font:600 13px/1.25 system-ui,sans-serif}
+#mall101-official-guide[hidden],#mall101-official-guide button[hidden]{display:none}
+#mall101-official-guide summary{padding:10px 12px;cursor:pointer}
+#mall101-official-guide:not([open]){width:auto}
+#mall101-official-guide button{display:block;width:100%;border:0;padding:0 5px;background:#faf8f1;cursor:zoom-in}
+#mall101-official-guide img{display:block;width:100%;height:auto;aspect-ratio:1}
+#mall101-official-guide a{display:block;padding:7px 12px 9px;text-align:right;color:#655633;font-size:11px}
+#mall101-official-guide.enlarged{width:min(53%,410px)}
+#mall101-official-guide.enlarged button{cursor:zoom-out}
+@media(max-width:650px){
+  #mall101-official-guide{width:132px;bottom:calc(var(--map-footer-bottom,44px) + 105px)}
+  #mall101-official-guide.enlarged{width:min(80%,345px)}
+}
+
+/* The same card may be rendered over the map by SwiftUI or by the web fallback. */
+.ios-map #stage:has(#place-card:not([hidden])) :is(#mall101-control,#mall101-official-guide){visibility:hidden}

@@ -20,6 +20,8 @@ class PocketCityPackageTests(unittest.TestCase):
     def test_runtime_includes_scene_worker_and_no_working_inputs(self):
         runtime = set(pkg.runtime_paths())
         self.assertTrue({'ios-map.js', 'taiwan-search-worker.js', 'assets/maplibre-gl-worker.mjs',
+                         'taipei101-indoor.js', 'taipei101-indoor-data.js', 'taipei101-indoor.css',
+                         'taipei101-floor-guide.js', 'taipei101-directory.js',
                          'taiwan/mountains/yushan-ridges.webp', 'taiwan/mountains/taiwan-highlands.webp',
                          'taipei-river-art.js', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
                          'taipei-frontage-cameras.js', 'city170-bike-docks.js', 'shop-categories.js',

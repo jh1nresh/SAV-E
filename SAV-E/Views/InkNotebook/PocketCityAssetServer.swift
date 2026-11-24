@@ -266,9 +266,10 @@ private nonisolated final class PocketCityHTTPListener: @unchecked Sendable {
     ]
     private var policy: String {
         let tileOrigins = allowsRemoteTiles ? " https://tiles.openfreemap.org https://s3.amazonaws.com/elevation-tiles-prod/" : ""
+        let floorGuideOrigin = allowsRemoteTiles ? " https://www.taipei-101.com.tw/asset/img/map/" : ""
         return [
             "default-src 'none'", "script-src 'self'", "worker-src 'self'", "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob:\(tileOrigins)", "connect-src 'self'\(tileOrigins)",
+            "img-src 'self' data: blob:\(tileOrigins)\(floorGuideOrigin)", "connect-src 'self'\(tileOrigins)",
             "font-src 'self'", "frame-ancestors 'none'", "form-action 'none'", "base-uri 'none'"
         ].joined(separator: "; ")
     }

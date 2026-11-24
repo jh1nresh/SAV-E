@@ -7,6 +7,7 @@
   <title>Pocket City · Savvy</title>
   <link rel="icon" href="./assets/icon.png">
   <link rel="stylesheet" href="./assets/maplibre-gl.css">
+  <link rel="stylesheet" href="./taipei101-indoor.css?v=mall-2">
   <link rel="stylesheet" href="./style.css?v=shuqi-light-1">
 </head>
 <body>
@@ -41,6 +42,12 @@
           <button type="button" id="pitch" title="切換俯視與斜視" aria-label="斜視" aria-pressed="false">∠</button>
         </div>
       </div>
+      <nav id="mall101-control" aria-label="台北101購物中心樓層" hidden>
+        <button type="button" data-floor-toggle aria-expanded="false" aria-controls="mall101-floors"></button>
+        <div id="mall101-floors" data-floor-list role="group" aria-label="選擇樓層" hidden></div>
+        <details><summary data-directory-summary></summary><ul data-directory></ul></details>
+        <button type="button" data-floor-exit>離開樓層圖</button>
+      </nav>
       <nav id="fuxing-controls" aria-label="復興南路街景比較" hidden>
         <button type="button" id="fuxing-frame">看整排</button>
         <button type="button" id="fuxing-compare" aria-pressed="false">舊版對照</button>
@@ -106,6 +113,6 @@
       </details>
     </section>
   </main>
-  <script type="module" src="./app.js?v=arcade-sections-2"></script>
+  <script type="module" src="./app.js?v=mall101-2"></script>
 </body>
 </html>
