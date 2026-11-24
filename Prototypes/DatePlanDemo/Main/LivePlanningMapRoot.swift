@@ -159,9 +159,9 @@ struct LivePlanningMapRoot: View {
                         if showsPocketCity { pocketMap } else { Spacer(minLength: 0) }
                         HStack {
                             if mode == .explore {
-                                Button(showsPocketCity ? copy("Apple Maps", "Apple 地圖") : copy("3D map (中文)", "立體地圖")) {
+                                Button(showsPocketCity ? copy("Apple Maps", "Apple 地圖") : copy("Pocket City", "Pocket City 立體地圖")) {
                                     camera = .region(searchRegion)
-                                    pocketCityPreference = !exploreIn3D
+                                    usesPocketCity.toggle()
                                 }
                                 .buttonStyle(.bordered).frame(minHeight: 44)
                             }
@@ -213,7 +213,6 @@ struct LivePlanningMapRoot: View {
             searchPresented = false
             destination = .saved
         }
-        .onChange(of: language.language) { _, _ in pocketCityPreference = nil }
         .onChange(of: destination) { previous, _ in
             if previous == .map && showsPocketCity { camera = .region(searchRegion) }
         }
@@ -320,9 +319,8 @@ struct LivePlanningMapRoot: View {
         guideAccess.reconcile(plan: plan, outing: outing, places: groupPlaces)
     }
 
-    @State private var pocketCityPreference: Bool?
-    private var exploreIn3D: Bool { pocketCityPreference ?? (language.language == .traditionalChinese) }
-    private var showsPocketCity: Bool { mode == .explore && exploreIn3D }
+    @State private var usesPocketCity = true
+    private var showsPocketCity: Bool { mode == .explore && usesPocketCity }
 
     private var pocketMap: some View {
         PocketCitySurface(pins: pins.map { pin in
@@ -341,7 +339,7 @@ struct LivePlanningMapRoot: View {
             if let pin = pins.first(where: { $0.id == id }) { selectMapPin(pin) }
         }, onMove: { region in
             if sessionIsCurrent && destination == .map { searchRegion = region }
-        }, onFailure: { pocketCityPreference = false })
+        }, onFailure: { usesPocketCity = false })
         .id([ownerSubject, String(sessionGeneration)])
         .accessibilityIdentifier("live.map")
     }

@@ -63,7 +63,7 @@ Passport is the account's place archive and control surface. It exposes confirme
 
 ## Maps and visits
 
-Ink Home and the phone preview’s Explore map open Pocket City for Traditional Chinese. People using English can choose “3D map (中文)” to open the Chinese-language atlas. Both maps offer Apple Maps and return to it if the atlas cannot load. Saved and visited buttons open the native place detail. Explore post buttons open the associated native place card. Browsing public atlas landmarks never confirms a save or a visit.
+Ink Home and the phone preview’s Explore map open Pocket City by default in every supported app language. Both maps offer an Apple Maps switch and fall back to Apple Maps if Pocket City cannot load. Saved and visited buttons open the native place detail. Explore post buttons open the associated native place card. Browsing public atlas landmarks never confirms a save or a visit.
 
 Place detail and walking routes use Apple MapKit with the existing Ink pins, muted map emphasis and light paper overlay. Distances and walking time come from the current location/MapKit path. Fixture and screenshot launches that use the drawn map retain it.
 

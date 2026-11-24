@@ -720,8 +720,7 @@ struct SaveInkLiveMap: View {
         }
     }
 
-    @State private var pocketCityPreference: Bool?
-    private var usesPocketCity: Bool { pocketCityPreference ?? (languageSettings.language == .traditionalChinese) }
+    @State private var usesPocketCity = true
     private var homeViewport: PocketCityViewport? {
         PocketCityViewport(SaveInkMapCamera.region(around: pins.map(\.coordinate), user: userCoordinate, focused: nil))
     }
@@ -741,7 +740,7 @@ struct SaveInkLiveMap: View {
                                       kind: pin.visited ? .visited : .saved)
                     }, viewport: homeViewport,
                     userDot: PocketCityUserDot(userCoordinate, label: languageSettings.localized(english: "My location", traditionalChinese: "我的位置")),
-                    onSelect: onSelect, onFailure: { pocketCityPreference = false })
+                    onSelect: onSelect, onFailure: { usesPocketCity = false })
                     .frame(height: 360)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .accessibilityIdentifier("ink.home.map")
@@ -749,13 +748,12 @@ struct SaveInkLiveMap: View {
                     appleMap
                 }
                 Button(usesPocketCity ? languageSettings.localized(english: "Apple Maps", traditionalChinese: "Apple 地圖")
-                                      : languageSettings.localized(english: "3D map (中文)", traditionalChinese: "立體地圖")) {
-                    pocketCityPreference = !usesPocketCity
+                                      : languageSettings.localized(english: "Pocket City", traditionalChinese: "Pocket City 立體地圖")) {
+                    usesPocketCity.toggle()
                 }
                 .font(SaveInkType.aux).foregroundStyle(SaveInkPalette.ink)
                 .frame(minHeight: 44)
             }
-            .onChange(of: languageSettings.language) { _, _ in pocketCityPreference = nil }
         }
     }
 
