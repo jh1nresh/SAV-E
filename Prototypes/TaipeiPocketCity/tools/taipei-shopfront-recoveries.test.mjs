@@ -51,3 +51,28 @@ test('every recovered store was an existing unmatched city POI and has a real su
       assert.ok(readFileSync(join(data,'200',row.surveyTile+'.bin.gz')).length>0);
     }
   });
+
+test('the two shop pins retain their identity throughout the Dihua arcade',async()=>{
+  const {dihuaNorthFronts}=await import('../dihua-north-frontages.js');
+  const {withShopFacts,completeFrontagePack}=await import('../taipei-frontage-pack.js');
+  const {drawDihuaShop}=await import('../dihua-shop-art.js');
+  const shops=completeFrontagePack('p221_2038',[]);
+  for(const row of dihuaNorthFronts){
+    assert.equal(shops.filter(s=>s.id===row.id).length,1);
+    assert.equal(completeFrontagePack('p000_000',[]).length,0);
+    const pin={id:row.id,properties:{placeId:row.id,category:'convenience',name:row.name}};
+    assert.equal(withShopFacts(pin).properties.categoryLabel,row.categoryLabel);
+    const search=frontageSearchRow([row.name,'大同區','',...row.poiCenter,null,row.id]);
+    assert.deepEqual(search.slice(3),[...row.center,row.angle,row.id]);
+    const vertices=[],plaques=[];
+    const geometry={half:row.width/2,point:(...p)=>p,quad:pts=>vertices.push(...pts),
+      panel:(a,b,lo,hi,d)=>vertices.push([a,lo,d],[b,hi,d]),rgb:x=>x,plaque:(...args)=>plaques.push(args)};
+    assert.equal(drawDihuaShop(row,geometry),true);
+    assert.equal(plaques.length,1);
+    assert.ok(vertices.every(([x,z,depth])=>Number.isFinite(x+z+depth)&&
+      Math.abs(x)<=row.width/2+.025 && z>=0 && z<=3.25 && depth<=row.arcadeDepth+.14));
+  }
+  const other={properties:{placeId:'poi/node/123',name:'其他店'}};
+  assert.equal(withShopFacts(other),other);
+  assert.equal(drawDihuaShop(other,{}),false);
+});

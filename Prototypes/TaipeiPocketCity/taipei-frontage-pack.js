@@ -1,6 +1,10 @@
 import {recoveredFronts} from './taipei-shopfront-recoveries.js';
+import {groundFronts} from './taipei-ground-frontages.js';
 
-const recoveredByID=new Map(recoveredFronts.map(row=>[row.id,row]));
+import {dihuaNorthFronts} from './dihua-north-frontages.js';
+
+const supplements=[...recoveredFronts,...dihuaNorthFronts,...groundFronts];
+const recoveredByID=new Map(supplements.map(row=>[row.id,row]));
 
 export function frontageSearchRow(row){
   const recovered=row[5]===null&&recoveredByID.get(row[6]);
@@ -9,6 +13,14 @@ export function frontageSearchRow(row){
 
 export function completeFrontagePack(pack,rows){
   if(!Array.isArray(rows))throw Error('Invalid Pocket City frontage pack');
-  const additions=recoveredFronts.filter(r=>r.pack===pack&&!rows.some(primary=>primary.id===r.id));
+  const additions=supplements.filter(r=>r.pack===pack&&!rows.some(primary=>primary.id===r.id));
   return additions.length?rows.concat(additions):rows;
+}
+
+const shopFacts=new Map(dihuaNorthFronts.map(row=>[row.id,row]));
+export function withShopFacts(feature){
+  const row=shopFacts.get(feature.properties.placeId??feature.id);
+  if(!row)return feature;
+  const {category,categoryLabel,source,url}=row;
+  return {...feature,properties:{...feature.properties,category:category==='food'?'shop':category,categoryLabel,source,url}};
 }

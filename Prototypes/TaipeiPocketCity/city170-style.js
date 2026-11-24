@@ -1,4 +1,5 @@
-import {placePinStyle,pinLabelColor} from './place-pins.js?v=category-badges-1';
+import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
+import {streetShopPinStyle} from './shop-trades.js';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
 
 const name = ['coalesce', ['get', 'name'], ''];
@@ -268,6 +269,15 @@ export function addCity170Style(map, sourceId, firstLabel) {
           ['match',category,'river',4,'canal',3,'stream',2.5,1.4],21,
           ['match',category,'river',12,'canal',8,'stream',5.8,3]],
         ...(seasonal?{'line-dasharray':[2,2]}:{})},
+    },underRoads);
+    // Where only a stream centreline is surveyed, keep the light within its cartographic stroke.
+    add({
+      id:'city170-stream-glints', source:'city170-waterways', type:'line', minzoom:16.8,
+      filter:['all',['==',['get','seasonal'],false],['in',category,['literal',['river','stream']]]],
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{'line-color':'#d4e8cb','line-opacity':fade(16.8,18.2,.78),
+        'line-width':['interpolate',['linear'],['zoom'],16.8,.45,19,.9,21,1.4],
+        'line-dasharray':[3,8]},
     },underRoads);
   }
   add({
@@ -546,7 +556,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     type: 'symbol',
     minzoom: 17.8,
     filter: ['all', places, named],
-    ...pin,
+    ...streetShopPinStyle(map,pin),
   }, underLabels);
   return pin;
 }

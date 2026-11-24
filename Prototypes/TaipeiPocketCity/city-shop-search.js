@@ -1,7 +1,7 @@
-import {loadCityPlaces} from './city-place-index.js';
+import {loadCityPlaces} from './city-place-index.js?v=ground-shops-2';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
-import {frontageSearchRow} from './taipei-frontage-pack.js';
+import {frontageSearchRow} from './taipei-frontage-pack.js?v=ground-shops-2';
 
 const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
 export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNation){

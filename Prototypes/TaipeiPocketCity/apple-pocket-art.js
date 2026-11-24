@@ -1,6 +1,6 @@
 import {surfaceFeature} from './city170-ground.js';
-import {buildFuxingFront} from './fuxing-fronts.js';
-import {completeFrontagePack} from './taipei-frontage-pack.js';
+import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
+import {completeFrontagePack} from './taipei-frontage-pack.js?v=ground-shops-2';
 import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
 
 const tileSize = 256;

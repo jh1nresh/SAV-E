@@ -1,10 +1,12 @@
+import {withShopFacts} from './taipei-frontage-pack.js?v=ground-shops-2';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
 import {surfaceFeature} from './city170-ground.js';
 import {courtDetails} from './city170-courts.js?v=court-equipment-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
-import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=court-equipment-1';
+import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=ground-shops-2';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=river-streets-2';
+import {streetShopProperties} from './shop-trades.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 
 const collection = features => ({type: 'FeatureCollection', features});
@@ -159,11 +161,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     return hits.find(f=>!basePlaces.includes(f.layer.id)||basePlaceName(f.properties));
   }
   function openFeature(feature,point){
-    const props={...feature.properties};
+    const props={...streetShopProperties(feature.properties)};
     if(props.placeId && feature.geometry.type==='Point'){
       const choices=nearbyPlaces(map,feature.geometry.coordinates);
       if(choices.length>1 && choices.some(p=>p.placeId===props.placeId)){
-        openPlace({name:'選擇地點',choices,point:feature.geometry.coordinates});return;
+        openPlace({name:'選擇地點',choices:choices.map(streetShopProperties),point:feature.geometry.coordinates});return;
       }
     }
     if(props.entranceId && entranceCards.has(props.entranceId)){
@@ -445,7 +447,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f) &&
         (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
-        ?{...f,properties:{...f.properties,placeId:f.id}}:f)));
+        ?withShopFacts({...f,properties:{...f.properties,placeId:f.id}}):f)));
       map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
       cityRoadLabels(cells.length>0);
       status = {cells:cells.length, features:features.length, prepared:0};

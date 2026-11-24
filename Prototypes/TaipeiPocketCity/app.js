@@ -2,13 +2,14 @@ import {connectIOSMap} from './ios-map.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
+import {addTaipeiRiverArt} from './taipei-river-art.js?v=river-wash-2';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
 import {addTaiwanCells} from './taiwan-cells.js?v=city-colour-3';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
 import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
-import {cityPlaceLayers} from './city-place-index.js';
+import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=palace-alignment-1';
@@ -19,10 +20,10 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=taipei-audit-1';
-import {addCity170,dihuaSearch} from './city170.js?v=court-equipment-1';
-import {addCityShopfronts} from './city-shopfronts.js?v=taipei-audit-1';
-import {CityNature} from './city-nature.js?v=alpine-1';
+import {addShopSearch} from './city-shop-search.js?v=ground-shops-2';
+import {addCity170,dihuaSearch} from './city170.js?v=river-streets-2';
+import {addCityShopfronts} from './city-shopfronts.js?v=street-fronts-3';
+import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
@@ -529,6 +530,7 @@ try{
   map.on('moveend',updateAlpineColors);
   updateAlpineColors();
   installTaiwanRelief(map,'water');
+  if (preview.get('river') !== 'before') addTaipeiRiverArt(map,firstLabel);
   map.addLayer(layer,firstLabel);
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);

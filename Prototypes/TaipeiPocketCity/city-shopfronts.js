@@ -1,8 +1,9 @@
 import {MercatorCoordinate} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
-import {buildFuxingFront} from './fuxing-fronts.js';
+import {drawDihuaShop} from './dihua-shop-art.js?v=dihua-shops-1';
+import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
 import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
-import {completeFrontagePack} from './taipei-frontage-pack.js';
+import {completeFrontagePack} from './taipei-frontage-pack.js?v=ground-shops-2';
 
 const minZoom=17.55;
 const layerId='city-shopfronts';
@@ -33,6 +34,13 @@ uniform sampler2D signTexture;
 uniform bool showNames;
 out vec4 outColor;
 void main(){
+  // Painted plaques carry the ink and field on one surface, without a second depth-tested text decal.
+  if(lit.r<0.0){
+    vec3 field=vec3(-lit.r-1.0,lit.gb);
+    float coverage=showNames?texture(signTexture,uv).a:0.0;
+    outColor=vec4(mix(field,vec3(1.0,0.89,0.67),coverage),1.0);
+    return;
+  }
   if(uv.x>=0.0 && (!showNames || texture(signTexture,uv).a<0.62)) discard;
   outColor=vec4(lit,1.0);
 }`;
@@ -44,6 +52,10 @@ const drawing={
   apparel: ['#a17080','#654e63','#ab897e','#92a29f','clothes'],
   health: ['#597e82','#426166','#a9a396','#85a49e','cross'],
   craft: ['#6c7796','#4f596f','#8c7964','#7e9298','books'],
+  salon: ['#948180','#665a58','#b09883','#95aca9','plain'],
+  botanical: ['#65846b','#526b59','#ab967d','#91a79b','plain'],
+  cycle: ['#567c87','#4b6367','#a3927c','#859d9b','plain'],
+  optical: ['#65848a','#506467','#ad9e86','#92aba9','plain'],
   retail: ['#786c58','#5c5a52','#a28d7c','#829991','plain'],
 };
 const categories={
@@ -107,11 +119,11 @@ function nameAtlas(map, count, maxTexture){
   ctx.textAlign='center';
   ctx.textBaseline='middle';
   let index=0;
-  return {canvas,write(text,fitSign=false){
+  return {canvas,write(text,fitSign=false,heavy=false){
     const left=(index%cols)*width,top=Math.floor(index++/cols)*height;
     if(top+height>canvas.height)return null;
     const name=text.trim().slice(0,40);
-    ctx.font=fitSign?'600 26px "Songti TC", serif':'bold 23px system-ui, sans-serif';
+    ctx.font=heavy?'bold 28px system-ui, sans-serif':fitSign?'600 26px "Songti TC", serif':'bold 23px system-ui, sans-serif';
     ctx.fillText(name,left+width/2,top+height/2,width-16);
     const inset=fitSign?Math.max(1,(width-Math.min(ctx.measureText(name).width,width-16))/2-8):1;
     return [(left+inset)/canvas.width,(top+1)/canvas.height,
@@ -119,13 +131,119 @@ function nameAtlas(map, count, maxTexture){
   }};
 }
 
-function buildShop(vertices,row,center,scale,atlas,fuxing=false){
+// Stock and furniture are illustrative. The trade, surveyed facade and available width
+// come from the matched shop. Draw one display per bay so shelves cannot mask its shape.
+const tradeWindows = new Map([
+  ['hairdresser','salon'], ['florist','flowers'], ['bicycle','cycle'],
+  ['cafe','espresso'], ['coffee','coffee-stock'], ['restaurant','dining'], ['fast_food','dining'],
+  ['optician','glasses'],
+]);
+const tradePaint={salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe'};
+const fixtureInk=rgb('#494845'), timber=rgb('#a87554'), porcelain=rgb('#f2dfb5'),
+  teal=rgb('#47877e'), leather=rgb('#ac6856'), petal=rgb('#d47774'), leaf=rgb('#688c5e');
+function tradeWindow(trade, left, right, point, quad){
+  const middle=(left+right)/2;
+  // Real-world proportions survive narrow storefronts. The display sits above its sill.
+  const scale=Math.min((right-left-.06)/1.65,1);
+  if(scale<=0)return;
+  const at=(x,y,z)=>point(middle+x*scale,.56+y*scale,z);
+  const face=(a,b,lo,hi,d,color)=>quad([at(a,lo,d),at(b,lo,d),at(b,hi,d),at(a,hi,d)],color);
+  function slab(a,b,lo,hi,d,color){
+    face(a,b,lo,hi,d,color);
+    quad([at(a,hi,.052),at(b,hi,.052),at(b,hi,d),at(a,hi,d)],porcelain);
+    quad([at(b,lo,.052),at(b,lo,d),at(b,hi,d),at(b,hi,.052)],fixtureInk);
+  }
+  function shape(coords,d,color){quad(coords.map(([x,y])=>at(x,y,d)),color);}
+  function rod(x,y,xx,yy,width,d,color){
+    const len=Math.hypot(xx-x,yy-y),dx=-(yy-y)*width/(2*len),dy=(xx-x)*width/(2*len);
+    shape([[x+dx,y+dy],[xx+dx,yy+dy],[xx-dx,yy-dy],[x-dx,y-dy]],d,color);
+  }
+  function rim(x,y,r,d,color,segments=10){
+    for(let i=0;i<segments;i++){
+      const a=2*Math.PI*i/segments,b=2*Math.PI*(i+1)/segments;
+      rod(x+r*Math.cos(a),y+r*Math.sin(a),x+r*Math.cos(b),y+r*Math.sin(b),r*.19,d,color);
+    }
+  }
+  switch(trade){
+    case 'salon':
+      face(-.52,.52,.65,1.59,.063,timber);
+      face(-.45,.45,.72,1.52,.071,highlights);
+      rod(-.38,1.05,-.06,1.41,.04,.074,porcelain);
+      slab(-.27,.27,.03,.11,.24,fixtureInk);
+      face(-.065,.065,.105,.40,.16,fixtureInk);
+      slab(-.36,.36,.38,.52,.26,leather);
+      slab(-.29,.29,.53,.85,.19,leather);
+      for(const side of [-.36,.27])slab(side,side+.09,.52,.65,.27,fixtureInk);
+      break;
+    case 'flowers':
+      for(const [x,y] of [[-.54,1.13],[-.10,1.36],[.29,1.18],[.53,1.32]]){
+        const foot=x<0?-.25:.30;
+        rod(foot,.42,x,y,.045,.12,leaf);
+        shape([[x*.7,.68],[x*.7-.14,.84],[x*.7-.16,.88],[x*.7+.025,.80]],.133,leaf);
+        const r=.105;
+        shape([[x-r,y],[x-.04,y+r],[x+.06,y+r],[x+r,y]],.14,x>0?porcelain:petal);
+        shape([[x-r,y],[x+r,y],[x+.04,y-r],[x-.06,y-r]],.14,x>0?porcelain:petal);
+      }
+      for(const x of [-.26,.30]){
+        shape([[x-.14,.02],[x+.14,.02],[x+.23,.49],[x-.23,.49]],.19,timber);
+        slab(x-.235,x+.235,.45,.52,.22,leather);
+      }
+      break;
+    case 'cycle':
+      for(const x of [-.49,.49])rim(x,.31,.28,.10,fixtureInk);
+      for(const [x,y,xx,yy] of [[-.49,.31,-.07,.32],[-.07,.32,-.20,.69],[-.20,.69,-.49,.31],
+        [-.20,.69,.28,.7],[.28,.7,-.07,.32],[.49,.31,.29,.78]]){
+        rod(x,y,xx,yy,.052,.14,teal);
+      }
+      rod(-.20,.69,-.25,.82,.05,.15,fixtureInk);
+      face(-.38,-.12,.80,.88,.17,leather);
+      rod(.29,.78,.25,.92,.05,.16,fixtureInk);
+      face(.22,.42,.90,.96,.17,fixtureInk);
+      break;
+    case 'espresso':
+      slab(-.76,.76,.27,.38,.22,timber);
+      slab(-.55,.42,.38,.47,.18,fixtureInk);
+      slab(-.52,-.37,.47,.90,.15,teal);
+      slab(-.55,.46,.76,1.05,.21,teal);
+      face(-.27,.36,.73,.78,.205,fixtureInk);
+      for(const x of [-.12,.21]){
+        face(x-.035,x+.035,.64,.74,.16,fixtureInk);
+        shape([[x-.07,.47],[x+.07,.47],[x+.10,.60],[x-.10,.60]],.18,porcelain);
+      }
+      break;
+    case 'coffee-stock':
+      slab(-.75,.75,.26,.35,.22,timber);
+      for(const [x,h] of [[-.45,.98],[0,1.06],[.45,.89]]){
+        shape([[x-.14,.36],[x+.14,.36],[x+.12,h],[x-.12,h]],.13,timber);
+        face(x-.12,x+.12,h-.055,h,.145,fixtureInk);
+        face(x-.085,x+.085,.48,.64,.15,porcelain);
+      }
+      break;
+    case 'dining':
+      for(const side of [-.55,.49])face(side,side+.065,.02,.58,.12,fixtureInk);
+      slab(-.75,.75,.54,.65,.24,timber);
+      for(const x of [-.32,.32]){
+        shape([[x-.09,.65],[x+.09,.65],[x+.22,.84],[x-.22,.84]],.15,porcelain);
+        face(x-.23,x+.23,.819,.855,.17,teal);
+      }
+      break;
+    case 'glasses':
+      slab(-.70,.70,.27,.37,.20,timber);
+      for(const x of [-.29,.29])rim(x,.85,.24,.12,fixtureInk,8);
+      rod(-.068,.89,.068,.89,.055,.13,timber);
+      for(const side of [-1,1])rod(side*.51,.89,side*.64,.94,.049,.13,timber);
+      break;
+  }
+}
+
+export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const [x,y,z]=center;
   const angle=row.angle*Math.PI/180, nx=Math.cos(angle),ny=Math.sin(angle);
   const tx=-ny,ty=nx;
   const half=clamp(row.width,1.5,9)*.5, top=3.25, offset=.14;
   const type=storefrontCategory(row)[1];
-  const paint=colored[type];
+  const trade=tradeWindows.get(row.category);
+  const paint=colored[tradePaint[trade]??type];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
   const trim=timbers[seed%timbers.length];
@@ -148,8 +266,15 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
     const nameUV=atlas.write(row.name,true);
     if(nameUV)panel(a,b,low,high,depth,color,nameUV);
   }
-  if(fuxing && buildFuxingFront(row,{half,top,point,quad,panel,rgb,sign})){
-    return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055)};
+  function plaque(a,b,low,high,depth,fill){
+    const field=rgb(fill), uv=atlas.write(row.name,true,true);
+    const color=uv?[-1-field[0],field[1],field[2]]:field;
+    panel(a,b,low,high,depth,color,uv);
+  }
+  const geometry={half,top,point,quad,panel,rgb,sign,plaque};
+  if(drawDihuaShop(row,geometry) || (fuxing && buildFuxingFront(row,geometry))){
+    return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055),
+      lip:row.arcadeDepth?corners(-half,half,.08,top,row.arcadeDepth+.14):null};
   }
   panel(-half,half,.08,top,0,paint.wall);
   panel(-half,half,.08,.35,.018,stone);
@@ -162,16 +287,25 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   quad([point(-half,top,.04),point(half,top,.04),point(half,top,.24),point(-half,top,.24)],cream);
   panel(-half,half,top-.07,top,.24,paint.frame);
   const door=Math.min(.61,half*.36);
-  panel(-door-.085,door+.085,.12,2.67,.025,paint.frame);
-  panel(-door,door,.22,2.56,.041,paint.glass);
-  panel(-door+.06,door-.06,1.45,2.44,.049,highlights);
-  panel(door-.18,door-.11,1.07,1.40,.053,cream);
-  for(const [start,end] of [[-half+.10,-door-.13],[door+.13,half-.10]]){
+  // A narrow shop needs one continuous display beside the entrance.
+  const doorCenter=trade&&half<2.85?half-.14-door:0;
+  const dl=doorCenter-door,dr=doorCenter+door;
+  panel(dl-.085,dr+.085,.12,2.67,.025,paint.frame);
+  panel(dl,dr,.22,2.56,.041,paint.glass);
+  panel(dl+.06,dr-.06,1.45,2.44,.049,highlights);
+  panel(dr-.18,dr-.11,1.07,1.40,.053,cream);
+  for(const [start,end] of [[-half+.10,dl-.13],[dr+.13,half-.10]]){
     if(end-start<.25)continue;
     panel(start,end,.44,2.60,.02,paint.frame);
     panel(start+.073,end-.073,.53,2.51,.038,paint.glass);
     panel(start+.10,end-.10,2.23,2.40,.042,highlights);
-    if(['books','shelves','awning'].includes(paint.detail)){
+    if(trade){
+      if(start<dl){
+        panel(start+.073,end-.073,.53,2.20,.043,paint.glass.map(c=>c*.81));
+        panel(start+.06,end-.06,.46,.53,.14,trim);
+        tradeWindow(trade,start+.07,end-.07,point,quad);
+      }
+    }else if(['books','shelves','awning'].includes(paint.detail)){
       const items=paint.detail==='awning'?2:4;
       const step=(end-start-.18)/items;
       for(const shelf of (paint.detail==='awning'?[.7]:[.7,1.26])){
@@ -219,8 +353,8 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055)};
 }
 
-function projectedFace(shop,matrix,width,height){
-  const corners=shop.hit.map(([x,y,z])=>{
+function projectedFace(shop,matrix,width,height,points=shop.hit){
+  const corners=points.map(([x,y,z])=>{
     const component=i=>matrix[i]*x+matrix[i+4]*y+matrix[i+8]*z+matrix[i+12];
     const w=component(3);
     return w>0?[(1+component(0)/w)*width/2,(1-component(1)/w)*height/2]:null;
@@ -231,11 +365,13 @@ function projectedFace(shop,matrix,width,height){
 }
 
 function hitShop(shop,matrix,point,width,height){
-  const corners=projectedFace(shop,matrix,width,height);
-  if(!corners)return false;
-  return corners.every(([x,y],index)=>{
-    const [nx,ny]=corners[(index+1)%4];
-    return (nx-x)*(point.y-y)-(ny-y)*(point.x-x)<0;
+  const faces=shop.lip?[shop.hit,shop.lip]:[shop.hit];
+  return faces.some(points=>{
+    const corners=projectedFace(shop,matrix,width,height,points);
+    return corners && corners.every(([x,y],index)=>{
+      const [nx,ny]=corners[(index+1)%4];
+      return (nx-x)*(point.y-y)-(ny-y)*(point.x-x)<0;
+    });
   });
 }
 
