@@ -129,4 +129,30 @@ test("a Taipei destination requires the exact visible official link and its own 
   assert.deepEqual((await lookup(body + link.replace("<a ", "<a hidden "))).counts.outcomes, { no_catalog_link: 1 });
   assert.deepEqual((await lookup(body + link + link.replace("380", "381"))).counts.outcomes, { multiple_catalog_features: 1 });
   assert.deepEqual((await lookup("台北信義區象山公園附近的另一個景點。 " + link)).counts.outcomes, { feature_name_unconfirmed: 1 });
+  for (const nearby of [
+    "象山公園的附近有一家咖啡店，今天專程來吃甜點。",
+    "今天去鄰近象山公園的咖啡店。",
+    "咖啡店在（象山公園）的對面。",
+    "The cafe is near 象山公園.",
+  ]) {
+    const result = await lookup(nearby + " " + link);
+    assert.deepEqual(result.counts.outcomes, { feature_name_unconfirmed: 1 }, nearby);
+    assert.deepEqual(result.verified, []);
+  }
+  assert.equal((await lookup("象山公園的附近有一家咖啡店。今天走進象山公園散步。" + link)).counts.admitted, 1);
+});
+
+test("a shorter feature alias inherits the context of its full name", async () => {
+  const zoo = { ...place, providerPlaceID: "ZooFixture", category: "attractions", name: "臺北市立動物園", address: "Taipei" };
+  const url = "https://www.travel.taipei/zh-tw/attraction/details/386";
+  const officialFeatures = [{ provider: zoo.provider, providerPlaceID: zoo.providerPlaceID,
+    expectedName: zoo.name, catalogID: "Attraction_379000000A_000386",
+    names: [zoo.name, "市立動物園"], authorityURLs: [url] }];
+  const draft = ig("ZooFixture");
+  const lookup = (text: string) => checkStreetDrafts(noArchive, [{ place: zoo, candidates: [draft] }], [zoo], {
+    now, officialFeatures, fetchEmbed: async () => embed(draft.sourceURL, `${text}<a href="${url}">官方網站</a>`),
+  });
+  const nearby = "今天去鄰近臺北市立動物園的咖啡店。";
+  assert.deepEqual((await lookup(nearby)).counts.outcomes, { feature_name_unconfirmed: 1 });
+  assert.equal((await lookup(nearby + "下午走進市立動物園。")).counts.admitted, 1);
 });
