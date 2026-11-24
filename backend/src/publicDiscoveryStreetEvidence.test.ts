@@ -44,6 +44,30 @@ test("holds venue changes, multi-location posts, stall units and a shared street
   assert.equal(classifyTaipeiStreetCaption(caption, {...place,address:"Taipei, Road No.116"}, expected), "unsupported_address");
 });
 
+test("a nearby address does not confirm the storefront", () => {
+  for (const body of [
+    `測試茶點店在${addr}附近，點心很好吃。`,
+    `測試茶點店在${addr}（周邊）。`,
+    `測試茶點店鄰近${addr}。`,
+    `測試茶點店離${addr}不遠。`,
+    `測試茶點店離「${addr}」步行五分鐘。`,
+    `測試茶點店就在${addr}的附近。`,
+    `測試茶點店就在${addr}的對面。`,
+    `測試茶點店在${addr}的隔壁。`,
+    `測試茶點店在（${addr}）附近。`,
+    `測試茶點店近${addr}。`,
+    `測試茶點店 is near ${addr}.`,
+  ]) {
+    assert.equal(classifyTaipeiStreetCaption(body, place, expected), "ambiguous_address", body);
+  }
+  const ig = "https://www.instagram.com/p/StreetFixture/";
+  const html = `<div class="Embed"><a class="EmbeddedMedia" href="${ig}">View</a>
+    <div class="Caption"><a class="CaptionUsername" href="/example/">example</a>測試茶點店在${addr}附近。</div></div>`;
+  assert.deepEqual(verifyPublicTaipeiStreetCandidate({
+    html, platform: "instagram", sourceURL: ig, place, placesAtAddress: expected,
+  }), { status: "ambiguous_address" });
+});
+
 test("checks an exact Instagram or Threads embed, never a hidden match or edited author", () => {
   const ig = "https://www.instagram.com/p/StreetFixture/";
   const html = `<div class="Embed"><a class="EmbeddedMedia" href="${ig}">View</a>
