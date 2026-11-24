@@ -1,4 +1,7 @@
 import {buildPalaceModel} from './palace-museum.js';
+import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
+
+const landmarkBuilders=new Map([['palace-museum',buildPalaceModel],[sunYatSenHall.id,buildSunYatSenHall]]);
 
 const vertexSource=`#version 300 es
 layout(location=0) in vec3 a_position;
@@ -25,6 +28,7 @@ uniform sampler2D u_districtMaterialMask;
 uniform bool u_districtMaterialDetail;
 uniform vec4 u_districtMaterialTransform;
 uniform vec3 u_cityLandmarks;
+uniform bool u_replaceMemorialShell;
 uniform vec3 u_songyanOffset;
 uniform vec3 u_dihuaOffset;
 uniform vec4 u_songyanLimit;
@@ -151,6 +155,7 @@ void main() {
   vec3 n=normalize(cross(dFdx(v_position),dFdy(v_position)));
   if(n.z<-.5)n=-n;
   float base=v_building.x, height=v_building.y, tone=v_building.z;
+  if(u_replaceMemorialShell && abs(base-8.23)<.006 && abs(height-9.77)<.006 && abs(tone-.495)<.0002)discard;
   float level=v_position.z-base;
   vec2 site=v_position.xy+u_focusOffset;
   // Taipei 101's four survey strips are separate 129.06 m features within 32 m of its center.
@@ -419,6 +424,7 @@ export class SurveyLayer {
     this.districtMaterialTransformLocation=gl.getUniformLocation(this.program,'u_districtMaterialTransform');
     this.districtMaterialMaskLocation=gl.getUniformLocation(this.program,'u_districtMaterialMask');
     this.cityLandmarkLocation=gl.getUniformLocation(this.program,'u_cityLandmarks');
+    this.memorialShellLocation=gl.getUniformLocation(this.program,'u_replaceMemorialShell');
     this.dihuaLocation=gl.getUniformLocation(this.program,'u_dihuaOffset');
     this.songyanOffsetLocation=gl.getUniformLocation(this.program,'u_songyanOffset');
     this.songyanTileLocation=gl.getUniformLocation(this.program,'u_songyanTile');
@@ -489,12 +495,12 @@ export class SurveyLayer {
     this.#pending.set(k,ctl);
     const url=new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
-    const palace=level==='city-streets/landmark'&&tile.id==='palace-museum';
-    const payload=palace?Promise.resolve().then(()=>buildPalaceModel().buffer):unpack(url,ctl.signal);
+    const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
+    const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
     payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
       const verts=data.byteLength/24;
-      if(palace?verts===0||verts%3!==0:verts!==tile.verts)throw Error('Building tile has invalid size');
+      if(builder?verts===0||verts%3!==0:verts!==tile.verts)throw Error('Building tile has invalid size');
       const gl=this.gl, vao=gl.createVertexArray(), buffer=gl.createBuffer();
       gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
       gl.bufferData(gl.ARRAY_BUFFER,new Uint8Array(data),gl.STATIC_DRAW);
@@ -557,11 +563,13 @@ export class SurveyLayer {
     this.dihuaDrawn=!!dihua&&this.#fetched.has(dihua.key);
     if(this.dihuaDrawn)this.#displayed.push({...dihua.tile,key:dihua.key});
     this.#cityLandmarksVisible.fill(0);
+    this.memorialDrawn=false;
     for(const {key,tile} of heritage){
       const asset=this.#fetched.get(key);
       if(!asset)continue;
       this.#displayed.push({...tile,key,verts:asset.verts});
-      this.#cityLandmarksVisible[tile.style]=1;
+      if(tile.id===sunYatSenHall.id)this.memorialDrawn=true;
+      else this.#cityLandmarksVisible[tile.style]=1;
     }
     for(const t of wanted){
       const entry=this.#fetched.get(t.key);
@@ -622,6 +630,7 @@ export class SurveyLayer {
     }
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
+      gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
       gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'?1:0);
       gl.uniform3f(this.dihuaLocation,this.dihua?(tile.mx-this.dihua.mx)/tile.m:0,
         this.dihua?(this.dihua.my-tile.my)/tile.m:0,this.dihuaDrawn?1:0);
