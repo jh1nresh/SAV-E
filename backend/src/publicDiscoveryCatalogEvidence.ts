@@ -1,3 +1,4 @@
+import { hasDirectPublicPlaceMention } from "./publicDiscoveryMentionEvidence.js";
 import type { PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { publicPostEvidenceFingerprint, readPublicPostForVenueReview } from "./publicPostReverification.js";
 
@@ -7,7 +8,6 @@ const authorityHosts = new Set([...cities, "www.gov.taipei", "www.post.gov.tw", 
 const featureKey = /^Attraction_379000000A_([0-9]{6})$/u;
 const featurePath = /^\/zh-tw\/attraction\/details\/([1-9][0-9]{0,5})\/?$/u;
 const transientContext = /跨年|多元舞台|觀音祭|集章|踩街|限時|快閃|報名|抽獎|開幕記者會|搬遷|舊址|停業/u;
-const neighbour = /^(?:附近|旁邊|旁的|邊的|對面|周邊)/u;
 const visibleURL = /https:\/\/[^\s<>"'。。，、！？；）】]+/gu;
 
 type FeatureProof = { catalogNumber: number; names: string[]; urls: Set<string> };
@@ -70,11 +70,6 @@ export function readTaipeiFeatureProof(raw: unknown, place: PublicDiscoveryPlace
   return { catalogNumber, names, urls };
 }
 
-function directlyNamesFeature(body: string, names: string[]): boolean {
-  const compact = normalize(body);
-  return names.some(name => compact.split(name).slice(1).some(after => !neighbour.test(after)));
-}
-
 export function verifyPublicTaipeiCatalogCandidate(input: {
   html: string; platform: Platform; sourceURL: string; author?: string; place: PublicDiscoveryPlace; proof: FeatureProof;
 }) {
@@ -82,7 +77,7 @@ export function verifyPublicTaipeiCatalogCandidate(input: {
   const original = readPublicPostForVenueReview(html, platform, sourceURL, author);
   if (!original) return { status: "original_unavailable" as const };
   if (transientContext.test(original.body)) return { status: "time_or_relocation" as const };
-  if (!directlyNamesFeature(original.body, proof.names)) return { status: "feature_name_unconfirmed" as const };
+  if (!hasDirectPublicPlaceMention(normalize(original.body), proof.names)) return { status: "feature_name_unconfirmed" as const };
   let hasProof = false;
   const links = [...original.bodyLinks, ...original.body.matchAll(visibleURL)].map(value =>
     authorityLink(typeof value === "string" ? value : value[0]));
