@@ -90,4 +90,12 @@ test('tall streetside towers keep their glazing and floor divisions up to the ro
   assert.equal(panes.length,4);
   assert.ok(panes.every(f=>f.properties.height>85));
   assert.ok(details.some(f=>f.properties.kind==='spandrel'&&f.properties.base>75));
+  for(const tags of [{'building:colour':'#ffeecc'}, {'building:material':'reinforced_concrete'}]){
+    const masonry={...building,properties:{...building.properties,...tags}};
+    const scene=buildTaiwanCells({view:[119.9999,22.9999,120.0004,23.0004],center:[120.00015,23.0001],
+      zoom:19,contains:()=>true,exclude:()=>false,tiles:{buildings:[masonry],ways:[],pois:[],woods:[],fields:[],water:[]}});
+    assert.ok(scene.details.every(f=>f.properties.kind!=='curtain-wall'));
+    assert.ok(scene.details.some(f=>f.properties.kind==='window'&&f.properties.base>75));
+    if(tags['building:colour'])assert.equal(scene.details.find(f=>f.properties.kind==='building').properties.color,'#ffeecc');
+  }
 });

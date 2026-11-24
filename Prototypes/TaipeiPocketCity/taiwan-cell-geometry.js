@@ -117,7 +117,7 @@ function clippingEdge(a,b){
   if(Math.abs(a[1]-b[1])<1e-10)return fractionalTile(my(a[1]),16384*256)<1e-5;
   return false;
 }
-function facade(rings,height,shop,details,neighbors,paint){
+function facade(rings,height,shop,details,neighbors,paint,tags){
   const ring=rings[0],wall=ring.map(xy),target=shop?xy(shop.pt):null;
   const area=wall.slice(1).reduce((sum,b,i)=>sum+wall[i][0]*b[1]-b[0]*wall[i][1],0);
   const sign=Math.sign(area);
@@ -166,16 +166,30 @@ function facade(rings,height,shop,details,neighbors,paint){
     }
     // Glazing follows the full height of a tower. Scaled floor bands keep its
     // silhouette legible when a tall building fills the street camera.
+    const material=String(tags['building:material']||tags['facade:material']||tags.material||'').trim().toLowerCase();
+    const reportedPaint=tags['building:colour']||tags['building:color']||tags['facade:colour']||tags.colour||tags.color;
+    const curtain=paint.family==='tower'&&!reportedPaint&&(!material||material==='glass');
     if(height>=38&&length>=5){
       const left=-mid+.45,right=length-mid-.45,bottom=4.4,top=height-.7;
-      panel(left,right,.10,bottom,top,paint.glass,'curtain-wall');
+      if(curtain)panel(left,right,.10,bottom,top,paint.glass,'curtain-wall');
       const sections=Math.min(9,Math.max(2,Math.round(length/4.8)));
-      for(let i=0;i<=sections;i++){
+      if(curtain)for(let i=0;i<=sections;i++){
         const x=left+(right-left)*i/sections;
         panel(x-.12,x+.12,.25,bottom,top,paint.frame,'mullion');
       }
       const spacing=Math.max(3.4,(height-bottom)/16);
-      for(let level=bottom;level<top-.15;level+=spacing)panel(left,right,.28,level,level+.24,paint.trim,'spandrel');
+      for(let level=bottom;level<top-.15;level+=spacing){
+        if(curtain)panel(left,right,.28,level,level+.24,paint.trim,'spandrel');
+        else{
+          const step=(right-left)/sections;
+          for(let bay=0;bay<sections;bay++){
+            const x=left+step*(bay+.19),w=step*.62;
+            const sill=Math.min(top,level+1.65);
+            panel(x,x+w,.16,level,sill,paint.frame,'window-frame');
+            if(sill-level>.22)panel(x+.1,x+w-.1,.21,level+.1,sill-.1,paint.glass,'window');
+          }
+        }
+      }
     }
     if(shop&&height>=3.1){
       const front=storefrontStyle(shop.subclass||shop.kind,shop.id??shop.pt.join(','),paint);
@@ -299,7 +313,7 @@ export function buildTaiwanCells({view,center,zoom,tiles,contains,exclude,overla
     const merchants=nearby.flatMap(c=>c.shops).filter(s=>inBox(s.pt,b)&&inPolygon(s.pt,rings));
     const shop=merchants.find(s=>s.id)??merchants[0];
     const neighbors=new Set(nearby.flatMap(c=>c.blockers));
-    facade(rings,eave,shop,details,neighbors,paint);
+    facade(rings,eave,shop,details,neighbors,paint,f.properties);
   }
   return {details,mappedBodies,roofs,trees:close?grow(cells,view,zoom,allowed):[],cells:cells.length};
 }
