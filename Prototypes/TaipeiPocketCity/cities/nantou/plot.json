@@ -1,0 +1,18 @@
+{
+ "lat": 23.84187,
+ "lon": 120.9208,
+ "rotation": -20,
+ "size": 175.0,
+ "asked": {
+  "lat": 23.84187,
+  "lon": 120.9208
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "慈恩塔"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "南投慈恩塔",
+ "osm_base": null
+}

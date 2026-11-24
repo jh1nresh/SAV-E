@@ -1,0 +1,194 @@
+{
+  "name": "宜蘭",
+  "title": "宜蘭 · 蘭陽博物館",
+  "region": "頭城鎮 · 烏石港",
+  "place": "蘭陽博物館",
+  "timezone": "Asia/Taipei",
+  "level": 3.15,
+  "styles": {
+    "default": {
+      "facade": "civic",
+      "roof": "flat",
+      "flatRoof": "#c5b7a0",
+      "wall": [
+        "#e0c69c",
+        "#e5d2b4",
+        "#c9b9ad"
+      ],
+      "levels": 3,
+      "shop": "poi",
+      "rooftop": "none"
+    }
+  },
+  "palette": {
+    "ground": "#d9c6aa",
+    "road": "#b1a4a1",
+    "pavement": "#e2ceb0",
+    "walk": "#e5d3b7",
+    "grass": "#94b579",
+    "paving": "#c4ac8c",
+    "kerb": "#ceb48e",
+    "slab": "#dfc199",
+    "water": "#6f9fa5"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.1,
+    "colour": "#c9b698",
+    "stone": "#e5d4b6"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "colours": [
+        "#82a65f",
+        "#769753",
+        "#9ab568"
+      ],
+      "height": 6,
+      "evergreen": true,
+      "vary": 0.4
+    }
+  },
+  "people": {
+    "clothes": [
+      "#b76853",
+      "#4b7575",
+      "#d29f5d",
+      "#516577",
+      "#748252"
+    ],
+    "skin": [
+      "#dfb292",
+      "#bf8863",
+      "#9e6249"
+    ],
+    "pants": [
+      "#4c5b62",
+      "#7e6659"
+    ],
+    "hair": [
+      "#453632",
+      "#5c483c"
+    ]
+  },
+  "seasons": [
+    {
+      "id": "spring",
+      "label": "晴日",
+      "leaves": "spring",
+      "grass": "#9fbe83",
+      "note": {
+        "text": "中央氣象署提供各測站的每月氣溫與日照資料。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      },
+      "boats": 0
+    },
+    {
+      "id": "summer",
+      "label": "陣雨",
+      "leaves": "summer",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "grass": "#88aa70",
+      "note": {
+        "text": "中央氣象署的測站氣候資料也記錄每月雨量與降雨日數。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      },
+      "boats": 0
+    }
+  ],
+  "months": [
+    "spring",
+    "spring",
+    "spring",
+    "spring",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "spring",
+    "spring",
+    "spring"
+  ],
+  "seasonLabel": "天候",
+  "cameras": {
+    "iso": {
+      "yaw": 42,
+      "pitch": 34,
+      "zoom": 0.86,
+      "x": 0,
+      "y": 0,
+      "z": 4
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "蘭陽博物館",
+      "camera": {
+        "yaw": 39,
+        "pitch": 22,
+        "zoom": 2.7,
+        "x": -43.32,
+        "y": -9.25,
+        "z": 9
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "蘭陽博物館",
+      "source": "OpenStreetMap",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 39,
+        "pitch": 22,
+        "zoom": 2.7,
+        "x": -43.32,
+        "y": -9.25,
+        "z": 9
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "蘭陽博物館",
+      "text": "依建築師資料、照片與 OSM 外框表現單面山的斜屋頂、石材分帶與玻璃切面。水岸、路網與館址同座標對齊。",
+      "links": [
+        {
+          "label": "蘭陽博物館 · 建築景觀",
+          "url": "https://yilancraft.lym.gov.tw/ch/about/architectural/"
+        },
+        {
+          "label": "姚仁喜 · 設計說明",
+          "url": "https://www.lym.gov.tw/export/sites/lym/files/e-news/4-5-new-2022A/20190919-e-kj-4-23.pdf"
+        }
+      ]
+    },
+    {
+      "title": "地圖與插畫",
+      "text": "地理位置和建物足印以 OSM 為準，建物立面、未測高度、路人、樹木與天候為插畫。",
+      "links": [
+        {
+          "label": "OpenStreetMap",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.8298677,24.8661304,121.8359323,24.8716696"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "蘭陽博物館 · 建築景觀",
+      "url": "https://yilancraft.lym.gov.tw/ch/about/architectural/"
+    },
+    {
+      "label": "姚仁喜 · 設計說明",
+      "url": "https://www.lym.gov.tw/export/sites/lym/files/e-news/4-5-new-2022A/20190919-e-kj-4-23.pdf"
+    }
+  ]
+}

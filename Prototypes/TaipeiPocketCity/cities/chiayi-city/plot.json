@@ -1,0 +1,18 @@
+{
+ "lat": 23.47911,
+ "lon": 120.44122,
+ "rotation": -41,
+ "size": 185.0,
+ "asked": {
+  "lat": 23.47911,
+  "lon": 120.44122
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "嘉義車站"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "嘉義車站",
+ "osm_base": null
+}

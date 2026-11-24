@@ -1,0 +1,56 @@
+{
+  "name": "上海",
+  "landmark": "外灘海關大樓鐘樓、前匯豐銀行與招商局",
+  "center": [
+    121.4859379,
+    31.2380855
+  ],
+  "bounds": [
+    121.48474765,
+    31.23706095,
+    121.48712815,
+    31.23911005
+  ],
+  "sizeMeters": 185,
+  "landmarkIds": [
+    "w178407318",
+    "w178407323",
+    "w178407326",
+    "w178407328",
+    "w178407330",
+    "w178407333",
+    "r2380996",
+    "w178408820",
+    "w380340030"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・185 m 外灘街區建築、河岸與巷道",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.4807000,31.2353000,121.4893000,31.2420000"
+    },
+    {
+      "title": "上海市政府新聞辦・海關大樓高度與鐘樓",
+      "url": "https://touch.shio.gov.cn/jsp/zfxw_detail.jsp?id=20250929181837586"
+    },
+    {
+      "title": "Diomidis Spinellis・海關大樓正立面照片",
+      "url": "https://commons.wikimedia.org/wiki/File:ShanghaiBundCustomsHouse.jpg"
+    },
+    {
+      "title": "Hermann Luyken・匯豐銀行和海關大樓臨江立面",
+      "url": "https://commons.wikimedia.org/wiki/File:2014.11.16.144825_HSBC_Building_Customs_House_The_Bund_Shanghai.jpg"
+    },
+    {
+      "title": "上海市民政局・外灘歷史建築檔案",
+      "url": "https://mzj.sh.gov.cn/lnb-wsws/20200518/MZ_LNB12_9104.html"
+    },
+    {
+      "title": "上海城管・福州路旗昌洋行舊址",
+      "url": "https://cgzf.sh.gov.cn/channel_50/20210604/23faf82582e94125ab5f3fb61d745076.html"
+    },
+    {
+      "title": "上海市黃浦區・外灘歷史建築輪廓及環境",
+      "url": "https://www.shhuangpu.gov.cn/main/2e5f5630-5ada-4356-987c-6328abaab1ce/ae9299f5-0df6-4525-a797-18adb15555a1/%E6%96%87%E6%9C%AC.pdf"
+    }
+  ]
+}

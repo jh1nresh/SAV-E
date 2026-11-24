@@ -1,0 +1,391 @@
+{
+  "name": "台中",
+  "title": "臺中市役所",
+  "region": "臺中市 · 西區",
+  "place": "臺中市役所",
+  "timezone": "Asia/Taipei",
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#cfaf99",
+        "#e1c3a7",
+        "#cab397",
+        "#b5a497"
+      ],
+      "glass": [
+        "#91a39b",
+        "#9ba4a6"
+      ],
+      "roof": "flat",
+      "roofColour": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "flatRoof": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "levels": 2,
+      "floor": 3.2,
+      "bay": 3.5,
+      "shop": "poi"
+    },
+    "rules": [
+      {
+        "if": {
+          "type": [
+            "house",
+            "residential"
+          ]
+        },
+        "set": {
+          "roof": "hipped",
+          "roofColour": "#9d6b5c",
+          "roofTex": "pantile",
+          "pitch": 21
+        }
+      }
+    ]
+  },
+  "palette": {
+    "ground": "#ddd0aa",
+    "road": "#a59e97",
+    "walk": "#d8c8af",
+    "pavement": "#d8caaf",
+    "grass": "#8db06c",
+    "slab": "#b5a783",
+    "paving": "#a8a296",
+    "water": "#80a8aa"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 0.75,
+    "colour": "#b1a48d"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "height": 6.7,
+      "evergreen": true,
+      "colours": [
+        "#78a065",
+        "#89b776",
+        "#579060"
+      ]
+    }
+  },
+  "vehicles": {
+    "kinds": [
+      "small",
+      "hatch",
+      "sedan"
+    ],
+    "colours": [
+      "#be9e86",
+      "#879a97",
+      "#ebe1d8",
+      "#b28b73"
+    ],
+    "plate": "#ede3d7"
+  },
+  "seasonLabel": "天氣",
+  "seasons": [
+    {
+      "id": "summer",
+      "label": "晴天",
+      "wx": "fluff",
+      "note": {
+        "text": "夏季季風為臺灣帶來溫暖潮濕的空氣。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    },
+    {
+      "id": "rain",
+      "icon": "autumn",
+      "label": "陣雨",
+      "wet": 0.72,
+      "wx": "drizzle",
+      "umbrellas": 0.55,
+      "note": {
+        "text": "夏季西南季風通常出現在六月中旬到九月中旬。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    }
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": 32,
+      "pitch": 39,
+      "zoom": 0.97,
+      "x": -22,
+      "y": -9,
+      "z": 5
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "臺中市役所",
+      "camera": {
+        "yaw": 30,
+        "pitch": 32,
+        "zoom": 2.75,
+        "x": -46,
+        "y": -28,
+        "z": 7
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "臺中市役所",
+      "source": "OpenStreetMap・Wikimedia Commons",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 30,
+        "pitch": 32,
+        "zoom": 2.75,
+        "x": -46,
+        "y": -28,
+        "z": 7
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "臺中市役所",
+      "text": "市役所轉角的深色圓頂、白色柱廊和石砌圓拱依現地影像重繪。",
+      "links": [
+        {
+          "label": "市役所與州廳街道現景",
+          "url": "https://commons.wikimedia.org/wiki/File:June_2023_Taichung_Prefectural_Hall_and_Taichung_Municipal_Office_Building.jpg"
+        },
+        {
+          "label": "市役所石砌圓拱入口近照",
+          "url": "https://commons.wikimedia.org/wiki/File:Taichung_Municipal_Office_Building_01.jpg"
+        }
+      ]
+    },
+    {
+      "title": "地圖與比例",
+      "text": "真實街道與足印由 OpenStreetMap 提供。周邊未標記高度、樹木與人物是地圖插畫的示意。",
+      "links": [
+        {
+          "label": "OpenStreetMap・建物、街道與地物",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.676220,24.134400,120.682620,24.139800"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "OpenStreetMap contributors (ODbL)",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ],
+  "buildings": {
+    "w294961634": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e",
+      "shop": "poi",
+      "shopWall": "#b5cba8",
+      "awnings": [
+        "#cfb274"
+      ],
+      "fascia": [
+        "#5e4634"
+      ]
+    },
+    "w368940462": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w368940463": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w548547381": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w569913307": {
+      "taiwanStreetFinish": true,
+      "wall": "#f7d785",
+      "roofColour": "#9e9a94",
+      "flatRoof": "#9e9a94",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w569913313": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w569913334": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w654379096": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w866696038": {
+      "taiwanStreetFinish": true,
+      "wall": "#e27351",
+      "roofColour": "#7c7f88",
+      "flatRoof": "#7c7f88",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f",
+      "shop": "poi",
+      "shopWall": "#e27351",
+      "awnings": [
+        "#f3ead6"
+      ],
+      "fascia": [
+        "#3d4a53"
+      ]
+    },
+    "w1174538726": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w1174538727": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w1240409630": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w1240418636": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w1240418637": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    }
+  }
+}

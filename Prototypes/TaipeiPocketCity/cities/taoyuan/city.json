@@ -1,0 +1,290 @@
+{
+  "name": "桃園",
+  "title": "桃園 · 大溪武德殿",
+  "region": "大溪區 · 普濟路",
+  "place": "大溪武德殿",
+  "timezone": "Asia/Taipei",
+  "level": 3.15,
+  "styles": {
+    "default": {
+      "facade": "timber",
+      "wall": [
+        "#e4d6b9",
+        "#cab290"
+      ],
+      "roof": "hipped",
+      "roofColour": "#676c70",
+      "roofTex": "kawara",
+      "roofPitch": 27,
+      "levels": 1,
+      "shop": "poi"
+    }
+  },
+  "palette": {
+    "ground": "#e4cfaa",
+    "road": "#b1a4a1",
+    "pavement": "#e2ceb0",
+    "walk": "#e5d3b7",
+    "grass": "#9eb76d",
+    "paving": "#c4ac8c",
+    "kerb": "#ceb48e",
+    "slab": "#dfc199",
+    "water": "#79a9af"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.1,
+    "colour": "#c9b698",
+    "stone": "#e5d4b6"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "colours": [
+        "#82a65f",
+        "#769753",
+        "#9ab568"
+      ],
+      "height": 6,
+      "evergreen": true,
+      "vary": 0.4
+    }
+  },
+  "people": {
+    "clothes": [
+      "#b76853",
+      "#4b7575",
+      "#d29f5d",
+      "#516577",
+      "#748252"
+    ],
+    "skin": [
+      "#dfb292",
+      "#bf8863",
+      "#9e6249"
+    ],
+    "pants": [
+      "#4c5b62",
+      "#7e6659"
+    ],
+    "hair": [
+      "#453632",
+      "#5c483c"
+    ]
+  },
+  "seasons": [
+    {
+      "id": "spring",
+      "label": "晴日",
+      "leaves": "spring",
+      "grass": "#9fbe83",
+      "note": {
+        "text": "中央氣象署提供各測站的每月氣溫與日照資料。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      }
+    },
+    {
+      "id": "summer",
+      "label": "陣雨",
+      "leaves": "summer",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "grass": "#88aa70",
+      "note": {
+        "text": "中央氣象署的測站氣候資料也記錄每月雨量與降雨日數。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      }
+    }
+  ],
+  "months": [
+    "spring",
+    "spring",
+    "spring",
+    "spring",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "spring",
+    "spring",
+    "spring"
+  ],
+  "seasonLabel": "天候",
+  "cameras": {
+    "iso": {
+      "yaw": 63,
+      "pitch": 34,
+      "zoom": 0.86,
+      "x": 0,
+      "y": 0,
+      "z": 4
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "大溪武德殿",
+      "camera": {
+        "yaw": 61,
+        "pitch": 22,
+        "zoom": 2.7,
+        "x": -13.75,
+        "y": -5.35,
+        "z": 9
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "大溪武德殿",
+      "source": "OpenStreetMap",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 61,
+        "pitch": 22,
+        "zoom": 2.7,
+        "x": -13.75,
+        "y": -5.35,
+        "z": 9
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "大溪武德殿",
+      "text": "保留武德殿及附屬建築的足印，根據桃園市政府館史重建日式深簷瓦頂、木構和入口。",
+      "links": [
+        {
+          "label": "桃園市政府 · 武德殿前世今生",
+          "url": "https://ws.tycg.gov.tw/001/Upload/86/relfile/13654/1157576/1.pdf"
+        },
+        {
+          "label": "文化資產局 · 大溪公園文化景觀",
+          "url": "https://nchdb.boch.gov.tw/assets/overview/culturalLandscape/20200710000001"
+        }
+      ]
+    },
+    {
+      "title": "地圖與插畫",
+      "text": "地理位置和建物足印以 OSM 為準，建物立面、未測高度、路人、樹木與天候為插畫。",
+      "links": [
+        {
+          "label": "OpenStreetMap",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.2836044,24.8787691,121.2885556,24.8832909"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "桃園市政府 · 武德殿前世今生",
+      "url": "https://ws.tycg.gov.tw/001/Upload/86/relfile/13654/1157576/1.pdf"
+    },
+    {
+      "label": "文化資產局 · 大溪公園文化景觀",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/culturalLandscape/20200710000001"
+    }
+  ],
+  "buildings": {
+    "w405959861": {
+      "facade": "civic",
+      "wall": "#d6b99c",
+      "roof": "flat"
+    },
+    "w405959862": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w406005642": {
+      "taiwanStreetFinish": true,
+      "wall": "#d2cab2",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w406005647": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w406005648": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w612008240": {
+      "taiwanStreetFinish": true,
+      "wall": "#d2cab2",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w612008241": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w1461665808": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    }
+  }
+}

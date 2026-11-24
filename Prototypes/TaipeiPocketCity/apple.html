@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Apple 地圖 · Savvy Pocket City</title>
+  <link rel="stylesheet" href="./apple-map.css">
+  <script type="module" src="./apple-map.js"></script>
+</head>
+<body>
+  <header class="apple-bar">
+    <div class="apple-title">
+      <span class="wordmark">Savvy</span>
+      <h1>Apple 地圖</h1>
+    </div>
+    <nav aria-label="地圖模式">
+      <a id="back-to-pocket" class="map-action primary" href="./index.html?view=121.543674,25.027489,18.5">返回插畫地圖</a>
+      <a id="open-in-apple" class="map-action" href="https://maps.apple.com/frame?center=25.027489,121.543674&amp;span=0.0035,0.0035" rel="external">在 Apple 地圖開啟</a>
+    </nav>
+  </header>
+  <main>
+    <div id="map-stage" class="map-stage">
+      <section id="apple-map" aria-label="臺北互動地圖" hidden></section>
+      <div id="map-state" class="map-state">
+        <p id="map-status" role="status">正在準備 Apple 地圖…</p>
+        <button id="retry-map" class="map-action primary" type="button" hidden>重新整理</button>
+        <noscript><p>啟用 JavaScript 即可使用此頁的互動地圖。</p></noscript>
+      </div>
+    </div>
+    <p id="map-selection" class="visually-hidden" role="status"></p>
+  </main>
+  <footer class="map-credits">
+    <span>地圖及地點由 Apple Maps 提供</span>
+    <span>插畫資料來自 <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> 與 <a href="https://data.taipei/">臺北市開放資料</a>，採用 <a href="https://april-zhu.com/">Pocket City</a> 插畫風格</span>
+    <p id="art-status" role="status"></p>
+  </footer>
+</body>
+</html>

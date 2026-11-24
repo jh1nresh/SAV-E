@@ -726,7 +726,108 @@ struct SaveInkLiveMap: View {
         }
     }
 
+    @State private var usesPocketCity = true
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+    @State private var pocketPublicStart: PocketCityViewport?
+#endif
+    private var homeRegion: MKCoordinateRegion? {
+        SaveInkMapCamera.region(around: pins.map(\.coordinate), user: userCoordinate, focused: nil)
+    }
+    private var homeViewport: PocketCityViewport? {
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        if publicVenues != nil { return pocketPublicStart ?? PocketCityViewport(homeRegion ?? publicMapSeedRegion) }
+#endif
+        return PocketCityViewport(homeRegion)
+    }
+
+    private var pocketPins: [PocketCityPin] {
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        if publicVenues != nil {
+            return pocketPublicGroups.map { group in
+                let place = group.venues[0].place
+                let name = group.venues.count == 1 ? place.name
+                    : languageSettings.localized(english: "\(group.venues.count) public places", traditionalChinese: "\(group.venues.count) 個公開地點")
+                let label = languageSettings.localized(
+                    english: "\(name) · Public posts", traditionalChinese: "\(name) · 公開貼文"
+                )
+                return PocketCityPin(id: group.id, name: name, label: label,
+                                     latitude: place.latitude, longitude: place.longitude, kind: .post)
+            }
+        }
+#endif
+        return pins.map { pin in
+            PocketCityPin(id: pin.id, name: pin.name,
+                          label: pin.visited
+                            ? languageSettings.localized(english: "\(pin.name), visited", traditionalChinese: "\(pin.name)，去過")
+                            : languageSettings.localized(english: "\(pin.name), saved", traditionalChinese: "\(pin.name)，已收藏"),
+                          latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude,
+                          kind: pin.visited ? .visited : .saved)
+        }
+    }
+
+    private func selectPocketPin(_ id: String) {
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        if publicVenues != nil {
+            if let group = pocketPublicGroups.first(where: { $0.id == id }) { onPublicSelect?(group) }
+            return
+        }
+#endif
+        onSelect(id)
+    }
+
+    private func pocketCameraMoved(_ region: MKCoordinateRegion) {
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        reportPublicViewport(region)
+#endif
+    }
+
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+    private var pocketPublicGroups: [LivePublicDiscoveryPinGroup] {
+        LivePublicDiscoveryPinGroup.grouping(publicVenues ?? []) { _ in nil }
+    }
+
+    private var publicMapSeedRegion: MKCoordinateRegion {
+        MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 25.0394, longitude: 121.5482),
+                           span: MKCoordinateSpan(latitudeDelta: 0.028, longitudeDelta: 0.034))
+    }
+#endif
+
     var body: some View {
+        if showsRoute || focusPlaceID != nil {
+            appleMap
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                if usesPocketCity {
+                    PocketCitySurface(
+                        pins: pocketPins, viewport: homeViewport,
+                        userDot: PocketCityUserDot(userCoordinate, label: languageSettings.localized(english: "My location", traditionalChinese: "我的位置")),
+                        onSelect: selectPocketPin, onMove: pocketCameraMoved,
+                        onFailure: { usesPocketCity = false }
+                    )
+                    .frame(height: 360)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .accessibilityIdentifier("ink.home.map")
+                    .accessibilityLabel(mapAccessibilityLabel)
+                } else {
+                    appleMap
+                }
+                Button(usesPocketCity ? languageSettings.localized(english: "Apple Maps", traditionalChinese: "Apple 地圖")
+                                      : languageSettings.localized(english: "Pocket City", traditionalChinese: "Pocket City 立體地圖")) {
+                    usesPocketCity.toggle()
+                }
+                .font(SaveInkType.aux).foregroundStyle(SaveInkPalette.ink)
+                .frame(minHeight: 44)
+            }
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+            .onChange(of: publicVenues != nil, initial: true) { _, showingPublic in
+                // Keep later Saved/location refreshes from moving an active Explore camera.
+                pocketPublicStart = showingPublic ? PocketCityViewport(homeRegion ?? publicMapSeedRegion) : nil
+            }
+#endif
+        }
+    }
+
+    private var appleMap: some View {
         MapReader { proxy in
             Map(position: $position) {
                 UserAnnotation()
@@ -909,8 +1010,7 @@ struct SaveInkLiveMap: View {
         }
 #if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
         if onPublicViewport != nil {
-            let region = MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 25.0394, longitude: 121.5482),
-                                            span: MKCoordinateSpan(latitudeDelta: 0.028, longitudeDelta: 0.034))
+            let region = publicMapSeedRegion
             position = .region(region)
             reportPublicViewport(region)
         }

@@ -1,0 +1,264 @@
+{
+  "name": "日月潭向山",
+  "title": "日月潭向山",
+  "region": "南投縣 · 魚池鄉",
+  "place": "向山行政暨遊客中心",
+  "timezone": "Asia/Taipei",
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#cfaf99",
+        "#e1c3a7",
+        "#cab397",
+        "#b5a497"
+      ],
+      "glass": [
+        "#91a39b",
+        "#9ba4a6"
+      ],
+      "roof": "flat",
+      "roofColour": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "flatRoof": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "levels": 2,
+      "floor": 3.2,
+      "bay": 3.5,
+      "shop": "poi"
+    },
+    "rules": [
+      {
+        "if": {
+          "type": [
+            "house",
+            "residential"
+          ]
+        },
+        "set": {
+          "roof": "hipped",
+          "roofColour": "#6f8465",
+          "roofTex": "pantile",
+          "pitch": 21
+        }
+      }
+    ]
+  },
+  "palette": {
+    "ground": "#d9cdac",
+    "road": "#aba79d",
+    "walk": "#d6c9b1",
+    "pavement": "#d8caaf",
+    "grass": "#8cab71",
+    "slab": "#b3a78d",
+    "paving": "#a8a296",
+    "water": "#73aaa4"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 0.75,
+    "colour": "#b1a48d"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "height": 6,
+      "evergreen": true,
+      "colours": [
+        "#638368",
+        "#80975e",
+        "#9caf71",
+        "#739879"
+      ]
+    }
+  },
+  "vehicles": {
+    "kinds": [
+      "small",
+      "hatch",
+      "sedan"
+    ],
+    "colours": [
+      "#be9e86",
+      "#879a97",
+      "#ebe1d8",
+      "#b28b73"
+    ],
+    "plate": "#ede3d7"
+  },
+  "seasonLabel": "天氣",
+  "seasons": [
+    {
+      "id": "clear",
+      "label": "晴日",
+      "icon": "summer",
+      "grass": "#95ac79",
+      "note": {
+        "text": "晴天時，面湖的鏡面水池會映出遊客中心與遠山。",
+        "source": "日月潭國家風景區管理處・空拍、水池與屋頂照片",
+        "url": "https://www.sunmoonlake.gov.tw/zh-tw/attractions/Attractions?A=20&Id=78&P=1"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "細雨",
+      "icon": "autumn",
+      "wx": "drizzle",
+      "grass": "#779571",
+      "wet": 0.45,
+      "umbrellas": 0.7,
+      "note": {
+        "text": "這個鏡頭用細雨呈現湖畔建築與水池。",
+        "source": "日月潭國家風景區管理處・空拍、水池與屋頂照片",
+        "url": "https://www.sunmoonlake.gov.tw/zh-tw/attractions/Attractions?A=20&Id=78&P=1"
+      }
+    },
+    {
+      "id": "shower",
+      "label": "夏季陣雨",
+      "icon": "summer",
+      "wx": "rain",
+      "grass": "#78946d",
+      "wet": 0.9,
+      "umbrellas": 0.95,
+      "cafes": "closed",
+      "note": {
+        "text": "夏季西南季風帶來溫暖、潮濕的空氣。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    },
+    {
+      "id": "cool",
+      "label": "涼季",
+      "icon": "winter",
+      "coats": true,
+      "grass": "#a9aa75",
+      "note": {
+        "text": "臺灣冬季盛行東北季風。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    }
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": 35,
+      "pitch": 38,
+      "zoom": 0.98,
+      "x": 0,
+      "y": 0,
+      "z": 1
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "清水模雙翼",
+      "camera": {
+        "yaw": 62,
+        "pitch": 29,
+        "zoom": 1.5,
+        "x": -28,
+        "y": -10,
+        "z": 4
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "向山行政暨遊客中心",
+      "source": "建築師圖面・OpenStreetMap",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 62,
+        "pitch": 29,
+        "zoom": 1.5,
+        "x": -28,
+        "y": -10,
+        "z": 4
+      }
+    },
+    {
+      "name": "日月潭岸",
+      "source": "OpenStreetMap",
+      "icon": "water",
+      "camera": {
+        "yaw": 40,
+        "pitch": 33,
+        "zoom": 1.5,
+        "x": 67,
+        "y": 75,
+        "z": 0
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "兩座草坡伸向湖面",
+      "text": "兩座折彎的清水模建築由草坡逐漸抬高，走到屋頂可以看湖。長懸臂下方保留空間，北側池面倒映屋簷。",
+      "links": [
+        {
+          "label": "日月潭國家風景區管理處・空拍、水池與屋頂照片",
+          "url": "https://www.sunmoonlake.gov.tw/zh-tw/attractions/Attractions?A=20&Id=78&P=1"
+        },
+        {
+          "label": "交通部觀光署・向山建築尺度",
+          "url": "https://www.taiwan.net.tw/m1.aspx?id=412&sNo=0001016"
+        },
+        {
+          "label": "團紀彥建築事務所・配置圖、立面及完工照片",
+          "url": "https://www.archdaily.com/771070/sun-moon-lake-administration-office-of-tourism-bureau-norihiko-dan-and-associates"
+        }
+      ]
+    },
+    {
+      "title": "水岸與自行車道",
+      "text": "日月潭岸線、兩翼輪廓和月潭自行車道取自 OpenStreetMap。草屋頂、鏡面水池和玻璃分格依照片及圖面簡化，林木與行人為插畫。",
+      "links": [
+        {
+          "label": "日月潭水域範圍",
+          "url": "https://www.openstreetmap.org/relation/3858334"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "OpenStreetMap contributors (ODbL)",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ],
+  "months": [
+    "cool",
+    "cool",
+    "clear",
+    "clear",
+    "rain",
+    "shower",
+    "shower",
+    "shower",
+    "rain",
+    "clear",
+    "cool",
+    "cool"
+  ],
+  "occasions": [
+    {
+      "id": "bike-day",
+      "label": "自行車嘉年華",
+      "crowd": 1.6,
+      "note": {
+        "text": "2026 年日月潭自行車嘉年華在向山行政暨遊客中心舉行。",
+        "source": "日月潭國家風景區管理處・自行車嘉年華",
+        "url": "https://www.sunmoonlake.gov.tw/zh-tw/news/News?a=13&id=1441"
+      }
+    }
+  ]
+}

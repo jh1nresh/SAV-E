@@ -1,0 +1,28 @@
+{
+  "name": "臺東",
+  "landmark": "臺東天后宮",
+  "center": [
+    121.1549028,
+    22.7572943
+  ],
+  "bounds": [
+    121.15407477520529,
+    22.75652558402699,
+    121.15573082479472,
+    22.758063015973015
+  ],
+  "sizeMeters": 170.0,
+  "landmarkIds": [
+    "w1112414810"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap 街區圖徵",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.1536093,22.7548299,121.1592107,22.7600301"
+    },
+    {
+      "title": "歷史建築・臺東天后宮",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/historicalBuilding/20031231000003"
+    }
+  ]
+}

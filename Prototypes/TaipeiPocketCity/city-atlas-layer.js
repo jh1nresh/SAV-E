@@ -1,0 +1,265 @@
+import {MercatorCoordinate,LngLat} from './assets/maplibre-gl.mjs';
+import {program} from './survey-layer.js';
+import {LanternLight} from './lantern-light.js';
+import {CityNature} from './city-nature.js';
+import {StreetPeople} from './street-people.js';
+import {placePinStyle} from './place-pins.js';
+import {geographicPoint,geographicScene} from './cities/geography.js?v=continuous-5';
+
+const vertex=`#version 300 es
+layout(location=0) in vec3 p;
+layout(location=1) in vec4 colour;
+uniform mat4 matrix;
+uniform float ground;
+uniform float dusk;
+out vec4 tint;
+void main(){gl_Position=matrix*vec4(p.xy,p.z+ground,1.);float lamp=smoothstep(.27,.57,colour.r-colour.b)*smoothstep(.49,.78,colour.r);
+  vec3 evening=colour.rgb*vec3(.49,.54,.74)+vec3(.023,.026,.045);
+  tint=vec4(mix(colour.rgb,evening,dusk*(1.-lamp)),1.);}`;
+const fragment=`#version 300 es
+precision mediump float;
+in vec4 tint;
+out vec4 pixel;
+void main(){pixel=tint;}`;
+const collection=features=>({type:'FeatureCollection',features});
+const spans=(a,b)=>a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];
+const localURL=path=>new URL('./cities/'+path,import.meta.url);
+async function read(path,signal,binary=false){
+  const res=await fetch(localURL(path),{signal});
+  if(!res.ok)throw Error(path+' HTTP '+res.status);
+  return binary?res.arrayBuffer():res.json();
+}
+
+// Apply both matrices in double precision before the final conversion to WebGL floats.
+function transform(out,m,meta){
+  const base=MercatorCoordinate.fromLngLat([meta.lon,meta.lat]);
+  const rad=meta.rotation*Math.PI/180,c=Math.cos(rad),s=Math.sin(rad);
+  const cosLat=Math.cos(meta.lat*Math.PI/180);
+  const east=1/(360*111320*cosLat),north=1/(360*110574*cosLat),up=base.meterInMercatorCoordinateUnits();
+  for(let i=0;i<4;i++){
+    out[i]=m[i]*c*east-m[i+4]*s*north;
+    out[4+i]=-m[i]*s*east-m[i+4]*c*north;
+    out[8+i]=m[8+i]*up;
+    out[12+i]=m[i]*base.x+m[4+i]*base.y+m[12+i];
+  }
+}
+class LandmarkLayer{
+  id='city-atlas-buildings';
+  type='custom';
+  renderingMode='3d';
+  meshes=new Map();
+  dusk=false;
+  onAdd(map,gl){
+    this.map=map;this.gl=gl;
+    this.shader=program(gl,vertex,fragment);
+    this.matrix=gl.getUniformLocation(this.shader,'matrix');
+    this.ground=gl.getUniformLocation(this.shader,'ground');
+    this.twilight=gl.getUniformLocation(this.shader,'dusk');
+    this.frame=new Float32Array(16);
+  }
+  put(id,meta,parts,bytes,lamps){
+    const gl=this.gl,vao=gl.createVertexArray(),buffer=gl.createBuffer();
+    gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,bytes,gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,16,0);
+    gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.UNSIGNED_BYTE,true,16,12);
+    gl.bindVertexArray(null);
+    const groups=parts.map(p=>({...p,coordinate:LngLat.convert(geographicPoint(meta,p.at))}));
+    this.meshes.set(id,{vao,buffer,groups,meta,glow:lamps?.length?new LanternLight(gl,lamps):null});
+    this.map.triggerRepaint();
+  }
+  drop(id){
+    const item=this.meshes.get(id);
+    if(!item)return;
+    item.glow?.dispose();
+    this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);this.meshes.delete(id);
+  }
+  render(gl,opts){
+    if(!this.meshes.size||this.map.getZoom()<14)return;
+    gl.useProgram(this.shader);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
+    gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);
+    for(const mesh of this.meshes.values()){
+      transform(this.frame,opts.defaultProjectionData.mainMatrix,mesh.meta);
+      gl.useProgram(this.shader);gl.uniform1f(this.twilight,this.dusk&&mesh.glow?1:0);
+      gl.uniformMatrix4fv(this.matrix,false,this.frame);gl.bindVertexArray(mesh.vao);
+      for(const group of mesh.groups){
+        const z=this.map.terrain?.getDrawnElevationForLngLat(group.coordinate);
+        gl.uniform1f(this.ground,Number.isFinite(z)?z:0);
+        gl.drawArrays(gl.TRIANGLES,group.first,group.count);
+      }
+      if(this.dusk&&mesh.glow){
+        const ground=this.map.terrain?.getDrawnElevationForLngLat(mesh.groups[0].coordinate);
+        mesh.glow.draw(this.frame,Number.isFinite(ground)?ground:0);
+      }
+    }
+    gl.bindVertexArray(null);
+  }
+  onRemove(){for(const id of this.meshes.keys())this.drop(id);this.gl.deleteProgram(this.shader);}
+}
+// Projected pins for a building may be offset from its OSM centroid. Use stable
+// IDs first. The older anonymous street pins can only match at their mapped point.
+export function indexAuthoredPlaces(features){
+  const ids=new Map(),names=new Map(),bindings=new Map();
+  const nameKey=name=>name.trim().normalize('NFKC');
+  for(const f of features){
+    if(f.properties.kind!=='pin'||!f.properties.name)continue;
+    if(f.properties.placeId)ids.set(f.properties.placeId,f);
+    else{
+      const key=nameKey(f.properties.name);
+      if(!names.has(key))names.set(key,[]);
+      names.get(key).push(f);
+    }
+  }
+  function nearby(name,[x,y]){
+    return (names.get(nameKey(name))??[]).filter(f=>{
+      const [lx,ly]=f.geometry.coordinates;
+      return Math.hypot((lx-x)*111320*Math.cos(y*Math.PI/180),(ly-y)*110574)<=4;
+    });
+  }
+  const visible=(f,zoom)=>zoom>=(f.properties.rank===0?16.8:18.65);
+  return {
+    claims(place,zoom){
+      const exact=ids.get(place.placeId);
+      if(exact&&visible(exact,zoom))return true;
+      const matches=nearby(place.name,place.point).filter(f=>visible(f,zoom));
+      if(matches.length!==1)return false;
+      const pin=matches[0],prior=bindings.get(pin);
+      if(prior&&prior.placeId!==place.placeId)return false;
+      bindings.set(pin,place);
+      return true;
+    },
+    enrich(f){
+      if(f.properties.placeId)return f.properties;
+      const matches=nearby(f.properties.name,f.geometry.coordinates);
+      const place=matches.length===1?bindings.get(matches[0]):null;
+      return place?{...f.properties,placeId:place.placeId,id:place.placeId,url:place.url,source:place.source}:f.properties;
+    },
+  };
+}
+export async function addCityAtlas(map,before,open,onChange){
+  const rows=await read('catalog.json?rev=city-colour-3'),mesh=new LandmarkLayer(),trees=new CityNature();
+  trees.id='city-atlas-trees';
+  const places=[{id:'taipei',name:'台北',landmark:'台北 101',center:[121.56481,25.03367]},...rows];
+  const overview=['taipei','beijing','shanghai','los-angeles'];
+  map.addSource('city-atlas-locations',{type:'geojson',data:collection(places.map(r=>({
+    type:'Feature',properties:{id:r.id,category:'museum',name:r.landmark.split(/[、與]/)[0],
+      city:r.id==='los-angeles'?r.area:r.name,rank:overview.includes(r.id)?overview.indexOf(r.id):4},
+    geometry:{type:'Point',coordinates:r.center}})))});
+  const world={source:'city-atlas-locations',maxzoom:6.4,filter:['<',['get','rank'],4]};
+  map.addLayer({...world,id:'world-city-dots',type:'circle',
+    paint:{'circle-radius':4.5,'circle-color':'#2e6856','circle-stroke-width':1.7,'circle-stroke-color':'#fff5e7'}});
+  map.addLayer({...world,id:'world-cities',type:'symbol',
+    layout:{'text-field':['get','city'],'text-font':['Noto Sans Bold'],'text-size':14,
+      'text-variable-anchor':['left','right','top','bottom'],'text-radial-offset':.7,'text-padding':2,
+      'symbol-sort-key':['get','rank']},
+    paint:{'text-color':'#245545','text-halo-color':'#fff5e7','text-halo-width':2}});
+  map.addLayer({id:'city-atlas-locators',type:'symbol',source:'city-atlas-locations',minzoom:6.4,maxzoom:16.8,...placePinStyle(map)});
+  map.on('click',e=>{
+    const hit=map.queryRenderedFeatures(e.point,{layers:['world-cities','world-city-dots','city-atlas-locators']})[0];
+    // Low-zoom GeoJSON tiles quantize coordinates. Aim at the authored landmark itself.
+    const place=places.find(row=>row.id===hit?.properties.id);
+    if(!place)return;
+    const zoom=Math.min(17.95,map.getZoom()+5);
+    map.flyTo({center:place.center,zoom,pitch:zoom>=15?45:0,
+      duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:850});
+  });
+  const loaded=new Map(),pending=new Map(),errors=new Map();
+  let rain=0,authoredPlaces=indexAuthoredPlaces([]);
+  map.addSource('city-atlas-ground',{type:'geojson',data:collection([])});
+  const base={source:'city-atlas-ground',minzoom:14};
+  map.addLayer({...base,id:'city-atlas-pavement',type:'fill',filter:['==',['geometry-type'],'Polygon'],
+    paint:{'fill-color':['match',['get','kind'],'lawn','#a8bb83','sand','#e9d69c','water','#89c0cc','roads','#f1e4ca','walk','#e7d9bd','#ddc6aa'],'fill-opacity':['match',['get','kind'],'water',0,'roads',.36,'lawn',.42,.74]}},before);
+  map.addSource('shuqi-evening',{type:'geojson',data:collection([{type:'Feature',properties:{},
+    geometry:{type:'Polygon',coordinates:[[[121.83,25.095],[121.86,25.095],[121.86,25.122],[121.83,25.122],[121.83,25.095]]]}}])});
+  map.addLayer({id:'shuqi-evening',type:'fill',source:'shuqi-evening',minzoom:17,
+    layout:{visibility:'none'},paint:{'fill-color':'#273041','fill-opacity':.80}},before);
+  map.addLayer(mesh,before);map.addLayer(trees,before);
+  map.addLayer({...base,id:'city-atlas-road-names',type:'symbol',minzoom:17,filter:['==',['get','kind'],'street'],
+    layout:{'symbol-placement':'line','text-field':['get','name'],'text-font':['Noto Sans Regular'],'text-size':12},
+    paint:{'text-color':'#685b4d','text-halo-color':'#fcf4e3','text-halo-width':1.5}});
+  const pinStyle=placePinStyle(map);
+  for(const [id,minzoom,rank] of [['city-atlas-places',18.65,2],['city-atlas-pins',16.8,0]]){
+    map.addLayer({...base,id,minzoom,type:'symbol',filter:['all',['==',['get','kind'],'pin'],['==',['get','rank'],rank]],...pinStyle});
+  }
+  map.on('click',e=>{
+    const hit=map.queryRenderedFeatures(e.point,{layers:['city-atlas-pins','city-atlas-places']})[0];
+    if(hit&&!e.defaultPrevented){
+      e.preventDefault();
+      open({...authoredPlaces.enrich(hit),point:hit.geometry.coordinates});
+    }
+  });
+  const authoredBounds={type:'MultiPolygon',coordinates:rows.flatMap(row=>{
+    if(row.footprint)return row.footprint.type==='Polygon'?[row.footprint.coordinates]:row.footprint.coordinates;
+    const [w,s,e,n]=row.bounds;
+    return [[[[w,s],[e,s],[e,n],[w,n],[w,s]]]];
+  })};
+  for(const id of ['poi_r1','poi_transit'])if(map.getLayer(id)){
+    const outside=['!', ['all',['>=',['zoom'],16.8],['within',authoredBounds]]];
+    map.setFilter(id,['all',map.getFilter(id)??true,outside]);
+  }
+  function refresh(){
+    const features=[...loaded.values()].flatMap(s=>s.features);
+    authoredPlaces=indexAuthoredPlaces(features);
+    map.getSource(base.source).setData(collection(features));
+    map.fire('city-atlas-pins-changed');
+    trees.setRows([...loaded.values()].flatMap(s=>s.trees));
+    onChange();
+  }
+  function update(){
+    const b=map.getBounds(),bounds=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
+    const wanted=new Set(rows.filter(row=>map.getZoom()>=14&&spans(row.bounds,bounds)).map(row=>row.id));
+    let changed=false;
+    for(const [id,a] of pending)if(!wanted.has(id)){a.abort();pending.delete(id);}
+    for(const [id,s] of loaded)if(!wanted.has(id)){
+      if(s.people)map.removeLayer(s.people.id);
+      mesh.drop(id);loaded.delete(id);changed=true;
+    }
+    if(changed)refresh();
+    for(const id of wanted){
+      if(loaded.has(id)||pending.has(id)||(errors.get(id)??0)>Date.now()-5000)continue;
+      const task=new AbortController();pending.set(id,task);
+      const row=rows.find(r=>r.id===id),version=row.revision?'?v='+row.revision:'';
+      Promise.all([read(id+'/scene.json'+version,task.signal),read(id+'/map-mesh.json'+version,task.signal),read(id+'/map-mesh.bin'+version,task.signal,true)]).then(([scene,index,bytes])=>{
+        if(pending.get(id)!==task)return;
+        const xy=p=>geographicPoint(scene.meta,p);
+        const paths=scene.routes.filter(p=>p.kind==='ped'&&p.p.length>=2).slice(0,18).map(p=>({points:p.p.map(xy),people:2}));
+        const people=paths.length?new StreetPeople('atlas-'+id,row.center,paths,16.65,true):null;
+        const plants=scene.trees.map(([x,y,i])=>[...xy([x,y]),5.5,/palm/i.test(scene.species[i])?'palm':'broad']);
+        mesh.put(id,scene.meta,index.parts,bytes,scene.lanterns);
+        if(people){people.umbrellaShare=rain;map.addLayer(people,before);}
+        loaded.set(id,{features:geographicScene(scene,row.landmarkIds,row.landmarkSites,row.landmarkPlaceIds),trees:plants,people});
+        errors.delete(id);refresh();
+      }).catch(e=>{if(!task.signal.aborted){errors.set(id,Date.now());console.warn('Pocket City',id,e);onChange();}})
+        .finally(()=>{if(pending.get(id)===task)pending.delete(id);});
+    }
+  }
+  map.on('moveend',update);map.on('remove',()=>{for(const task of pending.values())task.abort();});update();
+  const duskRoads=new Map(),daytimeWalls=new Map();
+  return {rows,setDusk(visible){
+    for(const id of ['city-atlas-context','taiwan-cell-details']){
+      if(visible&&!daytimeWalls.has(id)&&map.getLayer(id)){
+        const property='fill-extrusion-color',day=map.getPaintProperty(id,property);
+        daytimeWalls.set(id,day);
+        const channels=[.40,.45,.60].map((gain,k)=>['+',5,['*',gain,['at',k,['var','channels']]]]);
+        map.setPaintProperty(id,property,['let','channels',['to-rgba',day],['rgb',...channels]]);
+      }
+    }
+    if(mesh.dusk===visible)return;
+    mesh.dusk=visible;map.setLayoutProperty('shuqi-evening','visibility',visible?'visible':'none');
+    if(visible){
+      for(const layer of map.getStyle().layers){
+        if(layer.id==='city-atlas-road-names'||layer['source-layer']==='transportation_name'){
+          duskRoads.set(layer.id,map.getLayoutProperty(layer.id,'visibility')??'visible');
+          map.setLayoutProperty(layer.id,'visibility','none');
+        }
+      }
+    }else{
+      for(const [id,value] of duskRoads)map.setLayoutProperty(id,'visibility',value);
+      duskRoads.clear();
+      for(const [id,color] of daytimeWalls)if(map.getLayer(id))map.setPaintProperty(id,'fill-extrusion-color',color);
+      daytimeWalls.clear();
+    }
+    map.triggerRepaint();
+  },claimsPlace:(place,zoom)=>authoredPlaces.claims(place,zoom),setRain(share){rain=share;for(const s of loaded.values())if(s.people)s.people.umbrellaShare=share;},
+    at(lng,lat){return rows.find(({bounds:[w,s,e,n]})=>lng>=w-.001&&lng<=e+.001&&lat>=s-.001&&lat<=n+.001);},
+    ready:id=>loaded.has(id),failed:id=>errors.has(id),retry(id){errors.delete(id);update();},state:()=>({loaded:[...loaded.keys()],pending:[...pending.keys()],failed:[...errors.keys()]})};
+}

@@ -1,0 +1,56 @@
+{
+  "extract": "https://download.geofabrik.de/asia/taiwan/taiwan-261123.osm.pbf",
+  "sha256": "4cf99960699a7531c60a4120915a484c07f5ba4ea90ff496fbf554a54c721b47",
+  "license": "ODbL 1.0",
+  "supplements": {
+    "dongsha": {
+      "file": "sources/dongsha.osm.pbf",
+      "source": "https://api.openstreetmap.org/api/0.6/map?bbox=116.70,20.69,116.737,20.714",
+      "sha256": "2bbc0493eb456c76b79113a4e3029dfb1ca5f8f67f258e2e97886b3f4db6cec1"
+    },
+    "taiping": {
+      "file": "sources/taiping.osm.pbf",
+      "source": "https://api.openstreetmap.org/api/0.6/map?bbox=114.349,10.364,114.38,10.389",
+      "sha256": "c158db53d008331797c0aa52381fc2bc9e2c3774d84d397732fa3684af418427"
+    }
+  },
+  "geometry": "WGS84, simplified for regional use; full-resolution base vectors at street scale",
+  "boundaries": {
+    "source": "https://data.gov.tw/dataset/7441",
+    "file": "townships.geojson",
+    "sha256": "0edd9fa69c951ed4b1507fefc28ef352fedb4008bfbe355473321c0150b0e593"
+  },
+  "counts": {
+    "places": 14940,
+    "rivers": 13309,
+    "waters": 840
+  },
+  "coverage": {
+    "townshipsInMask": 368,
+    "townshipsWithScenery": 368,
+    "countiesWithScenery": 22
+  },
+  "placeKinds": {
+    "bay": 88,
+    "beach": 92,
+    "cape": 33,
+    "cave": 165,
+    "cliff": 101,
+    "hot_spring": 114,
+    "island": 186,
+    "lagoon": 6,
+    "lake": 188,
+    "nature_reserve": 172,
+    "park": 6091,
+    "peak": 4865,
+    "pond": 1669,
+    "reef": 4,
+    "reservoir": 156,
+    "spring": 88,
+    "water": 398,
+    "waterfall": 329,
+    "wetland": 77,
+    "wood": 118
+  },
+  "invalidGeometriesSkipped": 0
+}

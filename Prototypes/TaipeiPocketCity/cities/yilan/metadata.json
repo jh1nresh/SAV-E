@@ -1,0 +1,32 @@
+{
+  "name": "宜蘭",
+  "landmark": "蘭陽博物館",
+  "landmarkIds": [
+    "w196842735"
+  ],
+  "center": [
+    121.8329,
+    24.8689
+  ],
+  "bounds": [
+    121.83168709947776,
+    24.867792144627128,
+    121.83411290052223,
+    24.870007855372872
+  ],
+  "sizeMeters": 245.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap 圖資",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.8298677,24.8661304,121.8359323,24.8716696"
+    },
+    {
+      "title": "蘭陽博物館 · 建築景觀",
+      "url": "https://yilancraft.lym.gov.tw/ch/about/architectural/"
+    },
+    {
+      "title": "姚仁喜 · 設計說明",
+      "url": "https://www.lym.gov.tw/export/sites/lym/files/e-news/4-5-new-2022A/20190919-e-kj-4-23.pdf"
+    }
+  ]
+}

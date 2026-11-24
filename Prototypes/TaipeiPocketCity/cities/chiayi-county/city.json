@@ -1,0 +1,199 @@
+{
+  "name": "嘉義縣",
+  "title": "嘉義縣 · 高跟鞋教堂",
+  "region": "布袋鎮",
+  "place": "高跟鞋教堂",
+  "timezone": "Asia/Taipei",
+  "level": 3.2,
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#d2b995",
+        "#d6cab8",
+        "#e3d5bc"
+      ],
+      "roof": "auto",
+      "roofColour": [
+        "#916d61",
+        "#848580"
+      ],
+      "floor": 3.25,
+      "levels": 2,
+      "shop": "none",
+      "bay": 3.5,
+      "glass": [
+        "#759899",
+        "#9cb3a9",
+        "#71918c"
+      ]
+    }
+  },
+  "palette": {
+    "ground": "#e8dfcb",
+    "walk": "#e6d8bc",
+    "pavement": "#ddcfb4",
+    "paving": "#cabd9e",
+    "grass": "#a8c883",
+    "water": "#8bc5d0",
+    "road": "#aca7a0",
+    "kerb": "#d6c6a6"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.2,
+    "colour": "#cdbfa3"
+  },
+  "trees": {
+    "default": {
+      "style": 7,
+      "height": 5.5,
+      "vary": 0.34,
+      "colours": [
+        "#a8c883",
+        "#7a9d61"
+      ],
+      "evergreen": true
+    }
+  },
+  "seasons": [
+    {
+      "id": "clear",
+      "label": "晴日",
+      "grass": "#a8c883",
+      "note": {
+        "text": "場館的鞋形外殼高 17.76 公尺，藍色玻璃折面和白色細跟依現地照片重建。",
+        "source": "高跟鞋教堂現地照片",
+        "url": "https://commons.wikimedia.org/wiki/File:高跟鞋教堂.jpg"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "雨日",
+      "grass": "#789d68",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "note": {
+        "text": "布袋沿海地區在暖季的降雨量較高。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+      }
+    }
+  ],
+  "months": [
+    "clear",
+    "clear",
+    "clear",
+    "clear",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "clear",
+    "clear"
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": 18,
+      "pitch": 38,
+      "zoom": 1.08,
+      "x": 0,
+      "y": 0,
+      "z": 3
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "高跟鞋教堂",
+      "camera": {
+        "yaw": 18,
+        "pitch": 26,
+        "zoom": 8.1,
+        "x": -0.37,
+        "y": -1.46,
+        "z": 3
+      }
+    },
+    {
+      "id": "reverse",
+      "label": "轉看側面",
+      "camera": {
+        "yaw": 173,
+        "pitch": 34,
+        "zoom": 3.8,
+        "x": -0.37,
+        "y": -1.46,
+        "z": 3
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "高跟鞋教堂",
+      "source": "OpenStreetMap / 現地照片",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 18,
+        "pitch": 26,
+        "zoom": 8.1,
+        "x": -0.37,
+        "y": -1.46,
+        "z": 3
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "交通部觀光署雲嘉南濱海國家風景區",
+      "text": "場館的鞋形外殼高 17.76 公尺，藍色玻璃折面和白色細跟依現地照片重建。",
+      "links": [
+        {
+          "label": "交通部觀光署雲嘉南濱海國家風景區",
+          "url": "https://swcoast-nsa.travel/zh-tw"
+        }
+      ]
+    },
+    {
+      "title": "高跟鞋教堂現地照片",
+      "text": "屋頂、門窗和構造依現地影像手工重建。",
+      "links": [
+        {
+          "label": "高跟鞋教堂現地照片",
+          "url": "https://commons.wikimedia.org/wiki/File:高跟鞋教堂.jpg"
+        }
+      ]
+    }
+  ],
+  "buildings": {
+    "w827525335": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w827525336": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    }
+  }
+}

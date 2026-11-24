@@ -63,7 +63,9 @@ Passport is the account's place archive and control surface. It exposes confirme
 
 ## Maps and visits
 
-Normal Ink Home and place detail use Apple MapKit with the existing Ink pins, muted map emphasis and light paper overlay. Distances and walking time come from the current location/MapKit path. Fixture and screenshot launches keep the isolated drawn map.
+Ink Home and the phone preview’s Explore map open Pocket City by default in every supported app language. Both maps offer an Apple Maps switch and fall back to Apple Maps if Pocket City cannot load. Saved and visited buttons open the native place detail. Explore post buttons open the associated native place card. Browsing public atlas landmarks never confirms a save or a visit.
+
+Place detail and walking routes use Apple MapKit with the existing Ink pins, muted map emphasis and light paper overlay. Distances and walking time come from the current location/MapKit path. Fixture and screenshot launches that use the drawn map retain it.
 
 Arrival verification remains a one-shot explicit action under the existing permission, precision, distance and freshness rules. Unlocated places may record an unverified visit through the explicit unverified action. No background tracking or coordinates are written into visit records by this UI.
 

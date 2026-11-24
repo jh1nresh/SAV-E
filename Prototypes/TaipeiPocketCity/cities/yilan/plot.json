@@ -1,0 +1,18 @@
+{
+ "lat": 24.8689,
+ "lon": 121.8329,
+ "rotation": 0.0,
+ "size": 245.0,
+ "asked": {
+  "lat": 24.8689,
+  "lon": 121.8329
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "蘭陽博物館"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "宜蘭 · 蘭陽博物館",
+ "osm_base": null
+}

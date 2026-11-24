@@ -1,0 +1,18 @@
+{
+ "lat": 21.9022365,
+ "lon": 120.8526587,
+ "rotation": -10,
+ "size": 190.0,
+ "asked": {
+  "lat": 21.9022365,
+  "lon": 120.8526587
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "鵝鑾鼻燈塔"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "鵝鑾鼻燈塔",
+ "osm_base": null
+}

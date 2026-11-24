@@ -1,0 +1,32 @@
+{
+  "name": "新竹市",
+  "landmark": "新竹車站",
+  "landmarkIds": [
+    "w293504390"
+  ],
+  "center": [
+    120.9717189,
+    24.8013076
+  ],
+  "bounds": [
+    120.97063035932082,
+    24.80031279109375,
+    120.97280744067918,
+    24.802302408906254
+  ],
+  "sizeMeters": 220.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap 圖資",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.9688886,24.7991190,120.9743314,24.8040930"
+    },
+    {
+      "title": "國家圖書館 · 新竹車站明信片及建築說明",
+      "url": "https://tm.ncl.edu.tw/article?u=001_002_0000362370"
+    },
+    {
+      "title": "臺鐵 · 鐵道生活文化專輯",
+      "url": "https://www.railway.gov.tw/tra-tip-web/tip/file/b2006bc7-94a2-46bf-865f-b562e20bb167"
+    }
+  ]
+}

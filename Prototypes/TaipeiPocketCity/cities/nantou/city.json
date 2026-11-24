@@ -1,0 +1,202 @@
+{
+  "name": "南投",
+  "title": "日月潭慈恩塔",
+  "region": "南投縣 · 魚池鄉",
+  "place": "日月潭慈恩塔",
+  "timezone": "Asia/Taipei",
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#cfaf99",
+        "#e1c3a7",
+        "#cab397",
+        "#b5a497"
+      ],
+      "glass": [
+        "#91a39b",
+        "#9ba4a6"
+      ],
+      "roof": "flat",
+      "roofColour": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "flatRoof": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "levels": 2,
+      "floor": 3.2,
+      "bay": 3.5,
+      "shop": "poi"
+    },
+    "rules": [
+      {
+        "if": {
+          "type": [
+            "house",
+            "residential"
+          ]
+        },
+        "set": {
+          "roof": "hipped",
+          "roofColour": "#6f8465",
+          "roofTex": "pantile",
+          "pitch": 21
+        }
+      }
+    ]
+  },
+  "palette": {
+    "ground": "#ddd0aa",
+    "road": "#a59e97",
+    "walk": "#d8c8af",
+    "pavement": "#d8caaf",
+    "grass": "#8db06c",
+    "slab": "#b5a783",
+    "paving": "#a8a296",
+    "water": "#80a8aa"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 0.75,
+    "colour": "#b1a48d"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "height": 6.7,
+      "evergreen": true,
+      "colours": [
+        "#78a065",
+        "#89b776",
+        "#579060"
+      ]
+    }
+  },
+  "vehicles": {
+    "kinds": [
+      "small",
+      "hatch",
+      "sedan"
+    ],
+    "colours": [
+      "#be9e86",
+      "#879a97",
+      "#ebe1d8",
+      "#b28b73"
+    ],
+    "plate": "#ede3d7"
+  },
+  "seasonLabel": "天氣",
+  "seasons": [
+    {
+      "id": "summer",
+      "label": "晴天",
+      "wx": "fluff",
+      "note": {
+        "text": "夏季季風為臺灣帶來溫暖潮濕的空氣。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    },
+    {
+      "id": "rain",
+      "icon": "autumn",
+      "label": "陣雨",
+      "wet": 0.72,
+      "wx": "drizzle",
+      "umbrellas": 0.55,
+      "note": {
+        "text": "夏季西南季風通常出現在六月中旬到九月中旬。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    }
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -92,
+      "pitch": 38,
+      "zoom": 0.9,
+      "x": -4,
+      "y": 8,
+      "z": 11
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "日月潭慈恩塔",
+      "camera": {
+        "yaw": -107,
+        "pitch": 24,
+        "zoom": 2.46,
+        "x": -4,
+        "y": 10,
+        "z": 24
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "日月潭慈恩塔",
+      "source": "OpenStreetMap・Wikimedia Commons",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -107,
+        "pitch": 24,
+        "zoom": 2.46,
+        "x": -4,
+        "y": 10,
+        "z": 24
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "日月潭慈恩塔",
+      "text": "慈恩塔的疊簷、白欄杆與金色塔剎依現地影像繪製，塔高沿用地圖標記的 46 公尺。",
+      "links": [
+        {
+          "label": "慈恩塔現地立面與翠瓦、白欄杆",
+          "url": "https://commons.wikimedia.org/wiki/File:Ci_En_Pagoda_01.jpg"
+        }
+      ]
+    },
+    {
+      "title": "地圖與比例",
+      "text": "真實街道與足印由 OpenStreetMap 提供。周邊未標記高度、樹木與人物是地圖插畫的示意。",
+      "links": [
+        {
+          "label": "OpenStreetMap・建物、街道與地物",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.917340,23.838120,120.923740,23.843520"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "OpenStreetMap contributors (ODbL)",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ],
+  "buildings": {
+    "w1425385899": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    }
+  }
+}

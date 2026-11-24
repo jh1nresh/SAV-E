@@ -1,0 +1,251 @@
+{
+  "name": "屏東縣",
+  "title": "屏東縣 · 鵝鑾鼻燈塔",
+  "region": "恆春鎮",
+  "place": "鵝鑾鼻燈塔",
+  "timezone": "Asia/Taipei",
+  "level": 3.2,
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#ded7c8",
+        "#d6cab8",
+        "#e3d5bc"
+      ],
+      "roof": "auto",
+      "roofColour": [
+        "#916d61",
+        "#848580"
+      ],
+      "floor": 3.25,
+      "levels": 2,
+      "shop": "none",
+      "bay": 3.5,
+      "glass": [
+        "#759899",
+        "#9cb3a9",
+        "#71918c"
+      ]
+    }
+  },
+  "palette": {
+    "ground": "#e2ddc6",
+    "walk": "#e6d8bc",
+    "pavement": "#ddcfb4",
+    "paving": "#cabd9e",
+    "grass": "#a3c573",
+    "water": "#79bdc8",
+    "road": "#aca7a0",
+    "kerb": "#d6c6a6"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.2,
+    "colour": "#cdbfa3"
+  },
+  "trees": {
+    "default": {
+      "style": 7,
+      "height": 5.5,
+      "vary": 0.34,
+      "colours": [
+        "#a3c573",
+        "#7a9d61"
+      ],
+      "evergreen": true
+    }
+  },
+  "seasons": [
+    {
+      "id": "clear",
+      "label": "晴日",
+      "grass": "#a3c573",
+      "note": {
+        "text": "白色鐵塔高 21.4 公尺，塔身、燈室和瞭望欄杆分層建模。",
+        "source": "燈塔、燈室與欄杆照片",
+        "url": "https://commons.wikimedia.org/wiki/File:Eluanbi_Lighthouse_20240918-3.jpg"
+      }
+    },
+    {
+      "id": "rain",
+      "label": "雨日",
+      "grass": "#789d68",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "note": {
+        "text": "恆春暖季有較多降雨，冬季仍受東北季風影響。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+      }
+    }
+  ],
+  "months": [
+    "clear",
+    "clear",
+    "clear",
+    "clear",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "rain",
+    "clear",
+    "clear"
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -56,
+      "pitch": 38,
+      "zoom": 1.08,
+      "x": 0,
+      "y": 0,
+      "z": 3
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "鵝鑾鼻燈塔",
+      "camera": {
+        "yaw": -56,
+        "pitch": 26,
+        "zoom": 8.7,
+        "x": 0.04,
+        "y": -0.07,
+        "z": 10
+      }
+    },
+    {
+      "id": "reverse",
+      "label": "轉看側面",
+      "camera": {
+        "yaw": 99,
+        "pitch": 34,
+        "zoom": 4,
+        "x": 0.04,
+        "y": -0.07,
+        "z": 10
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "鵝鑾鼻燈塔",
+      "source": "OpenStreetMap / 現地照片",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -56,
+        "pitch": 26,
+        "zoom": 8.7,
+        "x": 0.04,
+        "y": -0.07,
+        "z": 10
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "交通部航港局 · 鵝鑾鼻燈塔",
+      "text": "白色鐵塔高 21.4 公尺，塔身、燈室和瞭望欄杆分層建模。",
+      "links": [
+        {
+          "label": "交通部航港局 · 鵝鑾鼻燈塔",
+          "url": "https://lighthouse.motcmpb.gov.tw/lighthouse_3_20.html"
+        }
+      ]
+    },
+    {
+      "title": "燈塔、燈室與欄杆照片",
+      "text": "屋頂、門窗和構造依現地影像手工重建。",
+      "links": [
+        {
+          "label": "燈塔、燈室與欄杆照片",
+          "url": "https://commons.wikimedia.org/wiki/File:Eluanbi_Lighthouse_20240918-3.jpg"
+        }
+      ]
+    }
+  ],
+  "buildings": {
+    "w306199192": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w310320725": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w310320727": {
+      "taiwanStreetFinish": true,
+      "wall": "#a5c1cc",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f"
+    },
+    "w310320729": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w499385660": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w499385661": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    }
+  }
+}

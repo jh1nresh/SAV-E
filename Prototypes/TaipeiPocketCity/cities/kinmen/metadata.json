@@ -1,0 +1,28 @@
+{
+  "name": "金門",
+  "landmark": "莒光樓",
+  "center": [
+    118.3190427,
+    24.4249899
+  ],
+  "bounds": [
+    118.31820408204214,
+    24.424221184026987,
+    118.31988131795785,
+    24.425758615973013
+  ],
+  "sizeMeters": 170.0,
+  "landmarkIds": [
+    "w363490447"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap 街區圖徵",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=118.3166868,24.4215430,118.3221132,24.4265170"
+    },
+    {
+      "title": "金門縣定古蹟・莒光樓",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/monument/20060613000004"
+    }
+  ]
+}

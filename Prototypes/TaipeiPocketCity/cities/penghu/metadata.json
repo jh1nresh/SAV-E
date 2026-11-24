@@ -1,0 +1,41 @@
+{
+  "name": "澎湖",
+  "landmark": "開臺澎湖天后宮",
+  "center": [
+    119.5640221,
+    23.5647115
+  ],
+  "bounds": [
+    119.56318906826053,
+    23.563942784026988,
+    119.56485513173948,
+    23.565480215973015
+  ],
+  "sizeMeters": 170.0,
+  "landmarkIds": [],
+  "sources": [
+    {
+      "title": "OpenStreetMap 街區圖徵",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=119.5619537,23.5620086,119.5664863,23.5661914"
+    },
+    {
+      "title": "國定古蹟・澎湖天后宮",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/monument/19831228000013"
+    },
+    {
+      "title": "地標原始位置與識別碼",
+      "url": "https://www.openstreetmap.org/way/330868213"
+    }
+  ],
+  "landmarkSites": [
+    {
+      "osmType": "way",
+      "osmId": 330868213,
+      "name": "開臺澎湖天后宮",
+      "point": [
+        119.5640221,
+        23.5647115
+      ]
+    }
+  ]
+}

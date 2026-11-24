@@ -1,0 +1,18 @@
+{
+ "lat": 23.3778148,
+ "lon": 120.1487714,
+ "rotation": 1,
+ "size": 164.0,
+ "asked": {
+  "lat": 23.3778148,
+  "lon": 120.1487714
+ },
+ "moved_m": 0.0,
+ "famous_inside": [
+  "高跟鞋教堂"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "高跟鞋教堂",
+ "osm_base": null
+}

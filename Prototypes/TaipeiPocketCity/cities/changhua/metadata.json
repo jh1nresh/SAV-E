@@ -1,0 +1,37 @@
+{
+  "name": "彰化",
+  "landmark": "彰化扇形車庫",
+  "center": [
+    120.5400647,
+    24.0858312
+  ],
+  "bounds": [
+    120.53871448,
+    24.08459022,
+    120.54141492,
+    24.08707218
+  ],
+  "sizeMeters": 200,
+  "landmarkIds": [
+    "w220285047",
+    "w307329570"
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・建物、街道與地物",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.535720,24.084640,120.542120,24.090040"
+    },
+    {
+      "title": "車庫面向轉車台的工業立面",
+      "url": "https://commons.wikimedia.org/wiki/File:Changhua_Railway_Roundhouse.jpg"
+    },
+    {
+      "title": "扇形車庫屋頂實景",
+      "url": "https://commons.wikimedia.org/wiki/File:Roof(s)_of_the_Changhua_Roundhouse.jpg"
+    },
+    {
+      "title": "車庫門洞與柱材",
+      "url": "https://commons.wikimedia.org/wiki/File:2021-12-30_TRA_Changhua_Roundhouse_02.jpg"
+    }
+  ]
+}

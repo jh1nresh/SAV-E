@@ -1,0 +1,304 @@
+{
+  "name": "北京",
+  "title": "北京 · 天壇祈年殿",
+  "region": "東城區",
+  "place": "天壇 · 祈穀壇",
+  "timezone": "Asia/Shanghai",
+  "level": 3.1,
+  "styles": {
+    "default": {
+      "wall": "#a74636",
+      "facade": "temple",
+      "roof": "hipped",
+      "roofColour": "#405e86",
+      "roofTex": "tiles",
+      "pitch": 29,
+      "levels": 1,
+      "shop": "none",
+      "bay": 4.0,
+      "floor": 4.2
+    }
+  },
+  "palette": {
+    "ground": "#e3d1aa",
+    "walk": "#e9d8b9",
+    "pavement": "#e9d8b9",
+    "paving": "#c3ab89",
+    "grass": "#9cbb66",
+    "slab": "#dbbd8d",
+    "kerb": "#bfaa83",
+    "road": "#bfb0a1",
+    "rail": "#c6b7a2"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.25,
+    "colour": "#c8b396",
+    "stone": "#e4d5ba"
+  },
+  "trees": {
+    "default": {
+      "style": 7,
+      "colours": [
+        "#769a52",
+        "#65834c"
+      ],
+      "height": 6,
+      "vary": 0.3
+    },
+    "rules": [
+      {
+        "match": "Woodland",
+        "mix": [
+          {
+            "style": 7,
+            "colours": [
+              "#74904e",
+              "#64864a"
+            ],
+            "height": 7.4,
+            "evergreen": true,
+            "share": 5
+          },
+          {
+            "style": 2,
+            "colours": [
+              "#84a85b",
+              "#75984c"
+            ],
+            "height": 8.7,
+            "evergreen": true,
+            "share": 2
+          },
+          {
+            "style": 3,
+            "colours": [
+              "#9dba60",
+              "#83aa5a"
+            ],
+            "height": 7.5,
+            "autumn": "#dca94a",
+            "share": 2
+          },
+          {
+            "style": 3,
+            "colours": [
+              "#91a957"
+            ],
+            "height": 6.1,
+            "blossom": "#e7a9b7",
+            "autumn": "#c87843",
+            "share": 1
+          }
+        ]
+      }
+    ]
+  },
+  "people": {
+    "clothes": [
+      "#ae5c4e",
+      "#3f5e7a",
+      "#4a6d61",
+      "#c68f50",
+      "#dec1a1",
+      "#374652"
+    ],
+    "skin": [
+      "#e6b591",
+      "#c58c66",
+      "#a86848"
+    ],
+    "pants": [
+      "#435061",
+      "#7a6255",
+      "#51676a"
+    ],
+    "hair": [
+      "#3d302c",
+      "#63534b"
+    ]
+  },
+  "lamp": {
+    "colour": "#65574e",
+    "height": 4.3,
+    "head": "#ead8a4",
+    "auto": false
+  },
+  "seasons": [
+    {
+      "id": "spring",
+      "label": "春 · 花色",
+      "leaves": "blossom",
+      "petals": true,
+      "grass": "#a9c67c",
+      "note": {
+        "text": "春天，天壇的桃花、杏花映襯朱牆與琉璃瓦。",
+        "source": "北京雜誌",
+        "url": "https://english.beijing.gov.cn/specials/beijingmagazine/list/202503/P020250326505054694939.pdf"
+      }
+    },
+    {
+      "id": "summer",
+      "label": "夏 · 陣雨",
+      "leaves": "summer",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "grass": "#8eb464",
+      "note": {
+        "text": "北京夏季炎熱多雨。",
+        "source": "北京市政府",
+        "url": "https://english.beijing.gov.cn/beijinginfo/facts/demographicgeography/202005/t20200518_1900888.html"
+      }
+    },
+    {
+      "id": "autumn",
+      "label": "秋 · 金葉",
+      "leaves": "autumn",
+      "grass": "#aaa052",
+      "note": {
+        "text": "秋日的天壇，銀杏與楓葉轉為金黃及紅褐色。",
+        "source": "北京雜誌",
+        "url": "https://english.beijing.gov.cn/specials/beijingmagazine/list/202503/P020250326505054694939.pdf"
+      }
+    },
+    {
+      "id": "winter",
+      "label": "冬 · 乾冷",
+      "leaves": "bare",
+      "coats": true,
+      "grass": "#b6a678",
+      "note": {
+        "text": "北京冬季寒冷而乾燥。",
+        "source": "北京市政府",
+        "url": "https://english.beijing.gov.cn/beijinginfo/facts/demographicgeography/202005/t20200518_1900888.html"
+      }
+    }
+  ],
+  "occasions": [
+    {
+      "id": "temple-light",
+      "label": "祈年殿夜燈",
+      "night": 0.78,
+      "crowd": 0.42,
+      "note": {
+        "text": "天壇公園在指定的週五與週六夜晚點亮祈年殿。",
+        "source": "北京市政府",
+        "url": "https://english.beijing.gov.cn/latest/news/202607/t20260715_4763505.html"
+      }
+    }
+  ],
+  "months": [
+    "winter",
+    "winter",
+    "spring",
+    "spring",
+    "spring",
+    "summer",
+    "summer",
+    "summer",
+    "autumn",
+    "autumn",
+    "autumn",
+    "winter"
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -62,
+      "pitch": 34,
+      "zoom": 0.83,
+      "x": 2,
+      "y": -8,
+      "z": 4
+    }
+  },
+  "views": [
+    {
+      "id": "hall",
+      "label": "祈年殿",
+      "camera": {
+        "yaw": -71,
+        "pitch": 26,
+        "zoom": 2.12,
+        "x": 44.86,
+        "y": 1.3,
+        "z": 18
+      }
+    },
+    {
+      "id": "gate",
+      "label": "祈年門",
+      "camera": {
+        "yaw": -66,
+        "pitch": 23,
+        "zoom": 2.19,
+        "x": 50.96,
+        "y": -101.8,
+        "z": 5
+      }
+    },
+    {
+      "id": "north",
+      "label": "皇乾殿",
+      "camera": {
+        "yaw": 118,
+        "pitch": 21,
+        "zoom": 2.35,
+        "x": 44.84,
+        "y": 78.49,
+        "z": 5
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "祈年殿",
+      "source": "OSM / UNESCO",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -71,
+        "pitch": 26,
+        "zoom": 2.12,
+        "x": 44.86,
+        "y": 1.3,
+        "z": 18
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "祈年殿的三重檐",
+      "text": "藍色琉璃瓦、金色寶頂與三層白石臺基依園方照片及 UNESCO 登錄圖面重建。東西配殿及門殿依 OSM 足印與公開照片簡化。",
+      "links": [
+        {
+          "label": "天壇公園",
+          "url": "https://www.tiantanpark.cn/en/Scenic/detail/1396.html"
+        },
+        {
+          "label": "UNESCO 登錄資料",
+          "url": "https://whc.unesco.org/uploads/nominations/881.pdf"
+        }
+      ]
+    },
+    {
+      "title": "地圖與插畫",
+      "text": "步道、建築足印與林地來自 OpenStreetMap。樹木位置、人物、鋪面細節與未測量的高度為插畫。",
+      "links": [
+        {
+          "label": "OpenStreetMap",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=116.4038400,39.8799500,116.4093400,39.8843100"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "天壇公園",
+      "url": "https://www.tiantanpark.cn/en/Scenic/detail/1396.html"
+    },
+    {
+      "label": "UNESCO 世界遺產",
+      "url": "https://whc.unesco.org/uploads/nominations/881.pdf"
+    }
+  ]
+}

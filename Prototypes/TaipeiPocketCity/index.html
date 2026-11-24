@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f6f2e8">
+  <title>Pocket City · Savvy</title>
+  <link rel="icon" href="./assets/icon.png">
+  <link rel="stylesheet" href="./assets/maplibre-gl.css">
+  <link rel="stylesheet" href="./style.css?v=shuqi-light-1">
+</head>
+<body>
+  <header>
+    <a class="wordmark" href="./">Savvy</a>
+    <span class="divider"></span><strong>Pocket City</strong><span class="preview">本機預覽</span>
+    <a id="apple-places-link" href="./apple.html">Apple 地點</a>
+  </header>
+  <main>
+    <section id="stage" aria-label="Pocket City 3D 地圖">
+      <div id="map"></div>
+      <div id="rain" aria-hidden="true" hidden></div>
+      <div class="geography">
+        <span id="parent"></span>
+        <h2 id="region">地球</h2>
+        <span id="resolution"></span><button type="button" id="retry-landmark" hidden>重試街區</button>
+      </div>
+      <div class="toolbar" aria-label="地圖工具">
+        <div class="extent-actions">
+          <button type="button" id="world">回到地球</button>
+          <button type="button" id="metro-toggle" aria-controls="metro-panel" aria-pressed="false" hidden>捷運</button>
+          <select id="weather-select" aria-label="場景天氣" title="切換場景天氣" hidden>
+            <option value="day">晴天</option>
+            <option value="cloudy">陰天</option>
+            <option value="drizzle">細雨</option>
+            <option value="rain">大雨</option>
+          </select>
+        </div>
+        <div class="camera-actions">
+          <button type="button" id="rotate-left" title="向左旋轉 30°" aria-label="向左旋轉 30°">↶</button>
+          <button type="button" id="rotate-right" title="向右旋轉 30°" aria-label="向右旋轉 30°">↷</button>
+          <button type="button" id="pitch" title="切換俯視與斜視" aria-label="斜視" aria-pressed="false">∠</button>
+        </div>
+      </div>
+      <nav id="fuxing-controls" aria-label="復興南路街景比較" hidden>
+        <button type="button" id="fuxing-frame">看整排</button>
+        <button type="button" id="fuxing-compare" aria-pressed="false">舊版對照</button>
+        <button type="button" id="fuxing-names" aria-pressed="true">店名</button>
+      </nav>
+      <button type="button" id="shuqi-view" hidden>看茶樓燈火</button>
+      <nav id="dihua-views" aria-label="迪化街店面鏡位" hidden>
+        <button type="button" data-dihua="dihua">南段街屋</button>
+        <button type="button" data-dihua="dihua-north">北段藥行</button>
+        <button type="button" data-dihua="dihua-noodles">對街麵店</button>
+      </nav>
+      <section id="metro-panel" aria-label="捷運路線預覽" hidden>
+        <strong>台北捷運</strong>
+        <p id="metro-status" role="status"></p>
+        <div class="metro-actions">
+          <button type="button" id="metro-reset" hidden>清除</button>
+          <button type="button" id="metro-play" aria-pressed="false" hidden>播放路線</button>
+        </div>
+        <small>市區路網示意 · 列車動畫為模擬</small>
+      </section>
+      <section id="place-card" aria-labelledby="place-name" hidden>
+        <span class="place-morph" aria-hidden="true"></span>
+        <button type="button" id="place-close" aria-label="關閉地點資訊"><span class="close-cross" aria-hidden="true"></span></button>
+        <button type="button" class="place-photo" hidden><img alt=""><span aria-hidden="true">⤢</span></button>
+        <div class="place-copy">
+          <span class="place-kind"></span>
+          <h3 id="place-name"></h3>
+          <p class="place-detail" hidden></p>
+          <div class="place-choices" hidden></div>
+          <div class="place-links"><a class="photo-credit" target="_blank" rel="noopener" hidden></a>
+          <a class="place-source" target="_blank" rel="noopener" hidden></a></div>
+          <ul class="savvy-posts" aria-label="Savvy 相關貼文" hidden></ul>
+        </div>
+      </section>
+      <dialog id="place-original" aria-labelledby="original-name">
+        <form method="dialog"><button aria-label="關閉完整照片"><span class="close-cross" aria-hidden="true"></span></button></form>
+        <img alt="">
+        <footer><strong id="original-name"></strong><a target="_blank" rel="noopener"></a></footer>
+      </dialog>
+      <button type="button" id="street-motion" aria-pressed="false" hidden>暫停行人</button>
+      <div id="progress" role="status"></div>
+      <p class="hint"><span class="mouse">拖曳移動 · 滾輪縮放 · 右鍵拖曳旋轉</span><span class="touch">拖曳移動 · 雙指縮放和旋轉</span></p>
+      <details class="mobile">
+        <summary>搜尋與圖層</summary>
+        <div class="mobile-controls">
+          <div class="shop-search"><input type="search" placeholder="搜尋全台店家、鄉鎮或風景" aria-label="搜尋全台店家、鄉鎮或風景" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
+      <input type="search" list="school-list" class="school-find" placeholder="搜尋台北學校" aria-label="搜尋台北學校">
+          <datalist id="school-list"></datalist>
+          <label><input id="models" type="checkbox" checked> 台北實測建物</label>
+          <label><input id="grid" type="checkbox"> 170 公尺格網</label>
+        <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
+          <small>全台地形採數值高程，街廓、山水與店家採公開圖資。台北建物採市府 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。缺少樓高時採示意高度；窗框、雨棚、林冠與天氣為插畫示意。</small>
+        </div>
+      </details>
+    </section>
+  </main>
+  <script type="module" src="./app.js?v=city-colour-3"></script>
+</body>
+</html>

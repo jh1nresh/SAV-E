@@ -1,0 +1,16 @@
+{
+ "lat": 23.85195,
+ "lon": 120.90237,
+ "rotation": 40.0,
+ "size": 230.0,
+ "asked": {
+  "lat": 23.85195,
+  "lon": 120.90237
+ },
+ "moved_m": 0.0,
+ "famous_inside": [],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "",
+ "osm_base": "2026-11-24T07:15:12Z"
+}

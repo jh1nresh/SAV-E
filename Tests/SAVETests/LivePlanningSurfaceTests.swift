@@ -9,6 +9,16 @@ import Combine
 /// Simulator-hosted component evidence, not a full-app UI or account integration test.
 @MainActor
 final class LivePlanningSurfaceTests: XCTestCase {
+    func testRepeatedPocketCitySearchResendsTheSameBounds() throws {
+        let region = MKCoordinateRegion(center: .init(latitude: 25.1, longitude: 121.8),
+                                        span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012))
+        let first = try XCTUnwrap(PocketCityViewport(region, requestID: 1))
+        let repeated = try XCTUnwrap(PocketCityViewport(region, requestID: 2))
+        XCTAssertEqual(first.bounds, repeated.bounds)
+        XCTAssertNotEqual(first, repeated)
+        XCTAssertEqual(repeated, PocketCityViewport(region, requestID: 2))
+    }
+
     func testPublicGuideChooserLightAndDarkWithoutWriting() async throws {
         let now = Date()
         let page = try LivePublicDiscoveryModelTests.page(now: now).validated(at: now)

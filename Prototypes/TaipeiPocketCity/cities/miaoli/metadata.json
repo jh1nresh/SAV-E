@@ -1,0 +1,35 @@
+{
+  "name": "苗栗",
+  "landmark": "臺灣客家文化館",
+  "landmarkIds": [
+    "w200028241"
+  ],
+  "center": [
+    120.7707524,
+    24.4628585
+  ],
+  "bounds": [
+    120.76954344038647,
+    24.461750644627127,
+    120.77196135961354,
+    24.46396635537287
+  ],
+  "sizeMeters": 245.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap 圖資",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.7677300,24.4600889,120.7737748,24.4656281"
+    },
+    {
+      "title": "客家文化發展中心 · 園區空間",
+      "url": "https://thcdc.hakka.gov.tw/1240/1310/11914/24669/post"
+    },
+    {
+      "title": "Wikimedia Commons · 園區外觀與館方模型照片",
+      "url": "https://commons.wikimedia.org/wiki/Category:Taiwan_Hakka_Museum"
+    }
+  ],
+  "placeReferences": {
+    "w200028241": "w355386414"
+  }
+}

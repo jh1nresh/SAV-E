@@ -1,0 +1,9 @@
+/apple-config.js
+/data/
+/taiwan/townships.geojson
+/.restore-*/
+__pycache__/
+*.p8
+*.pem
+*.key
+/savvy-place-sources.json

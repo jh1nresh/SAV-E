@@ -1,0 +1,22 @@
+{
+ "lat": 23.9826822,
+ "lon": 121.6154999,
+ "rotation": 28,
+ "size": 180.0,
+ "asked": {
+  "lat": 23.9826463,
+  "lon": 121.6155207
+ },
+ "moved_m": 4.5,
+ "famous_inside": [
+  "Pine Garden Café",
+  "way/918981667",
+  "way/918981668",
+  "中國廣播股份有限公司花蓮電台",
+  "松園別館"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "松園別館",
+ "osm_base": null
+}

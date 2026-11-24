@@ -1,0 +1,6 @@
+[
+  {"provider":"apple_maps","providerPlaceID":"H2710I3F9267923395B","placeId":"poi/node/2572568042","savvyName":"阿宗麵線 西門店","cityName":"阿宗麵線","door":"峨眉街8-1號","district":"萬華區"},
+  {"provider":"apple_maps","providerPlaceID":"H2710I3F9267AE96F0E","placeId":"poi/node/4584957701","savvyName":"台北101觀景台","cityName":"台北101觀景台","door":"信義路五段7號","district":"信義區","savvyUnit":"89樓"},
+  {"provider":"apple_maps","providerPlaceID":"H2710I3F9A3DC84C790","placeId":"poi/node/6323106722","savvyName":"台北君悅酒店 凱菲屋","cityName":"凱菲屋Cafe","door":"松壽路2號","district":"信義區","savvyUnit":"1樓"},
+  {"provider":"apple_maps","providerPlaceID":"H2710I3F996BB33EE7F","placeId":"poi/node/2861307508","savvyName":"阜杭豆漿","cityName":"阜杭豆漿","door":"忠孝東路一段108號","district":"中正區","savvyUnit":"2樓"}
+]

@@ -1,0 +1,715 @@
+{
+  "name": "彰化",
+  "title": "彰化扇形車庫",
+  "region": "彰化縣 · 彰化市",
+  "place": "彰化扇形車庫",
+  "timezone": "Asia/Taipei",
+  "styles": {
+    "default": {
+      "facade": "stucco",
+      "wall": [
+        "#cfaf99",
+        "#e1c3a7",
+        "#cab397",
+        "#b5a497"
+      ],
+      "glass": [
+        "#91a39b",
+        "#9ba4a6"
+      ],
+      "roof": "flat",
+      "roofColour": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "flatRoof": [
+        "#aa9788",
+        "#afa49b",
+        "#9a8d83"
+      ],
+      "levels": 2,
+      "floor": 3.2,
+      "bay": 3.5,
+      "shop": "poi"
+    },
+    "rules": [
+      {
+        "if": {
+          "type": [
+            "house",
+            "residential"
+          ]
+        },
+        "set": {
+          "roof": "hipped",
+          "roofColour": "#858988",
+          "roofTex": "pantile",
+          "pitch": 21
+        }
+      }
+    ]
+  },
+  "palette": {
+    "ground": "#ddd0aa",
+    "road": "#a59e97",
+    "walk": "#d8c8af",
+    "pavement": "#d8caaf",
+    "grass": "#8db06c",
+    "slab": "#b5a783",
+    "paving": "#a8a296",
+    "water": "#80a8aa"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 0.75,
+    "colour": "#b1a48d"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "height": 6.7,
+      "evergreen": true,
+      "colours": [
+        "#78a065",
+        "#89b776",
+        "#579060"
+      ]
+    }
+  },
+  "vehicles": {
+    "kinds": [
+      "small",
+      "hatch",
+      "sedan"
+    ],
+    "colours": [
+      "#be9e86",
+      "#879a97",
+      "#ebe1d8",
+      "#b28b73"
+    ],
+    "plate": "#ede3d7"
+  },
+  "seasonLabel": "天氣",
+  "seasons": [
+    {
+      "id": "summer",
+      "label": "晴天",
+      "wx": "fluff",
+      "note": {
+        "text": "夏季季風為臺灣帶來溫暖潮濕的空氣。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    },
+    {
+      "id": "rain",
+      "icon": "autumn",
+      "label": "陣雨",
+      "wet": 0.72,
+      "wx": "drizzle",
+      "umbrellas": 0.55,
+      "note": {
+        "text": "夏季西南季風通常出現在六月中旬到九月中旬。",
+        "source": "中央氣象署",
+        "url": "https://edu.cwa.gov.tw/PopularScience/wt/wt_3.html"
+      }
+    }
+  ],
+  "cameras": {
+    "iso": {
+      "yaw": -43,
+      "pitch": 45,
+      "zoom": 0.91,
+      "x": 0,
+      "y": 1,
+      "z": 2
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "彰化扇形車庫",
+      "camera": {
+        "yaw": -48,
+        "pitch": 39,
+        "zoom": 1.72,
+        "x": 6,
+        "y": 3,
+        "z": 4
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "彰化扇形車庫",
+      "source": "OpenStreetMap・Wikimedia Commons",
+      "icon": "buildings",
+      "camera": {
+        "yaw": -48,
+        "pitch": 39,
+        "zoom": 1.72,
+        "x": 6,
+        "y": 3,
+        "z": 4
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "彰化扇形車庫",
+      "text": "車庫依原始扇形足印，並依現地照片繪製向轉車台放射的十二個車庫開間。",
+      "links": [
+        {
+          "label": "車庫面向轉車台的工業立面",
+          "url": "https://commons.wikimedia.org/wiki/File:Changhua_Railway_Roundhouse.jpg"
+        },
+        {
+          "label": "扇形車庫屋頂實景",
+          "url": "https://commons.wikimedia.org/wiki/File:Roof(s)_of_the_Changhua_Roundhouse.jpg"
+        },
+        {
+          "label": "車庫門洞與柱材",
+          "url": "https://commons.wikimedia.org/wiki/File:2021-12-30_TRA_Changhua_Roundhouse_02.jpg"
+        }
+      ]
+    },
+    {
+      "title": "地圖與比例",
+      "text": "真實街道與足印由 OpenStreetMap 提供。周邊未標記高度、樹木與人物是地圖插畫的示意。",
+      "links": [
+        {
+          "label": "OpenStreetMap・建物、街道與地物",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.535720,24.084640,120.542120,24.090040"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "OpenStreetMap contributors (ODbL)",
+      "url": "https://www.openstreetmap.org/copyright"
+    }
+  ],
+  "buildings": {
+    "w307109026": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w307329571": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w307329572": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w307329573": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w307329574": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w307329575": {
+      "taiwanStreetFinish": true,
+      "wall": "#dcd2bd",
+      "roofColour": "#ccb196",
+      "flatRoof": "#ccb196",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w307329576": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w307426276": {
+      "taiwanStreetFinish": true,
+      "wall": "#a5c1cc",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f"
+    },
+    "w307426277": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w315751658": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w315751659": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w315751660": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w315829208": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w315829209": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w315829210": {
+      "taiwanStreetFinish": true,
+      "wall": "#dcd2bd",
+      "roofColour": "#ccb196",
+      "flatRoof": "#ccb196",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w529607845": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w529607846": {
+      "taiwanStreetFinish": true,
+      "wall": "#a5c1cc",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f"
+    },
+    "w529607850": {
+      "taiwanStreetFinish": true,
+      "wall": "#a5c1cc",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f"
+    },
+    "w529607851": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w529615656": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w529615658": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w529619208": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w529619214": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w529619215": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w533101474": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w533101475": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w533101476": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w533101477": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w533101491": {
+      "taiwanStreetFinish": true,
+      "wall": "#a5c1cc",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f"
+    },
+    "w533101494": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w533103121": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w533103122": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w533104110": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w533104111": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w533104112": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w533104113": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w537052276": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w537053316": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1e7d0",
+      "roofColour": "#74767e",
+      "flatRoof": "#74767e",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w537053317": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w1447489403": {
+      "taiwanStreetFinish": true,
+      "wall": "#a5c1cc",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f"
+    }
+  }
+}

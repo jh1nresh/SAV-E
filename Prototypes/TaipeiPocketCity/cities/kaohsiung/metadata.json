@@ -1,0 +1,37 @@
+{
+  "name": "高雄市",
+  "area": "高雄市",
+  "landmark": "打狗英國領事館官邸",
+  "landmarkIds": [
+    "w205060859"
+  ],
+  "center": [
+    120.2670603,
+    22.6186986
+  ],
+  "bounds": [
+    120.26552461486038,
+    22.617271468683455,
+    120.26859598513961,
+    22.62012573131654
+  ],
+  "sizeMeters": 230.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap contributors · 實地輪廓",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=120.2639955,22.6162660,120.2691045,22.6210140"
+    },
+    {
+      "title": "文化部文化資產局 · 打狗英國領事館及官邸",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/monument/20190223000001"
+    },
+    {
+      "title": "官邸正面與拱廊照片",
+      "url": "https://commons.wikimedia.org/wiki/File:Former_British_Consulate_at_Takao.jpg"
+    },
+    {
+      "title": "中央氣象署 · 氣候統計",
+      "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlydata.html"
+    }
+  ]
+}

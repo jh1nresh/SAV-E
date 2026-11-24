@@ -1,0 +1,16 @@
+{
+ "lat": 26.36587,
+ "lon": 120.51025,
+ "rotation": 0.0,
+ "size": 170.0,
+ "asked": {
+  "lat": 26.36587,
+  "lon": 120.51025
+ },
+ "moved_m": 0.0,
+ "famous_inside": [],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "東湧燈塔",
+ "osm_base": null
+}

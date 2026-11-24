@@ -295,6 +295,8 @@
 		INK1A000000000000000002 /* SaveInkNotebookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000001 /* SaveInkNotebookModel.swift */; };
 		INK1A00000000000000000D /* SaveInkPlaceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000C /* SaveInkPlaceCatalog.swift */; };
 		INK1A000000000000000004 /* SaveInkNotebookChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000003 /* SaveInkNotebookChrome.swift */; };
+		3840B4AA105CBDA890000012 /* PocketCityAssetServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3840B4AA105CBDA890000011 /* PocketCityAssetServer.swift */; };
+		3840B4AA105CBDA890000002 /* PocketCityMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3840B4AA105CBDA890000001 /* PocketCityMap.swift */; };
 		INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000005 /* SaveInkNotebookScreens.swift */; };
 		INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000007 /* SaveInkNotebookRoot.swift */; };
 		INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000A /* SaveInkNotebookTests.swift */; };
@@ -689,6 +691,8 @@
 		INK1A000000000000000001 /* SaveInkNotebookModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookModel.swift; sourceTree = "<group>"; };
 		INK1A00000000000000000C /* SaveInkPlaceCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkPlaceCatalog.swift; sourceTree = "<group>"; };
 		INK1A000000000000000003 /* SaveInkNotebookChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookChrome.swift; sourceTree = "<group>"; };
+		3840B4AA105CBDA890000011 /* PocketCityAssetServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketCityAssetServer.swift; sourceTree = "<group>"; };
+		3840B4AA105CBDA890000001 /* PocketCityMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketCityMap.swift; sourceTree = "<group>"; };
 		INK1A000000000000000005 /* SaveInkNotebookScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookScreens.swift; sourceTree = "<group>"; };
 		INK1A000000000000000007 /* SaveInkNotebookRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookRoot.swift; sourceTree = "<group>"; };
 		INK1A00000000000000000A /* SaveInkNotebookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookTests.swift; sourceTree = "<group>"; };
@@ -1339,6 +1343,8 @@
 				INK1A000000000000000001 /* SaveInkNotebookModel.swift */,
 				INK1A00000000000000000C /* SaveInkPlaceCatalog.swift */,
 				INK1A000000000000000003 /* SaveInkNotebookChrome.swift */,
+				3840B4AA105CBDA890000011 /* PocketCityAssetServer.swift */,
+				3840B4AA105CBDA890000001 /* PocketCityMap.swift */,
 				INK1A000000000000000005 /* SaveInkNotebookScreens.swift */,
 				INK1A000000000000000007 /* SaveInkNotebookRoot.swift */,
 			);
@@ -1538,6 +1544,7 @@
 				6DFB59A5DACC6C13A2CE7794 /* Frameworks */,
 				38E3923233750DB0215AE4B2 /* Embed Foundation Extensions */,
 				3D8AE07A69D4E51CB90C125D /* Embed App Clips */,
+				3840B4AA105CBDA890000098 /* Package Pocket City */,
 				1C05DC3D4BB69D3CD871D981 /* Package App Secrets.plist */,
 			);
 			buildRules = (
@@ -1731,6 +1738,19 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		3840B4AA105CBDA890000098 /* Package Pocket City */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			outputPaths = ();
+			name = "Package Pocket City";
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "python3 \"$SRCROOT/scripts/package-pocket-city.py\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/PocketCity\"";
+			showEnvVarsInLog = 0;
+		};
 		1C05DC3D4BB69D3CD871D981 /* Package App Secrets.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -2062,6 +2082,8 @@
 				INK1A000000000000000002 /* SaveInkNotebookModel.swift in Sources */,
 				INK1A00000000000000000D /* SaveInkPlaceCatalog.swift in Sources */,
 				INK1A000000000000000004 /* SaveInkNotebookChrome.swift in Sources */,
+				3840B4AA105CBDA890000012 /* PocketCityAssetServer.swift in Sources */,
+				3840B4AA105CBDA890000002 /* PocketCityMap.swift in Sources */,
 				INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */,
 				INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */,
 				D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */,

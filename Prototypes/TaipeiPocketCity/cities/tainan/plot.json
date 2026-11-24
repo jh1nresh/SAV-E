@@ -1,0 +1,21 @@
+{
+ "lat": 22.9976866,
+ "lon": 120.2025698,
+ "rotation": -19,
+ "size": 190.0,
+ "asked": {
+  "lat": 22.99759,
+  "lon": 120.20273
+ },
+ "moved_m": 19.6,
+ "famous_inside": [
+  "大士殿",
+  "文昌閣",
+  "海神廟",
+  "蓬壺書院"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "臺南赤崁樓",
+ "osm_base": null
+}

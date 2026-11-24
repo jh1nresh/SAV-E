@@ -1,0 +1,40 @@
+{
+  "name": "北京",
+  "landmark": "天壇祈年殿",
+  "landmarkIds": [
+    "w43921139"
+  ],
+  "center": [
+    116.4060983,
+    39.8822385
+  ],
+  "bounds": [
+    116.40469352539094,
+    39.88115325392045,
+    116.40750307460905,
+    39.88332374607955
+  ],
+  "sizeMeters": 240,
+  "sources": [
+    {
+      "title": "OpenStreetMap contributors · bbox API",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=116.4038400,39.8799500,116.4093400,39.8843100"
+    },
+    {
+      "title": "天壇公園 · 祈年殿",
+      "url": "https://www.tiantanpark.cn/en/Scenic/detail/1396.html"
+    },
+    {
+      "title": "UNESCO 世界遺產登錄圖面與照片",
+      "url": "https://whc.unesco.org/uploads/nominations/881.pdf"
+    },
+    {
+      "title": "北京市氣候概況",
+      "url": "https://english.beijing.gov.cn/beijinginfo/facts/demographicgeography/202005/t20200518_1900888.html"
+    },
+    {
+      "title": "北京市政府 · 天壇夜間照明",
+      "url": "https://english.beijing.gov.cn/latest/news/202607/t20260715_4763505.html"
+    }
+  ]
+}

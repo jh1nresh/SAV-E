@@ -1,0 +1,18 @@
+{
+ "lat": 25.132839,
+ "lon": 121.7411093,
+ "rotation": 0.0,
+ "size": 225.0,
+ "asked": {
+  "lat": 25.132839,
+  "lon": 121.740607
+ },
+ "moved_m": 50.6,
+ "famous_inside": [
+  "海港大樓"
+ ],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "基隆 · 海港大樓",
+ "osm_base": null
+}

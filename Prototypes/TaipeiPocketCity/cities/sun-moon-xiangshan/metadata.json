@@ -1,0 +1,52 @@
+{
+  "name": "日月潭向山",
+  "landmark": "向山行政暨遊客中心",
+  "center": [
+    120.90237,
+    23.85195
+  ],
+  "bounds": [
+    120.90077869,
+    23.85048478,
+    120.90396131,
+    23.85341522
+  ],
+  "sizeMeters": 230,
+  "landmarkIds": [
+    "w1001894428",
+    "w1001894430"
+  ],
+  "landmarkSites": [
+    {
+      "osmType": "node",
+      "osmId": 2341498877,
+      "name": "向山遊客中心",
+      "point": [
+        120.9021197,
+        23.8520452
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "title": "OpenStreetMap・向山遊客中心",
+      "url": "https://www.openstreetmap.org/node/2341498877"
+    },
+    {
+      "title": "日月潭國家風景區管理處・空拍、水池與屋頂照片",
+      "url": "https://www.sunmoonlake.gov.tw/zh-tw/attractions/Attractions?A=20&Id=78&P=1"
+    },
+    {
+      "title": "交通部觀光署・向山建築尺度",
+      "url": "https://www.taiwan.net.tw/m1.aspx?id=412&sNo=0001016"
+    },
+    {
+      "title": "團紀彥建築事務所・配置圖、立面及完工照片",
+      "url": "https://www.archdaily.com/771070/sun-moon-lake-administration-office-of-tourism-bureau-norihiko-dan-and-associates"
+    },
+    {
+      "title": "日月潭國家風景區管理處・自行車嘉年華",
+      "url": "https://www.sunmoonlake.gov.tw/zh-tw/news/News?a=13&id=1441"
+    }
+  ]
+}

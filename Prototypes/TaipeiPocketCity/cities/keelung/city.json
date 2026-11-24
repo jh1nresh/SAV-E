@@ -1,0 +1,303 @@
+{
+  "name": "基隆",
+  "title": "基隆 · 海港大樓",
+  "region": "仁愛區 · 港西街",
+  "place": "海港大樓",
+  "timezone": "Asia/Taipei",
+  "level": 3.15,
+  "styles": {
+    "default": {
+      "facade": "civic",
+      "roof": "flat",
+      "flatRoof": "#c5b7a0",
+      "wall": [
+        "#e0c69c",
+        "#e5d2b4",
+        "#c9b9ad"
+      ],
+      "levels": 3,
+      "shop": "poi",
+      "rooftop": "none"
+    }
+  },
+  "palette": {
+    "ground": "#d7c3aa",
+    "road": "#a9aaa0",
+    "pavement": "#e2ceb0",
+    "walk": "#e5d3b7",
+    "grass": "#a1bb76",
+    "paving": "#c4ac8c",
+    "kerb": "#ceb48e",
+    "slab": "#dfc199",
+    "water": "#6ba0aa"
+  },
+  "paving": {
+    "style": "slabs",
+    "size": 1.1,
+    "colour": "#c9b698",
+    "stone": "#e5d4b6"
+  },
+  "trees": {
+    "default": {
+      "style": 3,
+      "colours": [
+        "#82a65f",
+        "#769753",
+        "#9ab568"
+      ],
+      "height": 6,
+      "evergreen": true,
+      "vary": 0.4
+    }
+  },
+  "people": {
+    "clothes": [
+      "#b76853",
+      "#4b7575",
+      "#d29f5d",
+      "#516577",
+      "#748252"
+    ],
+    "skin": [
+      "#dfb292",
+      "#bf8863",
+      "#9e6249"
+    ],
+    "pants": [
+      "#4c5b62",
+      "#7e6659"
+    ],
+    "hair": [
+      "#453632",
+      "#5c483c"
+    ]
+  },
+  "seasons": [
+    {
+      "id": "spring",
+      "label": "晴日",
+      "leaves": "spring",
+      "grass": "#9fbe83",
+      "note": {
+        "text": "中央氣象署提供各測站的每月氣溫與日照資料。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      },
+      "boats": 0
+    },
+    {
+      "id": "summer",
+      "label": "陣雨",
+      "leaves": "summer",
+      "wet": true,
+      "wx": "rain",
+      "umbrellas": true,
+      "grass": "#88aa70",
+      "note": {
+        "text": "中央氣象署的測站氣候資料也記錄每月雨量與降雨日數。",
+        "source": "中央氣象署",
+        "url": "https://www.cwa.gov.tw/V8/C/C/Statistics/monthlymean.html"
+      },
+      "boats": 0
+    }
+  ],
+  "months": [
+    "spring",
+    "spring",
+    "spring",
+    "spring",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "summer",
+    "spring",
+    "spring",
+    "spring"
+  ],
+  "seasonLabel": "天候",
+  "cameras": {
+    "iso": {
+      "yaw": 152,
+      "pitch": 34,
+      "zoom": 0.86,
+      "x": 0,
+      "y": 0,
+      "z": 4
+    }
+  },
+  "views": [
+    {
+      "id": "landmark",
+      "label": "海港大樓",
+      "camera": {
+        "yaw": 152,
+        "pitch": 22,
+        "zoom": 2.04,
+        "x": -56.38,
+        "y": 26.22,
+        "z": 9
+      }
+    }
+  ],
+  "legend": [
+    {
+      "name": "海港大樓",
+      "source": "OpenStreetMap",
+      "icon": "buildings",
+      "camera": {
+        "yaw": 152,
+        "pitch": 22,
+        "zoom": 2.04,
+        "x": -56.38,
+        "y": 26.22,
+        "z": 9
+      }
+    }
+  ],
+  "notes": [
+    {
+      "title": "海港大樓",
+      "text": "依基隆市文化局及二二八事件紀念基金會的港面和街角照片，重現轉角圓塔、橫向窗帶和米色基座。",
+      "links": [
+        {
+          "label": "基隆市政府文化局 · 海港大樓",
+          "url": "https://tcmb.culture.tw/zh-tw/detail?id=302545&indexCode=Culture_Place"
+        },
+        {
+          "label": "二二八事件紀念基金會 · 港西街與港面照片",
+          "url": "https://www.228.org.tw/en/courses-1/%E5%9F%BA%E9%9A%86%E6%B8%AF"
+        }
+      ]
+    },
+    {
+      "title": "地圖與插畫",
+      "text": "地理位置和建物足印以 OSM 為準，建物立面、未測高度、路人、樹木與天候為插畫。",
+      "links": [
+        {
+          "label": "OpenStreetMap",
+          "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.7378163,25.1302955,121.7433977,25.1353825"
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "label": "基隆市政府文化局 · 海港大樓",
+      "url": "https://tcmb.culture.tw/zh-tw/detail?id=302545&indexCode=Culture_Place"
+    },
+    {
+      "label": "二二八事件紀念基金會 · 港西街與港面照片",
+      "url": "https://www.228.org.tw/en/courses-1/%E5%9F%BA%E9%9A%86%E6%B8%AF"
+    }
+  ],
+  "buildings": {
+    "w1154401067": {
+      "facade": "glass",
+      "levels": 1,
+      "roof": "flat",
+      "glass": [
+        "#5e8584",
+        "#80a39c"
+      ],
+      "flatRoof": "#abc0b7"
+    },
+    "w253032617": {
+      "facade": "office",
+      "levels": 6,
+      "wall": "#ac6551",
+      "roof": "flat"
+    },
+    "w367861774": {
+      "taiwanStreetFinish": true,
+      "wall": "#dcd2bd",
+      "roofColour": "#ccb196",
+      "flatRoof": "#ccb196",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w533464225": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w533464227": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w533464230": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w533464232": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1e7d0",
+      "roofColour": "#74767e",
+      "flatRoof": "#74767e",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w533464234": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w533464237": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    }
+  }
+}

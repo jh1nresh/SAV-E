@@ -1,0 +1,33 @@
+{
+  "name": "桃園",
+  "landmark": "大溪武德殿",
+  "landmarkIds": [
+    "w405959857",
+    "w405959863"
+  ],
+  "center": [
+    121.2862285,
+    24.8810752
+  ],
+  "bounds": [
+    121.2852382795678,
+    24.880170828267044,
+    121.28721872043221,
+    24.88197957173296
+  ],
+  "sizeMeters": 200.0,
+  "sources": [
+    {
+      "title": "OpenStreetMap 圖資",
+      "url": "https://api.openstreetmap.org/api/0.6/map?bbox=121.2836044,24.8787691,121.2885556,24.8832909"
+    },
+    {
+      "title": "桃園市政府 · 武德殿前世今生",
+      "url": "https://ws.tycg.gov.tw/001/Upload/86/relfile/13654/1157576/1.pdf"
+    },
+    {
+      "title": "文化資產局 · 大溪公園文化景觀",
+      "url": "https://nchdb.boch.gov.tw/assets/overview/culturalLandscape/20200710000001"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+ "lat": 23.5647115,
+ "lon": 119.5640221,
+ "rotation": 0.0,
+ "size": 170.0,
+ "asked": {
+  "lat": 23.56471145,
+  "lon": 119.5640221
+ },
+ "moved_m": 0.0,
+ "famous_inside": [],
+ "famous_cut": [],
+ "keep_missing": [],
+ "place": "澎湖天后宮",
+ "osm_base": null
+}
