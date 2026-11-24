@@ -23,6 +23,13 @@ test('a promoted POI and a new museum enter the queue even when both lack a mode
   const cli=spawnSync(process.execPath,[path.join(alias,'landmark-coverage.mjs'),data,path.join(runtime,'cli-report')],{encoding:'utf8'});
   assert.equal(cli.status,1,cli.stderr);
   assert.equal(JSON.parse(cli.stdout).candidates,2);
+  const entry=new URL('./landmark-coverage.mjs',import.meta.url).href;
+  const stdin=spawnSync(process.execPath,['--input-type=module','-'],{
+    input:'import {inventory} from '+JSON.stringify(entry)+'; console.log(typeof inventory);',
+    encoding:'utf8'
+  });
+  assert.equal(stdin.status,0,stdin.stderr);
+  assert.equal(stdin.stdout.trim(),'function');
   assert.equal(result.candidates,2);
   assert.equal(result.counts['待核對造型'],2);
   assert.ok(!result.missingPriority.includes('poi/way/189788192'));
