@@ -7,7 +7,7 @@
   <title>Pocket City · Savvy</title>
   <link rel="icon" href="./assets/icon.png">
   <link rel="stylesheet" href="./assets/maplibre-gl.css">
-  <link rel="stylesheet" href="./style.css?v=world-map-2">
+  <link rel="stylesheet" href="./style.css?v=globe-1">
 </head>
 <body>
   <header>
@@ -21,12 +21,12 @@
       <div id="rain" aria-hidden="true" hidden></div>
       <div class="geography">
         <span id="parent"></span>
-        <h2 id="region">世界地圖</h2>
+        <h2 id="region">地球</h2>
         <span id="resolution"></span><button type="button" id="retry-landmark" hidden>重試街區</button>
       </div>
       <div class="toolbar" aria-label="地圖工具">
         <div class="extent-actions">
-          <button type="button" id="world">世界全圖</button>
+          <button type="button" id="world">回到地球</button>
           <button type="button" id="metro-toggle" aria-controls="metro-panel" aria-pressed="false" hidden>捷運</button>
           <select id="weather-select" aria-label="場景天氣" title="切換場景天氣" hidden>
             <option value="day">晴天</option>
@@ -96,6 +96,6 @@
       </details>
     </section>
   </main>
-  <script type="module" src="./app.js?v=world-map-2"></script>
+  <script type="module" src="./app.js?v=globe-1"></script>
 </body>
 </html>

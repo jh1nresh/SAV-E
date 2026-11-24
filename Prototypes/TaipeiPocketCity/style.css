@@ -27,7 +27,7 @@ aside button:hover, aside button[aria-current] { background:#e5eadb; border-colo
 .settings small,.mobile-controls small { color:var(--muted); font-size:.68rem; line-height:1.45; }
 .settings { display:grid; gap:13px; margin:16px 0 0; padding:15px 4px 0; border-top:1px solid var(--line); font-size:.78rem; }
 input { accent-color:var(--green); width:16px; height:16px; margin:0 6px 0 0; vertical-align:-3px; }
-#stage { position:relative; isolation:isolate; min-height:225px; overflow:hidden; border-radius:13px; border:1px solid #bcc8bd; background:#89c0cc; }
+#stage { position:relative; isolation:isolate; min-height:225px; overflow:hidden; border-radius:13px; border:1px solid #bcc8bd; background:radial-gradient(ellipse at 48% 43%,#1b3341,#101e2a 68%,#0a131d); }
 #map { position:absolute; inset:0; }
 #stage.street-scale[data-weather]::before { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; }
 #stage.street-scale[data-weather="cloudy"]::before { background:#7c98b321; }

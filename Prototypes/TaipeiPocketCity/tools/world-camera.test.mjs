@@ -1,18 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {constrainWorldCamera} from '../world-camera.js';
+import {globeCamera,returnToGlobe} from '../world-camera.js';
 
-test('a portrait overview shows Taipei and Los Angeles in a single viewport',()=>{
-  const width=390,height=800;
-  const {center,zoom}=constrainWorldCamera({lng:0,lat:25},-2,width,height);
-  const halfDegrees=180*width/(512*2**zoom);
-  assert.ok(center.lng-halfDegrees<=-118.3 && center.lng+halfDegrees>=121.6);
-  assert.equal(center.lat,0);
+test('the globe opens facing East Asia with the short edge controlling its diameter',()=>{
+  const portrait=globeCamera(390,844);
+  assert.deepEqual(portrait,globeCamera(844,390));
+  assert.deepEqual(portrait.center,[124,24]);
+  assert.equal(portrait.pitch,0);
+  const desktop=globeCamera(1280,900);
+  assert.ok(Math.abs(2**(desktop.zoom-portrait.zoom)-900/390)<1e-6);
+  assert.ok(Number.isFinite(globeCamera(0,0).zoom));
 });
 
-test('street-scale movement keeps the requested location and zoom',()=>{
-  const {center,zoom}=constrainWorldCamera({lng:121.56481,lat:25.03367},17.25,390,800);
-  assert.ok(Math.abs(center.lat-25.03367)<1e-8);
-  assert.equal(center.lng,121.56481);
-  assert.equal(zoom,17.25);
+test('a street reset waits for globe rendering and respects interrupted motion',()=>{
+  for(const interrupted of [true,false]){
+    const events=new Map(),moves=[];
+    let zoom=18;
+    const map={stop(){},isMoving:()=>interrupted,getZoom:()=>zoom,
+      once:(event,handler)=>events.set(event,handler),easeTo:move=>moves.push(move)};
+    const home=globeCamera(390,844);
+    returnToGlobe(map,home,true);
+    assert.equal(moves.length,1);
+    assert.equal(moves[0].duration,0);
+    zoom=moves[0].zoom;
+    events.get('moveend')();
+    assert.equal(moves.length,1);
+    events.get('render')();
+    assert.deepEqual(moves.slice(1),interrupted?[]:[{...home,duration:0}]);
+  }
 });

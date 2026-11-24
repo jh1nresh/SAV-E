@@ -1,4 +1,4 @@
-import {constrainWorldCamera,worldBounds} from './world-camera.js';
+import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
 import {addCityContext} from './city-context.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=world-map-1';
 import {cityPlaceLayers} from './city-place-index.js';
@@ -116,6 +116,9 @@ const hybridBaseColors={
 };
 function mapStyle(base,districts) {
   base.name='Savvy Pocket City';
+  base.projection={type:'globe'};
+  base.sky={'sky-color':'#152532','horizon-color':'#b7d9d7','fog-color':'transparent',
+    'atmosphere-blend':['interpolate',['linear'],['zoom'],0,.62,5,.4,10,0]};
   const omit=new Set(['building-3d','natural_earth','road_area_pattern','poi_r20','poi_r7',
     'highway-shield-non-us','highway-shield-us-interstate','road_shield_us']);
   base.layers=base.layers.filter(l=>!omit.has(l.id));
@@ -128,6 +131,10 @@ function mapStyle(base,districts) {
     if(l.id==='poi_r1')delete l.layout['icon-image'];
     if(l.id==='poi_transit')l.filter=['match',['get','class'],['airport','rail'],true,false];
     if(l.id==='label_city'||l.id==='label_city_capital')l.maxzoom=14.3;
+    // At globe scale the surface near the horizon has little room for text.
+    if(['water_name_point_label','water_name_line_label','label_country_3','label_city_capital','label_city'].includes(l.id)){
+      l.minzoom=Math.max(4,l.minzoom??0);
+    }
     if(l.type==='symbol'&&l.layout?.['text-field']&&l.source==='openmaptiles'){
       const original=l.layout['text-field'];
       if(!l.id.includes('shield')){
@@ -185,7 +192,7 @@ function worldOverview(){
   const url=new URL(location.href);
   for(const key of ['city','street','view','campus','landmark','bearing'])url.searchParams.delete(key);
   history.replaceState(null,'',url);
-  map.fitBounds(worldBounds,{padding:10,bearing:0,pitch:0,duration:reducedMotion.matches?0:600});
+  returnToGlobe(map,globeCamera(stage.clientWidth,stage.clientHeight),reducedMotion.matches);
 }
 function locate(record,animate=true){
   const tower=record===landmarks['101'];
@@ -256,8 +263,8 @@ function updateUI(){
   const zoomed=active&&z>=16.4;
   const patch=z>=6&&worldAtlas?.at(lng,lat);
   const inTaiwan=lng>=118&&lng<=122.2&&lat>=21.7&&lat<=26.5;
-  const label=patch?.name??district??(city?'台北市':inTaiwan?'台灣':'世界地圖');
-  $('.geography').hidden=z>4&&label==='世界地圖';
+  const label=patch?.name??district??(city?'台北市':z>=5&&inTaiwan?'台灣':'地球');
+  $('.geography').hidden=z>4&&label==='地球';
   const retry=$('#retry-landmark');
   retry.hidden=!patch||!worldAtlas.failed(patch.id);
   if(patch)retry.dataset.city=patch.id;
@@ -415,12 +422,8 @@ try{
     }
   }
   map=new ml.Map({
-    container:'map',style:mapStyle(base,districts),bounds:worldBounds,fitBoundsOptions:{padding:10},bearing:0,pitch:0,
+    container:'map',style:mapStyle(base,districts),...globeCamera(stage.clientWidth,stage.clientHeight),
     minZoom:-2,maxZoom:21.6,maxPitch:65,
-    transformConstrain:(center,zoom)=>{
-      const result=constrainWorldCamera(center,zoom,stage.clientWidth,stage.clientHeight);
-      return {center:ml.LngLat.convert(result.center),zoom:result.zoom};
-    },
     transformRequest:url=>({url:localTerrain.get(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
     canvasContextAttributes:{antialias:true},
