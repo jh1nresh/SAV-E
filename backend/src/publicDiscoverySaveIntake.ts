@@ -78,7 +78,7 @@ async function collect(
       candidates.push(...leads);
       if (result.profiles.some(profile => profile.status === "rate_limited")) {
         coverage[platform] = "rate_limited";
-        break;
+        continue;
       }
       if (leads.length) {
         coverage[platform] = "searched";
@@ -362,6 +362,14 @@ async function readInventory(path: string): Promise<Inventory> {
   return inventory;
 }
 
+export async function writePublicSourceIntakeDraft(directory: string, identity: string, report: Result) {
+  // A retry may produce fewer leads. Keep the earlier batch available to the verifier.
+  const candidates = [...new Set(report.candidates.map(({ platform, sourceURL, authorHandle }) =>
+    JSON.stringify([platform, sourceURL, authorHandle])))].sort();
+  const digest = createHash("sha256").update(JSON.stringify([identity, report.place, candidates])).digest("hex");
+  await writePublicSourceJSON(join(directory, digest + ".json"), report);
+}
+
 export async function loadPublicDiscoverySaveIntake(directory: string, indexFile?: string) {
   if (!isAbsolute(directory)) throw new Error("Expected an absolute public source intake directory");
   const currentIndexFile = indexFile?.trim();
@@ -383,9 +391,6 @@ export async function loadPublicDiscoverySaveIntake(directory: string, indexFile
       return platforms.filter(platform => !indexed.has(platform));
     },
     retryableFailure: () => console.warn("[public-discovery] Could not complete save-source intake work"),
-    async write(identity, report) {
-      const digest = createHash("sha256").update(identity).digest("hex");
-      await writePublicSourceJSON(join(drafts, digest + ".json"), report);
-    },
+    write: (identity, report) => writePublicSourceIntakeDraft(drafts, identity, report),
   });
 }
