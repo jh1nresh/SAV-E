@@ -445,11 +445,22 @@ export function addCity170Style(map, sourceId, firstLabel) {
     },
   }, underStreet);
 
+  // Keep a court's pigment and lines in the same terrain paint pass.
   add({
-    id:'city170-court-markings',type:'line',minzoom:17,filter:kinds('court-markings'),
+    id:'city170-playing-area-fill',source:'city170-playing-areas',type:'fill',minzoom:17,filter:kinds('pitch'),
+    paint:{'fill-color':['match',['get','sport'],['basketball','volleyball'],'#bc836c','#7d9e93'],
+      'fill-outline-color':'#f6edcf'},
+  },underBuildings);
+  add({
+    id:'city170-court-markings',source:'city170-playing-areas',type:'line',minzoom:17,filter:kinds('court-markings'),
     paint:{'line-color':'#fff2d5','line-width':['interpolate',['linear'],['zoom'],17,.7,20,1.65],
       'line-opacity':fade(17,18,.92)},
   },underBuildings);
+  add({
+    id:'city170-court-equipment',source:'city170-equipment',type:'fill-extrusion',minzoom:18.5,filter:kinds('court-equipment'),
+    paint:{'fill-extrusion-base':['get','base'],'fill-extrusion-height':['get','top'],
+      'fill-extrusion-color':['get','color'],'fill-extrusion-vertical-gradient':false},
+  },firstLabel);
   add({
     id:'city170-stair-treads',type:'line',minzoom:17.35,
     filter:['all',gradeFilter('walk'),['==',category,'steps'],['==',['coalesce',['get','covered'],'no'],'no']],

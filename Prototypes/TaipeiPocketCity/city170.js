@@ -1,9 +1,10 @@
+import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
 import {surfaceFeature} from './city170-ground.js';
-import {courtMarkings} from './city170-courts.js';
+import {courtDetails} from './city170-courts.js?v=court-equipment-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=taipei-audit-1';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=court-equipment-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 
 const collection = features => ({type: 'FeatureCollection', features});
@@ -97,15 +98,18 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const paint = 'city170-prepared';
   const schools = 'city170-schools';
   const roadAnchors = 'city170-road-anchors';
-  for (const id of [data, paint, schools]) {
+  for (const id of [data, paint, schools, 'city170-equipment']) {
     map.addSource(id, {type:'geojson', data:collection([]), maxzoom:19});
   }
+  // One shared vector tile holds neighboring school courts at close zoom.
+  map.addSource('city170-playing-areas',{type:'geojson',data:collection([]),maxzoom:16,buffer:256,tolerance:0});
   // Keep short visible label lines intact across a native vector tile edge.
   map.addSource(roadAnchors,{type:'geojson',data:collection([]),maxzoom:16,buffer:512});
   for(const id of ['city170-waterways','city170-farmland']){
     map.addSource(id,{type:'geojson',data:collection([]),maxzoom:17});
   }
   addCityAirfield(map,firstLabel);
+  addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
   addCityPlaceIndex(map,pin);
   const baseRoads=map.getStyle().layers.filter(l=>l['source-layer']==='transportation_name');
@@ -290,6 +294,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       if (map.getZoom() < 13) {
         map.getSource(data).setData(collection([]));
         map.getSource(paint).setData(collection([]));
+        map.getSource('city170-equipment').setData(collection([]));
+        map.getSource('city170-playing-areas').setData(collection([]));
         map.getSource(roadAnchors).setData(collection([]));
         cityRoadLabels(false);
         resetLife();
@@ -308,6 +314,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         const features = landscape.features.filter(feature => overlaps(feature.bbox, view)).map(surfaceFeature);
         map.getSource(data).setData(collection(features));
         map.getSource(paint).setData(collection([]));
+        map.getSource('city170-equipment').setData(collection([]));
+        map.getSource('city170-playing-areas').setData(collection([]));
         map.getSource(roadAnchors).setData(collection([]));
         updateStores([]);
         cityRoadLabels(false);
@@ -422,12 +430,20 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         if(f.properties.entranceId)entranceCards.set(f.properties.entranceId,{...f.properties,point:f.geometry.coordinates});
       }
       updateStores(map.getZoom() >= 18.15 ? features.filter(f => f.properties.kind === 'poi').map(f => f.id) : []);
-      const mapped=features.filter(f=>!hasFocalPin(f) &&
-        (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
+      const equipment=[], playingAreas=[], detailedPitchIds=new Set();
       if(map.getZoom()>=17)for(const feature of features){
-        const lines=courtMarkings(feature);
-        if(lines)mapped.push(lines);
+        if(feature.properties.kind!=='pitch')continue;
+        const [painted,...parts]=courtDetails(feature,map.getZoom()>=18.5);
+        if(painted){
+          detailedPitchIds.add(feature.id);
+          playingAreas.push(feature,painted);
+        }
+        equipment.push(...parts);
       }
+      map.getSource('city170-equipment').setData(collection(equipment));
+      map.getSource('city170-playing-areas').setData(collection(playingAreas));
+      const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f) &&
+        (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
         ?{...f,properties:{...f.properties,placeId:f.id}}:f)));
       map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
