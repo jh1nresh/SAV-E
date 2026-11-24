@@ -5,7 +5,7 @@ import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
-import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-3';
+import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-4';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
 import {addTaiwanCells} from './taiwan-cells.js?v=city-colour-3';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
