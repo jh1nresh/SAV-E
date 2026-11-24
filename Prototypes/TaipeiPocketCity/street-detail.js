@@ -146,7 +146,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     button.append(canvas,document.createTextNode(place.name));
     button.setAttribute('aria-controls','place-card');
     button.setAttribute('aria-expanded','false');
-    const photo=originalPlacePhoto(place,place.point);
+    const photo=originalPlacePhoto(place);
     if(photo){
       photoButtons.set(button,photo.src);
       button.classList.add('photo-pin');

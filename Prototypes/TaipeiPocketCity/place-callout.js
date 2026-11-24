@@ -1,5 +1,6 @@
 import {morphPlaceCard} from './photo-pin-motion.js';
 import {originalPlacePhoto} from './place-photos.js';
+import {reviewedSavvyPosts} from './savvy-place-sources.js';
 
 export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
   const card=document.querySelector('#place-card');
@@ -9,8 +10,12 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
   const original=document.querySelector('#place-original');
   const fullImage=original.querySelector('img');
   const fullCredit=original.querySelector('a');
+  const photoIsCurrent=()=>currentPhoto&&(!currentPhoto.remote||Date.now()<currentPhoto.expiresAt);
   photoButton.addEventListener('click',()=>{
-    if(!currentPhoto)return;
+    if(!photoIsCurrent())return;
+    fullImage.referrerPolicy='no-referrer';
+    if(currentPhoto.remote)fullImage.crossOrigin='anonymous';
+    else fullImage.removeAttribute('crossorigin');
     fullImage.src=currentPhoto.src;
     fullImage.alt=currentPhoto.alt;
     original.querySelector('strong').textContent=name.textContent;
@@ -22,10 +27,13 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
   const kind=card.querySelector('.place-kind');
   const detail=card.querySelector('.place-detail');
   const source=card.querySelector('.place-source');
+  const postsList=card.querySelector('.savvy-posts');
+  const credit=card.querySelector('.photo-credit');
+  for(const link of [credit,fullCredit])link.addEventListener('click',event=>{if(!photoIsCurrent())event.preventDefault();});
   const name=card.querySelector('h3');
   const scene=map.getContainer();
   let anchor=null,trigger=null,currentPhoto=null,entering=false;
-  let pop,origin;
+  let pop,origin,expiryTimer,openSerial=0;
   function animateCard(reverse=false){
     pop?.cancel();
     const motion=morphPlaceCard(card,currentPhoto,origin,reverse);
@@ -71,6 +79,8 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
     reveal();
   }
   function close(restoreFocus=false){
+    openSerial++;
+    clearTimeout(expiryTimer);
     pop?.cancel();
     pop=null;
     const previous=trigger;
@@ -85,6 +95,64 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
     previous?.setAttribute('aria-expanded','false');
     if(restoreFocus)(previous?.isConnected?previous:map.getCanvas()).focus({preventScroll:true});
   }
+  function showPhoto(photo,fallback=null){
+    currentPhoto=photo;
+    photoImage.onerror=null;
+    photoButton.hidden=credit.hidden=!photo;
+    card.classList.toggle('has-photo',Boolean(photo));
+    if(!photo){photoImage.removeAttribute('src');return;}
+    photoButton.setAttribute('aria-label','查看'+name.textContent+'的完整照片');
+    photoImage.alt=photo.alt;
+    photoImage.referrerPolicy='no-referrer';
+    if(photo.remote)photoImage.crossOrigin='anonymous';
+    else photoImage.removeAttribute('crossorigin');
+    photoImage.onerror=()=>{showPhoto(fallback);position();};
+    photoImage.src=photo.src;
+    credit.textContent=(photo.remote?photo.credit:'攝影 '+photo.credit.split(' · ')[0])+' ↗';
+    credit.title=photo.credit;
+    credit.href=photo.url;
+  }
+  async function showPosts(place,serial,localPhoto){
+    const posts=await reviewedSavvyPosts(place);
+    if(serial!==openSerial)return;
+    const hadFocus=postsList.contains(document.activeElement);
+    postsList.replaceChildren();
+    const platformName={instagram:'Instagram',threads:'Threads'};
+    for(const post of posts){
+      const item=document.createElement('li');
+      const link=document.createElement('a');
+      link.href=post.url;
+      link.target='_blank';
+      link.rel='noopener noreferrer';
+      link.textContent=post.title||'查看'+platformName[post.platform]+'原文';
+      link.addEventListener('click',event=>{if(Date.now()>=post.expiresAt)event.preventDefault();});
+      const byline=document.createElement('small');
+      byline.textContent=platformName[post.platform]+(post.authorHandle?' · @'+post.authorHandle:'');
+      item.append(link,byline);
+      postsList.append(item);
+    }
+    postsList.hidden=posts.length===0;
+    if(hadFocus)closeButton.focus({preventScroll:true});
+    const featured=posts.find(post=>post.cover);
+    const coverExpiresAt=featured?Math.min(featured.expiresAt,featured.coverExpiry):undefined;
+    const sameOriginal=currentPhoto?.remote&&currentPhoto.src===featured?.cover
+      &&currentPhoto.url===featured?.url&&currentPhoto.expiresAt===coverExpiresAt;
+    if(currentPhoto?.remote&&!sameOriginal){
+      if(original.open)original.close();
+      fullImage.removeAttribute('src');
+      if(!featured)showPhoto(localPhoto);
+    }
+    if(featured&&!sameOriginal){
+      showPhoto({src:featured.cover,alt:featured.title||name.textContent,remote:true,url:featured.url,
+        expiresAt:coverExpiresAt,
+        credit:platformName[featured.platform]+(featured.authorHandle?' · @'+featured.authorHandle:'')},localPhoto);
+    }
+    position();
+    if(posts.length){
+      const expiry=Math.min(...posts.map(post=>post.expiresAt),featured?.coverExpiry??Infinity);
+      expiryTimer=setTimeout(()=>showPosts(place,serial,localPhoto),Math.min(2**31-1,Math.max(0,expiry-Date.now())));
+    }
+  }
   function open(place,button=null){
     close();
     anchor=place.point??null;
@@ -92,7 +160,8 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
     button?.setAttribute('aria-expanded','true');
     name.textContent=place.name||place.categoryLabel||'地點';
     kind.textContent=place.kind==='school-label'?'學校':place.categoryLabel??place.kind??'地點';
-    const street=(place.detail??'').replace(/[０-９0-9]+(?:[之－-][０-９0-9]+)?\s*號.*$/u,'').trim();
+    const street=place.source==='Savvy'?place.detail??''
+      :(place.detail??'').replace(/[０-９0-9]+(?:[之－-][０-９0-9]+)?\s*號.*$/u,'').trim();
     detail.textContent=street;
     detail.hidden=!street||street===kind.textContent;
     const choices=card.querySelector('.place-choices');
@@ -100,36 +169,17 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
     choices.hidden=!place.choices?.length;
     for(const candidate of place.choices??[]){
       const option=document.createElement('button');
-      option.type='button';option.textContent=candidate.name||candidate.categoryLabel||'地點';
+      option.type='button';option.textContent=(candidate.name||candidate.categoryLabel||'地點')
+        +(candidate.source==='Savvy'?' · Savvy 貼文':'');
       option.addEventListener('click',()=>open(candidate));
       choices.append(option);
     }
-    const photo=originalPlacePhoto(place,anchor);
-    currentPhoto=photo;
+    const photo=originalPlacePhoto(place);
     setExpandedPhoto(photo?.src??null);
-    photoImage.onerror=null;
-    photoButton.hidden=!photo;
-    card.classList.toggle('has-photo',Boolean(photo));
-    if(photo){
-      photoButton.setAttribute('aria-label','查看'+name.textContent+'的完整照片');
-      photoImage.alt=photo.alt;
-      photoImage.onerror=()=>{
-        photoButton.hidden=true;
-        card.classList.remove('has-photo');
-        position();
-      };
-      photoImage.src=photo.src;
-
-    }else{
-      photoImage.removeAttribute('src');
-    }
-    const credit=card.querySelector('.photo-credit');
-    credit.hidden=!photo;
-    if(photo){
-      credit.textContent='攝影 '+photo.credit.split(' · ')[0]+' ↗';
-      credit.title=photo.credit;
-      credit.href=photo.url;
-    }
+    showPhoto(photo);
+    postsList.hidden=true;
+    postsList.replaceChildren();
+    void showPosts(place,openSerial,photo);
     const url=place.url;
     source.hidden=!url;
     if(url){

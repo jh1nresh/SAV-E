@@ -1,11 +1,16 @@
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {photoPlaces} from './place-photos.js';
+import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
 
 const source='taipei-place-index';
 const names='taipei-place-names';
 const outdoorNames='taipei-outdoor-names';
 const nearby='taipei-place-neighbors';
-export const cityPlaceLayers=[names,outdoorNames,nearby];
+const savvySource='taipei-savvy-places';
+const savvyNames='taipei-savvy-place-names';
+const savvyNearby='taipei-savvy-place-neighbors';
+const savvyZoom=16;
+export const cityPlaceLayers=[savvyNames,names,outdoorNames,nearby];
 
 // Stable IDs distinguish the landmark itself from rentals and shops bearing the same name.
 const cityLandmarks=[
@@ -48,6 +53,7 @@ export function addCityPlaceIndex(map,pin){
     'text-size':['interpolate',['linear'],['zoom'],11,12.5,17,14,20,16],
     'text-padding':['interpolate',['linear'],['zoom'],11,25,14,24,16,17,17,10,19,5],
   };
+  map.addSource(savvySource,{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19});
   map.addLayer({id:names,source,type:'symbol',minzoom:11,maxzoom:17.8,
     filter:['all',named,['>=',['zoom'],revealZoom],['any',['<',['zoom'],16],['!',photoIds]]],
     layout,paint:pin.paint},before);
@@ -55,8 +61,12 @@ export function addCityPlaceIndex(map,pin){
   // outdoor areas represented by polygons in the detailed street packs.
   map.addLayer({id:outdoorNames,source,type:'symbol',minzoom:17.8,
     filter:['all',named,matches(category,outdoor)],layout,paint:pin.paint},before);
+  map.addLayer({id:savvyNames,source:savvySource,type:'symbol',minzoom:savvyZoom,
+    layout:{...layout,'text-optional':true},paint:pin.paint},before);
   // Query only after a visible street pin was selected, to disambiguate adjoining shops.
   map.addLayer({id:nearby,source,type:'circle',minzoom:16,filter:['!',photoIds],
+    paint:{'circle-radius':6,'circle-opacity':0}},before);
+  map.addLayer({id:savvyNearby,source:savvySource,type:'circle',minzoom:savvyZoom,
     paint:{'circle-radius':6,'circle-opacity':0}},before);
 
   let loading=false;
@@ -69,12 +79,32 @@ export function addCityPlaceIndex(map,pin){
   }
   map.on('moveend',load);
   load();
+
+  let loadingSavvy=false,removed=false,expiryTimer;
+  async function updateSavvy(){
+    const {featureCollection,nextExpiry}=await loadVerifiedSavvyMapPins();
+    if(removed)return;
+    const pinSource=map.getSource(savvySource);
+    if(!pinSource)return;
+    pinSource.setData(featureCollection);
+    if(Number.isFinite(nextExpiry))expiryTimer=setTimeout(updateSavvy,Math.min(2**31-1,Math.max(0,nextExpiry-Date.now())));
+  }
+  function loadSavvy(){
+    if(loadingSavvy||map.getZoom()<savvyZoom)return;
+    loadingSavvy=true;
+    map.off('moveend',loadSavvy);
+    void updateSavvy();
+  }
+  map.on('moveend',loadSavvy);
+  map.on('remove',()=>{removed=true;clearTimeout(expiryTimer);});
+  loadSavvy();
 }
 
 export function nearbyPlaces(map,coordinates){
   if(map.getZoom()<16||!map.getLayer(nearby))return [];
   const center=map.project(coordinates);
-  const hits=map.queryRenderedFeatures(center,{layers:[nearby]});
+  const layers=[nearby,savvyNearby].filter(id=>map.getLayer(id));
+  const hits=map.queryRenderedFeatures(center,{layers});
   const unique=new Map();
   for(const hit of hits){
     const p=hit.properties;

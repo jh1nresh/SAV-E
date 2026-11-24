@@ -125,6 +125,9 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 #place-card .place-links a {text-decoration:none}
 #place-card .place-links a:hover,#place-card .place-links a:focus-visible {text-decoration:underline}
 #place-card .photo-credit {color:#576252}
+#place-card .savvy-posts {list-style:none;padding:6px 0 0;margin:8px 0 0;border-top:1px solid #9eaa9466;max-height:110px;overflow:auto}
+#place-card .savvy-posts a {font-size:12px}
+#place-card .savvy-posts small {display:block;color:#576252}
 
 .place-photo {width:100%;padding:0;border:0;cursor:zoom-in;position:relative;display:block;border-radius:8px;overflow:hidden;background:var(--paper)}
 .place-photo img {display:block;width:100%;height:clamp(92px,16vh,155px);object-fit:cover}

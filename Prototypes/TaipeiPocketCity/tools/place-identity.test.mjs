@@ -12,10 +12,10 @@ test('each credited example resolves to its own bundled photo',async()=>{
   }
 });
 
-test('a different mapped branch at the same address stays text-only',()=>{
+test('a nearby same-name place needs the verified branch ID to show its photo',()=>{
   const {name, point}=photoPlaces[0];
   assert.equal(originalPlacePhoto({name,point,placeId:'poi/node/different'}),null);
   assert.equal(originalPlacePhoto({name,point,id:'poi/node/different'}),null);
-  assert.ok(originalPlacePhoto({name,point}));
+  assert.equal(originalPlacePhoto({name,point}),null);
   assert.equal(originalPlacePhoto({name:'無照片的地點',point}),null);
 });

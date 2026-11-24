@@ -5,3 +5,4 @@ __pycache__/
 *.p8
 *.pem
 *.key
+/savvy-place-sources.json

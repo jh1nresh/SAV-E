@@ -1,3 +1,5 @@
+import {cityPlaceID} from './savvy-place-sources.js';
+
 const entries = [
   {
     id: 'poi/node/7175344617',
@@ -40,17 +42,9 @@ export const photoPlaces = entries.map(({id, name, point, categoryLabel, detail}
   url: `https://www.openstreetmap.org/${id.slice(4)}`,
 }));
 
-export function originalPlacePhoto(place, point = place?.point) {
-  const id = place?.placeId ?? place?.id;
-  const name = typeof place?.name === 'string' ? place.name.normalize('NFKC').trim() : '';
-  const [lng, lat] = Array.isArray(point) ? point : [point?.lng, point?.lat];
-  const hasLocation = Number.isFinite(lng) && Number.isFinite(lat);
-  // A known map identity takes precedence over a nearby same-name branch.
-  const hasMapId = Boolean(place?.placeId || /^(?:poi|inspection|commerce)\//.test(id ?? ''));
-  const entry = entries.find(entry => entry.id === id || (!hasMapId &&
-    hasLocation && entry.name === name &&
-    Math.hypot((entry.point[0] - lng) * 100780, (entry.point[1] - lat) * 110800) <= 18
-  ));
+export function originalPlacePhoto(place) {
+  const id = cityPlaceID(place);
+  const entry = entries.find(entry => entry.id === id);
   if (!entry) return null;
   return {
     src: new URL(`./assets/place-photos/${entry.file}`, import.meta.url).href,
