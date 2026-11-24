@@ -7,6 +7,7 @@ import { checkStreetDrafts } from "./publicDiscoveryDraftEvidence.js";
 import { approvedSourceState, publishApprovedGeneration } from "./publicDiscoveryPublishGeneration.js";
 import { parsePublicSourceIntakeInventory } from "./publicDiscoverySaveIntake.js";
 import { writePublicSourceJSON } from "./publicDiscoverySaveQueue.js";
+import { renewApprovedSources, resumePendingSourceRenewal } from "./publicDiscoverySourceRenewal.js";
 import { defaultFetchText } from "./sourceSearchWorker.js";
 
 const minute = 60_000;
@@ -91,6 +92,7 @@ async function draftReports(root: string, inputs: string) {
 export async function maintainPublicSourceDrafts(root: string, descriptor: number, options: {
   clock?: () => Date;
   fetchEmbed?: (url: string) => Promise<string>;
+  renewExisting?: boolean;
 } = {}) {
   const state = approvedSourceState(root, descriptor);
   const { clock = () => new Date(), fetchEmbed = defaultFetchText } = options;
@@ -98,61 +100,80 @@ export async function maintainPublicSourceDrafts(root: string, descriptor: numbe
   const holdPath = join(state, "shared-provider-hold.json");
   const persistHold = (until: number, cadenceUntil: number) => writePublicSourceJSON(holdPath, { version: 1, until, cadenceUntil });
   const currentInventory = async () => (await trustedInputs(root).catch(absent))?.revision;
-  const recovered = await resumePendingDraftApproval(root, descriptor, clock, currentInventory);
-  const initialPublication = await publishApprovedGeneration(root, descriptor, clock);
+  const recovered = await resumePendingDraftApproval(root, descriptor, clock, currentInventory)
+    ?? await resumePendingSourceRenewal(root, descriptor, clock);
   const hold = await providerHold(state);
   const blockedUntil = Math.max(hold.until, hold.cadenceUntil);
   if (recovered || blockedUntil > +now) {
     const status = recovered ? "recovered" : hold.until > +now ? "provider_hold" : "cadence_wait";
     return { state: status, nextAllowedAt: Math.max(blockedUntil, +now + minute), requests: 0,
-      publication: initialPublication, ...(recovered ? { recovered } : {}) };
+      publication: await publishApprovedGeneration(root, descriptor, clock), ...(recovered ? { recovered } : {}) };
   }
   const checkpointPath = join(state, "street-worker.json");
   const checkpoint = await workerCheckpoint(checkpointPath);
   if (checkpoint.backoffUntil > +now) {
-    return { state: "provider_hold", nextAllowedAt: checkpoint.backoffUntil, requests: 0, publication: initialPublication };
+    return { state: "provider_hold", nextAllowedAt: checkpoint.backoffUntil, requests: 0,
+      publication: await publishApprovedGeneration(root, descriptor, clock) };
+  }
+  let requests = 0;
+  let cooldown = 0;
+  let holdFailure: unknown;
+  let fallbackHold = 0;
+  const providerPaused = () => holdFailure !== undefined || cooldown > +clock();
+  const readOriginal = async (url: string) => {
+    // Save a fallback hold before each cycle's first provider request.
+    if (holdFailure !== undefined) throw holdFailure;
+    if (providerPaused()) throw new Error("Public source provider is cooling down");
+    if (!requests) {
+      fallbackHold = +clock() + 60 * minute;
+      try { await persistHold(fallbackHold, 0); }
+      catch (error) { holdFailure = error; throw error; }
+    }
+    requests++;
+    try {
+      return await fetchEmbed(url);
+    } catch (error) {
+      const status = error instanceof Error ? /^(?:Provider )?HTTP (401|403|429)$/.exec(error.message)?.[1] : undefined;
+      if (status) {
+        cooldown = +clock() + (status === "429" ? 15 : 60) * minute;
+        try { await persistHold(Math.max(cooldown, fallbackHold), 0); }
+        catch (error) { holdFailure = error; }
+      }
+      throw error;
+    }
+  };
+  const finishWindow = async () => {
+    if (holdFailure !== undefined) throw holdFailure;
+    const nextAllowedAt = Math.max(+clock() + minute, cooldown);
+    if (requests) await persistHold(cooldown, nextAllowedAt);
+    return nextAllowedAt;
+  };
+  const renewal = options.renewExisting ? await renewApprovedSources(root, descriptor, {
+    clock, fetchEmbed: readOriginal, providerPaused,
+  }) : undefined;
+  if (holdFailure !== undefined) throw holdFailure;
+  const initialPublication = await publishApprovedGeneration(root, descriptor, clock);
+  const renewalResult = renewal ? { renewal } : {};
+  if (providerPaused()) {
+    return { state: "provider_hold", nextAllowedAt: await finishWindow(), requests, publication: initialPublication, ...renewalResult };
   }
   const inputs = await trustedInputs(root);
   const reports = await draftReports(root, inputs.revision);
   const changed = checkpoint.revision !== reports.revision;
   if (!changed && checkpoint.remaining === 0) {
-    return { state: "idle", nextAllowedAt: +now + minute, requests: 0, publication: initialPublication };
+    return { state: requests ? "checked" : "idle", nextAllowedAt: await finishWindow(), requests, publication: initialPublication, ...renewalResult };
   }
   const inventory = [...parsePublicSourceIntakeInventory(parse(inputs.inventory)).values()].map(venue => venue.place);
-  let requests = 0;
-  let cooldown = 0;
-  let holdFailure: unknown;
-  let fallbackHold = 0;
+  // Renewal can have activated a generation after this cycle started.
+  const draftAt = clock();
   const result = await approveReviewedDrafts(root, descriptor, {
-    now, clock, inventory: { revision: inputs.revision, currentRevision: currentInventory }, verify: async archive => {
+    now: draftAt, clock, inventory: { revision: inputs.revision, currentRevision: currentInventory }, verify: async archive => {
       const checked = await checkStreetDrafts(archive, reports.readReports(), inventory, {
-        now, cursor: checkpoint.cursor,
+        now: draftAt, cursor: checkpoint.cursor,
         maxOriginals: changed ? maxOriginals : Math.min(maxOriginals, checkpoint.remaining),
         localizedAddresses: inputs.localized ? parse(inputs.localized) : [],
         officialFeatures: inputs.official ? parse(inputs.official) : [],
-        fetchEmbed: async url => {
-          // Persist a conservative hold before reaching any provider. A killed
-          // process can complete local recovery while new requests stay paused.
-          if (holdFailure !== undefined) throw holdFailure;
-          if (cooldown > +clock()) throw new Error("Public source provider is cooling down");
-          if (!requests) {
-            fallbackHold = +clock() + 60 * minute;
-            try { await persistHold(fallbackHold, 0); }
-            catch (error) { holdFailure = error; throw error; }
-          }
-          requests++;
-          try {
-            return await fetchEmbed(url);
-          } catch (error) {
-            const status = error instanceof Error ? /^(?:Provider )?HTTP (401|403|429)$/.exec(error.message)?.[1] : undefined;
-            if (status) {
-              cooldown = +clock() + (status === "429" ? 15 : 60) * minute;
-              try { await persistHold(Math.max(cooldown, fallbackHold), 0); }
-              catch (error) { holdFailure = error; }
-            }
-            throw error;
-          }
-        },
+        fetchEmbed: readOriginal,
       });
       if (holdFailure !== undefined) throw holdFailure;
       if (await currentInventory() !== inputs.revision) throw new Error("Trusted source inventory changed during draft verification");
@@ -162,10 +183,9 @@ export async function maintainPublicSourceDrafts(root: string, descriptor: numbe
   const available = result.checked + result.deferred;
   const pending = changed ? available : Math.min(available, checkpoint.remaining);
   const consumed = result.checked - Number(cooldown > +now && result.checked > 0);
-  const nextAllowedAt = Math.max(+clock() + minute, cooldown);
   await writePublicSourceJSON(checkpointPath, { revision: reports.revision, remaining: Math.max(0, pending - consumed),
     cursor: result.nextCursor, backoffUntil: cooldown });
-  if (requests) await persistHold(cooldown, nextAllowedAt);
+  const nextAllowedAt = await finishWindow();
   const publication = result.activated ? await publishApprovedGeneration(root, descriptor, clock) : initialPublication;
-  return { state: "checked", nextAllowedAt, requests, approval: result, publication };
+  return { state: "checked", nextAllowedAt, requests, approval: result, publication, ...renewalResult };
 }
