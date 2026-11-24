@@ -1,5 +1,5 @@
 import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
-import {streetShopPinStyle} from './shop-trades.js?v=street-docks-2';
+import {streetShopPinStyle} from './shop-trades.js?v=service-windows-4';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
 
 const name = ['coalesce', ['get', 'name'], ''];
@@ -152,7 +152,8 @@ export function addCity170Style(map, sourceId, firstLabel) {
   const schools = map.getSource('city170-schools') ? 'city170-schools' : sourceId;
   const prepared = 'city170-prepared';
   const underRoads = map.getLayer('waterway_tunnel') ? 'waterway_tunnel' : firstLabel;
-  const underSand = map.getLayer('landcover_sand') ? 'landcover_sand' : underRoads;
+  // River art and the generic water layer load independently. Keep the illustration visible in either order.
+  const underRiver = ['taipei-river-art-shore', 'landcover_sand'].find(id => map.getLayer(id)) ?? underRoads;
   // Existing authored streets and survey buildings remain above the shared ground detail.
   const underStreet = layers.find(layer => /^street-.+-(road-edge|road|walk-edge|walk)$/.test(layer.id))?.id
     ?? (map.getLayer('atlas-shadows') ? 'atlas-shadows' : map.getLayer('survey') ? 'survey' : firstLabel);
@@ -204,7 +205,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'fill-outline-color': '#6ea7b3',
       'fill-opacity': fade(12.85, 15.2, 0.9),
     },
-  }, underSand);
+  }, underRiver);
   addSprite(map, 'city170-water-texture', drawWaterTexture, 128);
   add({
     id: 'city170-water-texture',
@@ -215,7 +216,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'fill-pattern': 'city170-water-texture',
       'fill-opacity': fade(17, 18.4, 0.68),
     },
-  }, underSand);
+  }, underRiver);
   for (const [id, color, width, opacity] of [
     ['shallows', '#b9d9bf', 2.8, 0.58],
     ['shoreline', '#629a9e', 0.85, 0.76],
@@ -231,7 +232,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
         'line-width': ['interpolate', ['linear'], ['zoom'], 17, width * 0.64, 20, width * 1.42],
         'line-opacity': fade(17, 18.15, opacity),
       },
-    }, underSand);
+    }, underRiver);
   }
   if(map.getSource('city170-farmland')){
     add({

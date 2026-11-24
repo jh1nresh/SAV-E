@@ -6,8 +6,8 @@ import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-equipment-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=ground-shops-2';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=street-docks-2';
-import {streetShopProperties} from './shop-trades.js?v=street-docks-2';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=waterfront-3';
+import {streetShopProperties} from './shop-trades.js?v=service-windows-4';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 
 const collection = features => ({type: 'FeatureCollection', features});

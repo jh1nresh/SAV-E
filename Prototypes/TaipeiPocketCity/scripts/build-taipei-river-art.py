@@ -13,7 +13,7 @@ import random
 import osmium
 from shapely import STRtree, from_wkb, get_parts, to_geojson, set_precision
 from shapely.affinity import affine_transform
-from shapely.geometry import LineString, Point, shape
+from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.ops import unary_union
 
 
@@ -110,11 +110,51 @@ def build(pbf, boundary):
                         echo = stroke(rng.uniform(2,4),span*.48)
                         if ink_surface.covers(echo):
                             emit(kind,echo,alpha)
+    # Broad, broken current ribbons sit underneath the fine strokes. Follow the local
+    # tangent from the existing brushwork and taper both ends to avoid a striped fill.
+    ribbons = random.Random(536)
+    water_parts = list(get_parts(surface))
+    water_tree = STRtree(water_parts)
+    for f in list(features):
+        if f['properties']['k'] != 'shade' or ribbons.random() > .36:
+            continue
+        line = metric(shape(f['geometry']))
+        start, end = line.coords[0], line.coords[-1]
+        angle = math.atan2(end[1]-start[1], end[0]-start[0])
+        ux, uy = math.cos(angle), math.sin(angle)
+        length, width = ribbons.uniform(12, 34), ribbons.uniform(1.3, 4.6)
+        bend = ribbons.uniform(-3.5, 3.5)
+        center = line.interpolate(.5, normalized=True)
+
+        def position(t, offset):
+            return (center.x + ux*length*t - uy*offset, center.y + uy*length*t + ux*offset)
+        steps = [i / 6 for i in range(-6, 7)]
+        def side(t, sign):
+            arc = math.sin(math.pi * (t+1)/2)
+            return position(t, arc*(bend*t + sign*width*.5))
+        ribbon = Polygon([side(t, 1) for t in steps] + [side(t, -1) for t in reversed(steps)])
+        if ribbon.is_valid:
+            for i in water_tree.query(ribbon, predicate='intersects'):
+                emit('current', ribbon.intersection(water_parts[i]), f['properties']['alpha'])
+
     # Only depict mapped landing structures physically adjoining these rivers.
     for pier in piers:
         if area.covers(pier) and water.distance(pier) <= 5:
             kind = 'pier-deck' if pier.geom_type in ('MultiPolygon', 'Polygon') else 'pier-walk'
-            emit(kind, pier, min(1, max(0, (850 - city.distance(pier)) / 240)))
+            opacity = min(1, max(0, (850 - city.distance(pier)) / 240))
+            emit(kind, pier, opacity)
+            if kind == 'pier-deck':
+                for deck in get_parts(pier):
+                    # Fine joints across the actual deck, perpendicular to its long axis.
+                    corners = list(deck.minimum_rotated_rectangle.exterior.coords)
+                    a, b = max(zip(corners, corners[1:]), key=lambda ab: math.dist(*ab))
+                    length = math.dist(a, b)
+                    ux, uy = (b[0]-a[0])/length, (b[1]-a[1])/length
+                    inset = deck.buffer(-.25)
+                    for distance in range(1, math.ceil(length), 2):
+                        x, y = a[0]+ux*distance, a[1]+uy*distance
+                        cross = LineString([(x+uy*length,y-ux*length),(x-uy*length,y+ux*length)])
+                        emit('deck-joint', cross.intersection(inset), opacity)
     with open(pbf, 'rb') as stream:
         source_hash = hashlib.file_digest(stream, 'sha256').hexdigest()
     return {'type': 'FeatureCollection', 'source': '© OpenStreetMap contributors, ODbL',

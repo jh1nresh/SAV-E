@@ -1,4 +1,5 @@
 // Street-scale glyphs refine existing POIs using declared trades only.
+import {serviceWindowLabels} from './shop-service-labels.js';
 import {shopCategories} from './shop-categories.js';
 import {bikeStationPlace} from './city170-bike-docks.js';
 import {registerPlaceBadge} from './place-pins.js?v=street-trades-1';
@@ -52,7 +53,7 @@ const byCategory=new Map(Object.values(trades).flatMap(item=>item.categories.map
 export function streetShopProperties(properties){
   if(properties.category==='bicycle_rental')return bikeStationPlace(properties);
   const key=properties.category;
-  const label=byCategory.get(key)?.name ?? (Object.hasOwn(shopCategories,key) ? shopCategories[key][0] : null);
+  const label=serviceWindowLabels.get(key) ?? byCategory.get(key)?.name ?? (Object.hasOwn(shopCategories,key) ? shopCategories[key][0] : null);
   if(!label || (properties.categoryLabel && properties.categoryLabel!==key))return properties;
   const localized={...properties,categoryLabel:label};
   if(localized.detail===key)localized.detail=label;

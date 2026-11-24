@@ -1,4 +1,6 @@
 import {storefrontCategory} from './shop-categories.js';
+import {drawServiceWindow} from './shop-service-windows.js';
+import {serviceWindowLabels} from './shop-service-labels.js';
 export {storefrontCategory};
 import {MercatorCoordinate} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
@@ -84,7 +86,7 @@ function cardFor(row){
   const source=row.source?.label??row.source?.name??(typeof row.source==='string'?row.source:undefined)
     ??(match?'OpenStreetMap':undefined);
   const label=typeof row.categoryLabel==='string'&&row.categoryLabel.trim();
-  const categoryLabel=label&&label!==row.category?label:storefrontCategory(row)[0];
+  const categoryLabel=label&&label!==row.category?label:serviceWindowLabels.get(row.category)??storefrontCategory(row)[0];
   return {id:row.id,name:row.name,categoryLabel,
     kind:'shopfront',detail:'店面位置與外觀為示意',source,url};
 }
@@ -127,6 +129,7 @@ const fixtureInk=rgb('#494845'), timber=rgb('#a87554'), porcelain=rgb('#f2dfb5')
   teal=rgb('#47877e'), leather=rgb('#ac6856'), petal=rgb('#d47774'), leaf=rgb('#688c5e');
 const enamel=rgb('#abccc1'), grape=rgb('#937796'), ochre=rgb('#d79e55'),
   crust=rgb('#bd8346'), sage=rgb('#5c927e'), berry=rgb('#b86d82');
+const servicePaint={ink:fixtureInk,wood:timber,cream:porcelain,glass:highlights,teal,leather,berry,ochre,sage,grape};
 // Polyfork's glass-door drinks fridge (0.8 × 1.9 m), dressing mirror (0.75 × 1.6 m)
 // and 0.18 × 0.14 m loaf inform the proportions. The mesh is drawn locally.
 function tradeWindow(trade, left, right, point, quad){
@@ -311,6 +314,8 @@ function tradeWindow(trade, left, right, point, quad){
       rod(-.068,.89,.068,.89,.055,.13,timber);
       for(const side of [-1,1])rod(side*.51,.89,side*.64,.94,.049,.13,timber);
       break;
+    default:
+      drawServiceWindow(trade,{face,slab,shape,rod,rim,bottle},servicePaint);
   }
 }
 
@@ -320,7 +325,7 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const tx=-ny,ty=nx;
   const half=clamp(row.width,1.5,9)*.5, top=3.25, offset=.14;
   const type=storefrontCategory(row)[1];
-  const trade=tradeWindows.get(row.category);
+  const trade=tradeWindows.get(row.category)??(serviceWindowLabels.has(row.category)?row.category:null);
   const paint=colored[tradePaint[trade]??type];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];

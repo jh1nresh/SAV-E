@@ -2,7 +2,7 @@ import {connectIOSMap} from './ios-map.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
-import {addTaipeiRiverArt} from './taipei-river-art.js?v=river-wash-2';
+import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-3';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
 import {addTaiwanCells} from './taiwan-cells.js?v=city-colour-3';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
@@ -20,9 +20,9 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=frontage-visibility-3';
-import {addCity170,dihuaSearch} from './city170.js?v=street-docks-2';
-import {addCityShopfronts} from './city-shopfronts.js?v=retail-windows-2';
+import {addShopSearch} from './city-shop-search.js?v=service-windows-4';
+import {addCity170,dihuaSearch} from './city170.js?v=waterfront-3';
+import {addCityShopfronts} from './city-shopfronts.js?v=service-windows-4';
 import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);

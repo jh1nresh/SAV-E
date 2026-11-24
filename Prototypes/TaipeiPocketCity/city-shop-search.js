@@ -1,5 +1,5 @@
 import {frontageCamera} from './fuxing-block.js?v=frontage-views-1';
-import {streetShopProperties} from './shop-trades.js?v=street-docks-2';
+import {streetShopProperties} from './shop-trades.js?v=service-windows-4';
 import {loadCityPlaces} from './city-place-index.js?v=ground-shops-2';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
