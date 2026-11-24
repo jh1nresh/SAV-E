@@ -156,3 +156,27 @@ test("a shorter feature alias inherits the context of its full name", async () =
   assert.deepEqual((await lookup(nearby)).counts.outcomes, { feature_name_unconfirmed: 1 });
   assert.equal((await lookup(nearby + "下午走進市立動物園。")).counts.admitted, 1);
 });
+
+test("a travel-time landmark or unvisited place does not produce venue evidence", async () => {
+  const street = ig("StreetLandmark");
+  const park = { ...place, providerPlaceID: "ParkLandmark", category: "attractions", name: "象山公園", address: "Taipei" };
+  const parkPost = ig("ParkLandmark");
+  const authority = "https://www.travel.taipei/zh-tw/attraction/details/380";
+  const feature = { provider: park.provider, providerPlaceID: park.providerPlaceID, expectedName: park.name,
+    catalogID: "Attraction_379000000A_000380", names: [park.name], authorityURLs: [authority] };
+  const articles = (store: string, attraction: string) => checkStreetDrafts(noArchive,
+    [{ place, candidates: [street] }, { place: park, candidates: [parkPost] }], [place, park], {
+      now, officialFeatures: [feature],
+      fetchEmbed: async url => url.includes("StreetLandmark")
+        ? embed(street.sourceURL, store)
+        : embed(parkPost.sourceURL, attraction + `<a href="${authority}">官方網站</a>`),
+    });
+  const falseEvidence = await articles(
+    `今天只去另一家咖啡店。步行五分鐘可到${place.name}，地標是${place.address}，我們沒有去。`,
+    "今天只去了一間咖啡店，走路五分鐘可到象山公園，但我們沒去公園。"
+  );
+  assert.deepEqual(falseEvidence.verified, []);
+  assert.deepEqual(falseEvidence.counts.outcomes, { name_unconfirmed: 1, feature_name_unconfirmed: 1 });
+  const direct = await articles(caption, "從捷運走了五分鐘抵達象山公園散步。");
+  assert.equal(direct.counts.admitted, 2);
+});

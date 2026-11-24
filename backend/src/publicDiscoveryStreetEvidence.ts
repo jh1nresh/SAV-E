@@ -1,3 +1,4 @@
+import { hasDirectPublicPlaceMention } from "./publicDiscoveryMentionEvidence.js";
 import type { PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { publicPostEvidenceFingerprint, readPublicPostForVenueReview } from "./publicPostReverification.js";
 
@@ -54,7 +55,7 @@ export function classifyTaipeiStreetCaption(
   if (paths.size !== 1 || abbreviatedAddress.test(text.replace(new RegExp(address, "gu"), "|"))) return "ambiguous_address";
   if (!paths.has(target)) return "different_branch";
   const name = normalize(place.name);
-  if (Array.from(name).length < 4 || !text.includes(name)) return "name_unconfirmed";
+  if (Array.from(name).length < 4 || !hasDirectPublicPlaceMention(text, [name])) return "name_unconfirmed";
   return "exact_street_match";
 }
 

@@ -1,3 +1,4 @@
+import { hasDirectPublicPlaceMention } from "./publicDiscoveryMentionEvidence.js";
 import type { PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { publicPostEvidenceFingerprint, readPublicPostForVenueReview } from "./publicPostReverification.js";
 
@@ -7,8 +8,6 @@ const authorityHosts = new Set([...cities, "www.gov.taipei", "www.post.gov.tw", 
 const featureKey = /^Attraction_379000000A_([0-9]{6})$/u;
 const featurePath = /^\/zh-tw\/attraction\/details\/([1-9][0-9]{0,5})\/?$/u;
 const transientContext = /跨年|多元舞台|觀音祭|集章|踩街|限時|快閃|報名|抽獎|開幕記者會|搬遷|舊址|停業/u;
-const neighbourBefore = /(?:靠近|鄰近|临近|接近|距離|距离|距|離|离|近|near|nearby|opposite|nextto|acrossfrom|around)[「『“"'（(【]*$/u;
-const neighbourAfter = /^[「」『』“”"'【】()[\]的]*(?:附近|旁|邊的|邊上|对面|正?對面|隔壁|周邊|週邊|周边|周圍|周围|一帶|nearby|opposite|nextto|acrossfrom)/u;
 const visibleURL = /https:\/\/[^\s<>"'。。，、！？；）】]+/gu;
 
 type FeatureProof = { catalogNumber: number; names: string[]; urls: Set<string> };
@@ -71,19 +70,6 @@ export function readTaipeiFeatureProof(raw: unknown, place: PublicDiscoveryPlace
   return { catalogNumber, names, urls };
 }
 
-function directlyNamesFeature(body: string, names: string[]): boolean {
-  const compact = normalize(body);
-  // Validated names contain Han characters and digits only. Match the full name
-  // before any nested alias so both use the same surrounding context.
-  const aliases = new RegExp([...names].sort((a, b) => b.length - a.length).join("|"), "gu");
-  for (const match of compact.matchAll(aliases)) {
-    const before = compact.slice(0, match.index);
-    const after = compact.slice(match.index + match[0].length);
-    if (!neighbourBefore.test(before) && !neighbourAfter.test(after)) return true;
-  }
-  return false;
-}
-
 export function verifyPublicTaipeiCatalogCandidate(input: {
   html: string; platform: Platform; sourceURL: string; author?: string; place: PublicDiscoveryPlace; proof: FeatureProof;
 }) {
@@ -91,7 +77,7 @@ export function verifyPublicTaipeiCatalogCandidate(input: {
   const original = readPublicPostForVenueReview(html, platform, sourceURL, author);
   if (!original) return { status: "original_unavailable" as const };
   if (transientContext.test(original.body)) return { status: "time_or_relocation" as const };
-  if (!directlyNamesFeature(original.body, proof.names)) return { status: "feature_name_unconfirmed" as const };
+  if (!hasDirectPublicPlaceMention(normalize(original.body), proof.names)) return { status: "feature_name_unconfirmed" as const };
   let hasProof = false;
   const links = [...original.bodyLinks, ...original.body.matchAll(visibleURL)].map(value =>
     authorityLink(typeof value === "string" ? value : value[0]));
