@@ -20,8 +20,8 @@
         "providerPlaceID": "H2710I3F98C59235879",
         "name": "二本松涮涮屋 本館",
         "address": "台北市大安區瑞安街118號",
-        "latitude": 25.026759,
-        "longitude": 121.546355,
+        "latitude": 25.0296508,
+        "longitude": 121.5425305,
         "coordinateSystem": "WGS84",
         "category": "food"
       },
@@ -32,10 +32,10 @@
           "authorHandle": "mardi.130",
           "title": "二本松本館雲丹和牛宴",
           "review": {
-            "checkedAt": "2026-11-18T21:42:11.326Z",
+            "checkedAt": "2026-11-21T11:36:59.856Z",
             "origin": "public_web_index",
             "branchEvidence": "The public captioned Instagram embed by mardi.130 explicitly names 二本松涮涮屋 本館 and No. 118, Rui’an Street, Da’an. MapKit and the public FunNow main-branch listing resolve the same address.",
-            "contentFingerprint": "98e6ecc7f5aac9a473d346d4bd426af3a8d092778065097118e124ffa3adf9af",
+            "contentFingerprint": "d1a6ec1c7f91524e7d54fb915474f58f2d00ea424c9d8ecd20ee84c2c5c37a87",
             "publishedAt": "2026-11-08T09:07:14.000Z"
           }
         },
@@ -45,10 +45,10 @@
           "authorHandle": "twoboysfoods",
           "title": "二本松的七道海膽料理",
           "review": {
-            "checkedAt": "2026-11-18T21:42:11.326Z",
+            "checkedAt": "2026-11-21T11:36:59.856Z",
             "origin": "public_web_index",
             "branchEvidence": "The public captioned Instagram embed by twoboysfoods names 二本松涮涮屋 and No. 118, Rui’an Street. Its restaurant phone also matches published main-branch listings.",
-            "contentFingerprint": "42a5980e382a5dd78fbfc27aef88144b663c3ca38aa09effec90bc0790e72a26",
+            "contentFingerprint": "8212b534ff34a5b4b1ac2302707376eef70ceffe426066d5c8138e8f72fb655f",
             "publishedAt": "2026-10-25T10:03:09.000Z"
           }
         },
@@ -58,10 +58,10 @@
           "authorHandle": "pio.jio_twins",
           "title": "二本松北海道海膽宴食記",
           "review": {
-            "checkedAt": "2026-11-18T21:42:11.326Z",
+            "checkedAt": "2026-11-21T11:36:59.856Z",
             "origin": "public_web_index",
             "branchEvidence": "The public captioned Instagram embed by pio.jio_twins identifies 二本松涮涮屋 at No. 118, Rui’an Street, Longtu Village, Da’an, matching the main branch.",
-            "contentFingerprint": "eb50090db7ba99fc67b48cd9b4f9705adbac741e49f5ce8f1730aca4e13ca7da",
+            "contentFingerprint": "f2818c38fc525c8903708f93fe3e6539cf3b3542d10c77034d3fb14534f8135d",
             "publishedAt": "2026-10-17T09:14:44.000Z"
           }
         },
@@ -73,13 +73,14 @@
           "title": "啊潔分享二本松本館北海道海膽宴",
           "review": {
             "origin": "public_web_index",
-            "checkedAt": "2026-11-19T20:05:37.000Z",
+            "checkedAt": "2026-11-21T11:36:59.856Z",
             "publishedAt": "2026-10-16T12:04:28.000Z",
             "publicLikes": {
               "count": 75,
               "observedAt": "2026-11-19T20:05:37.000Z"
             },
-            "branchEvidence": "The Threads reply names Er Ben Song Shabu and the newly launched Hokkaido sea urchin dinner. The same author’s Instagram post https://www.instagram.com/p/DelwydEGdeN/ explicitly identifies No. 118 Rui’an Street. Its photos 2 and 7 match the Threads parent’s photos 3 and 2, respectively, showing the same sea urchin box and the same rice bowl. The FunNow main-branch listing https://www.myfunnow.com/en/branches/3025998847248 confirms No. 118. The matched photos were checked separately."
+            "contentFingerprint": "threads-parent-v1:5953e2f2ba9f8cfe0f923326472dc7fbd2404c49b83f017e4d710eca8cfa11e2",
+            "branchEvidence": "The Threads reply names Er Ben Song Shabu and the newly launched Hokkaido sea urchin dinner. The same author’s Instagram post https://www.instagram.com/p/DelwydEGdeN/ explicitly identifies No. 118 Rui’an Street. Its photos 2 and 7 match the Threads parent’s photos 3 and 2, respectively, showing the same sea urchin box and the same rice bowl. The FunNow main-branch listing https://www.myfunnow.com/en/branches/3025998847248 confirms No. 118. The fingerprint binds the reply and parent text. The matched photos were checked separately."
           }
         }
       ]
