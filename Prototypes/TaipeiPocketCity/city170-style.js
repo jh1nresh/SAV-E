@@ -1,5 +1,5 @@
 import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
-import {streetShopPinStyle} from './shop-trades.js';
+import {streetShopPinStyle} from './shop-trades.js?v=street-docks-2';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
 
 const name = ['coalesce', ['get', 'name'], ''];
@@ -467,7 +467,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'line-opacity':fade(17,18,.92)},
   },underBuildings);
   add({
-    id:'city170-court-equipment',source:'city170-equipment',type:'fill-extrusion',minzoom:18.5,filter:kinds('court-equipment'),
+    id:'city170-court-equipment',source:'city170-equipment',type:'fill-extrusion',minzoom:18.5,filter:kinds('court-equipment','bike-dock'),
     paint:{'fill-extrusion-base':['get','base'],'fill-extrusion-height':['get','top'],
       'fill-extrusion-color':['get','color'],'fill-extrusion-vertical-gradient':false},
   },firstLabel);

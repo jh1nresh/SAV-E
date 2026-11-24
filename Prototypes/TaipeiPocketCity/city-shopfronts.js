@@ -1,3 +1,5 @@
+import {storefrontCategory} from './shop-categories.js';
+export {storefrontCategory};
 import {MercatorCoordinate} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
 import {drawDihuaShop} from './dihua-shop-art.js?v=dihua-shops-1';
@@ -58,23 +60,6 @@ const drawing={
   optical: ['#65848a','#506467','#ad9e86','#92aba9','plain'],
   retail: ['#786c58','#5c5a52','#a28d7c','#829991','plain'],
 };
-const categories={
-  inspection_store:['餐飲店家','meal'],restaurant:['餐廳','meal'],fast_food:['速食','meal'],food_court:['美食廣場','meal'],
-  cafe:['咖啡店','cafe'],ice_cream:['冰品店','cafe'],bakery:['烘焙店','cafe'],
-  bar:['酒吧','meal'],pub:['酒館','meal'],tea:['茶店','cafe'],
-  convenience:['便利商店','grocery'],supermarket:['超級市場','grocery'],grocery:['雜貨店','grocery'],
-  greengrocer:['蔬果店','grocery'],butcher:['肉品店','grocery'],seafood:['海產店','grocery'],
-  confectionery:['糖果甜點店','grocery'],general:['商店','grocery'],mall:['商場','grocery'],
-  clothes:['服飾店','apparel'],shoes:['鞋店','apparel'],boutique:['精品店','apparel'],
-  cosmetics:['美妝店','apparel'],hairdresser:['髮廊','apparel'],beauty:['美容店','apparel'],
-  pharmacy:['藥局','health'],chemist:['藥妝店','health'],optician:['眼鏡店','health'],
-  books:['書店','craft'],stationery:['文具店','craft'],gift:['禮品店','craft'],
-  department_store:['百貨公司','grocery'],florist:['花店','grocery'],bicycle:['自行車店','craft'],
-  hardware:['五金行','craft'],electronics:['電子用品店','craft'],jewelry:['珠寶店','apparel'],
-  car:['汽車展售店','retail'],beverages:['飲料店','grocery'],coffee:['咖啡專賣店','grocery'],pastry:['西點店','cafe'],
-  deli:['熟食店','grocery'],food:['食品行','grocery'],alcohol:['酒類專賣店','grocery'],wine:['葡萄酒專賣店','grocery'],
-  chocolate:['巧克力店','grocery'],nuts:['堅果店','grocery'],pasta:['麵食專賣店','grocery'],health_food:['健康食品店','grocery'],
-};
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const colored=Object.fromEntries(Object.entries(drawing).map(([key,values])=>{
   const [fascia,frame,wall,glass]=values.slice(0,4).map(rgb);
@@ -83,10 +68,7 @@ const colored=Object.fromEntries(Object.entries(drawing).map(([key,values])=>{
 const cream=rgb('#f3dfb6'), stone=rgb('#b5a597'), highlights=rgb('#a6bbb1');
 const stock=['#c58866','#d7b475','#659185','#9c7890','#8099ad'].map(rgb);
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
-export function storefrontCategory({category,categoryLabel}){
-  if(category==='commerce_store'&&categoryLabel==='餐飲店家')return ['餐飲店家','meal'];
-  return Object.hasOwn(categories,category)?categories[category]:['店家','retail'];
-}
+
 
 function shopRow(row){
   return row && typeof row.id==='string' && row.id && typeof row.name==='string' && row.name.trim() &&
@@ -136,11 +118,17 @@ function nameAtlas(map, count, maxTexture){
 const tradeWindows = new Map([
   ['hairdresser','salon'], ['florist','flowers'], ['bicycle','cycle'],
   ['cafe','espresso'], ['coffee','coffee-stock'], ['restaurant','dining'], ['fast_food','dining'],
-  ['optician','glasses'],
+  ['optician','glasses'], ['convenience','cooler'], ['supermarket','checkout'],
+  ['clothes','garments'], ['bakery','bread'], ['pastry','pastries'],
+  ['beverages','bottles'], ['chemist','drugstore'],
 ]);
 const tradePaint={salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe'};
 const fixtureInk=rgb('#494845'), timber=rgb('#a87554'), porcelain=rgb('#f2dfb5'),
   teal=rgb('#47877e'), leather=rgb('#ac6856'), petal=rgb('#d47774'), leaf=rgb('#688c5e');
+const enamel=rgb('#abccc1'), grape=rgb('#937796'), ochre=rgb('#d79e55'),
+  crust=rgb('#bd8346'), sage=rgb('#5c927e'), berry=rgb('#b86d82');
+// Polyfork's glass-door drinks fridge (0.8 × 1.9 m), dressing mirror (0.75 × 1.6 m)
+// and 0.18 × 0.14 m loaf inform the proportions. The mesh is drawn locally.
 function tradeWindow(trade, left, right, point, quad){
   const middle=(left+right)/2;
   // Real-world proportions survive narrow storefronts. The display sits above its sill.
@@ -164,7 +152,97 @@ function tradeWindow(trade, left, right, point, quad){
       rod(x+r*Math.cos(a),y+r*Math.sin(a),x+r*Math.cos(b),y+r*Math.sin(b),r*.19,d,color);
     }
   }
+  function bottle(x,bottom,height,d,color){
+    const shoulder=bottom+height*.69, neck=bottom+height*.83;
+    const w=height*.20;
+    face(x-w,x+w,bottom,shoulder,d,color);
+    shape([[x-w,shoulder],[x+w,shoulder],[x+w*.45,neck],[x-w*.45,neck]],d,color);
+    face(x-w*.45,x+w*.45,neck,bottom+height,d,porcelain);
+  }
   switch(trade){
+    case 'cooler':
+      slab(-.34,.34,.015,1.63,.19,fixtureInk);
+      face(-.29,.29,.11,1.44,.194,enamel);
+      face(-.27,.27,1.48,1.57,.201,porcelain);
+      for(const shelf of [.29,.78]){
+        face(-.27,.27,shelf-.04,shelf,.207,porcelain);
+        for(const [x,color] of [[-.17,ochre],[0,teal],[.17,berry]])bottle(x,shelf,.32,.212,color);
+      }
+      face(.26,.30,.67,.99,.232,fixtureInk);
+      break;
+    case 'checkout':
+      // A basket with an open handle sits on the belt next to the tilted terminal.
+      slab(-.74,.73,.04,.56,.21,sage);
+      slab(-.77,.76,.56,.64,.26,fixtureInk);
+      shape([[-.65,.88],[-.13,.88],[-.19,.65],[-.59,.65]],.19,ochre);
+      rod(-.58,.88,-.48,1.04,.034,.20,fixtureInk);
+      rod(-.48,1.04,-.28,1.04,.034,.20,fixtureInk);
+      rod(-.28,1.04,-.20,.88,.034,.20,fixtureInk);
+      for(const x of [-.51,-.39,-.27])face(x-.022,x+.022,.71,.82,.20,porcelain);
+      face(.34,.43,.64,.85,.14,fixtureInk);
+      shape([[.18,.84],[.53,.80],[.55,1.03],[.20,1.07]],.18,enamel);
+      break;
+    case 'garments':
+      // A dressed tailor's form on a foot, with a tall mirror behind it.
+      slab(-.69,-.08,.09,1.48,.10,timber);
+      face(-.64,-.13,.17,1.42,.105,highlights);
+      rod(-.58,.76,-.21,1.23,.045,.112,porcelain);
+      slab(.02,.58,.015,.08,.19,fixtureInk);
+      face(.27,.33,.08,.93,.13,timber);
+      face(.24,.36,1.29,1.52,.12,timber);
+      shape([[-.01,1.28],[.13,1.40],[.47,1.40],[.61,1.28]],.18,grape);
+      shape([[.09,1.28],[.51,1.28],[.44,1.03],[.16,1.03]],.18,grape);
+      shape([[.16,1.03],[.44,1.03],[.57,.56],[.03,.56]],.19,grape);
+      rod(.20,1.385,.30,1.32,.031,.195,porcelain);
+      rod(.30,1.32,.40,1.385,.031,.195,porcelain);
+      break;
+    case 'bread':
+    case 'pastries':{
+      const isBread=trade==='bread';
+      // Two timber trays or a chilled pastry counter, with stock above the tray lip.
+      slab(-.73,.73,.08,.37,.21,isBread?timber:sage);
+      for(const shelf of [.43,.91]){
+        slab(-.69,.69,shelf-.055,shelf,.23,isBread?crust:porcelain);
+        for(const x of [-.43,0,.43]){
+          if(isBread){
+            face(x-.12,x+.12,shelf,shelf+.08,.16,crust);
+            shape([[x-.12,shelf+.08],[x+.12,shelf+.08],
+              [x+.075,shelf+.15],[x-.075,shelf+.15]],.16,ochre);
+            rod(x-.045,shelf+.085,x+.003,shelf+.136,.022,.17,porcelain);
+          }else{
+            face(x-.13,x+.13,shelf,shelf+.10,.16,crust);
+            shape([[x-.13,shelf+.10],[x+.13,shelf+.10],
+              [x+.13,shelf+.18],[x-.13,shelf+.15]],.17,porcelain);
+            face(x-.026,x+.026,shelf+.15,shelf+.22,.18,berry);
+          }
+        }
+      }
+      if(!isBread){
+        rod(-.70,.38,-.70,1.26,.031,.25,enamel);
+        rod(.70,.38,.70,1.26,.031,.25,enamel);
+        face(-.70,.70,1.24,1.28,.25,enamel);
+      }
+      break;
+    }
+    case 'bottles':
+      for(const shelf of [.24,.86]){
+        slab(-.69,.69,shelf-.07,shelf,.20,timber);
+        for(const [x,h,color] of [[-.43,.35,sage],[-.14,.42,ochre],[.16,.32,berry],[.44,.39,teal]]){
+          bottle(x,shelf,h,.15,color);
+        }
+      }
+      break;
+    case 'drugstore':
+      for(const shelf of [.35,.83]){
+        slab(-.67,.67,shelf-.045,shelf,.17,enamel);
+        for(const [x,color] of [[-.47,sage],[-.15,berry],[.18,ochre],[.47,teal]]){
+          face(x-.08,x+.08,shelf,shelf+.30,.15,porcelain);
+          face(x-.08,x+.08,shelf+.17,shelf+.23,.158,color);
+        }
+      }
+      bottle(-.27,1.13,.29,.15,berry);
+      bottle(.22,1.13,.36,.15,sage);
+      break;
     case 'salon':
       face(-.52,.52,.65,1.59,.063,timber);
       face(-.45,.45,.72,1.52,.071,highlights);

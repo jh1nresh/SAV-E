@@ -2,11 +2,12 @@ import {withShopFacts} from './taipei-frontage-pack.js?v=ground-shops-2';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
 import {surfaceFeature} from './city170-ground.js';
+import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-equipment-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=ground-shops-2';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=river-streets-2';
-import {streetShopProperties} from './shop-trades.js';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=street-docks-2';
+import {streetShopProperties} from './shop-trades.js?v=street-docks-2';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 
 const collection = features => ({type: 'FeatureCollection', features});
@@ -434,7 +435,10 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       updateStores(map.getZoom() >= 18.15 ? features.filter(f => f.properties.kind === 'poi').map(f => f.id) : []);
       const equipment=[], playingAreas=[], detailedPitchIds=new Set();
       if(map.getZoom()>=17)for(const feature of features){
-        if(feature.properties.kind!=='pitch')continue;
+        if(feature.properties.kind!=='pitch'){
+          if(map.getZoom()>=18.5 && feature.properties.category==='bicycle_rental')equipment.push(...bikeDockParts(feature));
+          continue;
+        }
         const [painted,...parts]=courtDetails(feature,map.getZoom()>=18.5);
         if(painted){
           detailedPitchIds.add(feature.id);

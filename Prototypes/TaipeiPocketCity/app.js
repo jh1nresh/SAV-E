@@ -10,9 +10,9 @@ import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
 import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
-import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
+import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=palace-alignment-1';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=survey-wall-frames-1';
 import {addStreetDetail} from './street-detail.js?v=category-badges-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
@@ -20,9 +20,9 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=ground-shops-2';
-import {addCity170,dihuaSearch} from './city170.js?v=river-streets-2';
-import {addCityShopfronts} from './city-shopfronts.js?v=street-fronts-3';
+import {addShopSearch} from './city-shop-search.js?v=frontage-visibility-3';
+import {addCity170,dihuaSearch} from './city170.js?v=street-docks-2';
+import {addCityShopfronts} from './city-shopfronts.js?v=retail-windows-2';
 import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);
@@ -546,17 +546,15 @@ try{
       if(!place.placeId || !shopfronts?.openNamedPlace(place.placeId))streetDetail.openMappedPlace(place);
     };
     atlas170=addCity170(map,firstLabel,openMapLabel,setPreparedGround,streetDetail.setMappedStores,localLife,streetDetail.authoredRoads,streetDetail.hasFocalPin,preview.get('dihua')!=='before'?layer:null,cityNature,ids=>shopfronts?.setPacks(ids));
-    const focusFront=(card,x,y,angle)=>{
-      if(previousFronts||!inFuxing(x,y))return false;
-      locate(frontageCamera(x,y,angle));
-      streetDetail.openMappedPlace({...card,...(card.id===bookstoreId?bookshopEvidence:{}),point:[x,y]});
+    const focusBookshop=(card,x,y)=>{
+      if(previousFronts||card.id!==bookstoreId)return false;
+      locate(bookshopView);
+      streetDetail.openMappedPlace({...card,...bookshopEvidence,point:[x,y]});
       return true;
     };
     addShopSearch(map,locate,dihuaSearch,streetDetail.openMappedPlace,row=>{
-      const [name,district,street,x,y,angle,id]=row;
-      const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
-      return focusFront({id,name,kind:'shopfront',categoryLabel:'臨街店面',detail:[district,street].filter(Boolean).join(' · '),
-        source:osm?'OpenStreetMap':undefined,url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:undefined},x,y,angle);
+      const [name,,,x,y,,id,place]=row;
+      return focusBookshop({...place,id,name},x,y);
     },async (query,center)=>{
       const entries=await searchTaiwanEntries(query,center);
       const street=worldAtlas?.rows.find(row=>row.id==='jiufen-shuqi');
@@ -565,7 +563,7 @@ try{
       return entries;
     });
     shopfronts=addCityShopfronts(map,(card,row)=>{
-      if(!focusFront(card,...row.center,row.angle))streetDetail.openMappedPlace({...card,point:row.center});
+      if(!focusBookshop(card,...row.center))streetDetail.openMappedPlace({...card,point:row.center});
     },firstLabel,ids=>{
       const ready=ids.includes(bookstoreId);
       if(ready!==bookWallReady){bookWallReady=ready;requestAnimationFrame(updateFrontageView);}
