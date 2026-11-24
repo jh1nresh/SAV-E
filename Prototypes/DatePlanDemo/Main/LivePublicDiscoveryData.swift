@@ -58,7 +58,8 @@ struct LivePublicDiscoveryVenueKey: Hashable, Sendable {
     static let requestHeaders = [
         "x-savvy-discovery-associations": "1",
         "x-savvy-discovery-google-venues": "1",
-        "x-savvy-discovery-catalog-venues": "1"
+        "x-savvy-discovery-catalog-venues": "1",
+        "x-savvy-discovery-large-index": "1"
     ]
 
     private static let catalogCategories = [
@@ -256,9 +257,9 @@ struct LivePublicDiscoveryPage: Codable, Sendable {
               nextCursor == nil || nextCursor!.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil,
               coverage.count == 3, Set(coverage.map(\.platform)) == LivePublicDiscoveryPolicy.platforms,
               coverage.allSatisfy({ row in
-                  ["connected", "not_connected"].contains(row.status) && (0...5_000).contains(row.indexedPostCount)
+                  ["connected", "not_connected"].contains(row.status) && row.indexedPostCount >= 0
                     && (row.status == "connected" || row.indexedPostCount == 0)
-              }), coverage.reduce(0, { $0 + $1.indexedPostCount }) <= 5_000 else {
+              }) else {
             throw LivePublicDiscoveryValidationError.invalidPage
         }
         var validatedPosts: [LivePublicDiscoveryPost] = []
@@ -366,7 +367,7 @@ struct LivePublicDiscoveryVenue: Identifiable, Equatable, Sendable {
 
     /// Call with validated pages only. Cross-page venue conflicts must also fail closed.
     fileprivate static func grouping(_ posts: [LivePublicDiscoveryPost]) throws -> [Self] {
-        guard posts.count <= 5_000, Set(posts.map(\.associationKey)).count == posts.count else {
+        guard Set(posts.map(\.associationKey)).count == posts.count else {
             throw LivePublicDiscoveryValidationError.invalidPage
         }
         var places: [String: LivePublicDiscoveryPlace] = [:]
@@ -472,9 +473,12 @@ struct LivePublicDiscoveryValidatedPage: Sendable {
         guard coverage.allSatisfy({ row in combined.filter { $0.platform == row.platform }.count <= row.indexedPostCount }) else {
             throw LivePublicDiscoveryValidationError.invalidContinuation
         }
-        let dates = Dictionary(uniqueKeysWithValues: combined.map { ($0.associationKey, LivePublicDiscoveryPolicy.date($0.verifiedAt)!) })
+        var dates: [String: Date] = [:]
+        for post in combined where dates[post.verifiedAt] == nil {
+            dates[post.verifiedAt] = LivePublicDiscoveryPolicy.date(post.verifiedAt)!
+        }
         combined.sort {
-            let left = dates[$0.associationKey]!, right = dates[$1.associationKey]!
+            let left = dates[$0.verifiedAt]!, right = dates[$1.verifiedAt]!
             return left == right ? $0.associationKey.lexicographicallyPrecedes($1.associationKey) : left > right
         }
         return try Self(indexRevision: indexRevision, generatedAt: generatedAt,
