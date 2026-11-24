@@ -1,4 +1,7 @@
+import {surfaceFeature} from './city170-ground.js';
 import {buildFuxingFront} from './fuxing-fronts.js';
+import {completeFrontagePack} from './taipei-frontage-pack.js';
+import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
 
 const tileSize = 256;
 const minimumZ = 16;
@@ -91,7 +94,7 @@ function prepareFeatures({features}) {
   const art = [];
   for (const row of features.features) {
     const {kind} = row.properties;
-    if (!paintKinds.has(kind)) continue;
+    if (!paintKinds.has(kind) || (kind==='pitch' && surfaceFeature(row).properties.offGround)) continue;
     if (kind === 'tree' && row.geometry.type === 'Point') {
       const point = mercator(row.geometry.coordinates);
       art.push({id: row.id, kind, point, bounds: [...point, ...point]});
@@ -313,7 +316,7 @@ export function addPocketArt(map, mapkit, onState = () => {}) {
     const response = await fetch(url, {signal: lifetime.signal});
     if (!response.ok) throw Error('Pocket City asset ' + response.status + ' ' + path);
     if (!path.endsWith('.gz')) return response.json();
-    return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+    return decodeMapJSON(response);
   }
   function empty(scale) {
     if (!blank.has(scale)) blank.set(scale, makeCanvas(scale));
@@ -330,8 +333,7 @@ export function addPocketArt(map, mapkit, onState = () => {}) {
       const rows = memo(packs, pack.id, 42, () => json('city170/' + pack.file).then(prepareFeatures));
       const shops = tile.z < 19 ? [] : memo(frontages, pack.id, 46, async () => {
         const items = await json('city170-frontages/' + pack.file);
-        if (!Array.isArray(items)) throw Error('Invalid Pocket City frontage pack');
-        return items;
+        return completeFrontagePack(pack.id,items);
       });
       return Promise.allSettled([rows, shops]);
     }));

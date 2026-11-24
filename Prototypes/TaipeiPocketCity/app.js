@@ -19,9 +19,9 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=alpine-1';
-import {addCity170,dihuaSearch} from './city170.js?v=category-badges-1';
-import {addCityShopfronts} from './city-shopfronts.js?v=named-pins-1';
+import {addShopSearch} from './city-shop-search.js?v=taipei-audit-1';
+import {addCity170,dihuaSearch} from './city170.js?v=taipei-audit-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=taipei-audit-1';
 import {CityNature} from './city-nature.js?v=alpine-1';
 
 const $=query=>document.querySelector(query);

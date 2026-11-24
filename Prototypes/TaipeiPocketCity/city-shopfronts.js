@@ -1,6 +1,8 @@
 import {MercatorCoordinate} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
 import {buildFuxingFront} from './fuxing-fronts.js';
+import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
+import {completeFrontagePack} from './taipei-frontage-pack.js';
 
 const minZoom=17.55;
 const layerId='city-shopfronts';
@@ -57,6 +59,9 @@ const categories={
   books:['書店','craft'],stationery:['文具店','craft'],gift:['禮品店','craft'],
   department_store:['百貨公司','grocery'],florist:['花店','grocery'],bicycle:['自行車店','craft'],
   hardware:['五金行','craft'],electronics:['電子用品店','craft'],jewelry:['珠寶店','apparel'],
+  car:['汽車展售店','retail'],beverages:['飲料店','grocery'],coffee:['咖啡專賣店','grocery'],pastry:['西點店','cafe'],
+  deli:['熟食店','grocery'],food:['食品行','grocery'],alcohol:['酒類專賣店','grocery'],wine:['葡萄酒專賣店','grocery'],
+  chocolate:['巧克力店','grocery'],nuts:['堅果店','grocery'],pasta:['麵食專賣店','grocery'],health_food:['健康食品店','grocery'],
 };
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const colored=Object.fromEntries(Object.entries(drawing).map(([key,values])=>{
@@ -66,7 +71,10 @@ const colored=Object.fromEntries(Object.entries(drawing).map(([key,values])=>{
 const cream=rgb('#f3dfb6'), stone=rgb('#b5a597'), highlights=rgb('#a6bbb1');
 const stock=['#c58866','#d7b475','#659185','#9c7890','#8099ad'].map(rgb);
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
-const placeGroup=category=>Object.hasOwn(categories,category)?categories[category]:['店家','retail'];
+export function storefrontCategory({category,categoryLabel}){
+  if(category==='commerce_store'&&categoryLabel==='餐飲店家')return ['餐飲店家','meal'];
+  return Object.hasOwn(categories,category)?categories[category]:['店家','retail'];
+}
 
 function shopRow(row){
   return row && typeof row.id==='string' && row.id && typeof row.name==='string' && row.name.trim() &&
@@ -81,7 +89,8 @@ function cardFor(row){
     :match?`https://www.openstreetmap.org/${match[1]}/${match[2]}`:undefined;
   const source=row.source?.label??row.source?.name??(typeof row.source==='string'?row.source:undefined)
     ??(match?'OpenStreetMap':undefined);
-  const categoryLabel=typeof row.categoryLabel==='string'&&row.categoryLabel.trim()||placeGroup(row.category)[0];
+  const label=typeof row.categoryLabel==='string'&&row.categoryLabel.trim();
+  const categoryLabel=label&&label!==row.category?label:storefrontCategory(row)[0];
   return {id:row.id,name:row.name,categoryLabel,
     kind:'shopfront',detail:'店面位置與外觀為示意',source,url};
 }
@@ -115,7 +124,7 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const angle=row.angle*Math.PI/180, nx=Math.cos(angle),ny=Math.sin(angle);
   const tx=-ny,ty=nx;
   const half=clamp(row.width,1.5,9)*.5, top=3.25, offset=.14;
-  const type=placeGroup(row.category)[1];
+  const type=storefrontCategory(row)[1];
   const paint=colored[type];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
@@ -230,11 +239,11 @@ function hitShop(shop,matrix,point,width,height){
   });
 }
 
-async function readPack(id, signal){
+export async function readShopfrontPack(id, signal){
   const url=new URL(`./data/city170-frontages/${id}.json.gz?v=survey-health`,import.meta.url);
   const response=await fetch(url,{signal});
   if(!response.ok||!response.body)throw Error(`Shopfront pack returned ${response.status}`);
-  return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+  return completeFrontagePack(id,await decodeMapJSON(response));
 }
 
 export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},surveyTiles,onPickMiss=()=>{}){
@@ -260,9 +269,8 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       if(cache.has(id)||loading.has(id)||(failures.get(id)??0)>Date.now())continue;
       const controller=new AbortController();
       loading.set(id,controller);
-      readPack(id,controller.signal).then(payload=>{
+      readShopfrontPack(id,controller.signal).then(payload=>{
         if(removed||controller.signal.aborted)return;
-        if(!Array.isArray(payload))throw Error('Invalid city shopfront pack');
         cache.set(id,payload.filter(shopRow));
         failures.delete(id);
         for(const key of cache.keys()){

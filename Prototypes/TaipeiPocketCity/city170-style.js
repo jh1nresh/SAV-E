@@ -5,7 +5,7 @@ const name = ['coalesce', ['get', 'name'], ''];
 const category = ['coalesce', ['get', 'category'], ''];
 const named = ['!=', name, ''];
 const inCityDetail = ['!=', ['get', 'protected'], true];
-const atGround = ['all', ['==', ['to-number', ['get', 'layer'], 0], 0],
+const atGround = ['all', ['!=',['get','offGround'],true], ['==', ['to-number', ['get', 'layer'], 0], 0],
   ...['bridge', 'tunnel', 'indoor'].map(tag => ['==', ['coalesce', ['get', tag], 'no'], 'no']),
 ];
 
@@ -167,7 +167,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     minzoom: 12.65,
     filter: kinds('forest'),
     paint: {
-      'fill-color': '#83a56b',
+      'fill-color': ['match',category,'grassland','#c3ce83','wetland','#86b7a0','scrub','#a6b97e','#83a56b'],
       'fill-opacity': fade(12.65, 15, 0.82),
     },
   }, underRoads);
@@ -232,6 +232,44 @@ export function addCity170Style(map, sourceId, firstLabel) {
       },
     }, underSand);
   }
+  if(map.getSource('city170-farmland')){
+    add({
+      id:'city170-field-plots',source:'city170-farmland',type:'fill',minzoom:14,
+      paint:{'fill-color':['match',category,'orchard','#a3ba76','#c7c789'],
+      'fill-outline-color':'#a5ae77','fill-opacity':fade(14,16,.80)},
+    },'city170-forest');
+    // Cartographic textures distinguish cultivation at street scale. Boundaries follow OSM.
+    for(const orchard of [false,true]){
+      const id=orchard?'city170-orchard-texture':'city170-farm-texture';
+      addSprite(map,id,ctx=>{
+        ctx.lineCap='round';
+        if(orchard){
+          for(const [x,y] of [[8,9],[25,25]]){
+            ctx.fillStyle='#73894f88';ctx.beginPath();ctx.ellipse(x,y,2.7,2,.2,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#dae4ad';ctx.fillRect(x-.6,y-1.25,1.5,.8);
+          }
+        }else{
+          ctx.strokeStyle='#8d9d684d';ctx.lineWidth=1;
+          for(let x=-32;x<64;x+=8){ctx.beginPath();ctx.moveTo(x,32);ctx.lineTo(x+16,0);ctx.stroke();}
+        }
+      },32);
+      add({id,type:'fill',source:'city170-farmland',minzoom:16,
+        filter:['==',category,orchard?'orchard':'farmland'],
+        paint:{'fill-pattern':id,'fill-opacity':fade(16,17.5,.72)}},'city170-forest');
+    }
+  }
+  if(map.getSource('city170-waterways')){
+    for(const seasonal of [false,true])add({
+      id:seasonal?'city170-seasonal-stream':'city170-surface-stream',source:'city170-waterways',
+      type:'line',minzoom:14,filter:['==',['get','seasonal'],seasonal],
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{'line-color':seasonal?'#89aaa1':'#70aeb9','line-opacity':fade(14,16,.85),
+        'line-width':['interpolate',['exponential',1.55],['zoom'],14,.6,18,
+          ['match',category,'river',4,'canal',3,'stream',2.5,1.4],21,
+          ['match',category,'river',12,'canal',8,'stream',5.8,3]],
+        ...(seasonal?{'line-dasharray':[2,2]}:{})},
+    },underRoads);
+  }
   add({
     id: 'city170-school',
     source: schools,
@@ -248,7 +286,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-pitch',
     type: 'fill',
     minzoom: 15.25,
-    filter: kinds('pitch'),
+    filter: ['all',kinds('pitch'),atGround],
     paint: {
       'fill-color': ['case', ['==', category, 'track'], '#bd856e',
         ['match', ['coalesce', ['get', 'sport'], category],
@@ -266,7 +304,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-pitch-linework',
     type: 'line',
     minzoom: 16.8,
-    filter: ['all', kinds('pitch'), ['!=', category, 'track']],
+    filter: ['all', kinds('pitch'),atGround, ['!=', category, 'track']],
     paint: {
       'line-color': '#fbf0d2',
       'line-width': ['interpolate', ['linear'], ['zoom'], 16.8, 0.7, 20, 1.65],
@@ -278,7 +316,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-track-outline',
     type: 'line',
     minzoom: 16.65,
-    filter: ['all', kinds('pitch'), ['==', category, 'track']],
+    filter: ['all', kinds('pitch'),atGround, ['==', category, 'track']],
     paint: {
       'line-color': '#835d49',
       'line-width': ['interpolate', ['linear'], ['zoom'], 16.65, 0.65, 20, 1.5],
@@ -407,6 +445,18 @@ export function addCity170Style(map, sourceId, firstLabel) {
     },
   }, underStreet);
 
+  add({
+    id:'city170-court-markings',type:'line',minzoom:17,filter:kinds('court-markings'),
+    paint:{'line-color':'#fff2d5','line-width':['interpolate',['linear'],['zoom'],17,.7,20,1.65],
+      'line-opacity':fade(17,18,.92)},
+  },underBuildings);
+  add({
+    id:'city170-stair-treads',type:'line',minzoom:17.35,
+    filter:['all',gradeFilter('walk'),['==',category,'steps'],['==',['coalesce',['get','covered'],'no'],'no']],
+    layout:{'line-cap':'butt','line-join':'round'},
+    paint:{'line-color':'#94765c','line-width':groundWidth(1.6,5),
+      'line-dasharray':[.15,.50],'line-opacity':fade(17.35,18.4,.9)},
+  },underBuildings);
   // Street names use the base map and the existing authored road-name layer.
   // Campus and shop labels share the map's collision pass with those labels.
   const pin=placePinStyle(map);
