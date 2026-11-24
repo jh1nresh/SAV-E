@@ -43,6 +43,32 @@ async function read(filePath: string, query?: string) {
   return listPublicDiscoveryPosts(url(query), { filePath, now });
 }
 
+test("official destination posts require a capability and stay distinct from provider pins", async t => {
+  const areaID = "Attraction_379000000A_002265";
+  const routeID = "Attraction_379000000A_000008";
+  const area: PublicDiscoveryPost["place"] = {
+    provider: "taipei_catalog", providerPlaceID: areaID, name: "白石湖休閒農業區",
+    address: "臺北市內湖區", latitude: 25.105136, longitude: 121.594043, coordinateSystem: "WGS84", category: "area",
+  };
+  const instagram = post("Area", {
+    id: "instagram:Area", platform: "instagram", sourceURL: "https://www.instagram.com/p/Area/", place: area,
+  });
+  const ordinary = [post("A"), post("B"), post("C")];
+  const baseline = await indexFile(t, manifest(ordinary));
+  const candidate = await indexFile(t, manifest([...ordinary, instagram]));
+  const legacy = await read(baseline);
+  assert.deepEqual(await read(candidate), legacy);
+  const modern = (query: string) => listPublicDiscoveryPosts(url(query), { filePath: candidate, now, catalogVenues: true });
+  const exact = "bbox=121,25,122,26&provider=taipei_catalog&placeID=";
+  await assert.rejects(read(candidate, exact + areaID), failure(400));
+  await assert.rejects(modern(exact + "Attraction_379000000A_999999"), failure(400));
+  assert.deepEqual((await modern(exact + routeID)).posts, []);
+  assert.deepEqual((await modern(exact + areaID)).posts, [instagram]);
+  await assert.rejects(modern("bbox=121,25,122,26&limit=2&cursor=" + legacy.nextCursor), failure(400));
+  assert.throws(() => validate(manifest([{ ...instagram, place: { ...area, category: "route" } }])), failure(503));
+  assert.throws(() => validate(manifest([{ ...instagram, place: { ...area, latitude: 25 } }])), failure(503));
+});
+
 test("exact Google venues are opt-in, scoped by ID and incompatible with alias collisions", async t => {
   const apple = post("APPLE");
   const googleID = "ChIJ_exact_101";
@@ -74,6 +100,54 @@ test("exact Google venues are opt-in, scoped by ID and incompatible with alias c
   assert.throws(() => validate(collision), failure(503));
   const badPlace = { ...googlePlace, providerPlaceID: "not a place ID" };
   assert.throws(() => validate(manifest([post("GOOGLE", { place: badPlace })])), failure(503));
+});
+
+test("retired Google Saved IDs keep their scoped response identity while Explore uses the replacement", async t => {
+  const oldID = "ChIJ_retired", currentID = "ChIJ_current";
+  const alias = { googlePlaceID: oldID, provider: "google_places", providerPlaceID: currentID };
+  const place = { ...post().place, provider: "google_places" as const, providerPlaceID: currentID };
+  const one = post("First", { place, publishedAt: iso(-day) });
+  const two = post("Second", {
+    place, publishedAt: iso(-2 * day), authorHandle: "second",
+    sourceURL: "https://www.threads.com/@second/post/Second",
+  });
+  const filePath = await indexFile(t, { ...manifest([one, two]), googlePlaceAliases: [alias] });
+  const options = { filePath, now, googleVenues: true, multiVenue: true };
+  const query = (placeID: string) => "bbox=121,25,122,26&limit=1&provider=google_places&placeID=" + placeID;
+  const first = await listPublicDiscoveryPosts(url(query(oldID)), options);
+  assert.equal(first.googlePlaceMatch, undefined);
+  assert.deepEqual(first.posts, [{ ...one, place: { ...place, providerPlaceID: oldID } }]);
+  assert.ok(first.nextCursor);
+  const tail = "&cursor=" + first.nextCursor;
+  const second = await listPublicDiscoveryPosts(url(query(oldID) + tail), options);
+  assert.deepEqual(second.posts, [{ ...two, place: { ...place, providerPlaceID: oldID } }]);
+  assert.equal(second.nextCursor, null);
+  await assert.rejects(listPublicDiscoveryPosts(url(query(currentID) + tail), options), failure(400));
+  const canonical = await listPublicDiscoveryPosts(url(query(currentID)), options);
+  assert.deepEqual(canonical.posts, [one]);
+  const explore = await listPublicDiscoveryPosts(url(), options);
+  assert.deepEqual(explore.posts, [one, two]);
+  assert.deepEqual((await listPublicDiscoveryPosts(url(query(oldID)), { ...options, googleVenues: false })).posts, []);
+});
+
+test("Google redirects require an active exact target and cannot shadow venues or chain", async t => {
+  const source = post("Migration", {
+    place: { ...post().place, provider: "google_places", providerPlaceID: "ChIJ_current" },
+  });
+  const alias = { googlePlaceID: "ChIJ_retired", provider: "google_places", providerPlaceID: "ChIJ_current" };
+  const index = manifest([source]);
+  for (const googlePlaceAliases of [
+    [{ ...alias, googlePlaceID: alias.providerPlaceID }],
+    [{ ...alias, providerPlaceID: "ChIJ_missing" }],
+    [alias, { ...alias, googlePlaceID: "ChIJ_earlier", providerPlaceID: alias.googlePlaceID }],
+    [alias, { ...alias }],
+  ]) assert.throws(() => validate({ ...index, googlePlaceAliases }), failure(503));
+  const expired = { ...source, verifiedAt: iso(-day + 1_000) };
+  const filePath = await indexFile(t, { ...manifest([post("Unrelated"), expired]), googlePlaceAliases: [alias] });
+  const result = await listPublicDiscoveryPosts(url("bbox=121,25,122,26&provider=google_places&placeID=ChIJ_retired"),
+    { filePath, now: new Date(iso(1_000)), googleVenues: true });
+  assert.deepEqual(result.posts, []);
+  assert.equal(result.googlePlaceMatch, undefined);
 });
 
 test("dedicated file is required; empty/missing configuration is not a seeded success", async t => {
@@ -421,4 +495,34 @@ test("a formerly nonempty index becomes unavailable when its last source expires
   const emptyPath = await indexFile(t, manifest([]));
   const empty = await listPublicDiscoveryPosts(url(), { filePath: emptyPath, now: new Date(iso(2_000)) });
   assert.deepEqual(empty.posts, []);
+});
+
+test("a retired Apple Saved ID gets the park sources while Explore has one canonical park", async t => {
+  const place = { ...post().place, providerPlaceID: "MainPark" };
+  const source = post("Park", { place });
+  const alias = { applePlaceID: "LegacyArea", providerPlaceID: "MainPark" };
+  const filePath = await indexFile(t, { ...manifest([source]), applePlaceAliases: [alias] });
+  const options = { filePath, now, multiVenue: true };
+  const lookup = (id: string) => url("bbox=121,25,122,26&provider=apple_maps&placeID=" + id);
+  const legacy = await listPublicDiscoveryPosts(lookup(alias.applePlaceID), options);
+  assert.deepEqual(legacy.posts, [{ ...source, place: { ...place, providerPlaceID: alias.applePlaceID } }]);
+  assert.equal("applePlaceAliases" in legacy, false);
+  assert.equal(legacy.googlePlaceMatch, undefined);
+  assert.deepEqual((await listPublicDiscoveryPosts(lookup(place.providerPlaceID), options)).posts, [source]);
+  assert.deepEqual((await listPublicDiscoveryPosts(url(), options)).posts, [source]);
+  assert.deepEqual((await listPublicDiscoveryPosts(
+    url("bbox=121,25,122,26&provider=amap&placeID=LegacyArea"), options)).posts, []);
+  assert.deepEqual((await listPublicDiscoveryPosts(
+    url("bbox=120,24,120.5,24.5&provider=apple_maps&placeID=LegacyArea"), options)).posts, []);
+});
+
+test("Apple aliases reject shadowing, duplicates, chains and missing targets", () => {
+  const source = post("Park", { place: { ...post().place, providerPlaceID: "MainPark" } });
+  const alias = { applePlaceID: "LegacyArea", providerPlaceID: "MainPark" };
+  for (const applePlaceAliases of [
+    [{ ...alias, applePlaceID: "MainPark" }],
+    [alias, alias],
+    [alias, { applePlaceID: "Earlier", providerPlaceID: "LegacyArea" }],
+    [{ ...alias, providerPlaceID: "Unknown" }],
+  ]) assert.throws(() => validate({ ...manifest([source]), applePlaceAliases }), failure(503));
 });

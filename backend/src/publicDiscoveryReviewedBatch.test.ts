@@ -284,6 +284,64 @@ test("review files combine venue coverage and reject conflicting or unreadable i
   await assert.rejects(compileReviewedPublicFiles([first, join(dir, "missing.json")], now));
 });
 
+function capacityVenues(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    place: { ...place, name: `Fixture Store ${i}`, providerPlaceID: `Fixture${i}` },
+    candidates: [{ ...instagram, sourceURL: `https://www.instagram.com/p/FIXTURE_${i}/` }],
+  }));
+}
+
+test("review compiles over 500 venues across files and keeps each place query exact", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "savvy-review-capacity-"));
+  t.after(() => rm(dir, { recursive: true }));
+  const venues = capacityVenues(1_001);
+  const first = join(dir, "first.json"), second = join(dir, "second.json");
+  await writeFile(first, JSON.stringify({ venues: venues.slice(0, 500) }));
+  await writeFile(second, JSON.stringify({ venues: venues.slice(500) }));
+  const { manifest } = await compileReviewedPublicFiles([first, second], now);
+  assert.equal(manifest.posts.length, 1_001);
+  const coverage = publicVenueSourceCoverage({ publicVenues: venues.map(item => item.place) }, manifest, now);
+  assert.equal(coverage.withSources, 1_001);
+  assert.equal(coverage.withoutSources, 0);
+
+  const index = join(dir, "index.json");
+  await writeFile(index, JSON.stringify(manifest));
+  const last = await listPublicDiscoveryPosts(
+    new URL("http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1&provider=apple_maps&placeID=Fixture1000"),
+    { filePath: index, now, multiVenue: true },
+  );
+  assert.deepEqual(last.posts.map(post => post.id), ["instagram:FIXTURE_1000"]);
+  const rechecked = await recheckReviewedPublicBatch({ venues }, { now, fetchEmbed: async () => {
+    assert.fail("No reviewed row has a fingerprint to recheck");
+  } });
+  assert.deepEqual(rechecked.summary, { refreshed: 0, unconfirmed: 0, unconfigured: 1_001, pending: 0 });
+});
+
+test("review allows the full public post capacity and rejects the next venue or post", () => {
+  const venues = capacityVenues(5_001);
+  assert.equal(compileReviewedPublicBatch({ venues: venues.slice(0, 5_000) }, now).manifest.posts.length, 5_000);
+  assert.throws(() => compileReviewedPublicBatch({ venues }, now), /Invalid venue count/);
+  const oneMore = { ...instagram, sourceURL: "https://www.instagram.com/p/FIXTURE_EXTRA/" };
+  venues[0]!.candidates.push(oneMore);
+  assert.throws(() => compileReviewedPublicBatch({ venues: venues.slice(0, 5_000) }, now), /Invalid post count/);
+});
+
+test("review keeps the existing total processing budget for pending associations", async () => {
+  const venues = capacityVenues(501).map(({ place }, venue) => ({
+    place,
+    candidates: Array.from({ length: 50 }, (_, post) => ({
+      ...instagram, sourceURL: `https://www.instagram.com/p/PENDING_${venue}_${post}/`, review: null,
+    })),
+  }));
+  const allowed = compileReviewedPublicBatch({ venues: venues.slice(0, 500) }, now);
+  assert.equal(allowed.withheld, 25_000);
+  assert.equal(allowed.manifest.posts.length, 0);
+  assert.throws(() => compileReviewedPublicBatch({ venues }, now), /Invalid reviewed candidate count/);
+  await assert.rejects(recheckReviewedPublicBatch({ venues }, { now, fetchEmbed: async () => {
+    assert.fail("Over-budget archive must be rejected before rechecking");
+  } }), /Invalid reviewed candidate count/);
+});
+
 test("recheck renews only unchanged public originals with existing branch fingerprints", async () => {
   const igHTML = `
     <div class="Embed">
@@ -703,4 +761,19 @@ test("a current index whose last scheduled post has ended returns an empty page"
   await writeFile(reviewPath, JSON.stringify(staleMixedArchive));
   await assert.rejects(refreshReviewedPublicFiles([reviewPath], { now: later, fetchEmbed }), /No current reviewed posts/);
   assert.equal(requests, 2);
+});
+
+test("reviewed Apple aliases are preserved when combining files and never exposed in post previews", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "savvy-reviewed-apple-alias-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, "archive.json");
+  const alias = { applePlaceID: "HistoricalBranch", providerPlaceID: "BranchA",
+    branchEvidence: "Historical Saved identity verified for the same park." };
+  const input = { ...batch(instagram, threads), applePlaceAliases: [alias] };
+  await writeFile(file, JSON.stringify(input));
+  const { manifest } = await compileReviewedPublicFiles([file], now);
+  assert.deepEqual(manifest.applePlaceAliases, [{applePlaceID: "HistoricalBranch", providerPlaceID: "BranchA"}]);
+  assert.equal("applePlaceAliases" in makeReviewedPublicPreview(manifest, now).snapshot, false);
+  const rejected = { ...input, applePlaceAliases: [{...alias, branchEvidence: ""}] };
+  assert.throws(() => compileReviewedPublicBatch(rejected, now));
 });

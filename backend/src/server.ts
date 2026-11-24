@@ -1125,11 +1125,12 @@ createServer(async (request, response) => {
 
     if (isV0 && resource === "discovery") {
       response.setHeader("Cache-Control", "private, no-store");
-      response.setHeader("Vary", "Authorization, X-Savvy-Discovery-Associations, X-Savvy-Discovery-Google-Venues");
+      response.setHeader("Vary", "Authorization, X-Savvy-Discovery-Associations, X-Savvy-Discovery-Google-Venues, X-Savvy-Discovery-Catalog-Venues");
       const result = await evaluatePublicDiscoveryRequest({ method: request.method,
         authorization: request.headers.authorization, url, verifySubject: verifiedPrivyAccessSubject,
         multiVenue: request.headers["x-savvy-discovery-associations"] === "1",
-        googleVenues: request.headers["x-savvy-discovery-google-venues"] === "1" });
+        googleVenues: request.headers["x-savvy-discovery-google-venues"] === "1",
+        catalogVenues: request.headers["x-savvy-discovery-catalog-venues"] === "1" });
       return sendJson(response, result.body, result.statusCode);
     }
 
