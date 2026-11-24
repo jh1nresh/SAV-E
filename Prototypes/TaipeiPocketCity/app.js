@@ -1,11 +1,11 @@
 import {connectIOSMap} from './ios-map.js';
-import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js';
-import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js';
-import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=2';
-import {addTaiwanScenery} from './taiwan-scenery.js?v=2';
-import {addTaiwanCells} from './taiwan-cells.js?v=shuqi-1';
+import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
+import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
+import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
+import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
+import {addTaiwanCells} from './taiwan-cells.js?v=street-walls-1';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
-import {addCityContext} from './city-context.js?v=shuqi-1';
+import {addCityContext} from './city-context.js?v=street-walls-1';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=shuqi-light-2';
 import {cityPlaceLayers} from './city-place-index.js';
@@ -19,10 +19,10 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?tw=shuqi-1&v=photo-pins-1';
+import {addShopSearch} from './city-shop-search.js?v=alpine-1';
 import {addCity170,dihuaSearch} from './city170.js?v=category-badges-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=named-pins-1';
-import {CityNature} from './city-nature.js?v=inventory-3';
+import {CityNature} from './city-nature.js?v=alpine-1';
 
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
@@ -202,7 +202,7 @@ function worldOverview(){
   lanternView=false;
   manualPitch=false;
   const url=new URL(location.href);
-  for(const key of ['city','street','view','campus','landmark','bearing'])url.searchParams.delete(key);
+  for(const key of ['city','street','view','nature','campus','landmark','bearing','pitch'])url.searchParams.delete(key);
   history.replaceState(null,'',url);
   returnToGlobe(map,globeCamera(stage.clientWidth,stage.clientHeight),reducedMotion.matches);
 }
@@ -510,6 +510,24 @@ try{
   map.addSource('taiwan-grid',{type:'geojson',data:empty});
   map.addLayer({id:'taiwan-grid',source:'taiwan-grid',type:'line',minzoom:15,
     paint:{'line-color':'#3c7164','line-opacity':.35,'line-width':1,'line-dasharray':[2,2]}},firstLabel);
+  // Keep elevation bands visible when the regional illustrations fade at street zoom.
+  // Reuse the hillshade DEM, with low elevations transparent for cities and coastlines.
+  function updateAlpineColors(){
+    const {lng,lat}=map.getCenter();
+    const visible=map.getZoom()>=11&&lng>=119.99&&lng<=122.12&&lat>=21.75&&lat<=25.64;
+    const id='taiwan-alpine-colors';
+    if(visible===Boolean(map.getLayer(id)))return;
+    if(visible){
+      map.addLayer({id,type:'color-relief',source:'relief',minzoom:11,paint:{
+        'color-relief-opacity':['interpolate',['linear'],['zoom'],11,0,13,.74],
+        'color-relief-color':['interpolate',['linear'],['elevation'],
+          0,'rgba(112,146,107,0)',600,'rgba(112,146,107,0)',1350,'#8ca97d',
+          2400,'#678e76',2950,'#60816b',3350,'#9da478',3600,'#bcaf89',3950,'#bcafa0'],
+      }},'topography');
+    }else map.removeLayer(id);
+  }
+  map.on('moveend',updateAlpineColors);
+  updateAlpineColors();
   installTaiwanRelief(map,'water');
   map.addLayer(layer,firstLabel);
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
@@ -588,7 +606,7 @@ try{
     const visible=inside?localNames:globalNames;
     if(visible===appliedNames)return;
     appliedNames=visible;
-    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','tw-public-places','city-atlas-locators','world-cities','world-city-dots','poi_r1']){
+    for(const id of [...cityPlaceLayers,'tw-ordinary-streets-names','city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','tw-public-places','city-atlas-locators','world-cities','world-city-dots','poi_r1']){
       if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     }
     taiwanScenery?.setLabels(visible);
@@ -611,7 +629,7 @@ try{
     const inTown=(x,y)=>!!taiwanCoverage?.at(x,y);
     const overlapsAuthored=(box,rings)=>worldAtlas.rows.some(row=>plotOverlaps(row,box,rings));
     const exclude=(x,y)=>!!districtAt(x,y)||overlapsAuthored([x,y,x,y]);
-    addCityContext(map,worldAtlas.rows,firstLabel,districtAt,open,inTown);
+    const context=addCityContext(map,worldAtlas.rows,firstLabel,districtAt,open,inTown);
     taiwanScenery=addTaiwanScenery(map,firstLabel,open);
     addTaiwanPlaces(map,(place,zoom)=>!!districtAt(...place.point)||worldAtlas.claimsPlace(place,zoom),open);
     let coverageRequest;
@@ -622,7 +640,8 @@ try{
       coverageRequest=Promise.all([readTaiwanJSON('townships.geojson.gz'),readTaiwanJSON('cells.json')])
         .then(([towns,grid])=>{
           taiwanCoverage=makeTaiwanCoverage(towns,grid);
-          taiwanCells=addTaiwanCells(map,firstLabel,{contains:inTown,exclude,overlapsAuthored});
+          taiwanCells=addTaiwanCells(map,firstLabel,{contains:inTown,exclude,overlapsAuthored},context);
+          appliedNames=undefined;applyLocalNames(!$('#fuxing-controls').hidden);
           updateGrid();updateUI();
         }).catch(error=>console.warn('Taiwan coverage',error)).finally(()=>{coverageRequest=null;});
     }
@@ -650,8 +669,14 @@ try{
   if(coordinate.length===3 && coordinate.every(Number.isFinite) &&
       Math.abs(coordinate[0])<=180 &&
       Math.abs(coordinate[1])<=85){
-    locate({center:coordinate.slice(0,2),zoom:Math.max(4,Math.min(21.6,coordinate[2])),mobileZoom:Math.max(4,Math.min(21.6,coordinate[2]-.35)),pitch:coordinate[2]<11?0:42,mobilePitch:coordinate[2]<11?0:42,bearing:Number.isFinite(facing)?facing:-17},false);
-  }else if(lanternView)locate(lanternCamera,false);
+    const zoom=Math.max(4,Math.min(21.6,coordinate[2]));
+    const defaultPitch=zoom<11?0:42;
+    const requestedPitch=Number(preview.get('pitch')??defaultPitch);
+    const pitch=Number.isFinite(requestedPitch)?Math.max(0,Math.min(65,requestedPitch)):defaultPitch;
+    locate({center:coordinate.slice(0,2),zoom,mobileZoom:Math.max(4,zoom-.35),
+      pitch,mobilePitch:pitch,bearing:Number.isFinite(facing)?facing:-17},false);
+  }else if(preview.get('nature')==='yushan')locate(yushanView,false);
+  else if(lanternView)locate(lanternCamera,false);
   else if(startCity)locate(atlasCamera(startCity),false);
   else if(street==='fuxing')locate(bookshopView,false);
   else if(street==='fuxing-row')locate(shopRowView,false);
@@ -676,13 +701,18 @@ try{
     updateGrid();updateUI();
   });
   map.on('idle',updateUI);
-  map.on('zoomend',()=>{
-    if(!manualPitch){
+  function adjustPitch(){
+    if(!manualPitch&&!map.isMoving()){
       const z=map.getZoom();
-      const goal=z>=16.35?50:z>=15.1?43:z<10?0:z<buildingZoom?18:34;
+      const center=map.getCenter();
+      const highland=z>=12&&center.lng>=120&&center.lng<=122&&center.lat>=21.8&&center.lat<=25.4
+        &&map.queryTerrainElevation(center)>=1200;
+      const goal=highland?55:z>=16.35?50:z>=15.1?43:z<10?0:z<buildingZoom?18:34;
       if(Math.abs(goal-map.getPitch())>3)jump({pitch:goal});
     }
-  });
+  }
+  map.on('moveend',adjustPitch);
+  map.on('idle',adjustPitch);
   map.on('pitchstart',event=>{if(event.originalEvent)manualPitch=true});
   map.on('resize',()=>{updateGrid();updateUI()});
   updateUI();

@@ -70,14 +70,17 @@ def runtime_paths():
                      'scenery/places.geojson.gz', 'scenery/river-search.json.gz',
                      'scenery/rivers.geojson.gz', 'scenery/waters.geojson.gz'):
         include('taiwan/' + filename)
-    for key in document('taiwan/places/index.json')['tiles']:
-        include(f'taiwan/places/{key}.json.gz')
-    js = include('taiwan/relief/index.js').read_text()
-    relief = json.loads(js.split('export default', 1)[1].strip().rstrip(';'))
-    for sheet in relief['sheets']:
-        include(f'taiwan/relief/{sheet["name"]}.webp')
-    for tile in relief['dem']:
-        include(f'taiwan/relief/dem/{tile}.png')
+    for directory in ('places', 'streets'):
+        for key in document(f'taiwan/{directory}/index.json')['tiles']:
+            include(f'taiwan/{directory}/{key}.json.gz')
+    for directory in ('relief', 'mountains'):
+        root = f'taiwan/{directory}'
+        js = include(f'{root}/index.js').read_text()
+        relief = json.loads(js.split('export default', 1)[1].strip().rstrip(';'))
+        for sheet in relief['sheets']:
+            include(f'{root}/{sheet["name"]}.webp')
+        for tile in relief['dem']:
+            include(f'{root}/dem/{tile}.png')
     return sorted(paths)
 
 

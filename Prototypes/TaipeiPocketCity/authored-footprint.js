@@ -56,3 +56,8 @@ function segmentsTouch(a,b,c,d){
   const side=(p,q,r)=>(q[0]-p[0])*(r[1]-p[1])-(q[1]-p[1])*(r[0]-p[0]);
   return side(a,b,c)*side(a,b,d)<=0&&side(c,d,a)*side(c,d,b)<=0;
 }
+
+// Match the very same vector polygon in the context and street-detail layers.
+export function footprintKey(ring){
+  return ring.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join('/');
+}

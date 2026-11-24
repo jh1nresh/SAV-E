@@ -1,4 +1,4 @@
-import {plotOverlaps} from './authored-footprint.js';
+import {plotOverlaps,footprintKey} from './authored-footprint.js?v=street-walls-1';
 import {placePinStyle} from './place-pins.js';
 // Continue the built streets between authored landmarks with the visible OpenMapTiles
 // building tiles. Style the original tile fragments, retaining courtyards and min heights.
@@ -48,12 +48,12 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
         if(!ring?.length||inTaipei(...ring[0]))continue;
         const bounds=buildingBounds(ring);
         if(!plotOverlaps({bounds:view},bounds)||nearby.some(row=>plotOverlaps(row,bounds,polygon)))continue;
-        const key=ring.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join('/');
+        const key=footprintKey(ring);
         if(seen.has(key))continue;
         seen.add(key);
         const height=Math.max(1,Number(p.render_height)||5.5),base=Math.min(height,Math.max(0,Number(p.render_min_height)||0));
         features.push({type:'Feature',geometry:{type:'Polygon',coordinates:polygon},properties:{
-          height,base,material:Math.abs(Math.round(ring[0][0]*3000+ring[0][1]*17000))%5}});
+          footprint:key,height,base,material:Math.abs(Math.round(ring[0][0]*3000+ring[0][1]*17000))%5}});
       }
     }
     if(z>=16.6)for(const feature of map.querySourceFeatures('openmaptiles',{sourceLayer:'poi'})){
@@ -75,4 +75,12 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
   map.on('moveend',schedule);
   map.on('sourcedata',e=>{if(e.sourceId==='openmaptiles'&&e.sourceDataType==='content')schedule();});
   map.on('remove',()=>clearTimeout(timer));schedule();
+  let prior=[];
+  return {setDetailedFootprints(keys){
+    keys.sort();
+    if(keys.length===prior.length&&keys.every((v,i)=>v===prior[i]))return;
+    prior=keys;
+    const polygon=['==',['geometry-type'],'Polygon'];
+    map.setFilter(id,keys.length?['all',polygon,['!', ['in',['get','footprint'],['literal',keys]]]]:polygon);
+  }};
 }

@@ -1,5 +1,5 @@
 import {readTaiwanJSON} from './taiwan-coverage.js';
-import {sceneryCard} from './taiwan-scenery.js?v=2';
+import {sceneryCard} from './taiwan-scenery.js?v=alpine-1';
 
 const fold=text=>text.normalize('NFKC').toLowerCase().replaceAll('臺','台').replace(/\s/g,'');
 let loading;

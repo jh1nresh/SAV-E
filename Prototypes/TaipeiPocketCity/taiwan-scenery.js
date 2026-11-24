@@ -15,6 +15,8 @@ const classes={
 };
 const inks={summit:'#427052',rock:'#815e49',coast:'#2b7c81',falls:'#39779a',wetland:'#53805b',water:'#367d8c'};
 const classStyle=value=>['match',['get','k'],...Object.entries(classes).flatMap(([key,kinds])=>[kinds,value(key)]),value('water')];
+export const yushanView={center:[120.957274,23.469987],zoom:13.1,mobileZoom:12.8,
+  bearing:-32,pitch:62,mobilePitch:56};
 const yushanURL='https://www.ysnp.gov.tw/Trail/7fa5c242-df1a-4a8e-bcab-32dc55b1f7b6?ID=980ec5de-bc0d-41a5-b479-add518f66181&Tab=2';
 const cliff={source:'太魯閣國家公園管理處',url:'https://www.taroko.gov.tw/ch/trailsAttractions/attractions/8',
   detail:'清水山東側的岩壁緊鄰太平洋。片岩、片麻岩與大理石構成這段蘇花海岸。'};
@@ -37,7 +39,9 @@ export function sceneryCard(properties,point){
     placeId:'poi/'+type+'/'+ref[2],source:'OpenStreetMap',
     url:'https://www.openstreetmap.org/'+type+'/'+ref[2],
     detail:elevation==null?'':'圖載海拔 '+Number(elevation).toLocaleString('zh-TW')+' 公尺',
-    ...fieldNotes[properties.id]};
+    ...fieldNotes[properties.id],
+    ...(properties.k==='peak'?{mapView:properties.id==='n3428095932'?yushanView:
+      {center:point,zoom:13.8,mobileZoom:13.45,bearing:-25,pitch:55,mobilePitch:51}}:{})};
 }
 function addSymbols(map){
   for(const [key,color] of Object.entries(inks)){

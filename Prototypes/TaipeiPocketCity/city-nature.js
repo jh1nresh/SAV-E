@@ -38,7 +38,22 @@ function plant(form){
       for(const p of [a,b,c,a,c,d])vertex(p,[0,0],j<2?barkLight:bark);
     }
   }
-  if(form==='palm'){
+  if(form==='fir'){
+    branch([0,0,0],[0,0,.99],.031,.009);
+    // Offset each tier so daylight can show between the drooping boughs.
+    for(let tier=0;tier<7;tier++){
+      const base=.19+tier*.11,span=.24*(1-tier/8);
+      for(let j=0;j<9;j++){
+        const a=j*tau/9+tier*.8;
+        const tip=[span*Math.cos(a),span*Math.sin(a),base-.025];
+        for(const sign of [-1,1]){
+          const side=[span*.72*Math.cos(a+sign*.37),span*.72*Math.sin(a+sign*.37),base+.032];
+          const shade=palette[Math.cos(a+sign*.4)>.4?2:0];
+          for(const v of [[0,0,base+.13],side,tip])vertex(v,[0,0],shade);
+        }
+      }
+    }
+  }else if(form==='palm'){
     branch([0,0,0],[.025,0,.79],.027,.016);
     for(let j=0;j<13;j++){
       const a=j*2.4,c=Math.cos(a),s=Math.sin(a),radius=.32+.04*Math.cos(j*2);
@@ -145,7 +160,8 @@ export class CityNature {
     this.program=program(gl,vertex,fragment);
     this.matrix=new Float32Array(16);
     this.uniforms=Object.fromEntries(['matrix','rightAxis','upAxis'].map(k=>[k,gl.getUniformLocation(this.program,k)]));
-    this.meshes=forms.map(form=>{
+    this.forms=this.id==='taiwan-cell-forest'?[...forms,'fir']:forms;
+    this.meshes=this.forms.map(form=>{
       const model=plant(form),vao=gl.createVertexArray(),shape=gl.createBuffer(),instances=gl.createBuffer();
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER,shape);
@@ -171,15 +187,17 @@ export class CityNature {
     this.region=[w-dx,s-dy,e+dx,n+dy];
     const base=MercatorCoordinate.fromLngLat(this.map.getCenter()),m=base.meterInMercatorCoordinateUnits();
     this.tile={mx:base.x,my:base.y,m};
-    const groups=forms.map(()=>[]);
+    const groups=this.forms.map(()=>[]);
     const visible=[];
     for(const row of this.rows){
       const [lon,lat,h,form]=row;
       if(lon<w-dx||lat<s-dy||lon>e+dx||lat>n+dy)continue;
       const z=this.map.terrain?.getDrawnElevationForLngLat(new LngLat(lon,lat));
       if(!Number.isFinite(z))continue;
+      const alpine=this.id==='taiwan-cell-forest'&&z>=2500;
+      if(alpine&&z>=3600)continue;
       visible.push(row);
-      const q=MercatorCoordinate.fromLngLat([lon,lat]),i=forms.indexOf(form);
+      const q=MercatorCoordinate.fromLngLat([lon,lat]),i=this.forms.indexOf(alpine?'fir':form);
       const height=h>0?h:form==='palm'?7:6;
       groups[i<0?1:i].push((q.x-base.x)/m,(base.y-q.y)/m,z,height,((lon*26553+lat*8179)%1)*tau);
     }

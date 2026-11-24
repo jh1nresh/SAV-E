@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import coverage from '../taiwan/relief/index.js';
+import mountains from '../taiwan/mountains/index.js';
 import {installTaiwanRelief,taiwanLocalDEM} from '../taiwan-relief.js';
 
 const directory=new URL('../taiwan/relief/',import.meta.url);
@@ -36,12 +37,15 @@ test('textures are attached when in view and leave water and streets above them'
   const map={getZoom:()=>zoom,getBounds:()=>({getWest:()=>extent[0],getSouth:()=>extent[1],getEast:()=>extent[2],getNorth:()=>extent[3]}),
     addSource(id,source){assert.equal(source.coordinates.length,4);sources.add(id);},
     removeSource(id){assert.ok(!layers.has(id));sources.delete(id);},
-    addLayer(layer,before){assert.equal(before,'water');assert.ok(sources.has(layer.source));layers.add(layer.id);},
+    addLayer(layer,before){assert.ok(before==='water'||layers.has(before));assert.ok(sources.has(layer.source));layers.add(layer.id);},
     removeLayer:id=>layers.delete(id),on:(event,func)=>{assert.equal(event,'moveend');moveend=func;}};
-  assert.equal(installTaiwanRelief(map,'water'),coverage.sheets.length);
+  assert.equal(installTaiwanRelief(map,'water'),coverage.sheets.length+mountains.sheets.length);
   assert.equal(sources.size,0);
   zoom=9;extent=[120.8,23.4,121.1,23.8];moveend();
-  assert.deepEqual([...layers],['taiwan-relief-taiwan']);
+  assert.deepEqual([...layers],['taiwan-relief-taiwan','taiwan-relief-taiwan-highlands']);
+  zoom=13;extent=[120.95,23.46,120.97,23.48];moveend();
+  assert.ok(layers.has('taiwan-relief-yushan-ridges'));
+  zoom=9;
   extent=[118.33,24.38,118.39,24.46];moveend();
   assert.deepEqual([...layers],['taiwan-relief-kinmen']);
   extent=[170,-30,-170,40];moveend();

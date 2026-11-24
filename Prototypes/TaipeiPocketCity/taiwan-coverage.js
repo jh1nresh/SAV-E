@@ -1,7 +1,7 @@
 import {taiwanCellAt,taiwanCellBounds} from './taiwan-cell-geometry.js';
 
-export async function readTaiwanJSON(path){
-  const response=await fetch(new URL('./taiwan/'+path,import.meta.url));
+export async function readTaiwanJSON(path,options){
+  const response=await fetch(new URL('./taiwan/'+path,import.meta.url),options);
   if(!response.ok)throw Error('Taiwan map data '+response.status+' '+path);
   if(!path.endsWith('.gz'))return response.json();
   // Hosts may already have decoded a .gz response via Content-Encoding.
@@ -11,13 +11,29 @@ export async function readTaiwanJSON(path){
   return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).json();
 }
 
-function insideRing(points,x,y){
-  let inside=false;
+// A horizontal ray only intersects the edges at the query latitude.
+function latitudeBands(points){
+  let south=Infinity,north=-Infinity;
+  for(const [,y] of points){south=Math.min(south,y);north=Math.max(north,y);}
+  const count=Math.max(1,Math.min(256,Math.ceil(points.length/10)));
+  const step=(north-south)/count||1;
+  const bands=Array.from({length:count},()=>[]);
+  const band=y=>Math.max(0,Math.min(count-1,Math.floor((y-south)/step)));
   for(let i=0,j=points.length-1;i<points.length;j=i++){
-    const [a,b]=points[i],[c,d]=points[j];
-    if((b>y)!==(d>y)&&x<(c-a)*(y-b)/(d-b)+a)inside=!inside;
+    const a=points[j],b=points[i];
+    if(a[1]===b[1])continue;
+    const low=band(Math.min(a[1],b[1])),high=band(Math.max(a[1],b[1]));
+    for(let k=low;k<=high;k++)bands[k].push(i);
   }
-  return inside;
+  return (x,y)=>{
+    if(y<south||y>=north)return false;
+    let inside=false;
+    for(const i of bands[band(y)]){
+      const a=points[i],b=points[i===0?points.length-1:i-1];
+      if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;
+    }
+    return inside;
+  };
 }
 export function makeTaiwanCoverage(collection,grid){
   const buckets=new Map();
@@ -42,9 +58,11 @@ export function makeTaiwanCoverage(collection,grid){
   }
   function at(x,y){
     const bucket=buckets.get(Math.floor(x*10)+','+Math.floor(y*10));
-    for(const {rings,bounds:[w,s,e,n],town} of bucket??[]){
-      if(x>=w&&x<=e&&y>=s&&y<=n&&insideRing(rings[0],x,y)&&
-          !rings.slice(1).some(r=>insideRing(r,x,y)))return town;
+    for(const item of bucket??[]){
+      const [w,s,e,n]=item.bounds;
+      if(x<w||x>e||y<s||y>n)continue;
+      item.tests??=item.rings.map(latitudeBands);
+      if(item.tests[0](x,y)&&!item.tests.some((test,i)=>i>0&&test(x,y)))return item.town;
     }
   }
   function cellsIn(bounds){

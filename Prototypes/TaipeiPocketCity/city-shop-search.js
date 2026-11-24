@@ -72,7 +72,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
           if(heritagePlace?.camera){locate(heritagePlace.camera);return;}
           if(angle!==null && focusFront?.(row))return;
           const a=(angle??0)*Math.PI/180,offset=angle===null?0:2.5;
-          locate({center:[x+Math.cos(a)*offset/100780,y+Math.sin(a)*offset/110800],
+          locate(heritagePlace?.mapView??{center:[x+Math.cos(a)*offset/100780,y+Math.sin(a)*offset/110800],
             bearing:angle===null?0:270-angle,zoom:heritagePlace?.mapZoom??(angle===null?18.4:20.75),
             mobileZoom:heritagePlace?.mapZoom??(angle===null?18.4:20.45),pitch:42,mobilePitch:42});
           const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);

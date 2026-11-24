@@ -43,3 +43,27 @@ test('every national search reference resolves to the matching public place and 
   assert.equal(Object.keys(counts).length,368);assert.deepEqual(counts,manifest.townships);
   assert.equal([...tiles.values()].reduce((total,rows)=>total+rows.length,0),names.length);
 });
+
+test('indexed township boundaries keep holes and half-open shared edges',()=>{
+  const west=120,south=23;
+  function square(left,bottom,right,top){
+    // Subdivision deliberately puts query latitudes on the index band edges.
+    const ring=[];
+    for(let i=0;i<40;i++)ring.push([left+(right-left)*i/40,bottom]);
+    for(let i=0;i<40;i++)ring.push([right,bottom+(top-bottom)*i/40]);
+    for(let i=0;i<40;i++)ring.push([right-(right-left)*i/40,top]);
+    for(let i=0;i<40;i++)ring.push([left,top-(top-bottom)*i/40]);
+    return [...ring,ring[0]];
+  }
+  const east=west+.02,north=south+.02;
+  const features=[{properties:{code:'west'},geometry:{type:'Polygon',coordinates:[
+    square(west,south,east,north),square(west+.005,south+.005,west+.015,south+.015)]}},
+    {properties:{code:'east'},geometry:{type:'Polygon',coordinates:[square(east,south,east+.01,north)]}}];
+  const coverage=makeTaiwanCoverage({features},{rows:[]});
+  for(let i=0;i<=40;i++){
+    const y=south+.02*i/40;
+    assert.equal(coverage.at(west+.002,y)?.code,y<north?'west':undefined);
+    assert.equal(coverage.at(east,y)?.code,y<north?'east':undefined);
+    assert.equal(coverage.at(west+.01,y)?.code,y>=north||y>=south+.005&&y<south+.015?undefined:'west');
+  }
+});

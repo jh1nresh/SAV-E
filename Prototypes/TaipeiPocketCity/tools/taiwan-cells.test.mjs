@@ -47,7 +47,12 @@ test('a roof spanning cells stays whole with its courtyard; only a named shop in
   const tiles=emptyTiles(),box=[120.5013,23.5021,120.5032,23.5039],courtyard=[120.502,23.5026,120.5026,23.5032];
   const building=poly(box,{render_height:12},[courtyard]);
   tiles.buildings=[building,building];tiles.pois=[poi([120.5022,23.50285],'中庭地點')];
-  const without=make(tiles).details,roofs=without.filter(f=>f.properties.kind==='roof');
+  const built=make(tiles);
+  const bodies=built.details.filter(f=>f.properties.kind==='building');
+  assert.equal(bodies.length,1);
+  assert.deepEqual(bodies[0].geometry,building.geometry);
+  assert.equal(built.mappedBodies.length,1);
+  const without=built.details,roofs=without.filter(f=>f.properties.kind==='roof');
   assert.equal(roofs.length,1);assert.deepEqual(roofs[0].geometry,building.geometry);
   assert.ok(without.some(f=>f.properties.kind==='window'));
   assert.ok(!without.some(f=>f.properties.kind==='awning'));

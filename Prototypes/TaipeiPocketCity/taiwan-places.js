@@ -75,7 +75,7 @@ let searchWorker,next=0;
 const waiting=new Map();
 export async function searchTaiwanEntries(query,center){
   if(!searchWorker){
-    searchWorker=new Worker(new URL('./taiwan-search-worker.js?v=2',import.meta.url),{type:'module'});
+    searchWorker=new Worker(new URL('./taiwan-search-worker.js?v=alpine-1',import.meta.url),{type:'module'});
     searchWorker.onmessage=({data})=>{waiting.get(data.id)?.(data);waiting.delete(data.id);};
     searchWorker.onerror=()=>{
       for(const resolve of waiting.values())resolve({entries:[],refs:[]});

@@ -1,3 +1,4 @@
+import {footprintKey} from './authored-footprint.js?v=street-walls-1';
 import {placePinType} from './place-pins.js';
 
 export const CELL_METRES=170;
@@ -46,7 +47,11 @@ const feature=(rings,base,height,color,kind)=>({type:'Feature',geometry:{type:'P
   properties:{base,height,color,kind}});
 const roofPalette=['#c9b49c','#c6b79f','#ccb39c','#bdab98','#c0b9a8'];
 const shops=new Set(['food','cafe','shop','fashion','market','books']);
-const awnings={food:'#bf7354',cafe:'#648b80',shop:'#6e98a1',fashion:'#bc8291',market:'#c59356',books:'#848e6e'};
+const shopMaterials={
+  food:['#bd583b','#ab4232','#f5c77f'],cafe:['#477a6a','#355e53','#e9ca92'],
+  shop:['#668caa','#345d78','#f1d995'],fashion:['#b66c8c','#80465f','#f5d7ca'],
+  market:['#cd9651','#875f2e','#f2daba'],books:['#688675','#4f665b','#e7cfaa'],
+};
 
 function cellsInView(view,center){
   const [w,s,e,n]=view,[left,bottom]=taiwanCellAt(w,s),[right,top]=taiwanCellAt(e,n);
@@ -83,7 +88,7 @@ function prepareGround(cells,view,tiles){
       for(let i=1;i<line.length;i++){
         const left=line[i-1],right=line[i],b=boundsOf([left,right]);
         b[0]-=width/eastMetres;b[2]+=width/eastMetres;b[1]-=width/northMetres;b[3]+=width/northMetres;
-        if(intersects(b,view))distribute(cells,{bounds:b,a:xy(left),b:xy(right),width},'blockers');
+        if(intersects(b,view))distribute(cells,{bounds:b,a:xy(left),b:xy(right),width,street:!!p.ordinaryRoad,named:!!p.name},'blockers');
       }
     }
   }
@@ -92,9 +97,9 @@ function prepareGround(cells,view,tiles){
     const p=f.properties,name=p['name:zh-Hant']||p['name:zh']||p.name;
     let kind=placePinType(p.subclass);
     if(!shops.has(kind))kind=placePinType(p.class);
-    if(!name||!shops.has(kind))continue;
+    if((!name&&!p.mappedShop)||!shops.has(kind))continue;
     const pt=f.geometry.coordinates,b=[...pt,...pt];
-    if(inBox(pt,view))distribute(cells,{bounds:b,pt,kind},'shops');
+    if(inBox(pt,view))distribute(cells,{bounds:b,pt,kind,id:p.mappedShop},'shops');
   }
 }
 
@@ -108,28 +113,71 @@ function clippingEdge(a,b){
   if(Math.abs(a[1]-b[1])<1e-10)return fractionalTile(my(a[1]),16384*256)<1e-5;
   return false;
 }
-function facade(rings,height,shop,details){
+function facade(rings,height,shop,details,neighbors){
   const ring=rings[0],wall=ring.map(xy),target=shop?xy(shop.pt):null;
-  let side,area=0,best=-Infinity;
+  const area=wall.slice(1).reduce((sum,b,i)=>sum+wall[i][0]*b[1]-b[0]*wall[i][1],0);
+  const sign=Math.sign(area);
+  let side,best=-Infinity;
   for(let i=1;i<wall.length;i++){
     const a=wall[i-1],b=wall[i],dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);
-    area+=a[0]*b[1]-b[0]*a[1];
-    if(length<4||clippingEdge(ring[i-1],ring[i]))continue;
+    if(length<(shop?2.6:4)||clippingEdge(ring[i-1],ring[i]))continue;
     const near=target?nearestOnSegment(target,a,b):null;
-    const score=near?-near.distance:length;
+    const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+    const nx=sign*dy/length,ny=-sign*dx/length;
+    const outside=geographic([mid[0]+nx*.85,mid[1]+ny*.85]);
+    let streetScore=0,sharedWall=false;
+    for(const edge of neighbors){
+      if(edge.rings&&edge.rings!==rings&&inBox(outside,edge.bounds)&&inPolygon(outside,edge.rings))sharedWall=true;
+      if(!edge.street)continue;
+      const vx=edge.b[0]-edge.a[0],vy=edge.b[1]-edge.a[1],roadLength=Math.hypot(vx,vy);
+      if(!roadLength||Math.abs(dx*vx+dy*vy)<.50*length*roadLength)continue;
+      const hit=nearestOnSegment(mid,edge.a,edge.b);
+      if(hit.distance>=24||hit.distance<.05)continue;
+      const x=edge.a[0]+hit.t*vx,y=edge.a[1]+hit.t*vy;
+      const facing=(nx*(x-mid[0])+ny*(y-mid[1]))/hit.distance;
+      if(facing>.5)streetScore=Math.max(streetScore,(24-hit.distance)*facing+(edge.named?4:0));
+    }
+    if(sharedWall)continue;
+    const score=streetScore*1.6+(near?-near.distance:Math.min(14,length)*.2);
     if(score>best){best=score;side={a,dx:dx/length,dy:dy/length,length,t:near?.t??.5};}
   }
   if(!side||area===0)return;
-  const {a,dx,dy,length,t}=side,sign=Math.sign(area),half=Math.min(5.4,length*.39);
+  const {a,dx,dy,length,t}=side,half=Math.min(shop?7.2:5.4,length*(shop ? .46 : .39));
   const mid=Math.max(half+.15,Math.min(length-half-.15,t*length));
   const point=(s,d)=>geographic([a[0]+dx*(mid+s)+sign*dy*d,a[1]+dy*(mid+s)-sign*dx*d]);
   function panel(start,end,depth,base,top,color,kind){
     const ring=[point(start,-.08),point(end,-.08),point(end,depth),point(start,depth)];
-    details.push(feature([[...ring,ring[0]]],base,top,color,kind));
+    const part=feature([[...ring,ring[0]]],base,top,color,kind);
+    if(shop?.id)part.properties.frontagePOI=shop.id;
+    details.push(part);
   }
   if(shop&&height>=3.1){
-    panel(-half,half,1.05,2.70,2.95,awnings[shop.kind],'awning');
-    panel(-half*.86,half*.86,.13,.42,2.58,'#668482','glazing');
+    const [fabric,signColor,trim]=shopMaterials[shop.kind],food=shop.kind==='food'||shop.kind==='market';
+    const glass=shop.kind==='cafe'||shop.kind==='books'?'#819e90':'#7398a5';
+    const joinery=shop.kind==='fashion'?'#724f57':'#695844';
+    const depth=food?1.22:.94,doorAt=-half*.42,door=Math.min(.78,half*.49);
+    panel(-half,half,.17,.08,2.72,'#e3caaa','surround');
+    panel(-half+.13,half-.13,.25,.32,2.53,glass,'glazing');
+    panel(doorAt,doorAt+door,.31,.09,2.37,joinery,'door');
+    panel(doorAt+.09,doorAt+door-.09,.35,.43,2.22,'#425c59','door-glass');
+    panel(-half+.08,-half+.22,.30,.22,2.57,joinery,'shop-frame');
+    panel(half*.38,half*.38+.12,.30,.22,2.57,joinery,'shop-frame');
+    panel(-half+.11,half-.11,.31,1.86,1.96,joinery,'transom');
+    panel(-half,half,depth,2.56,2.75,fabric,'awning');
+    panel(-half,half,depth+.04,2.37,2.57,fabric,'valance');
+    if(food)for(let j=0;j<4;j++){
+      const start=-half+(j+.3)*half/2;
+      panel(start,start+half*.12,depth+.07,2.40,2.55,trim,'canopy-stripe');
+    }
+    const top=Math.min(3.85,height-.07),bottom=2.79;
+    panel(-half,half,.25,bottom,top,signColor,'shop-sign');
+    panel(-half,half,.31,bottom,bottom+.085,trim,'sign-trim');
+    panel(-half,half,.31,top-.085,top,trim,'sign-trim');
+    // Projecting sign and inset display are illustrative. Only the map pin carries the sourced shop name.
+    if(top>3.32){
+      panel(half*.77,half*.77+.14,.99,top-.20,top-.11,joinery,'sign-bracket');
+      panel(half*.77,half*.77+.16,.94,top-.77,top-.20,signColor,'blade-sign');
+    }
   }
   const sill=shop?4.25:1.05;
   for(let floor=sill;floor+1.25<Math.min(height,19);floor+=3.2){
@@ -166,11 +214,11 @@ function grow(cells,view,zoom,allowed){
 
 export function buildTaiwanCells({view,center,zoom,tiles,contains,exclude,overlapsAuthored=()=>false}){
   const cells=cellsInView(view,center),details=[],allowed=(lng,lat)=>contains(lng,lat)&&!exclude(lng,lat);
-  if(!cells.length)return {details,trees:[],cells:0};
+  if(!cells.length)return {details,mappedBodies:[],trees:[],cells:0};
   const workArea=[Math.min(...cells.map(c=>c.bounds[0])),Math.min(...cells.map(c=>c.bounds[1])),
     Math.max(...cells.map(c=>c.bounds[2])),Math.max(...cells.map(c=>c.bounds[3]))];
   prepareGround(cells,workArea,tiles);
-  const buildings=[],seen=new Set(),origin=xy(center);
+  const buildings=[],mappedBodies=[],seen=new Set(),origin=xy(center);
   forPolygons(tiles.buildings,(f,rings)=>{
     const ring=rings[0],b=boundsOf(ring);
     if(!intersects(b,workArea))return;
@@ -188,11 +236,16 @@ export function buildTaiwanCells({view,center,zoom,tiles,contains,exclude,overla
     // No artificial border at the 170 m grid: the entire real roof (holes included) is one feature.
     const seed=Number(f.id)||Math.round(h*37);
     const color=roofPalette[Math.floor(hash(seed,451)*roofPalette.length)];
+    const base=Math.min(h,Math.max(0,Number(f.properties.render_min_height)||0));
+    if(!f.properties.localFootprint)mappedBodies.push(footprintKey(rings[0]));
+    details.push(feature(rings,base,h,['#dfc3a7','#d6beaa','#d6c9b0'][Math.floor(hash(seed,103)*3)],'building'));
     details.push(feature(rings,h,h+.26,color,'roof'));
     if(zoom<18||details.length>900||Number(f.properties.render_min_height)>0)continue;
-    const shop=cells.filter(c=>intersects(b,c.bounds)).flatMap(c=>c.shops)
-      .find(s=>inBox(s.pt,b)&&inPolygon(s.pt,rings));
-    facade(rings,h,shop,details);
+    const nearby=cells.filter(c=>intersects(b,c.bounds));
+    const merchants=nearby.flatMap(c=>c.shops).filter(s=>inBox(s.pt,b)&&inPolygon(s.pt,rings));
+    const shop=merchants.find(s=>s.id)??merchants[0];
+    const neighbors=new Set(nearby.flatMap(c=>c.blockers));
+    facade(rings,h,shop,details,neighbors);
   }
-  return {details,trees:grow(cells,view,zoom,allowed),cells:cells.length};
+  return {details,mappedBodies,trees:grow(cells,view,zoom,allowed),cells:cells.length};
 }

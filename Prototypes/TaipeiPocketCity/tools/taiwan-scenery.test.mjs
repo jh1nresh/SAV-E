@@ -66,6 +66,9 @@ test('a low mountain named 玉山 keeps its own source and elevation',()=>{
   assert.match(low.detail,/370/);
   assert.equal(new URL(summit.url).hostname,'www.ysnp.gov.tw');
   assert.notEqual(low.placeId,summit.placeId);
+  assert.deepEqual(low.mapView.center,low.point);
+  assert.deepEqual(summit.mapView.center,[120.957274,23.469987]);
+  assert.ok(summit.mapView.pitch>low.mapView.pitch);
   assert.equal(sceneryCard({id:'n234',n:'無類別',k:'?'}),null);
 });
 

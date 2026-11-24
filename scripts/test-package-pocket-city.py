@@ -20,8 +20,12 @@ class PocketCityPackageTests(unittest.TestCase):
     def test_runtime_includes_scene_worker_and_no_working_inputs(self):
         runtime = set(pkg.runtime_paths())
         self.assertTrue({'ios-map.js', 'taiwan-search-worker.js', 'assets/maplibre-gl-worker.mjs',
+                         'taiwan/mountains/yushan-ridges.webp', 'taiwan/mountains/taiwan-highlands.webp',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)
+        street_index = json.loads((pkg.WEB / 'taiwan/streets/index.json').read_text())
+        self.assertTrue(street_index['tiles'])
+        self.assertTrue(all(f'taiwan/streets/{key}.json.gz' in runtime for key in street_index['tiles']))
         self.assertFalse(any(name.startswith(('examples/', 'bundles/', 'tools/', 'scripts/')) or
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))
