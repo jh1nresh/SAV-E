@@ -73,6 +73,25 @@ test("a draft with a competing Threads author cannot block other valid originals
   assert.deepEqual(result.counts.outcomes, { invalid_attribution: 1, exact_street_match: 1 });
 });
 
+test("retained author claims for the same original do not depend on report order", async () => {
+  const source = ig("RENAMED");
+  const report = (authorHandle: string | null) => ({ place, candidates: [{ ...source, authorHandle }] });
+  const old = report("oldhandle");
+  const current = report("Example");
+  let calls = 0;
+  const fetchEmbed = async () => { calls++; return embed(source.sourceURL, caption); };
+  for (const drafts of [[old, current], [current, old], [old, report(null)]]) {
+    const result = await checkStreetDrafts(noArchive, drafts, [place], { now, fetchEmbed });
+    assert.equal(result.counts.checked, 1);
+    assert.equal(result.counts.admitted, 1);
+    assert.equal(result.verified[0]?.candidates[0]?.authorHandle, "example");
+  }
+  const unmatched = await checkStreetDrafts(noArchive, [old], [place], { now, fetchEmbed });
+  assert.equal(unmatched.counts.admitted, 0);
+  assert.deepEqual(unmatched.counts.outcomes, { original_unavailable: 1 });
+  assert.equal(calls, 4);
+});
+
 test("a provider cooldown stops new reads and the next window continues after the recorded cursor", async () => {
   const report = [{ place, candidates: [ig("FIRST"), ig("NEXT")] }];
   const calls: string[] = [];
@@ -110,4 +129,54 @@ test("a Taipei destination requires the exact visible official link and its own 
   assert.deepEqual((await lookup(body + link.replace("<a ", "<a hidden "))).counts.outcomes, { no_catalog_link: 1 });
   assert.deepEqual((await lookup(body + link + link.replace("380", "381"))).counts.outcomes, { multiple_catalog_features: 1 });
   assert.deepEqual((await lookup("台北信義區象山公園附近的另一個景點。 " + link)).counts.outcomes, { feature_name_unconfirmed: 1 });
+  for (const nearby of [
+    "象山公園的附近有一家咖啡店，今天專程來吃甜點。",
+    "今天去鄰近象山公園的咖啡店。",
+    "咖啡店在（象山公園）的對面。",
+    "The cafe is near 象山公園.",
+  ]) {
+    const result = await lookup(nearby + " " + link);
+    assert.deepEqual(result.counts.outcomes, { feature_name_unconfirmed: 1 }, nearby);
+    assert.deepEqual(result.verified, []);
+  }
+  assert.equal((await lookup("象山公園的附近有一家咖啡店。今天走進象山公園散步。" + link)).counts.admitted, 1);
+});
+
+test("a shorter feature alias inherits the context of its full name", async () => {
+  const zoo = { ...place, providerPlaceID: "ZooFixture", category: "attractions", name: "臺北市立動物園", address: "Taipei" };
+  const url = "https://www.travel.taipei/zh-tw/attraction/details/386";
+  const officialFeatures = [{ provider: zoo.provider, providerPlaceID: zoo.providerPlaceID,
+    expectedName: zoo.name, catalogID: "Attraction_379000000A_000386",
+    names: [zoo.name, "市立動物園"], authorityURLs: [url] }];
+  const draft = ig("ZooFixture");
+  const lookup = (text: string) => checkStreetDrafts(noArchive, [{ place: zoo, candidates: [draft] }], [zoo], {
+    now, officialFeatures, fetchEmbed: async () => embed(draft.sourceURL, `${text}<a href="${url}">官方網站</a>`),
+  });
+  const nearby = "今天去鄰近臺北市立動物園的咖啡店。";
+  assert.deepEqual((await lookup(nearby)).counts.outcomes, { feature_name_unconfirmed: 1 });
+  assert.equal((await lookup(nearby + "下午走進市立動物園。")).counts.admitted, 1);
+});
+
+test("a travel-time landmark or unvisited place does not produce venue evidence", async () => {
+  const street = ig("StreetLandmark");
+  const park = { ...place, providerPlaceID: "ParkLandmark", category: "attractions", name: "象山公園", address: "Taipei" };
+  const parkPost = ig("ParkLandmark");
+  const authority = "https://www.travel.taipei/zh-tw/attraction/details/380";
+  const feature = { provider: park.provider, providerPlaceID: park.providerPlaceID, expectedName: park.name,
+    catalogID: "Attraction_379000000A_000380", names: [park.name], authorityURLs: [authority] };
+  const articles = (store: string, attraction: string) => checkStreetDrafts(noArchive,
+    [{ place, candidates: [street] }, { place: park, candidates: [parkPost] }], [place, park], {
+      now, officialFeatures: [feature],
+      fetchEmbed: async url => url.includes("StreetLandmark")
+        ? embed(street.sourceURL, store)
+        : embed(parkPost.sourceURL, attraction + `<a href="${authority}">官方網站</a>`),
+    });
+  const falseEvidence = await articles(
+    `今天只去另一家咖啡店。步行五分鐘可到${place.name}，地標是${place.address}，我們沒有去。`,
+    "今天只去了一間咖啡店，走路五分鐘可到象山公園，但我們沒去公園。"
+  );
+  assert.deepEqual(falseEvidence.verified, []);
+  assert.deepEqual(falseEvidence.counts.outcomes, { name_unconfirmed: 1, feature_name_unconfirmed: 1 });
+  const direct = await articles(caption, "從捷運走了五分鐘抵達象山公園散步。");
+  assert.equal(direct.counts.admitted, 2);
 });

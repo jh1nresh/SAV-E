@@ -16,6 +16,10 @@ type Options = {
   officialFeatures?: unknown;
 };
 type Platform = "instagram" | "threads";
+type DraftJob = {
+  place: PublicDiscoveryPlace; identity: string; post: string; url: string; platform: Platform; token: string;
+  authors: Set<string | null>; conflictingURL: boolean;
+};
 type ReviewedVenue = {
   place: PublicDiscoveryPlace;
   candidates: {
@@ -112,8 +116,7 @@ export async function checkStreetDrafts(
   }
 
   const claimed = new Map<string, Set<string>>();
-  const jobs: { place: PublicDiscoveryPlace; identity: string; post: string; url: string; platform: Platform; token: string; author?: string }[] = [];
-  const seen = new Set<string>();
+  const jobs = new Map<string, DraftJob>();
   const counts = { admitted: 0, alreadyIndexed: 0, branchConflict: 0, placeMismatch: 0,
     unsupportedOriginal: 0, deferred: 0, checked: 0 };
   const outcomes: Record<string, number> = {};
@@ -140,23 +143,32 @@ export async function checkStreetDrafts(
         continue;
       }
       const token = JSON.stringify([identity, post]);
-      if (seen.has(token)) continue;
-      seen.add(token);
+      const author = authorHandle?.toLowerCase() ?? null;
+      const existing = jobs.get(token);
+      if (existing) {
+        existing.conflictingURL ||= existing.url !== url;
+        existing.authors.add(author);
+        continue;
+      }
       const identities = claimed.get(post) ?? new Set<string>();
       identities.add(identity);
       claimed.set(post, identities);
-      jobs.push({ place, identity, post, url, platform, token, ...(authorHandle ? { author: authorHandle } : {}) });
+      jobs.set(token, { place, identity, post, url, platform, token, authors: new Set([author]), conflictingURL: false });
     }
   }
 
   const verified: ReviewedVenue[] = [];
-  const ordered = jobs.sort((a, b) => a.token === b.token ? 0 : a.token < b.token ? -1 : 1);
+  const ordered = [...jobs.values()].sort((a, b) => a.token === b.token ? 0 : a.token < b.token ? -1 : 1);
   const position = cursor === null ? 0 : Math.max(0, ordered.findIndex(job => job.token > cursor));
   let nextCursor = cursor;
-  for (const { place, identity, post, url, platform, token, author } of [...ordered.slice(position), ...ordered.slice(0, position)]) {
+  for (const { place, identity, post, url, platform, token, authors, conflictingURL } of [...ordered.slice(position), ...ordered.slice(0, position)]) {
     const existing = prior.get(post);
     if (existing?.has(identity)) { counts.alreadyIndexed++; continue; }
     if (existing?.size || claimed.get(post)!.size !== 1) { counts.branchConflict++; continue; }
+    if (conflictingURL) {
+      outcomes.invalid_attribution = (outcomes.invalid_attribution ?? 0) + 1;
+      continue;
+    }
     if (platform === "instagram" && new URL(url).pathname.startsWith("/tv/")) { counts.unsupportedOriginal++; continue; }
     const evidencePlace = evidencePlaces.get(identity)!;
     const peers = colocated(evidencePlace);
@@ -177,10 +189,15 @@ export async function checkStreetDrafts(
       outcomes.original_unavailable = (outcomes.original_unavailable ?? 0) + 1;
       continue;
     }
-    const context = { html, platform, sourceURL: url, place, ...(author ? { author } : {}) };
+    const context = { html, platform, sourceURL: url, place };
     const evidence = proof
       ? verifyPublicTaipeiCatalogCandidate({ ...context, proof })
       : verifyPublicTaipeiStreetCandidate({ ...context, placesAtAddress: peers, evidenceAddress: evidencePlace.address });
+    if ("authorHandle" in evidence && evidence.authorHandle
+      && !authors.has(null) && !authors.has(evidence.authorHandle.toLowerCase())) {
+      outcomes.original_unavailable = (outcomes.original_unavailable ?? 0) + 1;
+      continue;
+    }
     outcomes[evidence.status] = (outcomes[evidence.status] ?? 0) + 1;
     if (!("contentFingerprint" in evidence) || !evidence.contentFingerprint || !evidence.authorHandle) continue;
     verified.push({ place, candidates: [{ platform, sourceURL: url, authorHandle: evidence.authorHandle, title: place.name,
