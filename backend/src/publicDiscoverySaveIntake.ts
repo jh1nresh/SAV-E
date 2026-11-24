@@ -208,7 +208,7 @@ export function createPublicDiscoverySaveIntake(options: {
       added = true;
       return { ...current, catalogAfter: time + catalogInterval,
         jobs: [...current.jobs.filter(job => job.identity !== place.identity),
-          { identity: place.identity, pending: true, dueAt: time }] };
+          { identity: place.identity, pending: true, dueAt: time, catalogDueAt: time }] };
     });
     return added;
   }
@@ -244,6 +244,7 @@ export function createPublicDiscoverySaveIntake(options: {
         const { identity } = job;
         const venue = inventory.get(identity)!;
         let pending = false;
+        let rateLimited = false;
         let delay = searchBackoff;
         let providerBackoffUntil = 0;
         try {
@@ -261,7 +262,9 @@ export function createPublicDiscoverySaveIntake(options: {
             }));
           }
           if (statuses.every(status => status === "searched")) delay = day;
-          if (statuses.includes("rate_limited")) pending = true;
+          rateLimited = statuses.includes("rate_limited");
+          // A catalog retry can wait its turn after the shared provider cooldown.
+          pending = rateLimited && (!options.catalogScan || job.catalogDueAt === undefined);
           if (report) await options.write(identity, report);
         } catch {
           pending = true;
@@ -269,6 +272,8 @@ export function createPublicDiscoverySaveIntake(options: {
           options.retryableFailure?.();
         }
         const finishedAt = now();
+        const catalogDueAt = pending ? job.catalogDueAt
+          : options.catalogScan ? finishedAt + (rateLimited ? delay : catalogRetryInterval) : undefined;
         // Commit the draft first. If interrupted before this state write,
         // the next process can repeat the lookup without dropping the job.
         await change(current => ({
@@ -276,7 +281,7 @@ export function createPublicDiscoverySaveIntake(options: {
           backoffUntil: Math.max(current.backoffUntil, providerBackoffUntil),
           jobs: current.jobs.map(row => row.identity === identity
             ? { identity, pending, dueAt: finishedAt + delay,
-              ...(!pending && options.catalogScan ? { catalogDueAt: finishedAt + catalogRetryInterval } : {}) }
+              ...(catalogDueAt === undefined ? {} : { catalogDueAt }) }
             : row),
         }));
       }

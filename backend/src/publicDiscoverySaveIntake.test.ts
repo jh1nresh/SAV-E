@@ -475,6 +475,49 @@ test("catalog scan waits for the saved-place queue and restores a provider limit
   assert.deepEqual(reports, [secondIdentity, secondIdentity, identity]);
 });
 
+test("a rate-limited catalog lookup lets another gap run after cooldown and remains retryable", async () => {
+  const at = Date.parse("2026-11-23T05:00:00Z");
+  const backoff = 15 * 60_000;
+  const venues = inventory();
+  const secondIdentity = JSON.stringify([second.provider, second.providerPlaceID]);
+  let now = at;
+  let calls = 0;
+  let snapshot: QueueState | undefined;
+  const reports: string[] = [];
+  const options = {
+    inventory: venues, catalogScan: true, now: () => now,
+    async search() {
+      calls++;
+      if (now < at + 2 * backoff) throw new Error("HTTP 429");
+      return [];
+    },
+    async write(id: string) { reports.push(id); },
+    async persist(state: QueueState) { snapshot = state; },
+  };
+
+  await createPublicDiscoverySaveIntake(options).idle();
+  assert.deepEqual(reports, [identity]);
+  assert.equal(calls, 1);
+  assert.ok(snapshot);
+  assert.equal(snapshot.backoffUntil, at + backoff);
+
+  const restored = parsePublicSourceQueue(JSON.parse(JSON.stringify(snapshot)), new Set(venues.keys()));
+  now = at + backoff - 1;
+  const restart = createPublicDiscoverySaveIntake({ ...options, initialState: restored });
+  await restart.idle();
+  assert.equal(calls, 1);
+
+  now++;
+  await restart.idle();
+  assert.deepEqual(reports, [identity, secondIdentity]);
+  assert.equal(calls, 2);
+
+  now = at + 2 * backoff;
+  await restart.idle();
+  assert.deepEqual(reports, [identity, secondIdentity, identity]);
+  assert.equal(calls, 4);
+});
+
 test("rechecks catalog gaps after a week across restart without re-saving the place", async () => {
   const week = 7 * 24 * 60 * 60 * 1_000;
   const minute = 60 * 1_000;
