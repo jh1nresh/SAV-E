@@ -31,6 +31,7 @@ final class LivePublicDiscoveryModel: ObservableObject {
     private let now: @MainActor () -> Date
     private var viewport: LivePublicDiscoveryViewport?
     private var venue: LivePublicDiscoveryVenueKey?
+    private var automaticContinuations = 0
     private var revision: UInt64 = 0
     private var expiryTask: Task<Void, Never>?
     private var authObservation: AnyCancellable?
@@ -61,6 +62,7 @@ final class LivePublicDiscoveryModel: ObservableObject {
         revision &+= 1
         expiryTask?.cancel(); expiryTask = nil
         page = nil; viewport = nil; venue = nil; isLoading = false; isLoadingMore = false
+        automaticContinuations = 0
         unavailable = false; paginationFailed = false
     }
 
@@ -82,6 +84,7 @@ final class LivePublicDiscoveryModel: ObservableObject {
         guard sessionIsCurrent(), !Task.isCancelled else { return }
         self.viewport = viewport
         self.venue = venue
+        self.automaticContinuations = automaticContinuations
         let ticket = revision
         isLoading = true
         defer { if revision == ticket { isLoading = false } }
@@ -148,7 +151,13 @@ final class LivePublicDiscoveryModel: ObservableObject {
         expiryTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) } catch { return }
             guard let self, self.revision == ticket else { return }
-            self.clear(); self.unavailable = true
+            if let viewport = self.viewport, self.sessionIsCurrent() {
+                // Revalidate the current view without keeping expired pins or post links.
+                self.expiryTask = nil
+                await self.refresh(viewport, venue: self.venue, automaticContinuations: self.automaticContinuations)
+            } else {
+                self.clear(); self.unavailable = true
+            }
         }
     }
 
