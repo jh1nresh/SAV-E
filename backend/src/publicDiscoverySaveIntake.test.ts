@@ -333,6 +333,48 @@ test("a failed admission write creates no lookup and allows a later save to requ
   assert.equal(persisted, 3);
 });
 
+test("an Instagram profile cooldown leaves the independent Threads lookup available", async () => {
+  const profiles = [
+    { platform: "instagram" as const, handle: "fixture", branchTerms: ["華西街"] },
+    { platform: "threads" as const, handle: "fixture", branchTerms: ["華西街"] },
+  ];
+  const lead = {
+    platform: "threads" as const, sourceURL: "https://www.threads.com/@fixture/post/Independent",
+    authorHandle: "fixture", title: "", review: null, observedIn: "https://www.threads.com/@fixture",
+  };
+  const at = Date.parse("2026-11-23T05:00:00Z");
+  let now = at;
+  const calls: string[] = [];
+  const reports: unknown[] = [];
+  const worker = createPublicDiscoverySaveIntake({
+    inventory: new Map([[identity, { place, missing: ["instagram", "threads"], profiles }]]),
+    now: () => now,
+    async profileLookup(input) {
+      const profile = (input as { venues: { profiles: typeof profiles }[] }).venues[0]!.profiles[0]!;
+      calls.push(profile.platform);
+      const fromThreads = profile.platform === "threads";
+      return {
+        draft: { venues: fromThreads ? [{ place, candidates: [lead] }] : [] },
+        profiles: [{ platform: profile.platform, handle: profile.handle,
+          status: fromThreads ? "read" : "rate_limited", readablePosts: fromThreads ? 1 : 0 }],
+      };
+    },
+    async search() { assert.fail("Do not fall back on the rate-limited profile"); },
+    async write(_, report) { reports.push({ coverage: report.coverage, candidates: report.candidates }); },
+  });
+  await worker.afterSave(saved);
+  await worker.idle();
+  now += 15 * 60_000 - 1;
+  await worker.idle();
+  assert.deepEqual(calls, ["instagram", "threads"]);
+  now++;
+  await worker.idle();
+  assert.deepEqual(calls, ["instagram", "threads", "instagram", "threads"]);
+  assert.deepEqual(reports, Array.from({ length: 2 }, () => ({
+    coverage: { instagram: "rate_limited", threads: "searched" }, candidates: [lead],
+  })));
+});
+
 for (const [failure, status] of [
   ["Public search requires verification", "access_required"],
   ["Provider HTTP 429", "rate_limited"],

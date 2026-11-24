@@ -78,7 +78,7 @@ async function collect(
       candidates.push(...leads);
       if (result.profiles.some(profile => profile.status === "rate_limited")) {
         coverage[platform] = "rate_limited";
-        break;
+        continue;
       }
       if (leads.length) {
         coverage[platform] = "searched";
