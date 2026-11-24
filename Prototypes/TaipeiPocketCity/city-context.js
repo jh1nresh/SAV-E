@@ -1,3 +1,4 @@
+import {plotOverlaps} from './authored-footprint.js';
 import {placePinStyle} from './place-pins.js';
 // Continue the built streets between authored landmarks with the visible OpenMapTiles
 // building tiles. Style the original tile fragments, retaining courtyards and min heights.
@@ -6,10 +7,13 @@ export const atlasRegions=[
   [120.85,30.66,122.25,31.92],[115.41,39.42,117.53,41.10],[-118.96,33.65,-117.60,34.83],
 ];
 function covers([w,s,e,n],x,y){return x>=w&&x<=e&&y>=s&&y<=n;}
-export function intersectsBuilding(outer,[w,s,e,n]){
+function buildingBounds(outer){
   let west=Infinity,south=Infinity,east=-Infinity,north=-Infinity;
   for(const [x,y] of outer){west=Math.min(west,x);east=Math.max(east,x);south=Math.min(south,y);north=Math.max(north,y);}
-  return west<=e&&east>=w&&south<=n&&north>=s;
+  return [west,south,east,north];
+}
+export function intersectsBuilding(outer,bounds){
+  return plotOverlaps({bounds},buildingBounds(outer));
 }
 export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false){
   const id='city-atlas-context',data=features=>({type:'FeatureCollection',features});
@@ -41,8 +45,9 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
       if(p.hide_3d===true||!['Polygon','MultiPolygon'].includes(g.type))continue;
       for(const polygon of g.type==='Polygon'?[g.coordinates]:g.coordinates){
         const ring=polygon[0];
-        if(!ring?.length||!intersectsBuilding(ring,view)||inTaipei(...ring[0]))continue;
-        if(nearby.some(row=>intersectsBuilding(ring,row.bounds)))continue;
+        if(!ring?.length||inTaipei(...ring[0]))continue;
+        const bounds=buildingBounds(ring);
+        if(!plotOverlaps({bounds:view},bounds)||nearby.some(row=>plotOverlaps(row,bounds,polygon)))continue;
         const key=ring.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join('/');
         if(seen.has(key))continue;
         seen.add(key);

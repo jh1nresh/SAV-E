@@ -2,10 +2,11 @@ import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=2';
 import {addTaiwanScenery} from './taiwan-scenery.js?v=2';
-import {addTaiwanCells} from './taiwan-cells.js';
+import {addTaiwanCells} from './taiwan-cells.js?v=shuqi-1';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
-import {addCityContext} from './city-context.js';
-import {addCityAtlas} from './city-atlas-layer.js?v=taiwan-detail-3';
+import {addCityContext} from './city-context.js?v=shuqi-1';
+import {plotOverlaps} from './authored-footprint.js';
+import {addCityAtlas} from './city-atlas-layer.js?v=shuqi-light-2';
 import {cityPlaceLayers} from './city-place-index.js';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
@@ -17,7 +18,7 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?tw=2&v=photo-pins-1';
+import {addShopSearch} from './city-shop-search.js?tw=shuqi-1&v=photo-pins-1';
 import {addCity170,dihuaSearch} from './city170.js?v=category-badges-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=named-pins-1';
 import {CityNature} from './city-nature.js?v=inventory-3';
@@ -25,6 +26,8 @@ import {CityNature} from './city-nature.js?v=inventory-3';
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
 const preview=new URLSearchParams(location.search);
+const lanternCamera={center:[121.84363,25.10852],zoom:20.25,mobileZoom:19.8,pitch:58,mobilePitch:56,bearing:138};
+let lanternView=preview.get('street')==='amei-lanterns';
 const terrainRevision=new URL(import.meta.url).search;
 const look=preview.get('look')??'hybrid';
 const hybrid=look==='hybrid';
@@ -193,6 +196,7 @@ function fit(bounds,city){
 }
 function worldOverview(){
   if(!map)return;
+  lanternView=false;
   manualPitch=false;
   const url=new URL(location.href);
   for(const key of ['city','street','view','campus','landmark','bearing'])url.searchParams.delete(key);
@@ -267,6 +271,11 @@ function updateUI(){
   const active=!!district&&showModels&&z>=buildingZoom;
   const zoomed=active&&z>=16.4;
   const patch=z>=10&&worldAtlas?.at(lng,lat);
+  const inShuqi=patch?.id==='jiufen-shuqi'&&z>=17;
+  const lanternButton=$('#shuqi-view');
+  lanternButton.hidden=!inShuqi;
+  lanternButton.textContent=lanternView?'看整段石階':'看茶樓燈火';
+  worldAtlas?.setDusk(Boolean(lanternView&&inShuqi));
   const inTaiwan=lng>=118&&lng<=122.2&&lat>=21.7&&lat<=26.5;
   const town=z>=8?taiwanCoverage?.at(lng,lat):null;
   const label=patch?.name??district??(town?(z>=10?town.name:town.county):city?'台北市':z>=5&&z<8&&inTaiwan?'台灣':'地球');
@@ -386,7 +395,7 @@ try{
     rerun?readPocketCityAsset('street-pocket-city')
       .then(data=>data?.summary&&data?.districts?data:null).catch(()=>null):null,
     rerun?get(`./data/city-streets/index.json${terrainRevision}`).catch(()=>null):null,
-    get('./cities/map-tiles/index.json?rev=taiwan-1').catch(()=>null),
+    get('./cities/map-tiles/index.json?rev=shuqi-1').catch(()=>null),
     fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
       .then(res=>res.ok?res.json():null).catch(()=>null),
     ...streetDataKeys.filter(key=>!rerun||!key.endsWith('-district')).map(key=>get(`./data/street-${key}.json`)
@@ -525,7 +534,13 @@ try{
       const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
       return focusFront({id,name,kind:'shopfront',categoryLabel:'臨街店面',detail:[district,street].filter(Boolean).join(' · '),
         source:osm?'OpenStreetMap':undefined,url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:undefined},x,y,angle);
-    },searchTaiwanEntries);
+    },async (query,center)=>{
+      const entries=await searchTaiwanEntries(query,center);
+      const street=worldAtlas?.rows.find(row=>row.id==='jiufen-shuqi');
+      if(street?.camera)entries.unshift(['九份豎崎路','新北市瑞芳區','石階街景',...street.camera.center,
+        null,'poi/way/217815406',{camera:street.camera}]);
+      return entries;
+    });
     shopfronts=addCityShopfronts(map,(card,row)=>{
       if(!focusFront(card,...row.center,row.angle))streetDetail.openMappedPlace({...card,point:row.center});
     },firstLabel,ids=>{
@@ -591,7 +606,7 @@ try{
     worldAtlas=await addCityAtlas(map,firstLabel,place=>streetDetail?.openMappedPlace(place),updateUI);
     const open=place=>streetDetail?.openMappedPlace(place);
     const inTown=(x,y)=>!!taiwanCoverage?.at(x,y);
-    const overlapsAuthored=([w,s,e,n])=>worldAtlas.rows.some(({bounds:[a,b,c,d]})=>w<=c&&e>=a&&s<=d&&n>=b);
+    const overlapsAuthored=(box,rings)=>worldAtlas.rows.some(row=>plotOverlaps(row,box,rings));
     const exclude=(x,y)=>!!districtAt(x,y)||overlapsAuthored([x,y,x,y]);
     addCityContext(map,worldAtlas.rows,firstLabel,districtAt,open,inTown);
     taiwanScenery=addTaiwanScenery(map,firstLabel,open);
@@ -611,9 +626,16 @@ try{
     map.on('moveend',loadCoverage);loadCoverage();
     weather?.refresh();
     appliedNames=undefined;applyLocalNames(false);
+    $('#shuqi-view').addEventListener('click',()=>{
+      const row=worldAtlas.rows.find(r=>r.id==='jiufen-shuqi');
+      if(!row)return;
+      lanternView=!lanternView;
+      locate(lanternView?lanternCamera:row.camera);updateUI();
+    });
     $('#retry-landmark').addEventListener('click',e=>worldAtlas.retry(e.currentTarget.dataset.city));
   }catch(error){console.warn('City catalog unavailable',error);}
   function atlasCamera(row){
+    if(row.camera)return row.camera;
     return {center:row.center,zoom:row.id==='tamsui'?18.32:17.95,mobileZoom:17.45,pitch:52,mobilePitch:49,bearing:row.id==='tamsui'?18:row.bearing??-17};
   }
   const startCity=worldAtlas?.rows.find(row=>row.id===preview.get('city'));
@@ -626,7 +648,8 @@ try{
       Math.abs(coordinate[0])<=180 &&
       Math.abs(coordinate[1])<=85){
     locate({center:coordinate.slice(0,2),zoom:Math.max(4,Math.min(21.6,coordinate[2])),mobileZoom:Math.max(4,Math.min(21.6,coordinate[2]-.35)),pitch:coordinate[2]<11?0:42,mobilePitch:coordinate[2]<11?0:42,bearing:Number.isFinite(facing)?facing:-17},false);
-  }else if(startCity)locate(atlasCamera(startCity),false);
+  }else if(lanternView)locate(lanternCamera,false);
+  else if(startCity)locate(atlasCamera(startCity),false);
   else if(street==='fuxing')locate(bookshopView,false);
   else if(street==='fuxing-row')locate(shopRowView,false);
   else if(dihuaViews.has(street))locate(dihuaViews.get(street),false);

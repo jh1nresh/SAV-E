@@ -31,6 +31,32 @@ def block(html, name):
     return match[1].strip()
 
 
+def verify_mesh(folder):
+    raw=(folder/'map-mesh.bin').read_bytes()
+    parts=read(folder/'map-mesh.json')['parts']
+    count=0
+    for part in parts:
+        check(part['first']==count and part['count']>0 and part['count']%3==0 and
+              len(part['at'])==2 and all(math.isfinite(v) for v in part['at']),"Invalid mesh part")
+        count+=part['count']
+    check(count>0 and len(raw)==count*16, "Invalid mesh byte length")
+    check(all(all(math.isfinite(v) for v in vertex[:3]) and vertex[-1]==255
+              for vertex in struct.iter_unpack('<fff4B',raw)),"Invalid mesh vertex")
+
+
+def verify_recovered(folder, meta):
+    scene = read(folder / "scene.json")
+    west, south, east, north = meta["bounds"]
+    def in_scene(point):
+        return west <= point[0] <= east and south <= point[1] <= north
+    check(in_scene(meta["camera"]["center"]), "Street camera misses the recovered scene")
+    check(meta["footprint"]["type"] in ("Polygon", "MultiPolygon"), "Missing painted street footprint")
+    check(len(scene["centerlines"]) > 0 and all(in_scene(s["point"]) for s in meta["landmarkSites"]),
+          "Recovered street or landmark pins are outside the scene")
+    verify_mesh(folder)
+    print(f"{folder.name}: recovered street mesh, {len(meta['landmarkSites'])} mapped landmarks")
+
+
 def verify(folder, page):
     meta, plot, scene = (read(folder / filename) for filename in ("metadata.json", "plot.json", "scene.json"))
     geo = scene["meta"]
@@ -72,16 +98,7 @@ def verify(folder, page):
     artwork = (folder / "landmarks.js").read_text().strip()
     check(artwork and artwork.replace("</script", "<\\/script") == block(html, "landmarks"), "Stale landmark artwork")
     if page.parent==folder:
-        raw=(folder/'map-mesh.bin').read_bytes()
-        parts=read(folder/'map-mesh.json')['parts']
-        count=0
-        for part in parts:
-            check(part['first']==count and part['count']>0 and part['count']%3==0 and
-                  len(part['at'])==2 and all(math.isfinite(v) for v in part['at']),"Invalid mesh part")
-            count+=part['count']
-        check(count>0 and len(raw)==count*16, "Invalid mesh byte length")
-        check(all(all(math.isfinite(v) for v in vertex[:3]) and vertex[-1]==255
-                  for vertex in struct.iter_unpack('<fff4B',raw)),"Invalid mesh vertex")
+        verify_mesh(folder)
     print(f"{folder.name}: {geo['size']:g} m, {len(ids)} primary footprints, {len(buildings)} mapped building records")
 
 
@@ -100,10 +117,18 @@ def main():
           "Invalid catalog IDs")
     if args.city and (not re.fullmatch(r"[a-z0-9-]+",args.city) or not (ROOT/args.city/"metadata.json").exists()):
         parser.error("Unknown city")
-    if args.action == "build" and not args.skill_dir:
+    if args.action == "build" and not args.skill_dir and not (args.city and
+            read(ROOT / args.city / "metadata.json").get("format") == "recovered-mesh"):
         parser.error("Provide the Pocket City skill path using --skill-dir or POCKET_CITY_SKILL")
     for city in [args.city] if args.city else ids:
         folder = ROOT / city
+        meta = read(folder / "metadata.json")
+        if meta.get("format") == "recovered-mesh":
+            if args.action == "build":
+                subprocess.run(["node", str(folder / "build.mjs")], check=True)
+                meta = read(folder / "metadata.json")
+            verify_recovered(folder, meta)
+            continue
         page = folder / "index.html"
         if args.action == "verify":
             verify(folder, page)

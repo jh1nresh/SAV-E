@@ -1,4 +1,6 @@
 import test from 'node:test';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {exportMesh, triangulate, triangulateEvenOdd} from './export-pocket-mesh.mjs';
@@ -30,11 +32,18 @@ test('triangulation keeps reentrant walls and a roof courtyard open', () => {
 });
 
 for (const city of cities) {
-  test(`${city} mesh reproduces the inlined kit and covers its declared segments`, async () => {
-    const [{mesh,parts}, html] = await Promise.all([readCity(city), file(city,'index.html')]);
-    const rebuilt = exportMesh(html.toString('utf8'));
-    assert.ok(mesh.equals(rebuilt.buffer));
-    assert.deepEqual(parts, rebuilt.parts);
+  test(`${city} mesh reproduces the source artwork and covers its declared segments`, async () => {
+    const {mesh,parts}=await readCity(city);
+    const meta=JSON.parse(await file(city,'metadata.json'));
+    if(meta.format==='recovered-mesh'){
+      const builder=new URL(`../cities/${city}/build.mjs`,import.meta.url);
+      execFileSync(process.execPath,[fileURLToPath(builder),'--check']);
+    }else{
+      const html=await file(city,'index.html');
+      const rebuilt=exportMesh(html.toString('utf8'));
+      assert.ok(mesh.equals(rebuilt.buffer));
+      assert.deepEqual(parts,rebuilt.parts);
+    }
     let endpoint = 0;
     for (const part of parts) {
       assert.equal(part.first, endpoint);

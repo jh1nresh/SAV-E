@@ -2,7 +2,7 @@ import {loadCityPlaces} from './city-place-index.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
 
-const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replace(/\s+/g,'');
+const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
 export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNation){
   let pending,frontages,verifiedPending,verifiedEntries;
   const forms=document.querySelectorAll('.shop-search');
@@ -69,6 +69,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
           if((heritagePlace?.sourcesExpireAt??Infinity)<=Date.now()){void update();return;}
           for(const f of forms){f.querySelector('input').value=name;f.querySelector('.shop-options').hidden=true;}
           hide();document.querySelector('.mobile').open=false;
+          if(heritagePlace?.camera){locate(heritagePlace.camera);return;}
           if(angle!==null && focusFront?.(row))return;
           const a=(angle??0)*Math.PI/180,offset=angle===null?0:2.5;
           locate({center:[x+Math.cos(a)*offset/100780,y+Math.sin(a)*offset/110800],

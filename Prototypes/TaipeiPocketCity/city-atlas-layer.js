@@ -1,5 +1,6 @@
 import {MercatorCoordinate,LngLat} from './assets/maplibre-gl.mjs';
 import {program} from './survey-layer.js';
+import {LanternLight} from './lantern-light.js';
 import {CityNature} from './city-nature.js';
 import {StreetPeople} from './street-people.js';
 import {placePinStyle} from './place-pins.js';
@@ -10,8 +11,11 @@ layout(location=0) in vec3 p;
 layout(location=1) in vec4 colour;
 uniform mat4 matrix;
 uniform float ground;
+uniform float dusk;
 out vec4 tint;
-void main(){gl_Position=matrix*vec4(p.xy,p.z+ground,1.);tint=colour;}`;
+void main(){gl_Position=matrix*vec4(p.xy,p.z+ground,1.);float lamp=smoothstep(.27,.57,colour.r-colour.b)*smoothstep(.49,.78,colour.r);
+  vec3 evening=colour.rgb*vec3(.49,.54,.74)+vec3(.023,.026,.045);
+  tint=vec4(mix(colour.rgb,evening,dusk*(1.-lamp)),1.);}`;
 const fragment=`#version 300 es
 precision mediump float;
 in vec4 tint;
@@ -44,26 +48,29 @@ class LandmarkLayer{
   type='custom';
   renderingMode='3d';
   meshes=new Map();
+  dusk=false;
   onAdd(map,gl){
     this.map=map;this.gl=gl;
     this.shader=program(gl,vertex,fragment);
     this.matrix=gl.getUniformLocation(this.shader,'matrix');
     this.ground=gl.getUniformLocation(this.shader,'ground');
+    this.twilight=gl.getUniformLocation(this.shader,'dusk');
     this.frame=new Float32Array(16);
   }
-  put(id,meta,parts,bytes){
+  put(id,meta,parts,bytes,lamps){
     const gl=this.gl,vao=gl.createVertexArray(),buffer=gl.createBuffer();
     gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,bytes,gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,16,0);
     gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.UNSIGNED_BYTE,true,16,12);
     gl.bindVertexArray(null);
     const groups=parts.map(p=>({...p,coordinate:LngLat.convert(geographicPoint(meta,p.at))}));
-    this.meshes.set(id,{vao,buffer,groups,meta});
+    this.meshes.set(id,{vao,buffer,groups,meta,glow:lamps?.length?new LanternLight(gl,lamps):null});
     this.map.triggerRepaint();
   }
   drop(id){
     const item=this.meshes.get(id);
     if(!item)return;
+    item.glow?.dispose();
     this.gl.deleteVertexArray(item.vao);this.gl.deleteBuffer(item.buffer);this.meshes.delete(id);
   }
   render(gl,opts){
@@ -72,11 +79,16 @@ class LandmarkLayer{
     gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);
     for(const mesh of this.meshes.values()){
       transform(this.frame,opts.defaultProjectionData.mainMatrix,mesh.meta);
+      gl.useProgram(this.shader);gl.uniform1f(this.twilight,this.dusk&&mesh.glow?1:0);
       gl.uniformMatrix4fv(this.matrix,false,this.frame);gl.bindVertexArray(mesh.vao);
       for(const group of mesh.groups){
         const z=this.map.terrain?.getDrawnElevationForLngLat(group.coordinate);
         gl.uniform1f(this.ground,Number.isFinite(z)?z:0);
         gl.drawArrays(gl.TRIANGLES,group.first,group.count);
+      }
+      if(this.dusk&&mesh.glow){
+        const ground=this.map.terrain?.getDrawnElevationForLngLat(mesh.groups[0].coordinate);
+        mesh.glow.draw(this.frame,Number.isFinite(ground)?ground:0);
       }
     }
     gl.bindVertexArray(null);
@@ -124,7 +136,7 @@ export function indexAuthoredPlaces(features){
   };
 }
 export async function addCityAtlas(map,before,open,onChange){
-  const rows=await read('catalog.json?rev=taiwan-1'),mesh=new LandmarkLayer(),trees=new CityNature();
+  const rows=await read('catalog.json?rev=shuqi-lantern-1'),mesh=new LandmarkLayer(),trees=new CityNature();
   trees.id='city-atlas-trees';
   const places=[{id:'taipei',name:'台北',landmark:'台北 101',center:[121.56481,25.03367]},...rows];
   const overview=['taipei','beijing','shanghai','los-angeles'];
@@ -156,6 +168,10 @@ export async function addCityAtlas(map,before,open,onChange){
   const base={source:'city-atlas-ground',minzoom:14};
   map.addLayer({...base,id:'city-atlas-pavement',type:'fill',filter:['==',['geometry-type'],'Polygon'],
     paint:{'fill-color':['match',['get','kind'],'lawn','#a8bb83','sand','#e9d69c','water','#89c0cc','roads','#f1e4ca','walk','#e7d9bd','#ddc6aa'],'fill-opacity':['match',['get','kind'],'water',0,'roads',.36,'lawn',.42,.74]}},before);
+  map.addSource('shuqi-evening',{type:'geojson',data:collection([{type:'Feature',properties:{},
+    geometry:{type:'Polygon',coordinates:[[[121.83,25.095],[121.86,25.095],[121.86,25.122],[121.83,25.122],[121.83,25.095]]]}}])});
+  map.addLayer({id:'shuqi-evening',type:'fill',source:'shuqi-evening',minzoom:17,
+    layout:{visibility:'none'},paint:{'fill-color':'#273041','fill-opacity':.80}},before);
   map.addLayer(mesh,before);map.addLayer(trees,before);
   map.addLayer({...base,id:'city-atlas-road-names',type:'symbol',minzoom:17,filter:['==',['get','kind'],'street'],
     layout:{'symbol-placement':'line','text-field':['get','name'],'text-font':['Noto Sans Regular'],'text-size':12},
@@ -171,8 +187,11 @@ export async function addCityAtlas(map,before,open,onChange){
       open({...authoredPlaces.enrich(hit),point:hit.geometry.coordinates});
     }
   });
-  const authoredBounds={type:'MultiPolygon',coordinates:rows.map(({bounds:[w,s,e,n]})=>
-    [[[w,s],[e,s],[e,n],[w,n],[w,s]]])};
+  const authoredBounds={type:'MultiPolygon',coordinates:rows.flatMap(row=>{
+    if(row.footprint)return row.footprint.type==='Polygon'?[row.footprint.coordinates]:row.footprint.coordinates;
+    const [w,s,e,n]=row.bounds;
+    return [[[[w,s],[e,s],[e,n],[w,n],[w,s]]]];
+  })};
   for(const id of ['poi_r1','poi_transit'])if(map.getLayer(id)){
     const outside=['!', ['all',['>=',['zoom'],16.8],['within',authoredBounds]]];
     map.setFilter(id,['all',map.getFilter(id)??true,outside]);
@@ -198,13 +217,14 @@ export async function addCityAtlas(map,before,open,onChange){
     for(const id of wanted){
       if(loaded.has(id)||pending.has(id)||(errors.get(id)??0)>Date.now()-5000)continue;
       const task=new AbortController();pending.set(id,task);
-      Promise.all([read(id+'/scene.json',task.signal),read(id+'/map-mesh.json',task.signal),read(id+'/map-mesh.bin',task.signal,true)]).then(([scene,index,bytes])=>{
+      const row=rows.find(r=>r.id===id),version=row.revision?'?v='+row.revision:'';
+      Promise.all([read(id+'/scene.json'+version,task.signal),read(id+'/map-mesh.json'+version,task.signal),read(id+'/map-mesh.bin'+version,task.signal,true)]).then(([scene,index,bytes])=>{
         if(pending.get(id)!==task)return;
-        const row=rows.find(r=>r.id===id),xy=p=>geographicPoint(scene.meta,p);
+        const xy=p=>geographicPoint(scene.meta,p);
         const paths=scene.routes.filter(p=>p.kind==='ped'&&p.p.length>=2).slice(0,18).map(p=>({points:p.p.map(xy),people:2}));
         const people=paths.length?new StreetPeople('atlas-'+id,row.center,paths,16.65,true):null;
         const plants=scene.trees.map(([x,y,i])=>[...xy([x,y]),5.5,/palm/i.test(scene.species[i])?'palm':'broad']);
-        mesh.put(id,scene.meta,index.parts,bytes);
+        mesh.put(id,scene.meta,index.parts,bytes,scene.lanterns);
         if(people){people.umbrellaShare=rain;map.addLayer(people,before);}
         loaded.set(id,{features:geographicScene(scene,row.landmarkIds,row.landmarkSites,row.landmarkPlaceIds),trees:plants,people});
         errors.delete(id);refresh();
@@ -213,7 +233,33 @@ export async function addCityAtlas(map,before,open,onChange){
     }
   }
   map.on('moveend',update);map.on('remove',()=>{for(const task of pending.values())task.abort();});update();
-  return {rows,claimsPlace:(place,zoom)=>authoredPlaces.claims(place,zoom),setRain(share){rain=share;for(const s of loaded.values())if(s.people)s.people.umbrellaShare=share;},
+  const duskRoads=new Map(),daytimeWalls=new Map();
+  return {rows,setDusk(visible){
+    for(const id of ['city-atlas-context','taiwan-cell-details']){
+      if(visible&&!daytimeWalls.has(id)&&map.getLayer(id)){
+        const property='fill-extrusion-color',day=map.getPaintProperty(id,property);
+        daytimeWalls.set(id,day);
+        const channels=[.40,.45,.60].map((gain,k)=>['+',5,['*',gain,['at',k,['var','channels']]]]);
+        map.setPaintProperty(id,property,['let','channels',['to-rgba',day],['rgb',...channels]]);
+      }
+    }
+    if(mesh.dusk===visible)return;
+    mesh.dusk=visible;map.setLayoutProperty('shuqi-evening','visibility',visible?'visible':'none');
+    if(visible){
+      for(const layer of map.getStyle().layers){
+        if(layer.id==='city-atlas-road-names'||layer['source-layer']==='transportation_name'){
+          duskRoads.set(layer.id,map.getLayoutProperty(layer.id,'visibility')??'visible');
+          map.setLayoutProperty(layer.id,'visibility','none');
+        }
+      }
+    }else{
+      for(const [id,value] of duskRoads)map.setLayoutProperty(id,'visibility',value);
+      duskRoads.clear();
+      for(const [id,color] of daytimeWalls)if(map.getLayer(id))map.setPaintProperty(id,'fill-extrusion-color',color);
+      daytimeWalls.clear();
+    }
+    map.triggerRepaint();
+  },claimsPlace:(place,zoom)=>authoredPlaces.claims(place,zoom),setRain(share){rain=share;for(const s of loaded.values())if(s.people)s.people.umbrellaShare=share;},
     at(lng,lat){return rows.find(({bounds:[w,s,e,n]})=>lng>=w-.001&&lng<=e+.001&&lat>=s-.001&&lat<=n+.001);},
     ready:id=>loaded.has(id),failed:id=>errors.has(id),retry(id){errors.delete(id);update();},state:()=>({loaded:[...loaded.keys()],pending:[...pending.keys()],failed:[...errors.keys()]})};
 }

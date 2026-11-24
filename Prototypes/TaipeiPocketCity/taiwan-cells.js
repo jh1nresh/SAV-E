@@ -1,5 +1,5 @@
 import {CityNature} from './city-nature.js';
-import {buildTaiwanCells} from './taiwan-cell-geometry.js';
+import {buildTaiwanCells} from './taiwan-cell-geometry.js?v=shuqi-1';
 
 const sourceId='taiwan-cell-details';
 const collection=features=>({type:'FeatureCollection',features});

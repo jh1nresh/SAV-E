@@ -175,7 +175,7 @@ export function buildTaiwanCells({view,center,zoom,tiles,contains,exclude,overla
     const ring=rings[0],b=boundsOf(ring);
     if(!intersects(b,workArea))return;
     distribute(cells,{bounds:b,rings},'blockers');
-    if(f.properties.hide_3d===true||!intersects(b,view)||overlapsAuthored(b)||!allowed(...ring[0]))return;
+    if(f.properties.hide_3d===true||!intersects(b,view)||overlapsAuthored(b,rings)||!allowed(...ring[0]))return;
     const key=JSON.stringify(ring);
     if(seen.has(key))return;
     seen.add(key);

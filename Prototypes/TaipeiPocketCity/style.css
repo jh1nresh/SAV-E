@@ -261,3 +261,6 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 #resolution:empty { display:none; }
 
 #stage:not(.street-scale) #rain { display:none; }
+
+#shuqi-view { position:absolute; z-index:1; bottom:65px; left:50%; transform:translateX(-50%); min-height:38px; padding:0 14px; border:1px solid var(--line); border-radius:7px; background:var(--pane); }
+@media(max-width:720px) { #shuqi-view { bottom:calc(var(--map-footer-bottom) + 52px); } }
