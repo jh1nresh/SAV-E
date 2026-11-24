@@ -115,3 +115,34 @@ test('index fetch failures report once, while genuine empty tiles remain quiet',
   assert.deepEqual(emptyStates, []);
   empty.dispose();
 });
+
+test('Apple comparison tiles draw the recovered surveyed shop once across duplicate pack records',async t=>{
+  const {recoveredFronts}=await import('../taipei-shopfront-recoveries.js');
+  const shop=recoveredFronts.find(row=>row.id==='poi/way/663589871');
+  const {pack,center:[lon,lat]}=shop,secondPack='p999_999';
+  const bounds=[lon-.001,lat-.001,lon+.001,lat+.001];
+  let duplicate=false;
+  t.mock.method(globalThis,'fetch',async url=>{
+    if(url.pathname.endsWith('city170/index.json'))return Response.json({packs:[
+      {id:pack,bounds,deps:[secondPack]},{id:secondPack,bounds},
+    ]});
+    if(url.pathname.includes('/city170-frontages/')){
+      // The neighbor also contains the same record. Both HTTP bodies are already uncompressed.
+      return Response.json(duplicate&&url.pathname.includes(secondPack)?[shop]:[]);
+    }
+    return Response.json({features:{features:[]}});
+  });
+  const old=globalThis.document;globalThis.document={createElement:recordCanvas};
+  t.after(()=>{globalThis.document=old;});
+  let callback;
+  const kit={TileOverlay:class{constructor(handler){callback=handler;}}};
+  const z=21,side=2**z;
+  const x=Math.floor((lon+180)/360*side);
+  const y=Math.floor((1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)*side/2);
+  for(duplicate of [false,true]){
+    const art=addPocketArt({addTileOverlay(){},removeTileOverlay(){}},kit);
+    const tile=await callback(x,y,z,1);
+    assert.equal(tile.names.filter(name=>name===shop.name).length,1);
+    art.dispose();
+  }
+});

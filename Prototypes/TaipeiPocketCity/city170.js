@@ -1,7 +1,10 @@
+import {addCityAirfield} from './city170-airfield.js';
+import {surfaceFeature} from './city170-ground.js';
+import {courtMarkings} from './city170-courts.js';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=category-badges-1';
-import {readPocketCityAsset} from './pocket-city-atlas.js';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=taipei-audit-1';
+import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 
 const collection = features => ({type: 'FeatureCollection', features});
 const overlaps = ([w,s,e,n], [left,bottom,right,top]) => w <= right && e >= left && s <= top && n >= bottom;
@@ -99,6 +102,10 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   }
   // Keep short visible label lines intact across a native vector tile edge.
   map.addSource(roadAnchors,{type:'geojson',data:collection([]),maxzoom:16,buffer:512});
+  for(const id of ['city170-waterways','city170-farmland']){
+    map.addSource(id,{type:'geojson',data:collection([]),maxzoom:17});
+  }
+  addCityAirfield(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
   addCityPlaceIndex(map,pin);
   const baseRoads=map.getStyle().layers.filter(l=>l['source-layer']==='transportation_name');
@@ -205,6 +212,19 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     setShopPacks([]);
     if(lifeKey){setLocalLife([]);nature.setRows([]);lifeKey='';lifeRecords=[];lifeRevision=-1;sceneKey='';}
   }
+  const landLayers=new Map();
+  function loadLandDetails(){
+    // The network is static and clipped to the city. Send it to the map worker once.
+    if(map.getZoom()<14)return;
+    const b=map.getBounds();
+    if(!overlaps([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()],[121.4588,24.9603,121.6659,25.2102]))return;
+    for(const id of ['city170-farmland','city170-waterways']){
+      if(landLayers.has(id))continue;
+      const load=readPocketCityAsset(id).then(value=>map.getSource(id).setData(value))
+        .catch(error=>{landLayers.delete(id);console.warn(id,error.message);});
+      landLayers.set(id,load);
+    }
+  }
   let status = {cells:0, features:0, prepared:0};
   const cache = new Map();
   const inflight = new Map();
@@ -264,6 +284,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   }
   async function refresh() {
     const epoch = ++current;
+    loadLandDetails();
     clearTimeout(timer);
     try {
       if (map.getZoom() < 13) {
@@ -284,7 +305,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         if (epoch !== current) return;
         const b = map.getBounds();
         const view = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-        const features = landscape.features.filter(feature => overlaps(feature.bbox, view));
+        const features = landscape.features.filter(feature => overlaps(feature.bbox, view)).map(surfaceFeature);
         map.getSource(data).setData(collection(features));
         map.getSource(paint).setData(collection([]));
         map.getSource(roadAnchors).setData(collection([]));
@@ -340,7 +361,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       const dependencies = await Promise.all([...owners].map(pack));
       if (epoch !== current) return;
       const features = [...packs,...dependencies].flatMap(p => p.features.features.filter(f =>
-        wanted.has(f.id) && !['school','school-label'].includes(f.properties.kind)));
+        wanted.has(f.id) && !['school','school-label'].includes(f.properties.kind))).map(surfaceFeature);
       // The city roster supplements the canonical street features without blocking the base map.
       let supplemental;
       try {
@@ -403,17 +424,32 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       updateStores(map.getZoom() >= 18.15 ? features.filter(f => f.properties.kind === 'poi').map(f => f.id) : []);
       const mapped=features.filter(f=>!hasFocalPin(f) &&
         (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
+      if(map.getZoom()>=17)for(const feature of features){
+        const lines=courtMarkings(feature);
+        if(lines)mapped.push(lines);
+      }
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
         ?{...f,properties:{...f.properties,placeId:f.id}}:f)));
       map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
       cityRoadLabels(cells.length>0);
       status = {cells:cells.length, features:features.length, prepared:0};
-      const paintPacks = await Promise.all(visible.map(item => markings(item.id)));
+      const [paintPacks, openGround] = await Promise.all([
+        Promise.all(visible.map(item => markings(item.id))),
+        visible.length ? remember('open-ground',()=>readPocketCityAsset('city170-open-ground'))
+          .catch(error=>{console.warn('臺北開放地貌',error.message);return {};}) : {},
+      ]);
       if (epoch !== current) return;
       const pieces = [];
       for (let i = 0; i < packs.length; i++) {
         for (const cell of packs[i].cells) {
-          if (overlaps(cell.bounds, view)) pieces.push(...(paintPacks[i][cell.id] ?? []));
+          if(!overlaps(cell.bounds,view))continue;
+          const items=paintPacks[i][cell.id]??[];
+          const blocked=openGround[cell.id];
+          if(!blocked){pieces.push(...items);continue;}
+          const roots=new Set(blocked.map(pt=>pt.join(',')));
+          for(const f of items){
+            if(f.properties.kind!=='grove-tree'||!roots.has(f.geometry.coordinates.join(',')))pieces.push(f);
+          }
         }
       }
       map.getSource(paint).setData(collection(pieces.filter(f=>f.properties.kind!=='grove-tree'||!nature.activeTrees.near(...f.geometry.coordinates,9))));

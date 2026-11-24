@@ -1,6 +1,7 @@
 import {loadCityPlaces} from './city-place-index.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
+import {frontageSearchRow} from './taipei-frontage-pack.js';
 
 const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
 export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNation){
@@ -32,7 +33,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
       const records=new Map(heritage.map(row=>[row[6],row]));
       for(const row of rows){
         const id=row[6];
-        if(!records.has(id))records.set(id,[...row.slice(0,7),indexed.get(id)?.properties]);
+        if(!records.has(id))records.set(id,[...frontageSearchRow(row),indexed.get(id)?.properties]);
       }
       for(const [id,feature] of indexed){
         if(records.has(id))continue;
