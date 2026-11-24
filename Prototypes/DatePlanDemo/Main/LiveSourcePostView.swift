@@ -1,4 +1,4 @@
-#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+#if SAVVY_MAIN_APP && ((DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW) || SAVVY_PUBLIC_DISCOVERY_BACKEND)
 import SwiftUI
 import WebKit
 
@@ -8,6 +8,7 @@ struct LiveSourcePostView: View {
     let expiresAt: Date
     let isCurrent: @MainActor () -> Bool
     let onClose: () -> Void
+    var usesInkStyle = false
     @StateObject private var model = LiveSourcePostModel()
     @State private var attempt = 0
     @Environment(\.appLanguageSettings) private var language
@@ -17,11 +18,11 @@ struct LiveSourcePostView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text(source.platform.displayName).font(.headline)
+                Text(source.platform.displayName).font(usesInkStyle ? SaveInkType.shop : .headline)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 0)
                 Button(action: close) {
-                    Text(copy("Done", "完成")).font(.subheadline.weight(.semibold))
+                    Text(copy("Done", "完成")).font(usesInkStyle ? SaveInkType.secondaryButton : .subheadline.weight(.semibold))
                         .padding(.horizontal, 12)
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
@@ -58,8 +59,10 @@ struct LiveSourcePostView: View {
             }
             .accessibilityIdentifier("live.sourcePost.original")
         }
-        .padding(16).background(DateTheme.canvas.ignoresSafeArea())
-        .foregroundStyle(DateTheme.ink).tint(DateTheme.blue)
+        .padding(16)
+        .background(readerPaper.ignoresSafeArea())
+        .foregroundStyle(readerInk)
+        .tint(readerTint)
         .task(id: attempt) {
             guard canRead() else { close(); return }
             await model.load(source: source, isCurrent: canRead)
@@ -72,6 +75,27 @@ struct LiveSourcePostView: View {
         .onChange(of: isCurrent()) { _, allowed in if !allowed { close() } }
         .onChange(of: scenePhase) { _, phase in if phase != .active { close() } }
         .onDisappear { model.cancel() }
+    }
+
+    private var readerPaper: Color {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if !usesInkStyle { return DateTheme.canvas }
+#endif
+        return SaveInkPalette.paper
+    }
+
+    private var readerInk: Color {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if !usesInkStyle { return DateTheme.ink }
+#endif
+        return SaveInkPalette.ink
+    }
+
+    private var readerTint: Color {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if !usesInkStyle { return DateTheme.blue }
+#endif
+        return SaveInkPalette.ink
     }
 
     private func canRead() -> Bool { Date() < expiresAt && isCurrent() }
