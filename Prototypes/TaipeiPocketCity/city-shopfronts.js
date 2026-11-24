@@ -1,13 +1,15 @@
 import {storefrontCategory} from './shop-categories.js';
 import {drawServiceWindow} from './shop-service-windows.js';
 import {serviceWindowLabels} from './shop-service-labels.js';
+import {categoryFoodWindow,cuisineWindow,drawFoodWindow} from './shop-food-windows.js';
+import {mappedFoodWindow} from './taipei-food-window-evidence.js';
 export {storefrontCategory};
 import {MercatorCoordinate} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
 import {drawDihuaShop} from './dihua-shop-art.js?v=dihua-shops-1';
 import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
 import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
-import {completeFrontagePack} from './taipei-frontage-pack.js?v=ground-shops-2';
+import {completeFrontagePack} from './taipei-frontage-pack.js?v=shop-address-1';
 
 const minZoom=17.55;
 const layerId='city-shopfronts';
@@ -119,7 +121,7 @@ function nameAtlas(map, count, maxTexture){
 // come from the matched shop. Draw one display per bay so shelves cannot mask its shape.
 const tradeWindows = new Map([
   ['hairdresser','salon'], ['florist','flowers'], ['bicycle','cycle'],
-  ['cafe','espresso'], ['coffee','coffee-stock'], ['restaurant','dining'], ['fast_food','dining'],
+  ['coffee','coffee-stock'],
   ['optician','glasses'], ['convenience','cooler'], ['supermarket','checkout'],
   ['clothes','garments'], ['bakery','bread'], ['pastry','pastries'],
   ['beverages','bottles'], ['chemist','drugstore'],
@@ -314,8 +316,11 @@ function tradeWindow(trade, left, right, point, quad){
       rod(-.068,.89,.068,.89,.055,.13,timber);
       for(const side of [-1,1])rod(side*.51,.89,side*.64,.94,.049,.13,timber);
       break;
-    default:
-      drawServiceWindow(trade,{face,slab,shape,rod,rim,bottle},servicePaint);
+    default:{
+      const tools={face,slab,shape,rod,rim,bottle};
+      if(serviceWindowLabels.has(trade))drawServiceWindow(trade,tools,servicePaint);
+      else drawFoodWindow(trade,tools,servicePaint);
+    }
   }
 }
 
@@ -325,9 +330,11 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const tx=-ny,ty=nx;
   const half=clamp(row.width,1.5,9)*.5, top=3.25, offset=.14;
   const type=storefrontCategory(row)[1];
-  const trade=tradeWindows.get(row.category)??(serviceWindowLabels.has(row.category)?row.category:null);
-  const paint=colored[tradePaint[trade]??type];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
+  const knownCuisine=typeof row.cuisine==='string'?cuisineWindow(row.category,row.cuisine):mappedFoodWindow(row);
+  const trade=knownCuisine??categoryFoodWindow(row.category,seed)??tradeWindows.get(row.category)
+    ??(serviceWindowLabels.has(row.category)?row.category:null);
+  const paint=colored[tradePaint[trade]??type];
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
   const trim=timbers[seed%timbers.length];
   const first=vertices.length/13;

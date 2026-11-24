@@ -1,11 +1,13 @@
-import {withShopFacts} from './taipei-frontage-pack.js?v=ground-shops-2';
+import {withShopFacts} from './taipei-frontage-pack.js?v=shop-address-1';
+import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
+import {addCityHydrants} from './city170-hydrants.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
 import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-equipment-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
-import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=ground-shops-2';
+import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=shop-address-1';
 import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=waterfront-3';
 import {streetShopProperties} from './shop-trades.js?v=service-windows-4';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
@@ -114,6 +116,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   addCityAirfield(map,firstLabel);
   addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
+  addArcadeFloors(map,'survey');
+  addCityHydrants(map,firstLabel);
   addCityPlaceIndex(map,pin);
   const baseRoads=map.getStyle().layers.filter(l=>l['source-layer']==='transportation_name');
   let boundary,roadLabelsActive=false;

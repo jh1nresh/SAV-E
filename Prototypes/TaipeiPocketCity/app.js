@@ -20,9 +20,9 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=service-windows-4';
-import {addCity170,dihuaSearch} from './city170.js?v=waterfront-3';
-import {addCityShopfronts} from './city-shopfronts.js?v=service-windows-4';
+import {addShopSearch} from './city-shop-search.js?v=shop-address-1';
+import {addCity170,dihuaSearch} from './city170.js?v=arcade-sections-2';
+import {addCityShopfronts} from './city-shopfronts.js?v=shop-address-1';
 import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);

@@ -21,7 +21,7 @@ class PocketCityPackageTests(unittest.TestCase):
         runtime = set(pkg.runtime_paths())
         self.assertTrue({'ios-map.js', 'taiwan-search-worker.js', 'assets/maplibre-gl-worker.mjs',
                          'taiwan/mountains/yushan-ridges.webp', 'taiwan/mountains/taiwan-highlands.webp',
-                         'taipei-river-art.js', 'assets/taipei-river-art.json.gz',
+                         'taipei-river-art.js', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
                          'taipei-frontage-cameras.js', 'city170-bike-docks.js', 'shop-categories.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)

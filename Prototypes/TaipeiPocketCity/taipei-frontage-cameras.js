@@ -7535,6 +7535,7 @@ export const frontageViews={
 "poi/node/8438683276":0,
 "poi/node/8438740358":0,
 "poi/node/8438740363":3,
+"poi/node/8441425922":2,
 "poi/node/8457809911":4,
 "poi/node/8462626432":0,
 "poi/node/8467317973":-1,

@@ -146,7 +146,7 @@ import {gunzipSync} from 'node:zlib';
 const {courtMarkings}=await import('./city170-courts.js');
 const {surfaceFeature}=await import('./city170-ground.js');
 const {addCity170Style}=await import('./city170-style.js');
-const {recoveredFronts}=await import('./taipei-shopfront-recoveries.js');
+const {supplements:recoveredFronts}=await import('./taipei-frontage-pack.js');
 let filter;
 const ctx=new Proxy({}, {get:()=>()=>({addColorStop(){}})});
 globalThis.document={createElement:()=>({getContext:()=>ctx})};
@@ -807,7 +807,11 @@ def main():
                     "city170-grade-ids.js",
                     "city170-style.js",
                     "city170-courts.js",
+                    "taipei-frontage-pack.js",
                     "taipei-shopfront-recoveries.js",
+                    "dihua-north-frontages.js",
+                    "taipei-ground-frontages.js",
+                    "taipei-address-frontages.js",
                 ]
             ],
             args.osm,
