@@ -1,5 +1,6 @@
 /apple-config.js
 /data/
+/taiwan/townships.geojson
 /.restore-*/
 __pycache__/
 *.p8

@@ -3,7 +3,7 @@ import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
 
 const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replace(/\s+/g,'');
-export function addShopSearch(map,locate,heritage,openPlace,focusFront){
+export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNation){
   let pending,frontages,verifiedPending,verifiedEntries;
   const forms=document.querySelectorAll('.shop-search');
   function entry(row){
@@ -62,7 +62,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront){
         button.type='button';
         const title=document.createElement('strong'),detail=document.createElement('small');
         title.textContent=name;
-        detail.textContent=[district,street,heritagePlace?.source==='Savvy'?'Savvy 貼文':angle===null?'地點':'店面']
+        detail.textContent=[district,street,heritagePlace?.source==='Savvy'?'Savvy 貼文':angle!==null?'店面':district||street?'':'地點']
           .filter(Boolean).join(' · ');
         button.append(title,detail);
         button.addEventListener('click',()=>{
@@ -72,8 +72,8 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront){
           if(angle!==null && focusFront?.(row))return;
           const a=(angle??0)*Math.PI/180,offset=angle===null?0:2.5;
           locate({center:[x+Math.cos(a)*offset/100780,y+Math.sin(a)*offset/110800],
-            bearing:angle===null?0:270-angle,zoom:angle===null?18.4:20.75,
-            mobileZoom:angle===null?18.4:20.45,pitch:42,mobilePitch:42});
+            bearing:angle===null?0:270-angle,zoom:heritagePlace?.mapZoom??(angle===null?18.4:20.75),
+            mobileZoom:heritagePlace?.mapZoom??(angle===null?18.4:20.45),pitch:42,mobilePitch:42});
           const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
           const inspected=id.startsWith('inspection/');
           const commerce=id.startsWith('commerce/');
@@ -82,7 +82,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront){
             url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:
               inspected||commerce?'https://data.taipei/dataset/detail?id='+(inspected?'59579c19-a561-4564-8c0f-545bfb32c0f6':'0d09e03e-bb11-4213-a9c8-6bfd392fbb16'):undefined,
             ...heritagePlace,detail:heritagePlace?.source==='Savvy'?heritagePlace.detail
-              :[district,street].filter(Boolean).join(' · ')||heritagePlace?.detail||''});
+              :heritagePlace?.detail||[district,street].filter(Boolean).join(' · ')||''});
         });
         list.append(button);
       }
@@ -91,17 +91,20 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront){
       const turn=++serial,query=input.value.trim();
       if(!query){hide();return;}
       const terms=query.split(/\s+/).map(fold);
-      const extra=loadVerifiedEntries();
-      try{
-        const entries=await load();
-        if(turn!==serial)return;
-        render([...entries,...(verifiedEntries??[])],query,terms);
-        if(!verifiedEntries){
-          const sources=await extra;
-          if(turn===serial&&sources.length&&!list.contains(document.activeElement))render([...entries,...sources],query,terms);
-        }
-      }catch{
-        if(turn===serial){list.hidden=false;list.textContent='地點資料暫時無法載入，請再搜尋一次';}
+      let nearby=[],saved=[],national=[];
+      function display(){
+        if(turn!==serial||list.contains(document.activeElement))return;
+        const byId=new Map();
+        for(const e of [...saved,...nearby,...national])if(!byId.has(e.row[6]))byId.set(e.row[6],e);
+        render([...byId.values()],query,terms);
+      }
+      const results=await Promise.allSettled([
+        load().then(rows=>{nearby=rows;display();}),
+        loadVerifiedEntries().then(rows=>{saved=rows;if(rows.length)display();}),
+        searchNation?.(query,map.getCenter()).then(rows=>{national=rows.map(entry);if(rows.length)display();}),
+      ]);
+      if(turn===serial&&results.every(r=>r.status==='rejected')){
+        list.hidden=false;list.textContent='地點資料暫時無法載入，請再搜尋一次';
       }
     }
     input.addEventListener('input',update);

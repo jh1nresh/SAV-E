@@ -215,6 +215,39 @@
     ]
   },
   {
+    "id": "sun-moon-xiangshan",
+    "area": "南投縣",
+    "landmarkPlaceIds": {},
+    "name": "日月潭向山",
+    "landmark": "向山行政暨遊客中心",
+    "center": [
+      120.90237,
+      23.85195
+    ],
+    "bounds": [
+      120.90077869,
+      23.85048478,
+      120.90396131,
+      23.85341522
+    ],
+    "sizeMeters": 230,
+    "landmarkIds": [
+      "w1001894428",
+      "w1001894430"
+    ],
+    "landmarkSites": [
+      {
+        "osmType": "node",
+        "osmId": 2341498877,
+        "name": "向山遊客中心",
+        "point": [
+          120.9021197,
+          23.8520452
+        ]
+      }
+    ]
+  },
+  {
     "id": "yunlin",
     "area": "雲林縣",
     "landmarkPlaceIds": {

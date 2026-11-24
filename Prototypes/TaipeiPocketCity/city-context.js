@@ -11,7 +11,7 @@ export function intersectsBuilding(outer,[w,s,e,n]){
   for(const [x,y] of outer){west=Math.min(west,x);east=Math.max(east,x);south=Math.min(south,y);north=Math.max(north,y);}
   return west<=e&&east>=w&&south<=n&&north>=s;
 }
-export function addCityContext(map,rows,before,inTaipei,open){
+export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false){
   const id='city-atlas-context',data=features=>({type:'FeatureCollection',features});
   map.addSource(id,{type:'geojson',data:data([]),maxzoom:16});
   map.addLayer({id,source:id,type:'fill-extrusion',minzoom:15,filter:['==',['geometry-type'],'Polygon'],paint:{
@@ -30,7 +30,7 @@ export function addCityContext(map,rows,before,inTaipei,open){
   let timer,previous='',active=false;
   function refresh(){
     const {lng,lat}=map.getCenter(),z=map.getZoom(),bounds=map.getBounds();
-    if(z<15||!atlasRegions.some(box=>covers(box,lng,lat))){
+    if(z<15||!(inTaiwan(lng,lat)||atlasRegions.some(box=>covers(box,lng,lat)))){
       if(active){map.getSource(id).setData(data([]));previous='';active=false;}return;
     }
     const view=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()];
@@ -55,7 +55,7 @@ export function addCityContext(map,rows,before,inTaipei,open){
       if(feature.geometry.type!=='Point')continue;
       const p=feature.properties,[x,y]=feature.geometry.coordinates;
       const name=p['name:zh-Hant']||p['name:zh']||p.name;
-      if(!name||!covers(view,x,y)||inTaipei(x,y)||nearby.some(row=>covers(row.bounds,x,y)))continue;
+      if(!name||!covers(view,x,y)||inTaiwan(x,y)||inTaipei(x,y)||nearby.some(row=>covers(row.bounds,x,y)))continue;
       const key='poi/'+name+'/'+x.toFixed(6)+'/'+y.toFixed(6);
       if(seen.has(key))continue;
       seen.add(key);

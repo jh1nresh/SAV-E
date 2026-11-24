@@ -1,6 +1,15 @@
-# 台北 Pocket City
+# Savvy Pocket City
 
 同一個台北街區有兩個入口。「3D 街景」可以拖曳、旋轉和放大到復興南路的招牌。「Apple 地點」在 Apple 地圖上顯示 Pocket City 插畫，沿用 Apple 提供的興趣點與地點卡。這個原型沒有 Savvy 帳號資料。
+
+## 從地球看台灣
+
+在同一張地圖拖曳、旋轉和縮放。從[台灣本島](http://127.0.0.1:42418/index.html?view=120.92,23.68,7.0&bearing=0)可以看到中央山脈、河谷與西部平原。搜尋「日月潭」可以飛到湖岸，搜尋鄉鎮名可以移到當地繼續逛。街口的具名地點沿用 Savvy 的 pin 與地點卡。
+
+- 全國範圍取自國土測繪中心 TOWN_MOI_1120317 鄉鎮界。22 縣市、368 鄉鎮市區的陸域共與 1,283,052 個約 170 公尺網格相交，包含離島。各格共用同一個地理原點。海岸邊的格子只要碰到陸地就計入。[界線來源](https://maps.nlsc.gov.tw/pro/download.jsp)
+- 山脊與谷地沿用數值高程。另有 14,940 個具名景觀與公園、13,309 段河溪和露天水道以及 840 個水域與濕地輪廓。景觀名稱可點開看公開來源。[地形來源](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) · [山水資料與重建方式](taiwan/scenery/SOURCES.md)
+- 全台具名公共地點來自 2026-11-23 的 OpenStreetMap 台灣快照，共 245,607 筆，涵蓋所有鄉鎮。此索引與山水資料有交集。除了店家，也包含學校、車站及公共設施。瀏覽地點與建立收藏是不同操作。[Geofabrik 台灣快照](https://download.geofabrik.de/asia/taiwan.html)
+- 街口近景按目前視野中的建物、道路、水域和林地生成屋頂、店面細節與林冠。高倍率的普通街區需要連線載入向量圖磚。專門繪製的地標優先顯示自己的模型。[地標製作流程](CITY-WORKFLOW.md)
 
 ![復興南路同一手機鏡位，關閉店名後的舊版與新版](examples/fuxing-mobile-comparison.jpg)
 

@@ -83,8 +83,48 @@ class LandmarkLayer{
   }
   onRemove(){for(const id of this.meshes.keys())this.drop(id);this.gl.deleteProgram(this.shader);}
 }
+// Projected pins for a building may be offset from its OSM centroid. Use stable
+// IDs first. The older anonymous street pins can only match at their mapped point.
+export function indexAuthoredPlaces(features){
+  const ids=new Map(),names=new Map(),bindings=new Map();
+  const nameKey=name=>name.trim().normalize('NFKC');
+  for(const f of features){
+    if(f.properties.kind!=='pin'||!f.properties.name)continue;
+    if(f.properties.placeId)ids.set(f.properties.placeId,f);
+    else{
+      const key=nameKey(f.properties.name);
+      if(!names.has(key))names.set(key,[]);
+      names.get(key).push(f);
+    }
+  }
+  function nearby(name,[x,y]){
+    return (names.get(nameKey(name))??[]).filter(f=>{
+      const [lx,ly]=f.geometry.coordinates;
+      return Math.hypot((lx-x)*111320*Math.cos(y*Math.PI/180),(ly-y)*110574)<=4;
+    });
+  }
+  const visible=(f,zoom)=>zoom>=(f.properties.rank===0?16.8:18.65);
+  return {
+    claims(place,zoom){
+      const exact=ids.get(place.placeId);
+      if(exact&&visible(exact,zoom))return true;
+      const matches=nearby(place.name,place.point).filter(f=>visible(f,zoom));
+      if(matches.length!==1)return false;
+      const pin=matches[0],prior=bindings.get(pin);
+      if(prior&&prior.placeId!==place.placeId)return false;
+      bindings.set(pin,place);
+      return true;
+    },
+    enrich(f){
+      if(f.properties.placeId)return f.properties;
+      const matches=nearby(f.properties.name,f.geometry.coordinates);
+      const place=matches.length===1?bindings.get(matches[0]):null;
+      return place?{...f.properties,placeId:place.placeId,id:place.placeId,url:place.url,source:place.source}:f.properties;
+    },
+  };
+}
 export async function addCityAtlas(map,before,open,onChange){
-  const rows=await read('catalog.json'),mesh=new LandmarkLayer(),trees=new CityNature();
+  const rows=await read('catalog.json?rev=taiwan-1'),mesh=new LandmarkLayer(),trees=new CityNature();
   trees.id='city-atlas-trees';
   const places=[{id:'taipei',name:'台北',landmark:'台北 101',center:[121.56481,25.03367]},...rows];
   const overview=['taipei','beijing','shanghai','los-angeles'];
@@ -111,7 +151,7 @@ export async function addCityAtlas(map,before,open,onChange){
       duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:850});
   });
   const loaded=new Map(),pending=new Map(),errors=new Map();
-  let rain=0;
+  let rain=0,authoredPlaces=indexAuthoredPlaces([]);
   map.addSource('city-atlas-ground',{type:'geojson',data:collection([])});
   const base={source:'city-atlas-ground',minzoom:14};
   map.addLayer({...base,id:'city-atlas-pavement',type:'fill',filter:['==',['geometry-type'],'Polygon'],
@@ -126,7 +166,10 @@ export async function addCityAtlas(map,before,open,onChange){
   }
   map.on('click',e=>{
     const hit=map.queryRenderedFeatures(e.point,{layers:['city-atlas-pins','city-atlas-places']})[0];
-    if(hit)open({...hit.properties,point:hit.geometry.coordinates});
+    if(hit&&!e.defaultPrevented){
+      e.preventDefault();
+      open({...authoredPlaces.enrich(hit),point:hit.geometry.coordinates});
+    }
   });
   const authoredBounds={type:'MultiPolygon',coordinates:rows.map(({bounds:[w,s,e,n]})=>
     [[[w,s],[e,s],[e,n],[w,n],[w,s]]])};
@@ -135,7 +178,10 @@ export async function addCityAtlas(map,before,open,onChange){
     map.setFilter(id,['all',map.getFilter(id)??true,outside]);
   }
   function refresh(){
-    map.getSource(base.source).setData(collection([...loaded.values()].flatMap(s=>s.features)));
+    const features=[...loaded.values()].flatMap(s=>s.features);
+    authoredPlaces=indexAuthoredPlaces(features);
+    map.getSource(base.source).setData(collection(features));
+    map.fire('city-atlas-pins-changed');
     trees.setRows([...loaded.values()].flatMap(s=>s.trees));
     onChange();
   }
@@ -167,7 +213,7 @@ export async function addCityAtlas(map,before,open,onChange){
     }
   }
   map.on('moveend',update);map.on('remove',()=>{for(const task of pending.values())task.abort();});update();
-  return {rows,setRain(share){rain=share;for(const s of loaded.values())if(s.people)s.people.umbrellaShare=share;},
+  return {rows,claimsPlace:(place,zoom)=>authoredPlaces.claims(place,zoom),setRain(share){rain=share;for(const s of loaded.values())if(s.people)s.people.umbrellaShare=share;},
     at(lng,lat){return rows.find(({bounds:[w,s,e,n]})=>lng>=w-.001&&lng<=e+.001&&lat>=s-.001&&lat<=n+.001);},
     ready:id=>loaded.has(id),failed:id=>errors.has(id),retry(id){errors.delete(id);update();},state:()=>({loaded:[...loaded.keys()],pending:[...pending.keys()],failed:[...errors.keys()]})};
 }

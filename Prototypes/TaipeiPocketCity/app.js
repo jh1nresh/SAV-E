@@ -1,6 +1,11 @@
+import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js';
+import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js';
+import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=2';
+import {addTaiwanScenery} from './taiwan-scenery.js?v=2';
+import {addTaiwanCells} from './taiwan-cells.js';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
 import {addCityContext} from './city-context.js';
-import {addCityAtlas} from './city-atlas-layer.js?v=world-map-1';
+import {addCityAtlas} from './city-atlas-layer.js?v=taiwan-detail-3';
 import {cityPlaceLayers} from './city-place-index.js';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
@@ -12,7 +17,7 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=photo-pins-1';
+import {addShopSearch} from './city-shop-search.js?tw=2&v=photo-pins-1';
 import {addCity170,dihuaSearch} from './city170.js?v=category-badges-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=named-pins-1';
 import {CityNature} from './city-nature.js?v=inventory-3';
@@ -46,7 +51,7 @@ const nativeStatus=$('#progress');
 let map, layer, streetDetail, metroState, weather;
 let streetDistricts=new Map();
 let cityDistricts=[], cityGrids, cityGridLoad;
-let atlas170,shopfronts,cityNature,worldAtlas;
+let atlas170,shopfronts,cityNature,worldAtlas,taiwanCoverage,taiwanCells,taiwanScenery;
 let preparedGroundReady=false;
 function setPreparedGround(ready=preparedGroundReady){
   preparedGroundReady=ready;
@@ -70,7 +75,7 @@ function updateFrontageView(){
       // Ground labels draw before the solid facades and trees, so uncovered points remain visible.
       const layers=map.getStyle().layers;
       labelOrder=layers.flatMap((layer,i)=>{
-        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','world-cities','world-city-dots','poi_r1'].includes(layer.id);
+        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','tw-public-places','city-atlas-locators','world-cities','world-city-dots','poi_r1'].includes(layer.id);
         const road=layer['source-layer']==='transportation_name'||layer.id==='city170-road-names'||layer.id.endsWith('-road-labels');
         return place||road?[[layer.id,layers[i+1]?.id]]:[];
       });
@@ -261,14 +266,15 @@ function updateUI(){
   if(metroState)$('#metro-toggle').hidden=!city&&$('#metro-toggle').getAttribute('aria-pressed')!=='true';
   const active=!!district&&showModels&&z>=buildingZoom;
   const zoomed=active&&z>=16.4;
-  const patch=z>=6&&worldAtlas?.at(lng,lat);
+  const patch=z>=10&&worldAtlas?.at(lng,lat);
   const inTaiwan=lng>=118&&lng<=122.2&&lat>=21.7&&lat<=26.5;
-  const label=patch?.name??district??(city?'台北市':z>=5&&inTaiwan?'台灣':'地球');
+  const town=z>=8?taiwanCoverage?.at(lng,lat):null;
+  const label=patch?.name??district??(town?(z>=10?town.name:town.county):city?'台北市':z>=5&&z<8&&inTaiwan?'台灣':'地球');
   $('.geography').hidden=z>4&&label==='地球';
   const retry=$('#retry-landmark');
   retry.hidden=!patch||!worldAtlas.failed(patch.id);
   if(patch)retry.dataset.city=patch.id;
-  $('#parent').textContent=patch?(patch.area===label?'':patch.area??''):district?'台北市':city?'台灣':'';
+  $('#parent').textContent=patch?(patch.area===label?'':patch.area??''):district?'台北市':town?(z>=10?town.county:'台灣'):city?'台灣':'';
   $('#region').textContent=label;
   const nearby=z>=16&&Object.entries(landmarks).find(([key,item])=>{
     const bounds=streetDistricts.get(key)?.bounds;
@@ -281,7 +287,7 @@ function updateUI(){
   const illustrated=hasStreetDistrict(district);
   $('#resolution').textContent=patch&&z>=15?(worldAtlas.failed(patch.id)?'街區載入失敗':worldAtlas.ready(patch.id)?patch.landmark:'載入街區…'):z<10?'':zoomed
     ?atlas170?`${nearby?nearby[1].name+' · ':''}170 公尺街區`:(nearby?`${nearby[1].name} · ${nearby[0]!=='101'&&streetDistricts.has(nearby[0])?'220':'200'} 公尺街區`:illustrated||inLink?'街廓 · 220 公尺':'200 公尺 · 插畫立面')
-    :active?'2025 LOD1 量體':'地圖總覽';
+    :active?'2025 LOD1 量體':town?'':'地圖總覽';
   $('#pitch').setAttribute('aria-pressed',String(map.getPitch()>=23));
 }
 let lastGrid='', plotGrid, loadingPlots;
@@ -290,6 +296,11 @@ function hasStreetDistrict(name){
   return streetDistricts.has(key)||cityDistricts.some(district=>district.key===key);
 }
 function updateGrid(){
+  if(map.getSource('taiwan-grid')){
+    const town=showGrid&&taiwanCoverage&&map.getZoom()>=15&&
+      !regionAt()&&taiwanCoverage.at(map.getCenter().lng,map.getCenter().lat);
+    map.getSource('taiwan-grid').setData(town?{type:'FeatureCollection',features:taiwanCoverage.cellsIn(map.getBounds())}:empty);
+  }
   if(atlas170){atlas170.grid(showGrid);return;}
   const source=map.getSource('plots');
   if(!source)return;
@@ -375,7 +386,7 @@ try{
     rerun?readPocketCityAsset('street-pocket-city')
       .then(data=>data?.summary&&data?.districts?data:null).catch(()=>null):null,
     rerun?get(`./data/city-streets/index.json${terrainRevision}`).catch(()=>null):null,
-    get('./cities/map-tiles/index.json').catch(()=>null),
+    get('./cities/map-tiles/index.json?rev=taiwan-1').catch(()=>null),
     fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
       .then(res=>res.ok?res.json():null).catch(()=>null),
     ...streetDataKeys.filter(key=>!rerun||!key.endsWith('-district')).map(key=>get(`./data/street-${key}.json`)
@@ -424,13 +435,15 @@ try{
   map=new ml.Map({
     container:'map',style:mapStyle(base,districts),...globeCamera(stage.clientWidth,stage.clientHeight),
     minZoom:-2,maxZoom:21.6,maxPitch:65,
-    transformRequest:url=>({url:localTerrain.get(url)??url}),
+    transformRequest:url=>({url:localTerrain.get(url)??taiwanLocalDEM(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
     canvasContextAttributes:{antialias:true},
   });
   map.addControl(new ml.NavigationControl({visualizePitch:true}),'top-right');
   map.addControl(new ml.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
   map.addControl(new ml.AttributionControl({compact:true,customAttribution:[
+    '<a href="https://data.gov.tw/dataset/7441">國土測繪中心鄉鎮界線</a>',
+    '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">地形 Mapzen · USGS / NOAA</a>',
     '<a href="https://data.taipei/dataset/detail?id=1601ef3a-c253-4988-b047-943d9e786143" target="_blank" rel="noopener">臺北市區界</a>',
     '<a href="https://data.taipei/dataset/detail?id=c013d9ec-a550-46bd-ac60-45f085930706" target="_blank" rel="noopener">臺北市市場處</a>',
     '<a href="https://data.taipei/dataset/detail?id=59579c19-a561-4564-8c0f-545bfb32c0f6" target="_blank" rel="noopener">臺北市衛生局</a>',
@@ -482,6 +495,10 @@ try{
   const cityLandmarks=cityMask?cityLandmarkModels:[];
   layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
+  map.addSource('taiwan-grid',{type:'geojson',data:empty});
+  map.addLayer({id:'taiwan-grid',source:'taiwan-grid',type:'line',minzoom:15,
+    paint:{'line-color':'#3c7164','line-opacity':.35,'line-width':1,'line-dasharray':[2,2]}},firstLabel);
+  installTaiwanRelief(map,'water');
   map.addLayer(layer,firstLabel);
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);
@@ -508,7 +525,7 @@ try{
       const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
       return focusFront({id,name,kind:'shopfront',categoryLabel:'臨街店面',detail:[district,street].filter(Boolean).join(' · '),
         source:osm?'OpenStreetMap':undefined,url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:undefined},x,y,angle);
-    });
+    },searchTaiwanEntries);
     shopfronts=addCityShopfronts(map,(card,row)=>{
       if(!focusFront(card,...row.center,row.angle))streetDetail.openMappedPlace({...card,point:row.center});
     },firstLabel,ids=>{
@@ -553,9 +570,10 @@ try{
     const visible=inside?localNames:globalNames;
     if(visible===appliedNames)return;
     appliedNames=visible;
-    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','world-cities','world-city-dots','poi_r1']){
+    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','tw-public-places','city-atlas-locators','world-cities','world-city-dots','poi_r1']){
       if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     }
+    taiwanScenery?.setLabels(visible);
     shopfronts?.setNames(visible);
     $('#fuxing-names').setAttribute('aria-pressed',String(visible));
     document.body.classList.toggle('without-place-names',!visible);
@@ -571,7 +589,26 @@ try{
   }
   try{
     worldAtlas=await addCityAtlas(map,firstLabel,place=>streetDetail?.openMappedPlace(place),updateUI);
-    addCityContext(map,worldAtlas.rows,firstLabel,districtAt,place=>streetDetail?.openMappedPlace(place));
+    const open=place=>streetDetail?.openMappedPlace(place);
+    const inTown=(x,y)=>!!taiwanCoverage?.at(x,y);
+    const overlapsAuthored=([w,s,e,n])=>worldAtlas.rows.some(({bounds:[a,b,c,d]})=>w<=c&&e>=a&&s<=d&&n>=b);
+    const exclude=(x,y)=>!!districtAt(x,y)||overlapsAuthored([x,y,x,y]);
+    addCityContext(map,worldAtlas.rows,firstLabel,districtAt,open,inTown);
+    taiwanScenery=addTaiwanScenery(map,firstLabel,open);
+    addTaiwanPlaces(map,(place,zoom)=>!!districtAt(...place.point)||worldAtlas.claimsPlace(place,zoom),open);
+    let coverageRequest;
+    function loadCoverage(){
+      if(taiwanCoverage||coverageRequest||map.getZoom()<5)return;
+      const b=map.getBounds();
+      if(b.getEast()<114||b.getWest()>125||b.getNorth()<10||b.getSouth()>27)return;
+      coverageRequest=Promise.all([readTaiwanJSON('townships.geojson.gz'),readTaiwanJSON('cells.json')])
+        .then(([towns,grid])=>{
+          taiwanCoverage=makeTaiwanCoverage(towns,grid);
+          taiwanCells=addTaiwanCells(map,firstLabel,{contains:inTown,exclude,overlapsAuthored});
+          updateGrid();updateUI();
+        }).catch(error=>console.warn('Taiwan coverage',error)).finally(()=>{coverageRequest=null;});
+    }
+    map.on('moveend',loadCoverage);loadCoverage();
     weather?.refresh();
     appliedNames=undefined;applyLocalNames(false);
     $('#retry-landmark').addEventListener('click',e=>worldAtlas.retry(e.currentTarget.dataset.city));
@@ -588,7 +625,7 @@ try{
   if(coordinate.length===3 && coordinate.every(Number.isFinite) &&
       Math.abs(coordinate[0])<=180 &&
       Math.abs(coordinate[1])<=85){
-    locate({center:coordinate.slice(0,2),zoom:Math.max(10,Math.min(21.6,coordinate[2])),mobileZoom:Math.max(10,Math.min(21.6,coordinate[2]-.35)),pitch:42,bearing:Number.isFinite(facing)?facing:-17},false);
+    locate({center:coordinate.slice(0,2),zoom:Math.max(4,Math.min(21.6,coordinate[2])),mobileZoom:Math.max(4,Math.min(21.6,coordinate[2]-.35)),pitch:coordinate[2]<11?0:42,mobilePitch:coordinate[2]<11?0:42,bearing:Number.isFinite(facing)?facing:-17},false);
   }else if(startCity)locate(atlasCamera(startCity),false);
   else if(street==='fuxing')locate(bookshopView,false);
   else if(street==='fuxing-row')locate(shopRowView,false);
@@ -633,7 +670,7 @@ try{
       detail:layer.diagnostics,street:streetDetail?.state(),metro:metroState?.(),weather:weather?.state(),
       pocketCity:skillAtlas?.summary??null,
       atlas170:atlas170?.state(),shopfronts:shopfronts?.state(),inventoryTreesDrawn:cityNature?.drawn,
-      landmarkAtlas:worldAtlas?.state(),
+      landmarkAtlas:worldAtlas?.state(),taiwan:{townships:taiwanCoverage?.towns,landCells:taiwanCoverage?.count,visible:taiwanCells?.state()},
       cityAtlas:atlas170?atlas170.state().coverage:cityIndex?.cityCoverage??null,
     }),
   };
