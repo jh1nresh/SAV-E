@@ -3,7 +3,10 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { createPublicDiscoverySaveIntake, loadPublicDiscoverySaveIntake, writePublicSourceIntakeDraft } from "./publicDiscoverySaveIntake.js";
+import {
+  createPublicDiscoverySaveIntake, loadPublicDiscoverySaveIntake, parsePublicSourceIntakeInventory,
+  writePublicSourceIntakeDraft,
+} from "./publicDiscoverySaveIntake.js";
 import type { PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { parsePublicSourceQueue, type QueueState } from "./publicDiscoverySaveQueue.js";
 
@@ -18,6 +21,34 @@ const inventory = () => new Map<string, { place: PublicDiscoveryPlace; missing: 
   [identity, { place, missing: ["instagram", "threads"] }],
   [JSON.stringify([second.provider, second.providerPlaceID]), { place: second, missing: ["instagram"] }],
 ]);
+
+test("searches with the verified localized address while preserving the exact draft place", async () => {
+  const original = {
+    ...place, provider: "apple_maps" as const, name: "無店名魷魚羹",
+    address: "111 Taiwan Taibei City Shilin Renyongli Danan Road No.7, Shilin, Taibei, Taiwan China",
+  };
+  const localized = {
+    provider: original.provider, providerPlaceID: original.providerPlaceID,
+    expectedAddress: original.address, address: "台北市士林區大南路7號",
+  };
+  const rows = [{ place: original, missing: ["instagram", "threads"] }];
+  const queries: string[] = [];
+  const draftPlaces: PublicDiscoveryPlace[] = [];
+  // Reflect.apply also exercises the old one-argument parser in the regression check.
+  const worker = createPublicDiscoverySaveIntake({
+    inventory: Reflect.apply(parsePublicSourceIntakeInventory, undefined, [rows, [localized]]),
+    catalogScan: true,
+    async search(query) { queries.push(query); return []; },
+    async write(_identity, draft) { draftPlaces.push(draft.place); },
+  });
+  await worker.idle();
+  assert.equal(queries.length, 2);
+  assert.ok(queries.every(query => query.includes("台北市士林區大南路7號")), queries.join("\n"));
+  assert.ok(queries.every(query => !query.includes("Danan Road")));
+  assert.deepEqual(draftPlaces, [original]);
+  assert.throws(() => Reflect.apply(parsePublicSourceIntakeInventory, undefined,
+    [rows, [{ ...localized, expectedAddress: "stale provider address" }]]), /Invalid localized address evidence/);
+});
 
 test("loads new public venues during provider cooldown and drops removed pending venues", async () => {
   const at = Date.parse("2026-11-23T05:00:00Z");
@@ -300,6 +331,41 @@ test("queues a saved official destination only with its exact WGS84 identity", a
 
 test("requires a configured serving index before starting discovery intake", async () => {
   await assert.rejects(loadPublicDiscoverySaveIntake("/unused-savvy-intake-fixture"), /Expected a public discovery index/);
+});
+
+test("a retry with no search results retains its earlier unreviewed draft", async t => {
+  const directory = await mkdtemp(join(tmpdir(), "public-source-intake-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const sourceURL = "https://www.instagram.com/p/RetryFixture/";
+  const initialTime = Date.parse("2026-11-23T05:00:00Z");
+  let now = initialTime;
+  const worker = createPublicDiscoverySaveIntake({
+    inventory: inventory(),
+    now: () => now,
+    async search(query) {
+      if (now !== initialTime) return [];
+      if (query.includes("instagram.com")) return [{ query, url: sourceURL, title: "Public draft" }];
+      throw new Error("HTTP 429");
+    },
+    write: (id, report) => writePublicSourceIntakeDraft(directory, id, report),
+  });
+  await worker.afterSave(saved);
+  await worker.idle();
+  now += 15 * 60_000;
+  await worker.idle();
+  const readReports = async () => Promise.all((await readdir(directory)).map(async file =>
+    JSON.parse(await readFile(join(directory, file), "utf8"))));
+  const reports = await readReports();
+  assert.ok(reports.some(report => report.coverage.threads === "searched" && report.candidates.length === 0));
+  const candidates = reports.flatMap(report => report.candidates);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].sourceURL, sourceURL);
+  assert.equal(candidates[0].review, null);
+  await writePublicSourceIntakeDraft(directory, identity, {
+    ...reports.find(report => report.candidates.length),
+    checkedAt: new Date(now).toISOString(),
+  });
+  assert.equal((await readReports()).length, 2, "an identical candidate batch reuses its filename");
 });
 
 test("persistent state can restore more than 5000 exact configured places", () => {
@@ -632,39 +698,4 @@ test("persists a provider cooldown before publishing a catalog draft", async () 
   assert.equal(stateDuringDraft.backoffUntil, at + 15 * 60 * 1_000);
   assert.equal(stateDuringDraft.jobs[0]?.pending, true);
   assert.equal(lastState?.jobs[0]?.pending, false);
-});
-
-test("a retry with no search results retains its earlier unreviewed draft", async t => {
-  const directory = await mkdtemp(join(tmpdir(), "public-source-intake-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const sourceURL = "https://www.instagram.com/p/RetryFixture/";
-  const initialTime = Date.parse("2026-11-23T05:00:00Z");
-  let now = initialTime;
-  const worker = createPublicDiscoverySaveIntake({
-    inventory: inventory(),
-    now: () => now,
-    async search(query) {
-      if (now !== initialTime) return [];
-      if (query.includes("instagram.com")) return [{ query, url: sourceURL, title: "Public draft" }];
-      throw new Error("HTTP 429");
-    },
-    write: (id, report) => writePublicSourceIntakeDraft(directory, id, report),
-  });
-  await worker.afterSave(saved);
-  await worker.idle();
-  now += 15 * 60_000;
-  await worker.idle();
-  const readReports = async () => Promise.all((await readdir(directory)).map(async file =>
-    JSON.parse(await readFile(join(directory, file), "utf8"))));
-  const reports = await readReports();
-  assert.ok(reports.some(report => report.coverage.threads === "searched" && report.candidates.length === 0));
-  const candidates = reports.flatMap(report => report.candidates);
-  assert.equal(candidates.length, 1);
-  assert.equal(candidates[0].sourceURL, sourceURL);
-  assert.equal(candidates[0].review, null);
-  await writePublicSourceIntakeDraft(directory, identity, {
-    ...reports.find(report => report.candidates.length),
-    checkedAt: new Date(now).toISOString(),
-  });
-  assert.equal((await readReports()).length, 2, "an identical candidate batch reuses its filename");
 });

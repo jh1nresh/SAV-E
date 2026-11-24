@@ -6,6 +6,7 @@ import {
   readPublicDiscoveryFile, validatePublicDiscoveryPlace, type PublicDiscoveryPlace,
 } from "./publicDiscovery.js";
 import { isCatalogDestinationID } from "./publicDiscoveryCatalog.js";
+import { localizedPublicDiscoveryPlaces } from "./publicDiscoveryDraftEvidence.js";
 import { collectPublicProfileDiscoveryDrafts } from "./publicDiscoveryProfileDrafts.js";
 import { emptyPublicSourceQueue, openPublicSourceQueue, parsePublicSourceQueue,
   writePublicSourceJSON, type QueueState } from "./publicDiscoverySaveQueue.js";
@@ -15,7 +16,7 @@ import { searchPublicWebResults, type SourceSearchResult } from "./sourceSearchW
 const platforms = ["instagram", "threads"] as const;
 type Platform = typeof platforms[number];
 type Profile = { platform: Platform; handle: string; branchTerms: string[]; nameAliases?: string[] };
-type Venue = { place: PublicDiscoveryPlace; missing: Platform[]; profiles?: Profile[] };
+type Venue = { place: PublicDiscoveryPlace; missing: Platform[]; profiles?: Profile[]; searchAddress?: string };
 type Inventory = Map<string, Venue>;
 type Candidate = { platform: Platform; sourceURL: string; authorHandle: string | null; title: string; review: null; observedIn?: string };
 type SearchStatus = "searched" | "access_required" | "rate_limited" | "unavailable" | "deferred";
@@ -64,7 +65,7 @@ async function collect(
   search: (query: string) => Promise<SourceSearchResult[]>,
   profileLookup: typeof collectPublicProfileDiscoveryDrafts,
 ): Promise<Result> {
-  const { place, missing } = venue;
+  const { place, missing, searchAddress = place.address } = venue;
   const coverage: Result["coverage"] = { instagram: "deferred", threads: "deferred" };
   const candidates: Candidate[] = [];
   let sharedSearchHalted = false;
@@ -90,8 +91,8 @@ async function collect(
       }
     }
     if (sharedSearchHalted) continue;
-    const queries = buildRelatedSourceQueries({ id: place.providerPlaceID, name: place.name, address: place.address }, platform);
-    const address = place.address.normalize("NFKC").replace(/[^\p{L}\p{N}.-]+/gu, " ").trim().slice(0, 100);
+    const queries = buildRelatedSourceQueries({ id: place.providerPlaceID, name: place.name, address: searchAddress }, platform);
+    const address = searchAddress.normalize("NFKC").replace(/[^\p{L}\p{N}.-]+/gu, " ").trim().slice(0, 100);
     const query = [queries.at(-1), address].filter(Boolean).join(" ");
     try {
       const hits = await search(query);
@@ -349,7 +350,7 @@ function validateProfiles(input: unknown, place: PublicDiscoveryPlace): Profile[
   });
 }
 
-export function parsePublicSourceIntakeInventory(input: unknown): Inventory {
+export function parsePublicSourceIntakeInventory(input: unknown, localized?: unknown): Inventory {
   if (!Array.isArray(input)) throw new Error("Invalid public source intake inventory");
   const inventory: Inventory = new Map();
   for (const row of input) {
@@ -362,6 +363,16 @@ export function parsePublicSourceIntakeInventory(input: unknown): Inventory {
     }
     const profiles = row.profiles === undefined ? [] : validateProfiles(row.profiles, place);
     inventory.set(identity, { place, missing, profiles });
+  }
+  if (localized !== undefined) {
+    const places = new Map([...inventory.values()].map(({ place }) =>
+      [`${place.provider}:${place.providerPlaceID}`, place]));
+    const evidencePlaces = localizedPublicDiscoveryPlaces(places, localized);
+    for (const venue of inventory.values()) {
+      const { provider, providerPlaceID, address } = venue.place;
+      const evidence = evidencePlaces.get(`${provider}:${providerPlaceID}`)!;
+      if (evidence.address !== address) venue.searchAddress = evidence.address;
+    }
   }
   return inventory;
 }
@@ -378,7 +389,19 @@ export async function loadPublicDiscoverySaveIntake(directory: string, indexFile
   if (!isAbsolute(directory)) throw new Error("Expected an absolute public source intake directory");
   const currentIndexFile = indexFile?.trim();
   if (!currentIndexFile) throw new Error("Expected a public discovery index for source intake");
-  const reloadInventory = async () => parsePublicSourceIntakeInventory(await readPublicDiscoveryFile(join(directory, "inventory.json")));
+  const reloadInventory = async () => {
+    const [raw, localized] = await Promise.all([
+      readPublicDiscoveryFile(join(directory, "inventory.json")),
+      readPublicDiscoveryFile(join(directory, "localized-addresses.json")).catch(() => undefined),
+    ]);
+    try {
+      return parsePublicSourceIntakeInventory(raw, localized);
+    } catch (error) {
+      if (localized === undefined) throw error;
+      // A missing or stale optional translation must not stop catalog intake.
+      return parsePublicSourceIntakeInventory(raw);
+    }
+  };
   const inventory = await reloadInventory();
   const drafts = join(directory, "drafts");
   await mkdir(drafts, { recursive: true, mode: 0o700 });
