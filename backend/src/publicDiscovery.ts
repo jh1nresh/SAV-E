@@ -15,6 +15,7 @@ export type PublicDiscoveryPost = {
   cover: { url: string; expiresAt: string; permission: "author" | "provider" } | null;
   place: PublicDiscoveryPlace;
   publishedOn?: string;
+  visibleUntil?: string;
   multiVenue?: true;
   highlightRank?: number;
 };
@@ -195,7 +196,7 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
   const highlightSlots = new Set<string>();
   const originals = new Map<string, { signature: string; multiVenue: boolean }>();
   const validatedPosts = input.posts.map((value): PublicDiscoveryPost => {
-    const row = record(value, ["id", "platform", "sourceURL", "authorName", "authorHandle", "title", "publishedAt", "verifiedAt", "visibility", "locationEvidence", "place"], ["cover", "multiVenue", "highlightRank", "publishedOn"]);
+    const row = record(value, ["id", "platform", "sourceURL", "authorName", "authorHandle", "title", "publishedAt", "verifiedAt", "visibility", "locationEvidence", "place"], ["cover", "multiVenue", "highlightRank", "publishedOn", "visibleUntil"]);
     const platform = row.platform as PublicDiscoveryPlatform;
     if (!platforms.includes(platform) || statuses.get(platform) !== "connected" || row.visibility !== "public"
       || typeof row.locationEvidence !== "string" || !["explicit_geotag", "reviewed_match"].includes(row.locationEvidence)) return invalid();
@@ -203,6 +204,9 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
     if (id !== `${platform}:${source.postID}`
       || (row.multiVenue !== undefined && (row.multiVenue !== true || row.locationEvidence !== "reviewed_match"))) return invalid();
     const verifiedAt = timestamp(row.verifiedAt), verified = Date.parse(verifiedAt);
+    const visibleUntil = row.visibleUntil === undefined ? undefined : timestamp(row.visibleUntil);
+    if (visibleUntil !== undefined && (row.locationEvidence !== "reviewed_match"
+      || (mode !== "reviewArchive" && Date.parse(visibleUntil) <= sourceValidationTime))) return invalid();
     const publishedAt = row.publishedAt === null ? null : timestamp(row.publishedAt);
     const publishedOn = row.publishedOn === undefined ? undefined : publicationDay(row.publishedOn);
     if (verified > generated || (mode !== "reviewArchive" && verified + day <= sourceValidationTime)
@@ -232,15 +236,17 @@ function parsePublicDiscoveryManifest(value: unknown, now: Date,
       verifiedAt, visibility: "public", locationEvidence: row.locationEvidence as PublicDiscoveryPost["locationEvidence"],
       cover: cover(row.cover, platform, sourceValidationTime), place: venue,
       ...(publishedOn === undefined ? {} : { publishedOn }),
+      ...(visibleUntil === undefined ? {} : { visibleUntil }),
       ...(row.multiVenue === true ? { multiVenue: true } : {}),
       ...(highlightRank === undefined ? {} : { highlightRank }) };
   });
   const validatedAliases = validatedGoogleAliases(input.googlePlaceAliases, identities);
-  const posts = mode !== "strict"
-    ? validatedPosts.filter(post => Date.parse(post.verifiedAt) + day > time).map(post =>
-      post.cover && Date.parse(post.cover.expiresAt) <= time ? { ...post, cover: null } : post)
-    : validatedPosts;
-  if (mode === "serving" && validatedPosts.length > 0 && posts.length === 0) return invalid();
+  const scheduledPosts = mode === "strict" ? validatedPosts
+    : validatedPosts.filter(post => !publicDiscoveryPostHasEnded(post, time));
+  const posts = mode === "strict" ? scheduledPosts : scheduledPosts
+    .filter(post => Date.parse(post.verifiedAt) + day > time)
+    .map(post => post.cover && Date.parse(post.cover.expiresAt) <= time ? { ...post, cover: null } : post);
+  if (mode === "serving" && scheduledPosts.length > 0 && posts.length === 0) return invalid();
   posts.sort((a, b) => compareText(b.verifiedAt, a.verifiedAt) || compareText(a.id, b.id)
     || compareText(a.place.provider, b.place.provider) || compareText(a.place.providerPlaceID, b.place.providerPlaceID));
   const coverage = platforms.map(platform => ({ platform, status: statuses.get(platform)!,
@@ -335,6 +341,14 @@ export async function readPublicDiscoveryFile(filePath: string): Promise<unknown
   } finally { await handle.close(); }
 }
 
+export function publicDiscoveryPostHasEnded(post: PublicDiscoveryPost, time: number): boolean {
+  return post.visibleUntil !== undefined && Date.parse(post.visibleUntil) <= time;
+}
+
+export function publicDiscoveryPagePost({ visibleUntil: _visibleUntil, ...post }: PublicDiscoveryPost) {
+  return post;
+}
+
 export async function listPublicDiscoveryPosts(
   url: URL, options: PublicDiscoveryCapabilities & { filePath?: string; now?: Date } = {},
 ): Promise<PublicDiscoveryResponse> {
@@ -377,9 +391,10 @@ export async function listPublicDiscoveryPosts(
     }
     if (!found) return queryInvalid();
   }
-  const posts = filtered.slice(offset, offset + limit);
+  const posts = filtered.slice(offset, offset + limit).map(publicDiscoveryPagePost);
   const deadline = Math.min(now.getTime() + 5 * 60 * 1_000, Date.parse(index.expiresAt),
     ...visiblePosts.map(post => Date.parse(post.verifiedAt) + day),
+    ...visiblePosts.flatMap(post => post.visibleUntil ? [Date.parse(post.visibleUntil)] : []),
     ...visiblePosts.flatMap(post => post.cover ? [Date.parse(post.cover.expiresAt)] : []));
   return { schemaVersion: 1, indexRevision, generatedAt: index.generatedAt, expiresAt: new Date(deadline).toISOString(),
     coverage, posts, ...(googlePlaceMatch ? { googlePlaceMatch } : {}),

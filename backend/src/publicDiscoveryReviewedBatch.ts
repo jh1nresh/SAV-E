@@ -5,7 +5,8 @@ import { pathToFileURL } from "node:url";
 import {
   canonicalSource, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
-  publicationDay, timestamp, validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
+  publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, timestamp,
+  validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
   type PublicDiscoveryPlace, type PublicDiscoveryPost,
 } from "./publicDiscovery.js";
 import { addVenueHighlights, type PublicLikesObservation } from "./publicDiscoveryHighlights.js";
@@ -131,8 +132,8 @@ export function publicVenueSourceCoverage(raw: unknown, rawIndex: unknown, now =
 /** Local operator input. The review file keeps its evidence; the public index
  * publishes only canonical attribution and the confirmed venue. */
 export function compileReviewedPublicBatch(raw: unknown, now = new Date()) {
-  const result = projectReviewArchive(raw, now);
-  if (result.expired > 0 && result.manifest.posts.length === 0) throw new Error("No current reviewed posts");
+  const { ended, ...result } = projectReviewArchive(raw, now);
+  if (result.manifest.posts.length === 0 && result.expired > ended) throw new Error("No current reviewed posts");
   return result;
 }
 
@@ -192,6 +193,7 @@ function projectReviewArchive(raw: unknown, now: Date) {
       const id = `${platform}:${source.postID}`;
       const publishedAt = typeof review.publishedAt === "string" ? review.publishedAt : null;
       const publishedOn = typeof review.publishedOn === "string" ? review.publishedOn : undefined;
+      const visibleUntil = typeof review.visibleUntil === "string" ? review.visibleUntil : undefined;
       const observation = parsePublicLikes(review.publicLikes, publishedAt ?? publishedOn, now);
       if (observation) {
         const observationKey = JSON.stringify([id, observation.observedAt]);
@@ -209,6 +211,7 @@ function projectReviewArchive(raw: unknown, now: Date) {
         verifiedAt: review.checkedAt, visibility: "public", locationEvidence: "reviewed_match",
         cover: null, place,
         ...(publishedOn === undefined ? {} : { publishedOn }),
+        ...(visibleUntil === undefined ? {} : { visibleUntil }),
         ...(review.multiVenue === true ? { multiVenue: true } : {}) });
       if (posts.length > 5_000) throw new Error("Invalid post count");
     }
@@ -245,11 +248,12 @@ function projectReviewArchive(raw: unknown, now: Date) {
     posts: addVenueHighlights(projected.posts, likes, now),
     ...(projected.googlePlaceAliases ? { googlePlaceAliases: projected.googlePlaceAliases } : {}),
   };
-  return { manifest: currentManifest, withheld, expired };
+  const ended = posts.filter(post => publicDiscoveryPostHasEnded(post, now.getTime())).length;
+  return { manifest: currentManifest, withheld, expired, ended };
 }
 
 function reviewedEvidence(value: unknown, observedIn: unknown, platform: "threads" | "instagram", now: Date) {
-  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publishedOn", "publicLikes"]);
+  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publishedOn", "publicLikes", "visibleUntil"]);
   if (review.multiVenue !== undefined && review.multiVenue !== true) throw new Error("Invalid multi-venue review");
   if ((review.origin !== "public_web_index" && review.origin !== "creator_submission"
     && (review.origin !== "publisher_reference" || !publisherPageURL(observedIn)))
@@ -264,6 +268,8 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
       throw new Error("Invalid reviewed content fingerprint");
     }
   }
+  const normalized = review.visibleUntil === undefined ? review
+    : { ...review, visibleUntil: timestamp(review.visibleUntil) };
   if (review.publishedOn !== undefined) {
     const publishedOn = publicationDay(review.publishedOn);
     if (review.publishedAt !== undefined || publishedOn > timestamp(review.checkedAt).slice(0, 10)
@@ -273,9 +279,9 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
   } else if (review.publishedAt !== undefined) {
     const publishedAt = timestamp(review.publishedAt);
     if (publishedAt > timestamp(review.checkedAt)) throw new Error("Publication date follows review");
-    return { ...review, publishedAt };
+    return { ...normalized, publishedAt };
   }
-  return review;
+  return normalized;
 }
 
 function parsePublicLikes(value: unknown, publication: string | undefined, now: Date): PublicLikesObservation | undefined {
@@ -384,7 +390,7 @@ export async function refreshReviewedPublicFiles(files: string[], options: Reche
   projectReviewArchive(batch, now);
   const { batch: refreshed, summary } = await recheckReviewedPublicBatch(batch, { ...options, now });
   const result = compileReviewedPublicBatch(refreshed, now);
-  if (result.manifest.posts.length === 0) throw new Error("No current reviewed posts");
+  if (result.manifest.posts.length === 0 && result.expired === 0) throw new Error("No current reviewed posts");
   return { ...result, summary };
 }
 
@@ -446,7 +452,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     const output = `${JSON.stringify(artifact)}\n`;
     if (Buffer.byteLength(output) > publicDiscoveryMaxFileBytes) throw new Error("Manifest is too large");
     process.stdout.write(output);
-    process.stderr.write(`${manifest.posts.length} indexed · ${withheld} awaiting review · ${expired} need recheck\n`);
+    process.stderr.write(`${manifest.posts.length} indexed · ${withheld} awaiting review · ${expired} outside the visibility window\n`);
     if ("summary" in result) process.stderr.write(`${JSON.stringify(result.summary)}\n`);
   })().catch(() => {
     process.stderr.write("Review batch rejected. Check the input shape, source URLs, attribution, or verification dates.\n");
@@ -455,12 +461,14 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 }
 
 export function makeReviewedPublicPreview(raw: unknown, now = new Date()) {
-  const index = validatePublicDiscoveryManifest(raw, now);
+  const index = projectCurrentPublicDiscoveryManifest(raw, now);
   const { googlePlaceAliases = [], ...page } = index;
   if (page.posts.length === 0) throw new Error("Preview requires at least one reviewed association");
+  const deadline = Math.min(Date.parse(page.expiresAt),
+    ...page.posts.flatMap(post => post.visibleUntil ? [Date.parse(post.visibleUntil)] : []));
   return {
     snapshot: {
-      ...page, nextCursor: null,
+      ...page, expiresAt: new Date(deadline).toISOString(), posts: page.posts.map(publicDiscoveryPagePost), nextCursor: null,
       indexRevision: createHash("sha256").update(JSON.stringify(index)).digest("hex"),
     },
     googlePlaceAliases,
