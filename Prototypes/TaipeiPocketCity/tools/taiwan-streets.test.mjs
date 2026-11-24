@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {gunzipSync} from 'node:zlib';
-import {addTaiwanStreets,assignRoadLabels,streetLabelCandidates,indexStreetShard,localStreetFeatures,missingStreetBuildings} from '../taiwan-streets.js';
+import {addTaiwanStreets,assignRoadLabels,streetLabelCandidates,indexStreetShard,localStreetFeatures,mergeStreetBuildings,missingStreetBuildings} from '../taiwan-streets.js';
 import {buildTaiwanCells} from '../taiwan-cell-geometry.js';
 
 const dir=new URL('../taiwan/',import.meta.url);
@@ -115,4 +115,17 @@ test('pan away cancels any unmatched shard and removes local data at low zoom',a
   done();await new Promise(r=>setTimeout(r,0));
   assert.equal(loader.state().streets,0);
   listeners.get('remove')();
+});
+
+test('surveyed material requires 85% overlap in both directions',()=>{
+  const polygon=(x,properties)=>({type:'Feature',properties,geometry:{type:'Polygon',
+    coordinates:[[[x,23],[x+.001,23],[x+.001,23.001],[x,23.001],[x,23]]]}});
+  const source=polygon(120,{osmBuildingId:42,'building:material':'brick'});
+  const online=polygon(120.0003,{height:12});
+  const view=[119.99,22.99,120.01,23.01];
+  const offset=mergeStreetBuildings([online],[source],view);
+  assert.equal(offset.find(f=>f.properties.height===12).properties.osmBuildingId,undefined);
+  const strong=mergeStreetBuildings([polygon(120.00005,{height:12})],[source],view);
+  assert.equal(strong.find(f=>f.properties.height===12).properties.osmBuildingId,42);
+  assert.equal(strong.find(f=>f.properties.height===12).properties['building:material'],'brick');
 });

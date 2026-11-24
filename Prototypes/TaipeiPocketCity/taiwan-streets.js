@@ -132,10 +132,10 @@ function areaOf(ring){
   }
   return Math.abs(twice)/2;
 }
-function coversBuilding(rings,box,items){
+function coversBuilding(rings,box,items,ratio=2/3){
   const footprint=areaOf(rings[0])-rings.slice(1).reduce((sum,r)=>sum+areaOf(r),0);
   if(!items.length||footprint<=0)return false;
-  const target=footprint*2/3;
+  const target=footprint*ratio;
   const [w,s,e,n]=box;
   const cap=items.reduce((sum,item)=>{
     const a=item.bounds;return sum+Math.max(0,Math.min(e,a[2])-Math.max(w,a[0]))*Math.max(0,Math.min(n,a[3])-Math.max(s,a[1]));
