@@ -15,7 +15,7 @@ header { flex:0 0 58px; display:flex; align-items:center; gap:15px; padding:0 cl
 .divider { width:1px; height:20px; background:var(--line); }
 header strong { font:600 .92rem Georgia,serif; }
 .preview { margin-left:auto; font-size:.75rem; color:var(--muted); }
-main { min-height:0; display:grid; grid-template-columns:193px minmax(0,1fr); gap:10px; padding:11px 11px 11px 0; flex:1; }
+main { min-height:0; display:grid; grid-template-columns:minmax(0,1fr); padding:8px; flex:1; }
 aside { min-width:0; overflow:auto; padding:10px 5px 15px 15px; }
 h1 { font:700 1.58rem "Songti TC","Noto Serif TC",serif; margin:7px 0 17px 5px; }
 .districts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
@@ -27,12 +27,12 @@ aside button:hover, aside button[aria-current] { background:#e5eadb; border-colo
 .settings small,.mobile-controls small { color:var(--muted); font-size:.68rem; line-height:1.45; }
 .settings { display:grid; gap:13px; margin:16px 0 0; padding:15px 4px 0; border-top:1px solid var(--line); font-size:.78rem; }
 input { accent-color:var(--green); width:16px; height:16px; margin:0 6px 0 0; vertical-align:-3px; }
-#stage { position:relative; isolation:isolate; min-height:225px; overflow:hidden; border-radius:13px; border:1px solid #bcc8bd; background:#b6d4d9; }
+#stage { position:relative; isolation:isolate; min-height:225px; overflow:hidden; border-radius:13px; border:1px solid #bcc8bd; background:#89c0cc; }
 #map { position:absolute; inset:0; }
-#stage[data-weather]::before { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; }
-#stage[data-weather="cloudy"]::before { background:#7c98b321; }
-#stage[data-weather="drizzle"]::before { background:#8095ac13; }
-#stage[data-weather="rain"]::before { background:#54729129; }
+#stage.street-scale[data-weather]::before { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; }
+#stage.street-scale[data-weather="cloudy"]::before { background:#7c98b321; }
+#stage.street-scale[data-weather="drizzle"]::before { background:#8095ac13; }
+#stage.street-scale[data-weather="rain"]::before { background:#54729129; }
 #rain { position:absolute; inset:-166px -166px 0 -166px; pointer-events:none; }
 @keyframes street-rain { to { translate:0 166px; } }
 @media (prefers-reduced-motion: no-preference) {
@@ -247,7 +247,13 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 .place-choices button {text-align:left;background:transparent;color:var(--green);border:0;border-top:1px solid var(--line);padding:6px 2px}
 .place-choices button:hover,.place-choices button:focus-visible {background:#e4eadb}
 
-.cities-link {color:var(--green);font-size:.8rem;font-weight:650;white-space:nowrap}
-@media(max-width:480px){header:has(.cities-link) .preview{display:none}.cities-link{margin-left:auto}}
 
-#city-jump{max-width:min(36vw,225px);border:1px solid var(--line);border-radius:6px;background:#fcfaf3;padding:4px;color:#365246} #city-panel p{line-height:1.5;color:#655c4f}
+
+.mobile { display:block; left:12px; bottom:44px; border:1px solid var(--line); border-radius:7px; background:var(--pane); }
+.mobile summary { cursor:pointer; padding:10px 12px; font-size:.8rem; }
+.mobile[open] { z-index:3; width:min(260px,80%); }
+.mobile-controls { display:grid; gap:10px; padding:0 12px 12px; font-size:.8rem; }
+.mobile-controls .shop-options { top:auto; bottom:100%; }
+#resolution:empty { display:none; }
+
+#stage:not(.street-scale) #rain { display:none; }

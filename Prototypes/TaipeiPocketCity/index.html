@@ -7,48 +7,26 @@
   <title>Pocket City · Savvy</title>
   <link rel="icon" href="./assets/icon.png">
   <link rel="stylesheet" href="./assets/maplibre-gl.css">
-  <link rel="stylesheet" href="./style.css?v=continuous-cities-5">
+  <link rel="stylesheet" href="./style.css?v=world-map-1">
 </head>
 <body>
   <header>
     <a class="wordmark" href="./">Savvy</a>
     <span class="divider"></span><strong>Pocket City</strong><span class="preview">本機預覽</span>
-    <select id="city-jump" class="cities-link" aria-label="移至城市街區"><option value="">移至街區</option><option value="taipei">台北市</option></select>
     <a id="apple-places-link" href="./apple.html">Apple 地點</a>
   </header>
   <main>
-    <aside aria-label="街區"><div id="city-panel" hidden><h1></h1><p></p></div><div id="taipei-panel">
-      <h1>台北市</h1>
-      <div class="districts" id="districts"></div>
-      <div class="shop-search"><input type="search" placeholder="找店家或地點" aria-label="找店家或地點" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
-      <input type="search" list="school-list" class="school-find" placeholder="找學校" aria-label="找學校"><datalist id="school-list"></datalist>
-      <div class="landmarks" aria-label="地標">
-        <button type="button" data-landmark="101">台北 101</button>
-        <button type="button" data-street-101 hidden>101 街道</button>
-        <button type="button" data-landmark="yongchun">永春</button>
-        <button type="button" data-landmark="songshan">松菸</button>
-        <button type="button" data-dihua>迪化街店屋</button>
-        <button type="button" data-fuxing>復興南路書店</button>
-      </div>
-      <div class="settings">
-        <label><input id="models" type="checkbox" checked> 2025 LOD1 量體</label>
-        <label><input id="grid" type="checkbox"> 170 公尺格網</label>
-        <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
-        <small>建物採臺北市 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。店面位置、外觀與天氣為插畫示意。</small>
-      </div>
-    </div></aside>
     <section id="stage" aria-label="Pocket City 3D 地圖">
       <div id="map"></div>
       <div id="rain" aria-hidden="true" hidden></div>
       <div class="geography">
-        <span id="parent">台灣</span>
-        <h2 id="region">台北市</h2>
-        <span id="resolution">全市總覽</span><button type="button" id="retry-landmark" hidden>重試街區</button>
+        <span id="parent"></span>
+        <h2 id="region">世界地圖</h2>
+        <span id="resolution"></span><button type="button" id="retry-landmark" hidden>重試街區</button>
       </div>
       <div class="toolbar" aria-label="地圖工具">
         <div class="extent-actions">
-          <button type="button" id="taiwan">全台</button>
-          <button type="button" id="taipei">台北</button>
+          <button type="button" id="world">世界全圖</button>
           <button type="button" id="metro-toggle" aria-controls="metro-panel" aria-pressed="false" hidden>捷運</button>
           <select id="weather-select" aria-label="場景天氣" title="切換場景天氣" hidden>
             <option value="day">晴天</option>
@@ -104,24 +82,19 @@
       <div id="progress" role="status"></div>
       <p class="hint"><span class="mouse">拖曳移動 · 滾輪縮放 · 右鍵拖曳旋轉</span><span class="touch">拖曳移動 · 雙指縮放和旋轉</span></p>
       <details class="mobile">
-        <summary>街區與圖層</summary>
+        <summary>搜尋與圖層</summary>
         <div class="mobile-controls">
-          <button type="button" data-street-101 hidden>101 街道</button>
-          <button type="button" data-landmark="yongchun">永春</button>
-          <button type="button" data-landmark="songshan">松菸</button>
-        <button type="button" data-dihua>迪化街店屋</button>
-        <button type="button" data-fuxing>復興南路書店</button>
-          <div class="shop-search"><input type="search" placeholder="找店家或地點" aria-label="找店家或地點" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
-      <input type="search" list="school-list" class="school-find" placeholder="找學校" aria-label="找學校">
-          <label for="mobile-district">行政區</label><select id="mobile-district"><option value="">全市</option></select>
-          <label><input id="mobile-models" type="checkbox" checked> 2025 LOD1 量體</label>
-          <label><input id="mobile-grid" type="checkbox"> 170 公尺格網</label>
+          <div class="shop-search"><input type="search" placeholder="搜尋台北店家或地點" aria-label="搜尋台北店家或地點" autocomplete="off"><div class="shop-options" aria-live="polite" hidden></div></div>
+      <input type="search" list="school-list" class="school-find" placeholder="搜尋台北學校" aria-label="搜尋台北學校">
+          <datalist id="school-list"></datalist>
+          <label><input id="models" type="checkbox" checked> 台北實測建物</label>
+          <label><input id="grid" type="checkbox"> 170 公尺格網</label>
         <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
           <small>建物採臺北市 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。店面位置、外觀與天氣為插畫示意。</small>
         </div>
       </details>
     </section>
   </main>
-  <script type="module" src="./app.js?v=continuous-cities-5"></script>
+  <script type="module" src="./app.js?v=world-map-1"></script>
 </body>
 </html>

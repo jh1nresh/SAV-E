@@ -86,12 +86,29 @@ class LandmarkLayer{
 export async function addCityAtlas(map,before,open,onChange){
   const rows=await read('catalog.json'),mesh=new LandmarkLayer(),trees=new CityNature();
   trees.id='city-atlas-trees';
-  map.addSource('city-atlas-locations',{type:'geojson',data:collection(rows.map(r=>({
-    type:'Feature',properties:{id:r.id,category:'museum',name:r.landmark.split(/[、與]/)[0]},geometry:{type:'Point',coordinates:r.center}})))});
+  const places=[{id:'taipei',name:'台北',landmark:'台北 101',center:[121.56481,25.03367]},...rows];
+  const overview=['taipei','beijing','shanghai','los-angeles'];
+  map.addSource('city-atlas-locations',{type:'geojson',data:collection(places.map(r=>({
+    type:'Feature',properties:{id:r.id,category:'museum',name:r.landmark.split(/[、與]/)[0],
+      city:r.id==='los-angeles'?r.area:r.name,rank:overview.includes(r.id)?overview.indexOf(r.id):4},
+    geometry:{type:'Point',coordinates:r.center}})))});
+  const world={source:'city-atlas-locations',maxzoom:6.4,filter:['<',['get','rank'],4]};
+  map.addLayer({...world,id:'world-city-dots',type:'circle',
+    paint:{'circle-radius':4.5,'circle-color':'#2e6856','circle-stroke-width':1.7,'circle-stroke-color':'#fff5e7'}});
+  map.addLayer({...world,id:'world-cities',type:'symbol',
+    layout:{'text-field':['get','city'],'text-font':['Noto Sans Bold'],'text-size':14,
+      'text-variable-anchor':['left','right','top','bottom'],'text-radial-offset':.7,'text-padding':2,
+      'symbol-sort-key':['get','rank']},
+    paint:{'text-color':'#245545','text-halo-color':'#fff5e7','text-halo-width':2}});
   map.addLayer({id:'city-atlas-locators',type:'symbol',source:'city-atlas-locations',minzoom:6.4,maxzoom:16.8,...placePinStyle(map)});
-  map.on('click','city-atlas-locators',e=>{
-    const point=e.features?.[0]?.geometry.coordinates;
-    if(point)map.easeTo({center:point,zoom:17.95,pitch:49,duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:480});
+  map.on('click',e=>{
+    const hit=map.queryRenderedFeatures(e.point,{layers:['world-cities','world-city-dots','city-atlas-locators']})[0];
+    // Low-zoom GeoJSON tiles quantize coordinates. Aim at the authored landmark itself.
+    const place=places.find(row=>row.id===hit?.properties.id);
+    if(!place)return;
+    const zoom=Math.min(17.95,map.getZoom()+5);
+    map.flyTo({center:place.center,zoom,pitch:zoom>=15?45:0,
+      duration:matchMedia('(prefers-reduced-motion: reduce)').matches?0:850});
   });
   const loaded=new Map(),pending=new Map(),errors=new Map();
   let rain=0;

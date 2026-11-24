@@ -1,5 +1,6 @@
+import {constrainWorldCamera,worldBounds} from './world-camera.js';
 import {addCityContext} from './city-context.js';
-import {addCityAtlas} from './city-atlas-layer.js?v=continuous-5';
+import {addCityAtlas} from './city-atlas-layer.js?v=world-map-1';
 import {cityPlaceLayers} from './city-place-index.js';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
@@ -25,7 +26,6 @@ const hybrid=look==='hybrid';
 const rerun=hybrid&&preview.get('detail')!=='prior';
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const taipei=[[121.454,24.954],[121.673,25.218]];
-const taiwan=[[118.10,21.75],[122.13,26.43]];
 const dihuaCamera={center:[121.509939,25.056432],pitch:43,mobilePitch:41,bearing:70,zoom:21.35,mobileZoom:20.28};
 const landmarks={
   '101':{name:'台北 101',center:[121.56481,25.03367]},
@@ -42,7 +42,6 @@ const illustratedDistricts={'信義區':'xinyi-district','大安區':'daan-distr
 const illustratedGridMinZoom=11.4;
 const cityGridMinZoom=9.55;
 const streetDataKeys=[...Object.values(illustratedDistricts),'xinyi-link',...Object.keys(landmarks)];
-const districtOrder=['中正區','大同區','中山區','松山區','大安區','萬華區','信義區','士林區','北投區','內湖區','南港區','文山區'];
 const nativeStatus=$('#progress');
 let map, layer, streetDetail, metroState, weather;
 let streetDistricts=new Map();
@@ -71,7 +70,7 @@ function updateFrontageView(){
       // Ground labels draw before the solid facades and trees, so uncovered points remain visible.
       const layers=map.getStyle().layers;
       labelOrder=layers.flatMap((layer,i)=>{
-        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','poi_r1'].includes(layer.id);
+        const place=['city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','world-cities','world-city-dots','poi_r1'].includes(layer.id);
         const road=layer['source-layer']==='transportation_name'||layer.id==='city170-road-names'||layer.id.endsWith('-road-labels');
         return place||road?[[layer.id,layers[i+1]?.id]]:[];
       });
@@ -116,7 +115,7 @@ const hybridBaseColors={
   road_minor:'#faf0d8',road_secondary_tertiary:'#f1e4ca',road_trunk_primary:'#f5e8cb',
 };
 function mapStyle(base,districts) {
-  base.name='Savvy Taipei';
+  base.name='Savvy Pocket City';
   const omit=new Set(['building-3d','natural_earth','road_area_pattern','poi_r20','poi_r7',
     'highway-shield-non-us','highway-shield-us-interstate','road_shield_us']);
   base.layers=base.layers.filter(l=>!omit.has(l.id));
@@ -161,7 +160,6 @@ function mapStyle(base,districts) {
     paint:{'line-color':'#3c7164','line-width':1.2,
       'line-opacity':['interpolate',['linear'],['zoom'],9.55,.19,12,.43],'line-dasharray':[2,2]},
   });
-  base.terrain={source:'dem',exaggeration:1};
   return base;
 }
 const empty={type:'FeatureCollection',features:[]};
@@ -180,6 +178,14 @@ function fit(bounds,city){
   const compact=stage.clientWidth<600;
   map.fitBounds(bounds,{bearing:0,pitch:city?18:0,padding:{left:compact?22:70,right:compact?26:70,top:compact?80:58,bottom:42},
     maxZoom:city?15.1:8.9,duration:reducedMotion.matches?0:720});
+}
+function worldOverview(){
+  if(!map)return;
+  manualPitch=false;
+  const url=new URL(location.href);
+  for(const key of ['city','street','view','campus','landmark','bearing'])url.searchParams.delete(key);
+  history.replaceState(null,'',url);
+  map.fitBounds(worldBounds,{padding:10,bearing:0,pitch:0,duration:reducedMotion.matches?0:600});
 }
 function locate(record,animate=true){
   const tower=record===landmarks['101'];
@@ -244,21 +250,18 @@ function updateUI(){
   $('#dihua-views').hidden=!rerun||preview.get('dihua')==='before'||z<18.7||
     Math.abs(lng-121.50991)>.0008||Math.abs(lat-25.05650)>.0008;
   const city=z>=10&&lng>=taipei[0][0]&&lng<=taipei[1][0]&&lat>=taipei[0][1]&&lat<=taipei[1][1];
+  stage.classList.toggle('street-scale',z>=14);
+  if(metroState)$('#metro-toggle').hidden=!city&&$('#metro-toggle').getAttribute('aria-pressed')!=='true';
   const active=!!district&&showModels&&z>=buildingZoom;
   const zoomed=active&&z>=16.4;
-  const patch=worldAtlas?.at(lng,lat);
+  const patch=z>=6&&worldAtlas?.at(lng,lat);
   const inTaiwan=lng>=118&&lng<=122.2&&lat>=21.7&&lat<=26.5;
   const label=patch?.name??district??(city?'台北市':inTaiwan?'台灣':'世界地圖');
-  $('#taipei-panel').hidden=!!patch||(!city&&!district&&z>=10);
-  $('#city-panel').hidden=!patch;
+  $('.geography').hidden=z>4&&label==='世界地圖';
   const retry=$('#retry-landmark');
   retry.hidden=!patch||!worldAtlas.failed(patch.id);
   if(patch)retry.dataset.city=patch.id;
-  if(patch){
-    $('#city-panel h1').textContent=patch.name;
-    $('#city-panel p').textContent=patch.landmark;
-  }
-  $('#parent').textContent=patch?(patch.area??''):district?'台北市':city?'台灣':'';
+  $('#parent').textContent=patch?(patch.area===label?'':patch.area??''):district?'台北市':city?'台灣':'';
   $('#region').textContent=label;
   const nearby=z>=16&&Object.entries(landmarks).find(([key,item])=>{
     const bounds=streetDistricts.get(key)?.bounds;
@@ -269,15 +272,10 @@ function updateUI(){
   const link=streetDistricts.get('xinyi-link');
   const inLink=link&&inside(link.footprint.coordinates[0],lng,lat);
   const illustrated=hasStreetDistrict(district);
-  $('#resolution').textContent=patch&&z>=15?(worldAtlas.failed(patch.id)?'街區載入失敗':worldAtlas.ready(patch.id)?patch.sizeMeters+' 公尺街區':'載入街區…'):z<10?(inTaiwan?'全台總覽':'地圖總覽'):zoomed
+  $('#resolution').textContent=patch&&z>=15?(worldAtlas.failed(patch.id)?'街區載入失敗':worldAtlas.ready(patch.id)?patch.landmark:'載入街區…'):z<10?'':zoomed
     ?atlas170?`${nearby?nearby[1].name+' · ':''}170 公尺街區`:(nearby?`${nearby[1].name} · ${nearby[0]!=='101'&&streetDistricts.has(nearby[0])?'220':'200'} 公尺街區`:illustrated||inLink?'街廓 · 220 公尺':'200 公尺 · 插畫立面')
     :active?'2025 LOD1 量體':'地圖總覽';
   $('#pitch').setAttribute('aria-pressed',String(map.getPitch()>=23));
-  for(const button of document.querySelectorAll('[data-district]')){
-    if(button.dataset.district===district)button.setAttribute('aria-current','location');
-    else button.removeAttribute('aria-current');
-  }
-  $('#mobile-district').value=district??'';
 }
 let lastGrid='', plotGrid, loadingPlots;
 function hasStreetDistrict(name){
@@ -330,7 +328,6 @@ function updateGrid(){
 }
 function setModels(input){
   showModels=input.checked;
-  $('#models').checked=$('#mobile-models').checked=showModels;
   layer?.setEnabled(showModels);
   shopfronts?.setEnabled(showModels);
   if(map?.getLayer('atlas-shadows'))map.setLayoutProperty('atlas-shadows','visibility',showModels?'visible':'none');
@@ -338,20 +335,9 @@ function setModels(input){
 }
 function setGrid(input){
   showGrid=input.checked;
-  $('#grid').checked=$('#mobile-grid').checked=showGrid;
   if(map?.getLayer('pocket-plots')){
     map.setLayoutProperty('pocket-plots','visibility',showGrid?'visible':'none');
     updateGrid();
-  }
-}
-function formatDistricts(counts){
-  districtsByName=new Map(counts.map(row=>[row.name,row]));
-  for(const name of districtOrder){
-    const district=districtsByName.get(name);
-    if(!district)continue;
-    const button=document.createElement('button');button.type='button';button.dataset.district=name;
-    button.textContent=name;button.addEventListener('click',()=>focusDistrict(name));$('#districts').append(button);
-    const item=document.createElement('option');item.value=name;item.textContent=name;$('#mobile-district').append(item);
   }
 }
 function focusDistrict(name){
@@ -362,21 +348,12 @@ function focusDistrict(name){
   const left=name==='中山區'?Math.min(west,2*121.5355-east):west;
   fit([[left,south],[east,north]],true);
 }
-for(const selector of ['#models','#mobile-models']) $(selector).addEventListener('change',event=>setModels(event.target));
-for(const selector of ['#grid','#mobile-grid']) $(selector).addEventListener('change',event=>setGrid(event.target));
-$('#mobile-district').addEventListener('change',event=>{
-  focusDistrict(event.target.value);
-  $('.mobile').open=false;
-});
-for(const button of document.querySelectorAll('[data-landmark]'))
-  button.addEventListener('click',()=>{if(map){locate(landmarks[button.dataset.landmark]);$('.mobile').open=false;}});
+$('#models').addEventListener('change',event=>setModels(event.target));
+$('#grid').addEventListener('change',event=>setGrid(event.target));
 $('#rotate-left').addEventListener('click',()=>{if(map)rotate(-30)});
 $('#rotate-right').addEventListener('click',()=>{if(map)rotate(30)});
 $('#pitch').addEventListener('click',()=>{if(map)togglePitch()});
-for(const button of document.querySelectorAll('[data-street-101]'))
-  button.addEventListener('click',()=>{focus101Street();$('.mobile').open=false;});
-$('#taiwan').addEventListener('click',()=>fit(taiwan,false));
-$('#taipei').addEventListener('click',()=>fit(taipei,true));
+$('#world').addEventListener('click',worldOverview);
 
 message('載入地圖…');
 try{
@@ -397,7 +374,7 @@ try{
     ...streetDataKeys.filter(key=>!rerun||!key.endsWith('-district')).map(key=>get(`./data/street-${key}.json`)
       .then(data=>({key,data})).catch(error=>{console.warn(error.message);return null;})),
   ]);
-  formatDistricts(index.counts);
+  districtsByName=new Map(index.counts.map(row=>[row.name,row]));
   cityDistricts=cityIndex?.districts??[];
   for(const {name,key} of cityDistricts)illustratedDistricts[name]=key;
   const [cityMask,cityLandmarkModels]=cityIndex?.materialBounds?await Promise.all([
@@ -423,6 +400,13 @@ try{
     const vectorTemplate=liveTiles?.tiles?.[0]??tileIndex.vectorTemplate;
     base.sources.openmaptiles={type:'vector',tiles:[vectorTemplate],minzoom:0,maxzoom:14,
       attribution:tileIndex.attribution};
+    for(let z=0;z<=tileIndex.overviewMaxZoom;z++){
+      const side=2**z;
+      for(let x=0;x<side;x++)for(let y=0;y<side;y++){
+        const url=vectorTemplate.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+        localTerrain.set(url,new URL(`./cities/map-tiles/overview/${z}-${x}-${y}.pbf`,import.meta.url).href);
+      }
+    }
     for(const [x,y] of tileIndex.tiles){
       for(const [key,ext] of [[terrainSource+'14/'+x+'/'+y+'.png','png'],
           [vectorTemplate.replace('{z}',14).replace('{x}',x).replace('{y}',y),'pbf']]){
@@ -431,8 +415,12 @@ try{
     }
   }
   map=new ml.Map({
-    container:'map',style:mapStyle(base,districts),center:[121.547,25.083],zoom:11.4,bearing:0,pitch:18,
-    minZoom:2,maxZoom:21.6,maxPitch:65,
+    container:'map',style:mapStyle(base,districts),bounds:worldBounds,fitBoundsOptions:{padding:10},bearing:0,pitch:0,
+    minZoom:-2,maxZoom:21.6,maxPitch:65,
+    transformConstrain:(center,zoom)=>{
+      const result=constrainWorldCamera(center,zoom,stage.clientWidth,stage.clientHeight);
+      return {center:ml.LngLat.convert(result.center),zoom:result.zoom};
+    },
     transformRequest:url=>({url:localTerrain.get(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
     canvasContextAttributes:{antialias:true},
@@ -452,6 +440,12 @@ try{
     console.warn(event.error?.message??'Map data error');
   });
   await map.once('load');
+  function syncTerrain(){
+    const terrain=map.getZoom()>=12;
+    if(terrain!==Boolean(map.getTerrain()))map.setTerrain(terrain?{source:'dem',exaggeration:1}:null);
+  }
+  map.on('zoomend',syncTerrain);
+  syncTerrain();
   const streets=loadedStreets.filter(Boolean);
   const priorGround=new Map();
   for(const {key,data} of streets){
@@ -523,9 +517,6 @@ try{
     }
     compare.addEventListener('click',()=>{previousFronts=!previousFronts;applyComparison();});
     applyComparison();
-    for(const button of document.querySelectorAll('[data-fuxing]')){
-      button.addEventListener('click',()=>{locate(bookshopView);$('.mobile').open=false;});
-    }
   }
   const orderSongyanSurface=cityIndex&&preview.get('songyan')!=='before'
     ?loadSongyanNear(map,asset=>layer.setSongyan(asset)):null;
@@ -546,30 +537,13 @@ try{
   });
   setModels($('#models'));
   if(metro)metroState=addMetroPreview(map,ml.Marker,metro,preview.get('metro')==='1');
-  if(streetDistricts.has('101')){
-    for(const button of document.querySelectorAll('[data-street-101]'))button.hidden=false;
-  }
-  for(const record of cityLandmarks){
-    const makeButton=()=>{
-      const button=document.createElement('button');
-      button.type='button';
-      button.textContent=record.name;
-      button.addEventListener('click',()=>{
-        locate({...record,zoom:17.15});
-        $('.mobile').open=false;
-      });
-      return button;
-    };
-    $('.landmarks').append(makeButton());
-    $('.mobile-controls label[for="mobile-district"]').before(makeButton());
-  }
   const nameInputs=[...document.querySelectorAll('[data-place-names]')];
   let globalNames=preview.get('names')!=='off',localNames=globalNames,appliedNames;
   applyLocalNames=inside=>{
     const visible=inside?localNames:globalNames;
     if(visible===appliedNames)return;
     appliedNames=visible;
-    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','poi_r1']){
+    for(const id of [...cityPlaceLayers,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','city-atlas-locators','world-cities','world-city-dots','poi_r1']){
       if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
     }
     shopfronts?.setNames(visible);
@@ -591,19 +565,6 @@ try{
     weather?.refresh();
     appliedNames=undefined;applyLocalNames(false);
     $('#retry-landmark').addEventListener('click',e=>worldAtlas.retry(e.currentTarget.dataset.city));
-    const select=$('#city-jump');
-    for(const row of worldAtlas.rows)select.add(new Option(row.name+' · '+row.landmark,row.id));
-    select.addEventListener('change',()=>{
-      const id=select.value;
-      if(!id)return;
-      const url=new URL(location.href);
-      for(const key of ['view','street','campus','landmark','bearing'])url.searchParams.delete(key);
-      url.searchParams.set('city',id);
-      history.replaceState(null,'',url);
-      if(id==='taipei')fit(taipei,true);
-      else locate(atlasCamera(worldAtlas.rows.find(r=>r.id===id)),false);
-      select.value='';
-    });
   }catch(error){console.warn('City catalog unavailable',error);}
   function atlasCamera(row){
     return {center:row.center,zoom:row.id==='tamsui'?18.32:17.95,mobileZoom:17.45,pitch:52,mobilePitch:49,bearing:row.id==='tamsui'?18:row.bearing??-17};
@@ -630,7 +591,7 @@ try{
     else if(street==='xinyi-link')focusCorridor();
     else if(street==='101')focus101Street(false);
     else locate(landmarks[street],false);
-  }else fit(taipei,true);
+  }else if(preview.get('city')==='taipei')fit(taipei,true);
   if(cityDistricts.length&&!atlas170)addCityStreetLoading(map,cityDistricts,loaded=>{
     streetDetail.addStreets(loaded);
     for(const {key,data} of loaded)streetDistricts.set(key,data);
@@ -645,7 +606,7 @@ try{
   map.on('zoomend',()=>{
     if(!manualPitch){
       const z=map.getZoom();
-      const goal=z>=16.35?50:z>=15.1?43:z<buildingZoom?18:34;
+      const goal=z>=16.35?50:z>=15.1?43:z<10?0:z<buildingZoom?18:34;
       if(Math.abs(goal-map.getPitch())>3)jump({pitch:goal});
     }
   });
