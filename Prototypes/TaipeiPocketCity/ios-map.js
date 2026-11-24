@@ -18,9 +18,19 @@ export function connectIOSMap(map, Marker, channel) {
   function refresh() {
     const bounds = visibleRegion(map.getBounds());
     const groups = new Map();
+    const pointGroups = new Map();
+    const publicAnchors = [];
     for (const pin of pins) {
       if (!bounds.contains(pin.point)) continue;
-      const key = pin.point.join(',');
+      const pointKey = pin.point.join(',');
+      let key = pointGroups.get(pointKey) ?? pointKey;
+      if (pin.kind === 'post' && !groups.has(key)) {
+        const {x,y} = map.project(pin.point);
+        const nearby = publicAnchors.find(anchor => Math.abs(x - anchor.x) < 44 && Math.abs(y - anchor.y) < 44);
+        if (nearby) key = nearby.key;
+        else publicAnchors.push({key,x,y});
+      }
+      pointGroups.set(pointKey, key);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(pin);
     }

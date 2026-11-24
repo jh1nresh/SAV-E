@@ -1,14 +1,18 @@
 import { createHash } from "node:crypto";
+import { lstat, mkdir } from "node:fs/promises";
 import { isIP } from "node:net";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import {
-  canonicalSource, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes,
+  canonicalSource, combinePublicDiscoveryShards, isPublicDiscoveryVenueID, publicDiscoveryMaxFileBytes, publicDiscoveryMaxPosts,
   projectCurrentPublicDiscoveryManifest, projectReviewedPublicDiscoveryManifest, readPublicDiscoveryFile,
-  publicationDay, timestamp, validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
+  publicationDay, publicDiscoveryPagePost, publicDiscoveryPostHasEnded, publicDiscoveryShardDigests, timestamp,
+  validatePublicDiscoveryManifest, validatePublicDiscoveryPlace,
   type PublicDiscoveryPlace, type PublicDiscoveryPost,
 } from "./publicDiscovery.js";
 import { addVenueHighlights, type PublicLikesObservation } from "./publicDiscoveryHighlights.js";
+import { writePublicSourceJSON } from "./publicDiscoverySaveQueue.js";
 import { defaultFetchText } from "./sourceSearchWorker.js";
 import { publicPostEvidenceFingerprint, publicReviewEmbedURL, threadsParentFingerprintPrefix } from "./publicPostReverification.js";
 
@@ -28,8 +32,10 @@ function publisherPageURL(value: unknown): string | undefined {
 }
 
 const maxDraftVenues = 20;
-const maxReviewedVenues = 500;
+const maxReviewedVenues = publicDiscoveryMaxPosts;
 const maxCandidatesPerVenue = 50;
+// Keep the review workload bounded, including pending rows.
+const maxReviewedCandidates = 25_000;
 const defaultRecheckOriginalBudget = 100;
 const maxRecheckOriginalBudget = 5_000;
 const socialPlatforms = ["instagram", "threads"] as const;
@@ -46,6 +52,22 @@ function fields(value: unknown, keys: string[], optional: string[] = []): Record
     throw new Error("Invalid review fields");
   }
   return row;
+}
+
+function reviewedVenueRows(value: unknown) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > maxReviewedVenues) {
+    throw new Error("Invalid venue count");
+  }
+  let candidateCount = 0;
+  return value.map((row: unknown) => {
+    const venue = fields(row, ["place", "candidates"]);
+    if (!Array.isArray(venue.candidates) || venue.candidates.length < 1 || venue.candidates.length > maxCandidatesPerVenue) {
+      throw new Error("Invalid venue review");
+    }
+    candidateCount += venue.candidates.length;
+    if (candidateCount > maxReviewedCandidates) throw new Error("Invalid reviewed candidate count");
+    return { place: venue.place, candidates: venue.candidates as unknown[] };
+  });
 }
 
 function publicVenueInventory(value: unknown, limit: number): PublicDiscoveryPlace[] {
@@ -73,9 +95,14 @@ export function publicVenueSourceCoverage(raw: unknown, rawIndex: unknown, now =
   // An expired post stops counting towards coverage. Its reviewed venue
   // identity still routes the next draft to the existing canonical branch.
   const published = validatePublicDiscoveryManifest(rawIndex, new Date(index.generatedAt));
-  const aliases = new Map(published.googlePlaceAliases?.map(alias => [
-    venueKey("google_places", alias.googlePlaceID), venueKey(alias.provider, alias.providerPlaceID),
-  ]));
+  const aliases = new Map([
+    ...(published.googlePlaceAliases ?? []).map(alias => [
+      venueKey("google_places", alias.googlePlaceID), venueKey(alias.provider, alias.providerPlaceID),
+    ] as const),
+    ...(published.applePlaceAliases ?? []).map(alias => [
+      venueKey("apple_maps", alias.applePlaceID), venueKey("apple_maps", alias.providerPlaceID),
+    ] as const),
+  ]);
   const canonicalVenues = new Map(published.posts.map(({ place }) => [
     venueKey(place.provider, place.providerPlaceID), place,
   ]));
@@ -131,16 +158,51 @@ export function publicVenueSourceCoverage(raw: unknown, rawIndex: unknown, now =
 /** Local operator input. The review file keeps its evidence; the public index
  * publishes only canonical attribution and the confirmed venue. */
 export function compileReviewedPublicBatch(raw: unknown, now = new Date()) {
-  const result = projectReviewArchive(raw, now);
-  if (result.expired > 0 && result.manifest.posts.length === 0) throw new Error("No current reviewed posts");
+  const { ended, ...result } = projectReviewArchive(raw, now);
+  if (result.manifest.posts.length === 0 && result.expired > ended) throw new Error("No current reviewed posts");
   return result;
 }
 
+/** Replay a maintenance approval, including associations withheld by the reviewer. */
+export function compileApprovedPublicBatch(raw: unknown, held: ReadonlySet<string>, now: Date) {
+  const batch = fields(raw, ["venues"], ["googlePlaceAliases", "applePlaceAliases"]);
+  const reviewed = new Set<string>();
+  const venues = reviewedVenueRows(batch.venues).map(({ place: rawPlace, candidates }) => {
+    const place = validatePublicDiscoveryPlace(rawPlace);
+    const key = venueKey(place.provider, place.providerPlaceID);
+    return { place, candidates: candidates.map(rawCandidate => {
+      const candidate = fields(rawCandidate, ["platform", "sourceURL", "authorHandle", "title", "review"], ["observedIn"]);
+      const platform = candidate.platform;
+      if (platform !== "instagram" && platform !== "threads") throw new Error("Unsupported platform");
+      const { postID } = canonicalSource(candidate.sourceURL, platform);
+      if (held.has(`${key}:${platform}:${postID}`)) return { ...candidate, review: null };
+      if (candidate.review !== null) reviewed.add(key);
+      return candidate;
+    }) };
+  });
+  const aliases = (value: unknown, idField: "applePlaceID" | "googlePlaceID") => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) throw new Error("Invalid approved aliases");
+    const keys = idField === "applePlaceID"
+      ? [idField, "providerPlaceID", "branchEvidence"]
+      : [idField, "provider", "providerPlaceID", "branchEvidence"];
+    return value.filter((rawAlias: unknown) => {
+      const alias = fields(rawAlias, keys);
+      const provider = idField === "applePlaceID" ? "apple_maps" : alias.provider;
+      if (typeof provider !== "string" || typeof alias.providerPlaceID !== "string") throw new Error("Invalid approved alias");
+      return reviewed.has(`${provider}:${alias.providerPlaceID}`);
+    });
+  };
+  return projectReviewArchive({
+    venues,
+    googlePlaceAliases: aliases(batch.googlePlaceAliases, "googlePlaceID"),
+    applePlaceAliases: aliases(batch.applePlaceAliases, "applePlaceID"),
+  }, now).manifest;
+}
+
 function projectReviewArchive(raw: unknown, now: Date) {
-  const batch = fields(raw, ["venues"], ["googlePlaceAliases"]);
-  if (!Array.isArray(batch.venues) || batch.venues.length < 1 || batch.venues.length > maxReviewedVenues) {
-    throw new Error("Invalid venue count");
-  }
+  const batch = fields(raw, ["venues"], ["googlePlaceAliases", "applePlaceAliases"]);
+  const reviewedVenues = reviewedVenueRows(batch.venues);
   const generatedAt = now.toISOString();
   const posts: PublicDiscoveryPost[] = [];
   const likes = new Map<string, PublicLikesObservation>();
@@ -148,13 +210,9 @@ function projectReviewArchive(raw: unknown, now: Date) {
   const venueSignatures = new Map<string, string>();
   const associations = new Set<string>();
   let withheld = 0;
-  for (const value of batch.venues) {
-    const venue = fields(value, ["place", "candidates"]);
+  for (const venue of reviewedVenues) {
     const place = validatePublicDiscoveryPlace(venue.place);
-    if (!Array.isArray(venue.candidates) || venue.candidates.length < 1 || venue.candidates.length > maxCandidatesPerVenue
-      || !isPublicDiscoveryVenueID(place.providerPlaceID)) {
-      throw new Error("Invalid venue review");
-    }
+    if (!isPublicDiscoveryVenueID(place.providerPlaceID)) throw new Error("Invalid venue review");
     const key = venueKey(place.provider, place.providerPlaceID);
     const signature = JSON.stringify(place);
     const priorVenue = venueSignatures.get(key);
@@ -192,6 +250,7 @@ function projectReviewArchive(raw: unknown, now: Date) {
       const id = `${platform}:${source.postID}`;
       const publishedAt = typeof review.publishedAt === "string" ? review.publishedAt : null;
       const publishedOn = typeof review.publishedOn === "string" ? review.publishedOn : undefined;
+      const visibleUntil = typeof review.visibleUntil === "string" ? review.visibleUntil : undefined;
       const observation = parsePublicLikes(review.publicLikes, publishedAt ?? publishedOn, now);
       if (observation) {
         const observationKey = JSON.stringify([id, observation.observedAt]);
@@ -209,31 +268,21 @@ function projectReviewArchive(raw: unknown, now: Date) {
         verifiedAt: review.checkedAt, visibility: "public", locationEvidence: "reviewed_match",
         cover: null, place,
         ...(publishedOn === undefined ? {} : { publishedOn }),
+        ...(visibleUntil === undefined ? {} : { visibleUntil }),
         ...(review.multiVenue === true ? { multiVenue: true } : {}) });
-      if (posts.length > 5_000) throw new Error("Invalid post count");
+      if (posts.length > publicDiscoveryMaxPosts) throw new Error("Invalid post count");
     }
   }
   const day = 86_400_000;
-  let googlePlaceAliases: unknown[] = [];
-  if (batch.googlePlaceAliases !== undefined) {
-    if (!Array.isArray(batch.googlePlaceAliases) || batch.googlePlaceAliases.length > 5_000) {
-      throw new Error("Invalid reviewed Google place aliases");
-    }
-    googlePlaceAliases = batch.googlePlaceAliases.map(value => {
-      const { googlePlaceID, provider, providerPlaceID, branchEvidence } = fields(value,
-        ["googlePlaceID", "provider", "providerPlaceID", "branchEvidence"]);
-      if (typeof branchEvidence !== "string" || !branchEvidence.trim() || branchEvidence.length > 1_000) {
-        throw new Error("Google alias requires reviewed evidence");
-      }
-      return { googlePlaceID, provider, providerPlaceID };
-    });
-  }
+  const googlePlaceAliases = reviewedAliases(batch.googlePlaceAliases, ["googlePlaceID", "provider", "providerPlaceID"]);
+  const applePlaceAliases = reviewedAliases(batch.applePlaceAliases, ["applePlaceID", "providerPlaceID"]);
   const manifest = {
     schemaVersion: 1, generatedAt, expiresAt: new Date(now.getTime() + day).toISOString(),
     coverage: (["instagram", "threads", "xiaohongshu"] as const).map(platform => ({
       platform, status: posts.some(post => post.platform === platform) ? "connected" : "not_connected",
     })),
     posts, ...(googlePlaceAliases.length ? { googlePlaceAliases } : {}),
+    ...(applePlaceAliases.length ? { applePlaceAliases } : {}),
   };
   const projected = projectReviewedPublicDiscoveryManifest(manifest, now);
   const expired = posts.length - projected.posts.length;
@@ -244,12 +293,26 @@ function projectReviewArchive(raw: unknown, now: Date) {
     })),
     posts: addVenueHighlights(projected.posts, likes, now),
     ...(projected.googlePlaceAliases ? { googlePlaceAliases: projected.googlePlaceAliases } : {}),
+    ...(projected.applePlaceAliases ? { applePlaceAliases: projected.applePlaceAliases } : {}),
   };
-  return { manifest: currentManifest, withheld, expired };
+  const ended = posts.filter(post => publicDiscoveryPostHasEnded(post, now.getTime())).length;
+  return { manifest: currentManifest, withheld, expired, ended };
+}
+
+function reviewedAliases(value: unknown, keys: string[]) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 5_000) throw new Error("Invalid reviewed place aliases");
+  return value.map(entry => {
+    const { branchEvidence, ...alias } = fields(entry, [...keys, "branchEvidence"]);
+    if (typeof branchEvidence !== "string" || !branchEvidence.trim() || branchEvidence.length > 1_000) {
+      throw new Error("Place alias requires reviewed evidence");
+    }
+    return alias;
+  });
 }
 
 function reviewedEvidence(value: unknown, observedIn: unknown, platform: "threads" | "instagram", now: Date) {
-  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publishedOn", "publicLikes"]);
+  const review = fields(value, ["checkedAt", "origin", "branchEvidence"], ["contentFingerprint", "multiVenue", "publishedAt", "publishedOn", "publicLikes", "visibleUntil"]);
   if (review.multiVenue !== undefined && review.multiVenue !== true) throw new Error("Invalid multi-venue review");
   if ((review.origin !== "public_web_index" && review.origin !== "creator_submission"
     && (review.origin !== "publisher_reference" || !publisherPageURL(observedIn)))
@@ -264,6 +327,8 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
       throw new Error("Invalid reviewed content fingerprint");
     }
   }
+  const normalized = review.visibleUntil === undefined ? review
+    : { ...review, visibleUntil: timestamp(review.visibleUntil) };
   if (review.publishedOn !== undefined) {
     const publishedOn = publicationDay(review.publishedOn);
     if (review.publishedAt !== undefined || publishedOn > timestamp(review.checkedAt).slice(0, 10)
@@ -273,9 +338,9 @@ function reviewedEvidence(value: unknown, observedIn: unknown, platform: "thread
   } else if (review.publishedAt !== undefined) {
     const publishedAt = timestamp(review.publishedAt);
     if (publishedAt > timestamp(review.checkedAt)) throw new Error("Publication date follows review");
-    return { ...review, publishedAt };
+    return { ...normalized, publishedAt };
   }
-  return review;
+  return normalized;
 }
 
 function parsePublicLikes(value: unknown, publication: string | undefined, now: Date): PublicLikesObservation | undefined {
@@ -300,20 +365,16 @@ export async function recheckReviewedPublicBatch(raw: unknown, options: RecheckO
   if (!Number.isInteger(maxOriginals) || maxOriginals < 1 || maxOriginals > maxRecheckOriginalBudget) {
     throw new Error("Invalid original recheck budget. Choose an integer from 1 to 5000");
   }
-  const batch = fields(raw, ["venues"], ["googlePlaceAliases"]);
-  if (!Array.isArray(batch.venues) || batch.venues.length < 1 || batch.venues.length > maxReviewedVenues) {
-    throw new Error("Invalid venue count");
-  }
+  const batch = fields(raw, ["venues"], ["googlePlaceAliases", "applePlaceAliases"]);
+  const reviewedVenues = reviewedVenueRows(batch.venues);
   const now = options.now ?? new Date();
   const checkedAt = now.toISOString();
   const fetchEmbed = options.fetchEmbed ?? defaultFetchText;
   const summary = { refreshed: 0, unconfirmed: 0, unconfigured: 0, pending: 0 };
   const checksByEmbed = new Map<string, Array<(html: string | undefined) => void>>();
-  const venues = batch.venues.map(value => {
-    const venue = fields(value, ["place", "candidates"]);
+  const venues = reviewedVenues.map(venue => {
     const place = validatePublicDiscoveryPlace(venue.place);
-    if (!isPublicDiscoveryVenueID(place.providerPlaceID) || !Array.isArray(venue.candidates)
-      || venue.candidates.length < 1 || venue.candidates.length > maxCandidatesPerVenue) throw new Error("Invalid venue review");
+    if (!isPublicDiscoveryVenueID(place.providerPlaceID)) throw new Error("Invalid venue review");
     const candidates = venue.candidates.map(value => {
       const candidate = fields(value, ["platform", "sourceURL", "authorHandle", "title", "review"], ["observedIn"]);
       if (candidate.observedIn !== undefined && !publisherPageURL(candidate.observedIn)) throw new Error("Invalid publisher evidence URL");
@@ -377,6 +438,67 @@ export async function compileReviewedPublicFiles(files: string[], now = new Date
   return compileReviewedPublicBatch(await readReviewedPublicFiles(files), now);
 }
 
+/** Compile each review shard and write the catalog only after the complete snapshot passes validation. */
+export async function writeShardedPublicIndex(
+  directory: string, files: string[], now = new Date(),
+  options: { replace?: boolean; clock?: () => Date } = {},
+) {
+  const projections = [];
+  for (const file of files) {
+    const { manifest } = await compileReviewedPublicFiles([file], now);
+    projections.push(manifest);
+  }
+  return writeShardedPublicProjection(directory, projections, now, options);
+}
+
+type ReviewedProjection = ReturnType<typeof compileReviewedPublicBatch>["manifest"];
+
+/** Publish slices of a reviewed projection without recomputing its highlights. */
+export async function writeShardedPublicProjection(
+  directory: string, projections: readonly ReviewedProjection[], now = new Date(),
+  options: { replace?: boolean; clock?: () => Date } = {},
+) {
+  const parts = [];
+  const shards = new Map<string, ReviewedProjection>();
+  for (const projection of projections) {
+    const manifest = structuredClone(projection);
+    const data = `${JSON.stringify(manifest)}\n`;
+    if (Buffer.byteLength(data) > publicDiscoveryMaxFileBytes) throw new Error("Manifest shard is too large");
+    const digest = createHash("sha256").update(data).digest("hex");
+    if (shards.has(digest)) throw new Error("Duplicate manifest shard");
+    shards.set(digest, manifest);
+    parts.push(validatePublicDiscoveryManifest(manifest, now));
+  }
+  const approved = combinePublicDiscoveryShards(parts, now);
+  const catalog = { schemaVersion: 2, shards: [...shards.keys()] };
+  if (Buffer.byteLength(JSON.stringify(catalog) + "\n") > publicDiscoveryMaxFileBytes) {
+    throw new Error("Manifest catalog is too large");
+  }
+  const filePath = join(directory, "index.json");
+  if (options.replace) {
+    if (!(await lstat(directory)).isDirectory()) throw new Error("Expected a public discovery catalog directory");
+    // Replacing an existing serving index is intentional and limited to this format.
+    publicDiscoveryShardDigests(await readPublicDiscoveryFile(filePath));
+  } else {
+    await mkdir(directory, { mode: 0o700 });
+  }
+  for (const [digest, manifest] of shards) {
+    const path = join(directory, digest + ".json");
+    const exists = await readPublicDiscoveryFile(path, digest).then(() => true).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return false;
+      throw error;
+    });
+    if (!exists) await writePublicSourceJSON(path, manifest);
+  }
+  // A single publisher owns this directory. Leave prior leaves in place for
+  // requests already reading the previous pointer.
+  if (options.clock && !isDeepStrictEqual(combinePublicDiscoveryShards(parts, options.clock()), approved)) {
+    throw new Error("Reviewed snapshot changed before publication");
+  }
+  await writePublicSourceJSON(filePath, catalog);
+  return { filePath, shards: parts.length, associations: approved.posts.length };
+}
+
 /** Validate the whole archive before any provider read, then compile one fresh snapshot. */
 export async function refreshReviewedPublicFiles(files: string[], options: RecheckOptions = {}) {
   const now = options.now ?? new Date();
@@ -384,33 +506,43 @@ export async function refreshReviewedPublicFiles(files: string[], options: Reche
   projectReviewArchive(batch, now);
   const { batch: refreshed, summary } = await recheckReviewedPublicBatch(batch, { ...options, now });
   const result = compileReviewedPublicBatch(refreshed, now);
-  if (result.manifest.posts.length === 0) throw new Error("No current reviewed posts");
+  if (result.manifest.posts.length === 0 && result.expired === 0) throw new Error("No current reviewed posts");
   return { ...result, summary };
 }
 
 async function readReviewedPublicFiles(files: string[]) {
   if (files.length < 1 || files.length > 25) throw new Error("Pass 1–25 review JSON paths");
   const venues: unknown[] = [];
-  const googlePlaceAliases: unknown[] = [];
+  const aliases = { googlePlaceAliases: [] as unknown[], applePlaceAliases: [] as unknown[] };
+  const aliasFields = ["googlePlaceAliases", "applePlaceAliases"] as const;
   for (const file of files) {
-    const batch = fields(await readPublicDiscoveryFile(file), ["venues"], ["googlePlaceAliases"]);
+    const batch = fields(await readPublicDiscoveryFile(file), ["venues"], [...aliasFields]);
     if (!Array.isArray(batch.venues) || batch.venues.length === 0 || venues.length + batch.venues.length > maxReviewedVenues) {
       throw new Error("Invalid venue count");
     }
     venues.push(...batch.venues);
-    if (batch.googlePlaceAliases !== undefined) {
-      if (!Array.isArray(batch.googlePlaceAliases) || googlePlaceAliases.length + batch.googlePlaceAliases.length > 5_000) {
-        throw new Error("Invalid reviewed Google place aliases");
+    for (const key of aliasFields) {
+      const entries = batch[key];
+      if (entries === undefined) continue;
+      if (!Array.isArray(entries) || aliases[key].length + entries.length > 5_000) {
+        throw new Error("Invalid reviewed place aliases");
       }
-      googlePlaceAliases.push(...batch.googlePlaceAliases);
+      aliases[key].push(...entries);
     }
   }
-  return { venues, googlePlaceAliases };
+  return { venues, ...aliases };
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   void (async () => {
     const args = process.argv.slice(2);
+    if ((args[0] === "--sharded-index" || args[0] === "--publish-sharded-index") && args[1] && args.length >= 3) {
+      const result = await writeShardedPublicIndex(args[1], args.slice(2), new Date(), {
+        replace: args[0] === "--publish-sharded-index", clock: () => new Date(),
+      });
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      return;
+    }
     const recheckOptions: RecheckOptions = {};
     const budgetArgument = args[1];
     if (budgetArgument?.startsWith("--max-originals=")) {
@@ -446,7 +578,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     const output = `${JSON.stringify(artifact)}\n`;
     if (Buffer.byteLength(output) > publicDiscoveryMaxFileBytes) throw new Error("Manifest is too large");
     process.stdout.write(output);
-    process.stderr.write(`${manifest.posts.length} indexed · ${withheld} awaiting review · ${expired} need recheck\n`);
+    process.stderr.write(`${manifest.posts.length} indexed · ${withheld} awaiting review · ${expired} outside the visibility window\n`);
     if ("summary" in result) process.stderr.write(`${JSON.stringify(result.summary)}\n`);
   })().catch(() => {
     process.stderr.write("Review batch rejected. Check the input shape, source URLs, attribution, or verification dates.\n");
@@ -455,14 +587,16 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
 }
 
 export function makeReviewedPublicPreview(raw: unknown, now = new Date()) {
-  const index = validatePublicDiscoveryManifest(raw, now);
-  const { googlePlaceAliases = [], ...page } = index;
+  const index = projectCurrentPublicDiscoveryManifest(raw, now);
+  const { googlePlaceAliases = [], applePlaceAliases, ...page } = index;
   if (page.posts.length === 0) throw new Error("Preview requires at least one reviewed association");
+  const deadline = Math.min(Date.parse(page.expiresAt),
+    ...page.posts.flatMap(post => post.visibleUntil ? [Date.parse(post.visibleUntil)] : []));
   return {
     snapshot: {
-      ...page, nextCursor: null,
+      ...page, expiresAt: new Date(deadline).toISOString(), posts: page.posts.map(publicDiscoveryPagePost), nextCursor: null,
       indexRevision: createHash("sha256").update(JSON.stringify(index)).digest("hex"),
     },
-    googlePlaceAliases,
+    googlePlaceAliases, ...(applePlaceAliases ? { applePlaceAliases } : {}),
   };
 }

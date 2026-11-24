@@ -50,3 +50,36 @@ test('wraps both representations of a viewport crossing the date line', () => {
     assert.equal(box.contains([0,6]), false);
   }
 });
+
+test('nearby public pins open a single chooser and separate when zoomed in', t => {
+  const messages = [], markers = new Set();
+  const previousDocument = globalThis.document;
+  globalThis.document = {createElement: () => ({
+    dataset: {}, classList: {toggle() {}},
+    addEventListener(event, handler) { this[event] = handler; }, setAttribute() {},
+  })};
+  t.after(() => { if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument; });
+  class Marker {
+    constructor({element}) { this.button = element; }
+    getElement() { return this.button; }
+    setLngLat() { return this; }
+    addTo() { markers.add(this); return this; }
+    remove() { markers.delete(this); }
+  }
+  let pixelsPerDegree = 1_000;
+  const map = {
+    getBounds: () => ({getEast: () => 122, getWest: () => 120, getNorth: () => 26, getSouth: () => 24}),
+    project: ([x,y]) => ({x: (x - 121) * pixelsPerDegree, y: (y - 25) * pixelsPerDegree}),
+    on(event, handler) { this[event] = handler; },
+  };
+  const host = connectIOSMap(map, Marker, {postMessage: message => messages.push(message)});
+  const a = {id: 'a', name: 'Tea', label: 'Tea, public posts', kind: 'post', point: [121,25]};
+  const b = {id: 'b', name: 'Books', label: 'Books, public posts', kind: 'post', point: [121.012,25.009]};
+  host.update({pins: [a,b]});
+  assert.equal(markers.size, 1);
+  [...markers][0].button.click({stopPropagation() {}});
+  assert.deepEqual(messages.pop(), {event: 'select', ids: ['a','b']});
+  pixelsPerDegree = 5_000;
+  map.moveend();
+  assert.equal(markers.size, 2);
+});

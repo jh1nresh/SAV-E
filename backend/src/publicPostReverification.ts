@@ -115,6 +115,16 @@ function visibleText(markup: string): string {
     .normalize("NFC").replace(/\s+/gu, " ").trim();
 }
 
+function instagramCaptionBody(markup: string): string {
+  for (const tag of markup.matchAll(staticMarkupTagPattern())) {
+    if (tag[2] && !tag[1]
+      && staticMarkupAttributes(tag[0]).get("class")?.split(/\s+/).includes("CaptionComments")) {
+      return markup.slice(0, tag.index);
+    }
+  }
+  return markup;
+}
+
 function exactPostLink(anchor: Element, platform: Platform, sourceURL: string): boolean {
   try { return canonicalSource(anchor.attributes.get("href"), platform).url === sourceURL; }
   catch { return false; }
@@ -183,10 +193,11 @@ function inspectPublicPostEmbed(
   const caption = platform === "instagram"
     ? elements(reviewedMarkup, "div", "Caption") : elements(reviewedMarkup, "span", "BodyTextContainer");
   if (caption.length !== 1) return;
+  const content = platform === "instagram" ? instagramCaptionBody(caption[0]!.body) : caption[0]!.body;
   const headers = reviewedMarkup.slice(0, caption[0]!.end);
   const threadAuthor = platform === "threads" ? elements(headers, "div", "AuthorIdentity") : [];
   if (platform === "threads" && threadAuthor.length !== 1) return;
-  const profile = elements(platform === "instagram" ? caption[0]!.body : threadAuthor[0]!.body, "a",
+  const profile = elements(platform === "instagram" ? content : threadAuthor[0]!.body, "a",
     platform === "instagram" ? "CaptionUsername" : "HeaderLink");
   const base = platform === "instagram" ? "https://www.instagram.com" : "https://www.threads.com";
   if (profile.length !== 1) return;
@@ -194,6 +205,7 @@ function inspectPublicPostEmbed(
   try {
     const url = new URL(profile[0]!.attributes.get("href") ?? "", base);
     if (url.origin !== base) return;
+    if (platform === "threads" && new URL(canonical).pathname.split("/")[1]?.toLowerCase() !== url.pathname.slice(1).toLowerCase()) return;
     if (expectedAuthor !== undefined) {
       const profilePath = platform === "instagram" ? `/${expectedAuthor}/` : `/@${expectedAuthor}`;
       if (url.pathname.toLowerCase() !== profilePath.toLowerCase()) return;
@@ -201,7 +213,6 @@ function inspectPublicPostEmbed(
     } else {
       const pattern = platform === "instagram" ? /^\/([a-z0-9._]{1,30})\/$/i : /^\/@([a-z0-9._]{1,30})$/i;
       author = url.pathname.match(pattern)?.[1];
-      if (platform === "threads" && new URL(canonical).pathname.split("/")[1]?.toLowerCase() !== url.pathname.slice(1).toLowerCase()) return;
     }
   } catch { return; }
   const threadLinks = platform === "threads" ? elements(threadLinkMarkup ?? headers, "div", "LinkContainer") : [];
@@ -209,7 +220,6 @@ function inspectPublicPostEmbed(
   const permalink = platform === "instagram" ? elements(headers, "a", "EmbeddedMedia")
     : elements(threadLinks[0]!.body, "a");
   if (!author || permalink.length !== 1 || !exactPostLink(permalink[0]!, platform, canonical)) return;
-  const content = caption[0]!.body.split(/<div\b[^>]*\bclass=(?:"CaptionComments"|'CaptionComments')/i)[0]!;
   const body = visibleText(content);
   if (Array.from(body).length < 12) return;
   const locations = elements(headers, "a", "Location");
@@ -233,4 +243,11 @@ export function publicPostEvidenceFingerprint(
     body, bodyLinks, location, ...(parentEvidence ? [parentEvidence] : []),
   ])).digest("hex");
   return parentEvidence ? threadsParentFingerprintPrefix + digest : digest;
+}
+
+/** Read author and caption from the canonical public embed for local venue review. */
+export function readPublicPostForVenueReview(html: string, platform: Platform, sourceURL: string, author?: string) {
+  const evidence = inspectPublicPostEmbed(html, platform, sourceURL, author);
+  if (!evidence) return;
+  return { author: evidence.author, body: evidence.body, bodyLinks: evidence.bodyLinks };
 }

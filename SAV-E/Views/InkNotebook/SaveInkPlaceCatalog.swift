@@ -136,7 +136,7 @@ enum SaveInkPlaceCatalog {
         let source = nonempty(ink?.sourceLabel)
             ?? ((place.sourceUrl?.isEmpty == false) ? "來自 分享" : "來自 已存的地點")
         let mappable = place.isMapKitMappable
-        return SaveInkPlace(
+        let row = SaveInkPlace(
             id: ink?.id ?? place.id.uuidString,
             name: name,
             stampName: nonempty(ink?.stampName) ?? name,
@@ -157,6 +157,13 @@ enum SaveInkPlaceCatalog {
             blurbIsUserContent: nonempty(ink?.blurb) != nil ? (ink?.blurbIsUserContent ?? false) : note != nil,
             detailNoteIsUserContent: nonempty(ink?.detailNote) != nil ? (ink?.detailNoteIsUserContent ?? false) : note != nil
         )
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+        var result = row
+        result.publicSourceVenue = LivePublicDiscoveryVenueKey(savedPlace: place)
+        return result
+#else
+        return row
+#endif
     }
 
     private static func nonempty(_ value: String?) -> String? {

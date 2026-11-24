@@ -20,6 +20,9 @@ struct SaveInkHomeScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if showsLiveMap {
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+                            SaveInkExploreMapEntry(store: store, places: picks)
+#else
                             SaveInkLiveMap(
                                 places: picks,
                                 userCoordinate: store.userCoordinate,
@@ -27,6 +30,7 @@ struct SaveInkHomeScreen: View {
                                 showsRoute: false,
                                 onSelect: { store.openPlace($0) }
                             )
+#endif
                         }
                         friendsEntry
                         ForEach(picks) { place in
@@ -835,6 +839,9 @@ struct SaveInkPlaceScreen: View {
                     }
                 }
                 facts(place)
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+                SaveInkPublicSourcesEntry(store: store, placeID: place.id)
+#endif
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -907,6 +914,341 @@ struct SaveInkPlaceScreen: View {
         )
     }
 }
+
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+
+private struct SaveInkExploreMapEntry: View {
+    @ObservedObject var store: SaveInkNotebookStore
+    let places: [SaveInkPlace]
+    @ObservedObject private var auth = PrivyAuthService.shared
+
+    var body: some View {
+        if case .authenticated(let owner) = auth.authState, auth.currentUserId == owner {
+            let generation = auth.sessionGeneration
+            SaveInkExploreMap(store: store, places: places, owner: owner, generation: generation) {
+                guard case .authenticated(let active) = auth.authState else { return false }
+                return active == owner && auth.currentUserId == owner && auth.sessionGeneration == generation
+            }
+            .id([owner, String(generation)])
+        } else {
+            SaveInkLiveMap(places: [], userCoordinate: nil, focusPlaceID: nil, showsRoute: false, onSelect: { _ in })
+        }
+    }
+}
+
+private struct SaveInkExploreMap: View {
+    @ObservedObject var store: SaveInkNotebookStore
+    let places: [SaveInkPlace]
+    let owner: String
+    let generation: Int
+    let isCurrent: @MainActor () -> Bool
+    @StateObject private var discovery: LivePublicDiscoveryModel
+    @State private var showsPublic = true
+    @State private var viewport: LivePublicDiscoveryViewport?
+    @State private var refreshID = 0
+    @State private var selected: LivePublicDiscoveryPinGroup?
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(store: SaveInkNotebookStore, places: [SaveInkPlace], owner: String, generation: Int,
+         isCurrent: @escaping @MainActor () -> Bool) {
+        self.store = store
+        self.places = places
+        self.owner = owner
+        self.generation = generation
+        self.isCurrent = isCurrent
+        _discovery = StateObject(wrappedValue: LivePublicDiscoveryModel(ownerSubject: owner, sessionGeneration: generation))
+    }
+
+    private var active: Bool { showsPublic && scenePhase == .active && isCurrent() }
+    private var requestID: String? {
+        guard active, let viewport else { return nil }
+        return "\(viewport.queryValue)|\(refreshID)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                lens(copy("Explore", "探索"), showsPosts: true)
+                lens(copy("Saved", "收藏"), showsPosts: false)
+            }
+            SaveInkLiveMap(
+                places: store.canShowLivePlaces(owner: owner) ? places : [],
+                userCoordinate: store.userCoordinate, focusPlaceID: nil, showsRoute: false,
+                onSelect: {
+                    if isCurrent(), store.canShowLivePlaces(owner: owner) { store.openPlace($0) }
+                },
+                publicVenues: showsPublic ? (active ? discovery.page?.venues ?? [] : []) : nil,
+                onPublicViewport: { viewport = $0 },
+                onPublicSelect: { group in
+                    if active, let page = discovery.page, page.expiresAt > Date(),
+                       group.venues.allSatisfy({ venue in page.venues.contains(where: { $0.id == venue.id }) }) {
+                        selected = group
+                    }
+                }
+            )
+            if active, discovery.isLoading || discovery.isLoadingMore || discovery.unavailable
+                || discovery.page?.posts.isEmpty == true || discovery.page?.nextCursor != nil {
+                HStack(spacing: 8) {
+                    if discovery.isLoading || discovery.isLoadingMore {
+                        ProgressView().accessibilityLabel(copy("Loading public posts", "載入公開貼文中"))
+                    } else if discovery.unavailable {
+                        Button(copy("Retry public posts", "重新載入公開貼文")) { refreshID &+= 1 }
+                            .accessibilityIdentifier("ink.map.public.retry")
+                    } else if discovery.page?.posts.isEmpty == true {
+                        Text(copy("No public posts in this area", "這一帶目前沒有公開貼文"))
+                            .foregroundStyle(SaveInkPalette.inkSub)
+                    }
+                    if !discovery.isLoadingMore, discovery.page?.nextCursor != nil {
+                        Button(copy("Show more places", "顯示更多地點")) { Task { await discovery.loadMore() } }
+                            .accessibilityIdentifier("ink.map.public.more")
+                    }
+                }
+                .font(SaveInkType.aux)
+                .buttonStyle(.plain)
+                .frame(minHeight: 44, alignment: .leading)
+            }
+        }
+        .foregroundStyle(SaveInkPalette.ink)
+        .task(id: requestID) {
+            if active, let viewport { await discovery.refreshMap(viewport) }
+            else { dismissPublic() }
+        }
+        .onDisappear(perform: dismissPublic)
+        .sheet(item: $selected) { group in
+            NavigationStack {
+                Group {
+                    if group.venues.count == 1, let venue = group.venues.first {
+                        venueDetail(venue)
+                    } else {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(group.venues) { venue in
+                                    NavigationLink {
+                                        venueDetail(venue)
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(venue.place.name).font(SaveInkType.shop)
+                                            Text(venue.place.address).font(SaveInkType.aux)
+                                                .foregroundStyle(SaveInkPalette.inkSub)
+                                        }
+                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("ink.map.public.choice.\(venue.id)")
+                                }
+                            }.padding(20)
+                        }
+                    }
+                }
+                .navigationTitle(copy("Public places", "公開地點"))
+                .navigationBarTitleDisplayMode(.inline)
+                .background(SaveInkPalette.paper.ignoresSafeArea())
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(copy("Done", "完成")) { selected = nil }
+                    }
+                }
+                .foregroundStyle(SaveInkPalette.ink)
+                .tint(SaveInkPalette.ink)
+            }
+        }
+    }
+
+    private func venueDetail(_ venue: LivePublicDiscoveryVenue) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(venue.place.name).font(SaveInkType.subpageTitle)
+                Text(venue.place.address).font(SaveInkType.aux).foregroundStyle(SaveInkPalette.inkSub)
+                if let count = venue.recentTopicAccountCount(at: Date()) {
+                    Label(copy("Recent topic · \(count) accounts", "近期話題・\(count) 個帳號"), systemImage: "flame")
+                        .font(SaveInkType.aux)
+                }
+                if let key = LivePublicDiscoveryVenueKey(provider: venue.place.provider, id: venue.place.providerPlaceID) {
+                    SaveInkPublicSources(venue: key, owner: owner, generation: generation, showsStatus: true) {
+                        // A pushed detail stays active with its own exact venue while SwiftUI updates the sheet selection.
+                        isCurrent() && showsPublic
+                    }
+                    .id(key)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
+        }
+        .background(SaveInkPalette.paper.ignoresSafeArea())
+    }
+
+    private func lens(_ title: String, showsPosts: Bool) -> some View {
+        let chosen = showsPublic == showsPosts
+        return Button { showsPublic = showsPosts } label: {
+            Text(title)
+                .font(SaveInkType.aux)
+                .padding(.horizontal, 10)
+                .frame(minHeight: 44)
+                .background {
+                    if chosen { Capsule().strokeBorder(SaveInkPalette.ink, lineWidth: 1.3) }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+        .accessibilityIdentifier(showsPosts ? "ink.map.mode.explore" : "ink.map.mode.saved")
+    }
+
+    private func dismissPublic() {
+        selected = nil
+        discovery.clear()
+    }
+
+    private func copy(_ english: String, _ chinese: String) -> String {
+        language.localized(english: english, traditionalChinese: chinese)
+    }
+}
+
+private struct SaveInkPublicSourcesEntry: View {
+    @ObservedObject var store: SaveInkNotebookStore
+    let placeID: String
+    @ObservedObject private var auth = PrivyAuthService.shared
+
+    var body: some View {
+        if case .authenticated(let owner) = auth.authState,
+           auth.currentUserId == owner, let venue = store.publicSourceVenue(for: placeID, owner: owner) {
+            let generation = auth.sessionGeneration
+            SaveInkPublicSources(venue: venue, owner: owner, generation: generation) {
+                guard case .authenticated(let currentOwner) = auth.authState else { return false }
+                return currentOwner == owner && auth.currentUserId == owner && auth.sessionGeneration == generation
+                    && store.publicSourceVenue(for: placeID, owner: owner) == venue
+            }
+            .id([owner, String(generation), placeID, venue.provider, venue.id])
+        }
+    }
+}
+
+private struct SaveInkPublicSources: View {
+    private struct Original: Identifiable {
+        let post: LivePublicDiscoveryPost
+        let source: LiveSourcePostURL
+        let expiresAt: Date
+        let indexRevision: String
+
+        var id: String { post.id }
+    }
+
+    let venue: LivePublicDiscoveryVenueKey
+    let showsStatus: Bool
+    let isCurrent: @MainActor () -> Bool
+    @StateObject private var discovery: LivePublicDiscoveryModel
+    @State private var refreshID = 0
+    @State private var showsAll = false
+    @State private var original: Original?
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.locale) private var locale
+    @Environment(\.scenePhase) private var scenePhase
+
+    init(venue: LivePublicDiscoveryVenueKey, owner: String, generation: Int, showsStatus: Bool = false,
+         isCurrent: @escaping @MainActor () -> Bool) {
+        self.showsStatus = showsStatus
+        self.venue = venue
+        self.isCurrent = isCurrent
+        _discovery = StateObject(wrappedValue: LivePublicDiscoveryModel(ownerSubject: owner, sessionGeneration: generation))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if isCurrent(), let page = discovery.page, let matched = page.venues.first {
+                Text(copy("Public posts", "公開貼文")).font(SaveInkType.shop)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("ink.place.publicSources")
+                ForEach(showsAll ? matched.postsByHighlight : matched.highlightedPosts) { post in
+                    if let url = post.sourceLink, let source = LiveSourcePostURL.parse(url) {
+                        let item = Original(post: post, source: source, expiresAt: page.expiresAt,
+                                            indexRevision: page.indexRevision)
+                        Button {
+                            if canRead(item) { original = item }
+                        } label: {
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(post.title.isEmpty ? copy("Read original post", "閱讀原始貼文") : post.title)
+                                        .font(SaveInkType.body)
+                                    Text(attribution(post, platform: source.platform.displayName))
+                                        .font(SaveInkType.aux)
+                                        .foregroundStyle(SaveInkPalette.inkSub)
+                                }
+                                Spacer(minLength: 0)
+                                Image(systemName: "arrow.up.right").accessibilityHidden(true)
+                            }
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("ink.place.publicSource.\(post.id)")
+                    }
+                }
+                if !showsAll && (matched.posts.count > LivePublicDiscoveryVenue.highlightLimit || page.nextCursor != nil) {
+                    action(copy("Show more posts", "顯示更多貼文")) {
+                        showsAll = true
+                        if page.nextCursor != nil { Task { await discovery.loadMore() } }
+                    }
+                } else if showsAll, page.nextCursor != nil {
+                    action(copy("Show more posts", "顯示更多貼文")) { Task { await discovery.loadMore() } }
+                        .disabled(discovery.isLoadingMore)
+                }
+            } else if isCurrent(), discovery.unavailable {
+                action(copy("Retry public posts", "重新載入公開貼文")) { refreshID &+= 1 }
+                    .accessibilityIdentifier("ink.place.publicSources.retry")
+            } else if showsStatus && isCurrent() {
+                if discovery.page?.posts.isEmpty == true {
+                    Text(copy("No public posts available", "目前沒有公開貼文")).font(SaveInkType.body)
+                } else {
+                    ProgressView(copy("Loading public posts", "載入公開貼文中"))
+                }
+            }
+        }
+        .foregroundStyle(SaveInkPalette.ink)
+        .task(id: refreshID) {
+            guard scenePhase == .active, isCurrent(),
+                  let viewport = try? LivePublicDiscoveryViewport(west: -180, south: -90, east: 180, north: 90) else { return }
+            await discovery.refresh(viewport, venue: venue)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refreshID &+= 1 }
+            else { clear() }
+        }
+        .onDisappear(perform: clear)
+        .sheet(item: $original) { item in
+            LiveSourcePostView(source: item.source, expiresAt: item.expiresAt,
+                               isCurrent: { canRead(item) }, onClose: { original = nil }, usesInkStyle: true)
+        }
+    }
+
+    private func attribution(_ post: LivePublicDiscoveryPost, platform: String) -> String {
+        let date = post.formattedPublicationDate(locale: locale)
+        return [platform, post.authorName ?? post.authorHandle, date].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func action(_ title: String, perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
+            Text(title).font(SaveInkType.body).frame(minHeight: 44)
+        }.buttonStyle(.plain)
+    }
+
+    private func copy(_ english: String, _ chinese: String) -> String {
+        language.localized(english: english, traditionalChinese: chinese)
+    }
+
+    private func canRead(_ item: Original) -> Bool {
+        guard isCurrent(), scenePhase == .active, Date() < item.expiresAt, let page = discovery.page,
+              page.indexRevision == item.indexRevision else { return false }
+        return page.posts.contains(item.post)
+    }
+
+    private func clear() {
+        original = nil
+        discovery.clear()
+    }
+}
+#endif
 
 struct SaveInkArrivalScreen: View {
     @Environment(\.appLanguageSettings) private var languageSettings

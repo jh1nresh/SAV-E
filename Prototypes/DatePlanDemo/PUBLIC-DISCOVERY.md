@@ -26,6 +26,14 @@ The coverage input is `{"publicVenues":[...]}` with rows in the public place wir
 
 A snapshot lives for at most 24 hours. Use `--refresh-index` to validate the full archive and renew checks only where a public original still matches its prior fingerprint. This reads the canonical provider embeds without a profile lookup or an account feed. An unreachable or changed original keeps its previous check time and leaves the published index when that check expires.
 
+For an index that spans more than one reviewed batch, keep each exact venue's sources and aliases together in one review file so its highlights can be ranked together. After using `--recheck` on the individual batches, compile the resulting review JSON files with one shared snapshot time. Use a new output directory.
+
+```sh
+node dist/publicDiscoveryReviewedBatch.js --sharded-index /absolute/path/taipei-revision district-a.json district-b.json
+```
+
+Set `SAVE_PUBLIC_DISCOVERY_INDEX_FILE` to the resulting `index.json` for the intended environment, and keep its content-addressed shards beside it. Each shard retains the existing file and row limits. The complete catalog is validated together, including identity and alias consistency. Clients that send `X-Savvy-Discovery-Large-Index: 1` can page through all matches. For older clients, a catalog above 5,000 visible associations reports up to 5,000 matches within the current viewport or exact-venue query.
+
 The existing discovery endpoint also accepts an exact `provider` and `placeID` pair with the viewport. Reviewed Google aliases resolve to their canonical venue. Clients that send `X-Savvy-Discovery-Google-Venues: 1` receive independent Google venue rows. Clients that send `X-Savvy-Discovery-Associations: 1` receive each separately reviewed venue association for a shared original. Other clients receive unique originals and corresponding index-wide counts. A cursor binds the venue and the requested capabilities. The endpoint reads the snapshot selected by `SAVE_PUBLIC_DISCOVERY_INDEX_FILE`.
 
 ## Highlights per venue
@@ -52,7 +60,7 @@ Authenticated read: `GET /v0/discovery/posts?bbox=west,south,east,north&limit=30
 
 `bbox` is WGS84, finite, latitude[-90,90], longitude[-180,180], south<north; west>east crosses the dateline. Limit1–50. Cursor binds exact normalized bounds, limit and index revision. Response is `private, no-store` because the app uses its normal account transport; data itself is explicitly public. Missing/configuration/expired index returns503 with `public_discovery_unavailable`; invalid query/cursor returns400. No mutation occurs.
 
-Manifest configuration: `SAVE_PUBLIC_DISCOVERY_INDEX_FILE`. Absent means unavailable, never a seeded sample. Read at most6MiB/5,000 posts. Re-read file changes, reject invalid replacements instead of retaining obsolete data. Strict manifest input keys prevent accidental account/vault exports. Source checks and manifest validity last at most24h; response expires no later than now+5min or the manifest/source deadline.
+Manifest configuration: `SAVE_PUBLIC_DISCOVERY_INDEX_FILE`. Absent means unavailable, never a seeded sample. Each manifest file is limited to 6 MiB and 5,000 posts. A sharded catalog combines multiple manifest files. Re-read file changes, reject invalid replacements instead of retaining obsolete data. Strict manifest input keys prevent accidental account/vault exports. Source checks and manifest validity last at most 24 hours. The response expires no later than five minutes from now or the manifest/source deadline.
 
 Manifest:
 

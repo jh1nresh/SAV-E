@@ -93,6 +93,44 @@ The explicit `--public-web` mode sends the name and address from each missing pu
 
 The JSON output includes provider search outcomes and a `draft.venues` array. Each new candidate has a canonical permalink and `review: null`. Review the original and its exact branch before including a candidate in a public manifest. A successful provider response covers only the requested search page. Meta keyword mode reports when the provider advertises more results. Both modes leave original access verification to a separate check.
 
+## Publish an approved public discovery generation
+
+After backend build, an operator can publish from an initialized, absolute
+source maintenance directory.
+
+```bash
+python3 backend/scripts/publish-reviewed-generation.py /absolute/path/to/source-root
+```
+
+The command acquires `state/refresh.lock` and matches `state/active-index.json`
+to its review envelope under `state/generations/`. It only serves approved
+associations, including the approved ordering and venue aliases. It prints a
+receipt for the catalog at `serving/index.json`. A maintenance process that
+already holds the same lock calls `publishApprovedGeneration` with its inherited
+descriptor. Re-running after an interruption can publish the already approved
+snapshot without reading Instagram or Threads again.
+
+A bounded draft maintenance cycle uses the same intake directory as
+`SAVE_PUBLIC_DISCOVERY_DRAFT_INTAKE_DIR`. It reads the trusted venues in
+`inventory.json` and the reports in `drafts/`. It can read up to two public
+originals, saves its retry window and publishes the approved result.
+
+```bash
+python3 backend/scripts/publish-reviewed-generation.py --maintain-drafts /absolute/path/to/source-root
+```
+
+Use `--maintain-sources` for a cycle that also rechecks up to four approved
+originals. It prioritizes places that could lose their last source, then
+checks pending drafts. Both steps share the provider hold.
+
+The receipt includes `nextAllowedAt` for a scheduler. Completed checks can
+resume during a cooldown. Draft recovery also confirms its trusted inventory.
+
+A draft maintenance runner can call `approveReviewedDrafts` under the same
+lock with its candidate verifier. Before scheduling provider reads, it calls
+`resumePendingDraftApproval` so an interrupted approval can finish while the
+provider is still in cooldown. Both use the existing generation archive.
+
 ## Deploy checklist
 
 Merge does not migrate. The backend does not auto-apply SQL on boot.

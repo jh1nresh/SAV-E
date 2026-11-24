@@ -1016,7 +1016,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
     }
 
-#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+#if SAVVY_MAIN_APP && ((DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW) || SAVVY_PUBLIC_DISCOVERY_BACKEND)
     func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage {
         try await fetchPublicDiscovery(viewport: viewport, cursor: cursor, venue: nil)
     }
@@ -1027,9 +1027,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard let path = Self.publicDiscoveryPostsPath(viewport: viewport, cursor: cursor, venue: venue) else {
             throw SupabaseError.invalidResponse("Invalid map bounds")
         }
-        let data = try await request(path: path, additionalHeaders: [
-            "x-savvy-discovery-associations": "1", "x-savvy-discovery-google-venues": "1"
-        ])
+        let data = try await request(path: path, additionalHeaders: LivePublicDiscoveryVenueKey.requestHeaders)
         guard data.count <= 6 * 1_024 * 1_024 else { throw SupabaseError.invalidResponse("Discovery response too large") }
         return try JSONDecoder().decode(LivePublicDiscoveryPage.self, from: data)
 #else

@@ -168,6 +168,9 @@ struct SaveInkPlace: Identifiable, Equatable {
     /// even when their text happens to equal a generated fallback label.
     var blurbIsUserContent = false
     var detailNoteIsUserContent = false
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+    var publicSourceVenue: LivePublicDiscoveryVenueKey? = nil
+#endif
 
     var meta: String {
         let streetText = street
@@ -819,6 +822,17 @@ final class SaveInkNotebookStore: ObservableObject {
         if let exact = places.first(where: { $0.id == id }) { return exact }
         return places.first { $0.aliasIDs.contains(id) }
     }
+
+#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
+    func canShowLivePlaces(owner: String) -> Bool {
+        usesLivePlaces && catalogOwner == owner && liveOwner() == owner
+    }
+
+    func publicSourceVenue(for id: String, owner: String) -> LivePublicDiscoveryVenueKey? {
+        guard canShowLivePlaces(owner: owner) else { return nil }
+        return place(id)?.publicSourceVenue
+    }
+#endif
 
     /// The Home「我到了」target. Live mode uses it only when a place has a
     /// measured distance, so a denied location cannot check in the first name.

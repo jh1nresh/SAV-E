@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { compileReviewedPublicBatch, compileReviewedPublicFiles,
   makeReviewedPublicPreview, publicVenueSourceCoverage, recheckReviewedPublicBatch,
-  refreshReviewedPublicFiles } from "./publicDiscoveryReviewedBatch.js";
+  refreshReviewedPublicFiles, writeShardedPublicIndex, writeShardedPublicProjection } from "./publicDiscoveryReviewedBatch.js";
 import { listPublicDiscoveryPosts, type PublicDiscoveryPlace } from "./publicDiscovery.js";
 import { publicPostEvidenceFingerprint } from "./publicPostReverification.js";
 import { evaluatePublicDiscoveryRequest } from "./publicDiscoveryEndpoint.js";
@@ -20,6 +20,99 @@ const place = { provider: "apple_maps", providerPlaceID: "BranchA", name: "Store
   address: "10 Example Rd, ground floor", latitude: 25.03, longitude: 121.56, coordinateSystem: "WGS84", category: "cafe" };
 const other = { ...place, providerPlaceID: "Branch+B", name: "Store B", address: "10 Example Rd, basement" };
 const batch = (...candidates: object[]) => ({ venues: [{ place, candidates }] });
+
+test("sharded compiler publishes one readable catalog after validating the entire set", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-review-shards-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const first = join(root, "approved-a.json");
+  const second = join(root, "approved-b.json");
+  await writeFile(first, JSON.stringify(batch(threads)));
+  await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [instagram] }] }));
+  const output = join(root, "catalog");
+  const result = await writeShardedPublicIndex(output, [first, second], now);
+  assert.deepEqual(result, { filePath: join(output, "index.json"), shards: 2, associations: 2 });
+  const endpoint = new URL("http://localhost/v0/discovery/posts?bbox=121,25,122,26");
+  const read = await listPublicDiscoveryPosts(endpoint, { filePath: result.filePath, now });
+  assert.deepEqual(read.posts.map(row => row.id), ["instagram:IG_1", "threads:TER_1"]);
+  endpoint.searchParams.set("provider", "apple_maps");
+  endpoint.searchParams.set("placeID", other.providerPlaceID);
+  assert.deepEqual((await listPublicDiscoveryPosts(endpoint, { filePath: result.filePath, now })).posts.map(row => row.id),
+    ["instagram:IG_1"]);
+  const rejectedOutput = join(root, "rejected");
+  await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [threads] }] }));
+  await assert.rejects(writeShardedPublicIndex(rejectedOutput, [first, second], now));
+  await assert.rejects(access(rejectedOutput), { code: "ENOENT" });
+});
+
+test("keeps the serving pointer through failed replacement and reuses verified partitions", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-republish-shards-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const first = join(root, "approved-old.json");
+  const second = join(root, "approved-new.json");
+  await writeFile(first, JSON.stringify(batch(threads)));
+  await writeFile(second, JSON.stringify({ venues: [{ place: other, candidates: [{
+    ...instagram, review: { ...review, checkedAt: "2026-11-18T11:00:00Z" },
+  }] }] }));
+  const directory = join(root, "catalog");
+  const { filePath } = await writeShardedPublicIndex(directory, [first], now);
+  const before = await readFile(filePath, "utf8");
+  const query = new URL("http://localhost/v0/discovery/posts?bbox=121,25,122,26");
+  const list = () => listPublicDiscoveryPosts(query, { filePath, now });
+  assert.deepEqual((await list()).posts.map(row => row.id), ["threads:TER_1"]);
+
+  const staged = await writeShardedPublicIndex(join(root, "comparison"), [second], now);
+  const [digest] = JSON.parse(await readFile(staged.filePath, "utf8")).shards;
+  const corrupt = join(directory, digest + ".json");
+  await writeFile(corrupt, "{corrupt");
+  await assert.rejects(writeShardedPublicIndex(directory, [first, second], now, { replace: true }));
+  assert.equal(await readFile(filePath, "utf8"), before);
+  assert.deepEqual((await list()).posts.map(row => row.id), ["threads:TER_1"]);
+  await rm(corrupt);
+
+  const afterExpiry = new Date(now.getTime() + 86_400_000);
+  await assert.rejects(writeShardedPublicIndex(directory, [first, second], now,
+    { replace: true, clock: () => afterExpiry }));
+  assert.equal(await readFile(filePath, "utf8"), before);
+  assert.deepEqual((await list()).posts.map(row => row.id), ["threads:TER_1"]);
+
+  const afterOneReviewExpires = new Date("2026-11-19T10:30:00Z");
+  await assert.rejects(writeShardedPublicIndex(directory, [first, second], now,
+    { replace: true, clock: () => afterOneReviewExpires }));
+  assert.equal(await readFile(filePath, "utf8"), before);
+
+  const result = await writeShardedPublicIndex(directory, [first, second], now, { replace: true });
+  assert.equal(result.associations, 2);
+  assert.deepEqual((await list()).posts.map(row => row.id), ["instagram:IG_1", "threads:TER_1"]);
+  await assert.rejects(writeShardedPublicIndex(directory, [first], now), { code: "EEXIST" });
+  await writeShardedPublicIndex(directory, [first], now, { replace: true });
+  assert.equal(await readFile(filePath, "utf8"), before);
+  await access(corrupt); // Leave the prior leaves for readers that captured their pointer.
+});
+
+test("publishes the validated projection even when the caller edits its input during a write", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-projection-copy-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { manifest } = compileReviewedPublicBatch(batch(threads), now);
+  const expected = manifest.posts[0]!.title;
+  const publishing = writeShardedPublicProjection(join(root, "catalog"), [manifest], now);
+  manifest.posts[0]!.title = "Changed after validation";
+  const { filePath } = await publishing;
+  const query = new URL("http://localhost/v0/discovery/posts?bbox=121,25,122,26");
+  const result = await listPublicDiscoveryPosts(query, { filePath, now });
+  assert.equal(result.posts[0]?.title, expected);
+});
+
+test("explicit replacement refuses a non-v2 pointer", async t => {
+  const root = await mkdtemp(join(tmpdir(), "savvy-republish-legacy-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const review = join(root, "approved.json");
+  await writeFile(review, JSON.stringify(batch(threads)));
+  const index = join(root, "index.json");
+  const legacy = JSON.stringify(compileReviewedPublicBatch(batch(threads), now).manifest);
+  await writeFile(index, legacy);
+  await assert.rejects(writeShardedPublicIndex(root, [review], now, { replace: true }));
+  assert.equal(await readFile(index, "utf8"), legacy);
+});
 
 test("Threads reply fingerprints bind the selected reply and optionally require its embedded parent", async () => {
   const permalink = "https://www.threads.com/@reply.author/post/REPLY";
@@ -282,6 +375,64 @@ test("review files combine venue coverage and reject conflicting or unreadable i
   assert.deepEqual(manifest.posts.map(post => post.place.providerPlaceID), [other.providerPlaceID, place.providerPlaceID]);
   await assert.rejects(compileReviewedPublicFiles([first, first], now));
   await assert.rejects(compileReviewedPublicFiles([first, join(dir, "missing.json")], now));
+});
+
+function capacityVenues(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    place: { ...place, name: `Fixture Store ${i}`, providerPlaceID: `Fixture${i}` },
+    candidates: [{ ...instagram, sourceURL: `https://www.instagram.com/p/FIXTURE_${i}/` }],
+  }));
+}
+
+test("review compiles over 500 venues across files and keeps each place query exact", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "savvy-review-capacity-"));
+  t.after(() => rm(dir, { recursive: true }));
+  const venues = capacityVenues(1_001);
+  const first = join(dir, "first.json"), second = join(dir, "second.json");
+  await writeFile(first, JSON.stringify({ venues: venues.slice(0, 500) }));
+  await writeFile(second, JSON.stringify({ venues: venues.slice(500) }));
+  const { manifest } = await compileReviewedPublicFiles([first, second], now);
+  assert.equal(manifest.posts.length, 1_001);
+  const coverage = publicVenueSourceCoverage({ publicVenues: venues.map(item => item.place) }, manifest, now);
+  assert.equal(coverage.withSources, 1_001);
+  assert.equal(coverage.withoutSources, 0);
+
+  const index = join(dir, "index.json");
+  await writeFile(index, JSON.stringify(manifest));
+  const last = await listPublicDiscoveryPosts(
+    new URL("http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1&provider=apple_maps&placeID=Fixture1000"),
+    { filePath: index, now, multiVenue: true },
+  );
+  assert.deepEqual(last.posts.map(post => post.id), ["instagram:FIXTURE_1000"]);
+  const rechecked = await recheckReviewedPublicBatch({ venues }, { now, fetchEmbed: async () => {
+    assert.fail("No reviewed row has a fingerprint to recheck");
+  } });
+  assert.deepEqual(rechecked.summary, { refreshed: 0, unconfirmed: 0, unconfigured: 1_001, pending: 0 });
+});
+
+test("review allows the full public post capacity and rejects the next venue or post", () => {
+  const venues = capacityVenues(5_001);
+  assert.equal(compileReviewedPublicBatch({ venues: venues.slice(0, 5_000) }, now).manifest.posts.length, 5_000);
+  assert.throws(() => compileReviewedPublicBatch({ venues }, now), /Invalid venue count/);
+  const oneMore = { ...instagram, sourceURL: "https://www.instagram.com/p/FIXTURE_EXTRA/" };
+  venues[0]!.candidates.push(oneMore);
+  assert.throws(() => compileReviewedPublicBatch({ venues: venues.slice(0, 5_000) }, now), /Invalid post count/);
+});
+
+test("review keeps the existing total processing budget for pending associations", async () => {
+  const venues = capacityVenues(501).map(({ place }, venue) => ({
+    place,
+    candidates: Array.from({ length: 50 }, (_, post) => ({
+      ...instagram, sourceURL: `https://www.instagram.com/p/PENDING_${venue}_${post}/`, review: null,
+    })),
+  }));
+  const allowed = compileReviewedPublicBatch({ venues: venues.slice(0, 500) }, now);
+  assert.equal(allowed.withheld, 25_000);
+  assert.equal(allowed.manifest.posts.length, 0);
+  assert.throws(() => compileReviewedPublicBatch({ venues }, now), /Invalid reviewed candidate count/);
+  await assert.rejects(recheckReviewedPublicBatch({ venues }, { now, fetchEmbed: async () => {
+    assert.fail("Over-budget archive must be rejected before rechecking");
+  } }), /Invalid reviewed candidate count/);
 });
 
 test("recheck renews only unchanged public originals with existing branch fingerprints", async () => {
@@ -605,4 +756,117 @@ test("reviewed Google aliases reject duplicate, orphaned and unsupported crosswa
     [{ ...alias, branchEvidence: "" }],
     [{ ...alias, provider: "google_places" }],
   ]) assert.throws(() => compileReviewedPublicBatch({ ...batch(instagram, threads), googlePlaceAliases: aliases }, now));
+});
+
+test("an event post leaves Saved and Explore at its reviewed local-day cutoff", async t => {
+  const before = new Date("2026-11-18T15:59:30Z");
+  const cutoff = new Date("2026-11-18T16:00:00Z");
+  const dir = await mkdtemp(join(tmpdir(), "savvy-event-expiry-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "review.json"), index = join(dir, "index.json");
+  const html = `<div class="Embed">
+    <a class="EmbeddedMedia" href="https://www.instagram.com/p/IG_1/">post</a>
+    <div class="Caption"><a class="CaptionUsername" href="/example/">example</a>
+    Workshop at Store A, 10 Example Rd, ground floor
+    </div></div>`;
+  const fingerprint = publicPostEvidenceFingerprint(html, "instagram", instagram.sourceURL, "example", place as PublicDiscoveryPlace);
+  assert.ok(fingerprint);
+  const event = { ...instagram, review: { ...review, visibleUntil: cutoff.toISOString(), contentFingerprint: fingerprint } };
+  const archive = batch(event, threads);
+  const published = compileReviewedPublicBatch(archive, before).manifest;
+  assert.equal(makeReviewedPublicPreview(published, before).snapshot.expiresAt, cutoff.toISOString());
+  const preview = makeReviewedPublicPreview(published, cutoff);
+  assert.deepEqual(preview.snapshot.posts.map(post => post.id), ["threads:TER_1"]);
+  await writeFile(path, JSON.stringify(archive));
+  await writeFile(index, JSON.stringify(published));
+
+  const urls = [
+    "http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1&limit=1",
+    "http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1&provider=apple_maps&placeID=BranchA&limit=1",
+  ];
+  for (const target of urls) {
+    const url = new URL(target);
+    const active = await listPublicDiscoveryPosts(url, { filePath: index, now: before });
+    assert.equal(active.posts[0]?.id, "instagram:IG_1");
+    assert.equal(active.expiresAt, cutoff.toISOString());
+    assert.equal("visibleUntil" in active.posts[0]!, false);
+    assert.ok(active.nextCursor);
+    const atCutoff = await listPublicDiscoveryPosts(url, { filePath: index, now: cutoff });
+    assert.deepEqual(atCutoff.posts.map(post => post.id), ["threads:TER_1"]);
+    assert.notEqual(atCutoff.indexRevision, active.indexRevision);
+    assert.equal(atCutoff.coverage.find(item => item.platform === "instagram")?.indexedPostCount, 0);
+    url.searchParams.set("cursor", active.nextCursor);
+    await assert.rejects(listPublicDiscoveryPosts(url, { filePath: index, now: cutoff }));
+  }
+  const refreshed = await refreshReviewedPublicFiles([path], { now: cutoff, fetchEmbed: async () => html });
+  assert.deepEqual(refreshed.manifest.posts.map(post => post.id), ["threads:TER_1"]);
+  assert.equal(refreshed.expired, 1);
+  assert.equal(refreshed.summary.refreshed, 1, "the original is still public");
+});
+
+test("invalid post cutoff fails before the reviewed refresh accesses its sources", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "savvy-invalid-event-expiry-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "review.json");
+  for (const visibleUntil of [null, "2026-02-30T16:00:00Z", "2026-11-18"]) {
+    const candidate = { ...instagram, review: { ...review, visibleUntil, contentFingerprint: "a".repeat(64) } };
+    await writeFile(path, JSON.stringify(batch(candidate)));
+    let requests = 0;
+    await assert.rejects(refreshReviewedPublicFiles([path], { now, fetchEmbed: async () => { requests++; return ""; } }));
+    assert.equal(requests, 0);
+  }
+});
+
+test("a current index whose last scheduled post has ended returns an empty page", async t => {
+  const before = new Date("2026-11-18T15:59:30Z");
+  const cutoff = new Date("2026-11-18T16:00:00Z");
+  const dir = await mkdtemp(join(tmpdir(), "savvy-last-event-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "index.json"), reviewPath = join(dir, "review.json");
+  const event = { ...instagram, review: { ...review, visibleUntil: cutoff.toISOString(), contentFingerprint: "a".repeat(64) } };
+  const archive = batch(event);
+  await writeFile(path, JSON.stringify(compileReviewedPublicBatch(archive, before).manifest));
+  const url = new URL("http://localhost/v0/discovery/posts?bbox=121.5,25,121.6,25.1");
+  const initialSnapshot = await listPublicDiscoveryPosts(url, { filePath: path, now: cutoff });
+  assert.deepEqual(initialSnapshot.posts, []);
+  assert.equal(initialSnapshot.nextCursor, null);
+  assert.equal(initialSnapshot.coverage.find(item => item.platform === "instagram")?.indexedPostCount, 0);
+
+  const later = new Date("2026-11-20T16:00:00Z");
+  await writeFile(reviewPath, JSON.stringify(archive));
+  let requests = 0;
+  const fetchEmbed = async () => {
+    requests++;
+    throw new Error("Unavailable original");
+  };
+  const refreshed = await refreshReviewedPublicFiles([reviewPath], { now: later, fetchEmbed });
+  assert.equal(refreshed.summary.unconfirmed, 1);
+  assert.equal(requests, 1);
+  assert.deepEqual(refreshed.manifest.posts, []);
+  assert.equal(refreshed.expired, 1);
+  await writeFile(path, JSON.stringify(refreshed.manifest));
+  const newSnapshot = await listPublicDiscoveryPosts(url, { filePath: path, now: later });
+  assert.deepEqual(newSnapshot.posts, []);
+  assert.equal(newSnapshot.coverage.find(item => item.platform === "instagram")?.status, "not_connected");
+
+  const staleMixedArchive = batch(event, threads);
+  assert.throws(() => compileReviewedPublicBatch(staleMixedArchive, later), /No current reviewed posts/);
+  await writeFile(reviewPath, JSON.stringify(staleMixedArchive));
+  await assert.rejects(refreshReviewedPublicFiles([reviewPath], { now: later, fetchEmbed }), /No current reviewed posts/);
+  assert.equal(requests, 2);
+});
+
+test("reviewed Apple aliases are preserved when combining files and never exposed in post previews", async t => {
+  const dir = await mkdtemp(join(tmpdir(), "savvy-reviewed-apple-alias-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = join(dir, "archive.json");
+  const alias = { applePlaceID: "HistoricalBranch", providerPlaceID: "BranchA",
+    branchEvidence: "Historical Saved identity verified for the same park." };
+  const input = { ...batch(instagram, threads), applePlaceAliases: [alias] };
+  await writeFile(file, JSON.stringify(input));
+  const { manifest } = await compileReviewedPublicFiles([file], now);
+  assert.deepEqual(manifest.applePlaceAliases, [{applePlaceID: "HistoricalBranch", providerPlaceID: "BranchA"}]);
+  assert.equal("applePlaceAliases" in makeReviewedPublicPreview(manifest, now).snapshot, false);
+  const rejected = { ...input, applePlaceAliases: [{...alias, branchEvidence: ""}] };
+  assert.throws(() => compileReviewedPublicBatch(rejected, now));
 });

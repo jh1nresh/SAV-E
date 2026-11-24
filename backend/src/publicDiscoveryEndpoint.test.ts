@@ -18,9 +18,14 @@ test("public discovery rejects missing, malformed or unverified bearer before in
 test("verified subject reads only the public index without provisioning a profile", async () => {
   let verified = 0, reads = 0;
   const result = await evaluatePublicDiscoveryRequest({ method: "GET", authorization: "Bearer fixture",
+    largeIndex: true,
     url: new URL("https://fixture.invalid/v0/discovery/posts?bbox=1,2,3,4"),
     verifySubject: async token => { assert.equal(token, "fixture"); verified++; return "unprovisioned-subject"; },
-    readPosts: async () => { reads++; throw new PublicDiscoveryError(503); } });
+    readPosts: async (_url, options) => {
+      assert.equal(options.largeIndex, true);
+      reads++;
+      throw new PublicDiscoveryError(503);
+    } });
   assert.equal(verified, 1); assert.equal(reads, 1);
   assert.deepEqual(result, { statusCode: 503, body: { error: "public_discovery_unavailable" } });
 });
