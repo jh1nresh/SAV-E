@@ -73,6 +73,25 @@ test("a draft with a competing Threads author cannot block other valid originals
   assert.deepEqual(result.counts.outcomes, { invalid_attribution: 1, exact_street_match: 1 });
 });
 
+test("retained author claims for the same original do not depend on report order", async () => {
+  const source = ig("RENAMED");
+  const report = (authorHandle: string | null) => ({ place, candidates: [{ ...source, authorHandle }] });
+  const old = report("oldhandle");
+  const current = report("Example");
+  let calls = 0;
+  const fetchEmbed = async () => { calls++; return embed(source.sourceURL, caption); };
+  for (const drafts of [[old, current], [current, old], [old, report(null)]]) {
+    const result = await checkStreetDrafts(noArchive, drafts, [place], { now, fetchEmbed });
+    assert.equal(result.counts.checked, 1);
+    assert.equal(result.counts.admitted, 1);
+    assert.equal(result.verified[0]?.candidates[0]?.authorHandle, "example");
+  }
+  const unmatched = await checkStreetDrafts(noArchive, [old], [place], { now, fetchEmbed });
+  assert.equal(unmatched.counts.admitted, 0);
+  assert.deepEqual(unmatched.counts.outcomes, { original_unavailable: 1 });
+  assert.equal(calls, 4);
+});
+
 test("a provider cooldown stops new reads and the next window continues after the recorded cursor", async () => {
   const report = [{ place, candidates: [ig("FIRST"), ig("NEXT")] }];
   const calls: string[] = [];

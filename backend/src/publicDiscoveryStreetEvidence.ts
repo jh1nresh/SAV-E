@@ -9,7 +9,9 @@ const door = `${digits}(?:[-之]${digits})?號(?:之${digits})?`;
 const floor = "(?:[bB]?[0-9]{1,3}(?:樓|[fF])(?:之[0-9]{1,3})?)?";
 const address = `台北市(${district})(${street})(${door})(${floor})`;
 const conflictingContext = /舊址|舊店|搬遷|搬家|遷址|搬到|搬去|原址|新址|快閃|限定活動|美食節|營業異動|歇業|停業/u;
-const unitHint = /^(?:之|對面|旁|隔壁|前|後|樓|室|戶|棟|櫃|攤|[0-9])/u;
+const unitOrProximityHint = /^(?:之|正?對面|正?对面|旁|隔壁|前|後|樓|室|戶|棟|櫃|攤|[0-9]|附近|鄰近|近旁|周邊|週邊|周边|周圍|周围|一帶|nearby|opposite|nextto|acrossfrom)/u;
+const proximityBeforeAddress = /(?:靠近|鄰近|临近|接近|距離|距离|距|離|离|近|near|nearby|opposite|nextto|acrossfrom|around)[「『“"'（(【]*$/u;
+const addressSuffixPunctuation = /^[「」『』“”"'【】()[\]的]*/u;
 const abbreviatedAddress = new RegExp(`${street}${door}`, "u");
 const supportedCategories = new Set(["food", "cafe", "restaurant"]);
 
@@ -42,7 +44,11 @@ export function classifyTaipeiStreetCaption(
   const text = normalize(body);
   if (conflictingContext.test(text)) return "time_or_relocation";
   const matches = [...text.matchAll(new RegExp(address, "gu"))];
-  if (matches.some(match => unitHint.test(text.slice(match.index! + match[0].length)))) return "ambiguous_address";
+  if (matches.some(match => {
+    const index = match.index!;
+    const after = text.slice(index + match[0].length).replace(addressSuffixPunctuation, "");
+    return unitOrProximityHint.test(after) || proximityBeforeAddress.test(text.slice(0, index));
+  })) return "ambiguous_address";
   const paths = new Set(matches.map(matchedKey));
   if (!paths.size) return "no_exact_address";
   if (paths.size !== 1 || abbreviatedAddress.test(text.replace(new RegExp(address, "gu"), "|"))) return "ambiguous_address";
