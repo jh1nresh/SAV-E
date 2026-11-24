@@ -146,15 +146,24 @@ struct LivePlanningMapRoot: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                realMap.opacity(destination == .map ? 1 : 0)
-                    .allowsHitTesting(destination == .map).accessibilityHidden(destination != .map)
+                if !showsPocketCity {
+                    realMap.opacity(destination == .map ? 1 : 0)
+                        .allowsHitTesting(destination == .map).accessibilityHidden(destination != .map)
+                }
                 if destination != .map { DateTheme.canvas.ignoresSafeArea() }
                 VStack(spacing: 12) {
                     if destination != .map { header }
                     if destination == .map {
                         modeControl
-                        Spacer(minLength: 0)
+                        if showsPocketCity { pocketMap } else { Spacer(minLength: 0) }
                         HStack {
+                            if mode == .explore {
+                                Button(showsPocketCity ? copy("Apple Maps", "Apple 地圖") : copy("3D map (中文)", "立體地圖")) {
+                                    camera = .region(searchRegion)
+                                    pocketCityPreference = !exploreIn3D
+                                }
+                                .buttonStyle(.bordered).frame(minHeight: 44)
+                            }
                             Spacer()
                             LiveMapLocationControl(position: $camera, ownerSubject: ownerSubject,
                                                    sessionGeneration: sessionGeneration)
@@ -202,6 +211,10 @@ struct LivePlanningMapRoot: View {
             selected = nil
             searchPresented = false
             destination = .saved
+        }
+        .onChange(of: language.language) { _, _ in pocketCityPreference = nil }
+        .onChange(of: destination) { previous, _ in
+            if previous == .map && showsPocketCity { camera = .region(searchRegion) }
         }
         .onChange(of: mode) { _, next in
             lifecycleRevision &+= 1
@@ -304,18 +317,46 @@ struct LivePlanningMapRoot: View {
         guideAccess.reconcile(plan: plan, outing: outing, places: groupPlaces)
     }
 
+    @State private var pocketCityPreference: Bool?
+    private var exploreIn3D: Bool { pocketCityPreference ?? (language.language == .traditionalChinese) }
+    private var showsPocketCity: Bool { mode == .explore && exploreIn3D }
+
+    private var pocketMap: some View {
+        PocketCitySurface(pins: pins.map { pin in
+            let kind: PocketCityPin.Kind
+            switch pin.origin {
+            case .publicPost: kind = .post
+            case .saved: kind = .saved
+            case .search: kind = .search
+            case .shared: kind = .shared
+            }
+            return PocketCityPin(id: pin.id, name: pin.place.name,
+                                 label: "\(pin.place.name) · \(pin.sourceLabel) · \(pin.place.address)",
+                                 latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude,
+                                 kind: kind, selected: selected?.id == pin.id)
+        }, viewport: PocketCityViewport(camera.region), onSelect: { id in
+            if let pin = pins.first(where: { $0.id == id }) { selectMapPin(pin) }
+        }, onMove: { region in
+            if sessionIsCurrent && destination == .map { searchRegion = region }
+        }, onFailure: { pocketCityPreference = false })
+        .id([ownerSubject, String(sessionGeneration)])
+        .accessibilityIdentifier("live.map")
+    }
+
+    private func selectMapPin(_ pin: LiveMapPlace) {
+        guard sessionIsCurrent, mapCanSelect else { return }
+        let resolved = pin.origin == .publicPost ? pin : (pin.existingSavedProjection(in: mapVM.places) ?? pin)
+        if resolved.origin == .search { searchPin = resolved }
+        selected = resolved
+    }
+
     private var realMap: some View {
         LiveInteractiveMapSurface(
             position: $camera, pins: pins, routes: canShowPlan ? plan.routes : [], isInteractive: mapCanSelect,
             activePinID: selected?.id, friends: mode == .outing ? friendEntries : [],
             publicVenues: mode == .explore ? (discovery.page?.venues ?? []) : [],
             ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
-            onSelect: { pin in
-                guard sessionIsCurrent, mapCanSelect else { return }
-                let resolved = pin.origin == .publicPost ? pin : (pin.existingSavedProjection(in: mapVM.places) ?? pin)
-                if resolved.origin == .search { searchPin = resolved }
-                selected = resolved
-            },
+            onSelect: selectMapPin,
             onCameraSettled: { _, region in searchRegion = region }
         ).ignoresSafeArea().accessibilityIdentifier("live.map")
     }

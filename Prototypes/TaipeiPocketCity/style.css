@@ -264,3 +264,21 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 
 #shuqi-view { position:absolute; z-index:1; bottom:65px; left:50%; transform:translateX(-50%); min-height:38px; padding:0 14px; border:1px solid var(--line); border-radius:7px; background:var(--pane); }
 @media(max-width:720px) { #shuqi-view { bottom:calc(var(--map-footer-bottom) + 52px); } }
+
+.ios-map header, .ios-map .hint { display:none; }
+.ios-map main { padding:0; height:100%; }
+.ios-map #stage { height:100%; min-height:0; border:0; border-radius:0; }
+.ios-place-pin {
+  min-height:44px; min-width:44px; padding:0 8px 12px; border:0; background:transparent;
+  color:#24201e; font-weight:700; text-shadow:0 0 3px white,1px 1px 2px white,-1px -1px 2px white;
+}
+.ios-place-pin::after {
+  content:""; display:block; width:17px; height:17px; margin:0 auto; line-height:17px;
+  color:#1e1d1b; background:#faf9f4; border:2px solid #1e1d1b; border-radius:50%; text-shadow:none;
+}
+.ios-place-pin[data-kind="visited"]::after { content:"✓"; background:#1e1d1b; color:white; }
+.ios-place-pin[data-kind="post"]::after { content:"···"; background:#b8481f; color:white; border-radius:6px 6px 6px 0; border-color:white; }
+.ios-place-pin[data-kind="search"]::after { content:"＋"; }
+.ios-place-pin[data-kind="shared"]::after { content:"↗"; }
+.ios-place-pin.selected::after { outline:3px solid #1e1d1b; outline-offset:2px; }
+.ios-user-dot { width:16px; height:16px; border-radius:50%; border:2px solid white; background:#1874ce; box-shadow:0 0 0 4px #1578d137; pointer-events:none; }

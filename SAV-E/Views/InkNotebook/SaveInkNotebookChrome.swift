@@ -720,7 +720,46 @@ struct SaveInkLiveMap: View {
         }
     }
 
+    @State private var pocketCityPreference: Bool?
+    private var usesPocketCity: Bool { pocketCityPreference ?? (languageSettings.language == .traditionalChinese) }
+    private var homeViewport: PocketCityViewport? {
+        PocketCityViewport(SaveInkMapCamera.region(around: pins.map(\.coordinate), user: userCoordinate, focused: nil))
+    }
+
     var body: some View {
+        if showsRoute || focusPlaceID != nil {
+            appleMap
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                if usesPocketCity {
+                    PocketCitySurface(pins: pins.map { pin in
+                        PocketCityPin(id: pin.id, name: pin.name,
+                                      label: pin.visited
+                                        ? languageSettings.localized(english: "\(pin.name), visited", traditionalChinese: "\(pin.name)，去過")
+                                        : languageSettings.localized(english: "\(pin.name), saved", traditionalChinese: "\(pin.name)，已收藏"),
+                                      latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude,
+                                      kind: pin.visited ? .visited : .saved)
+                    }, viewport: homeViewport,
+                    userDot: PocketCityUserDot(userCoordinate, label: languageSettings.localized(english: "My location", traditionalChinese: "我的位置")),
+                    onSelect: onSelect, onFailure: { pocketCityPreference = false })
+                    .frame(height: 360)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .accessibilityIdentifier("ink.home.map")
+                } else {
+                    appleMap
+                }
+                Button(usesPocketCity ? languageSettings.localized(english: "Apple Maps", traditionalChinese: "Apple 地圖")
+                                      : languageSettings.localized(english: "3D map (中文)", traditionalChinese: "立體地圖")) {
+                    pocketCityPreference = !usesPocketCity
+                }
+                .font(SaveInkType.aux).foregroundStyle(SaveInkPalette.ink)
+                .frame(minHeight: 44)
+            }
+            .onChange(of: languageSettings.language) { _, _ in pocketCityPreference = nil }
+        }
+    }
+
+    private var appleMap: some View {
         Map(position: $position) {
             UserAnnotation()
             ForEach(pins) { pin in

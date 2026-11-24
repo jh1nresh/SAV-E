@@ -51,6 +51,10 @@ targets:
       - path: Prototypes/DatePlanDemo/Core
       - path: Prototypes/DatePlanDemo/Main
     postBuildScripts:
+      - name: Package Pocket City
+        script: 'python3 "$SRCROOT/scripts/package-pocket-city.py" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/PocketCity"'
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
       - name: Package App Secrets.plist
         script: '"${SRCROOT}/scripts/package-google-places-secrets.sh"'
         basedOnDependencyAnalysis: false
@@ -80,6 +84,10 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Savvy
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            "127.0.0.1":
+              NSExceptionAllowsInsecureHTTPLoads: true
         CFBundleLocalizations: [en, zh-Hant]
         UIApplicationSupportsIndirectInputEvents: true
         UIAppFonts:

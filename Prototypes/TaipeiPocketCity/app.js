@@ -1,3 +1,4 @@
+import {connectIOSMap} from './ios-map.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=2';
@@ -25,6 +26,8 @@ import {CityNature} from './city-nature.js?v=inventory-3';
 
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
+const iosChannel=window.webkit?.messageHandlers?.pocketMap;
+if(iosChannel) document.documentElement.classList.add('ios-map');
 const preview=new URLSearchParams(location.search);
 const lanternCamera={center:[121.84363,25.10852],zoom:20.25,mobileZoom:19.8,pitch:58,mobilePitch:56,bearing:138};
 let lanternView=preview.get('street')==='amei-lanterns';
@@ -697,7 +700,12 @@ try{
       cityAtlas:atlas170?atlas170.state().coverage:cityIndex?.cityCoverage??null,
     }),
   };
+  if(iosChannel){
+    window.savvyPocketHost=connectIOSMap(map,ml.Marker,iosChannel);
+    iosChannel.postMessage({event:'ready'});
+  }
 }catch(error){
+  iosChannel?.postMessage({event:'failure'});
   message('預覽無法載入，請重新整理。');
   console.error(error);
 }
