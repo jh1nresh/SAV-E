@@ -38,8 +38,9 @@ struct PocketCityViewport: Equatable {
     let latitude: Double
     let width: Double
     let height: Double
+    let requestID: Int
 
-    init?(_ region: MKCoordinateRegion?) {
+    init?(_ region: MKCoordinateRegion?, requestID: Int = 0) {
         guard let region, CLLocationCoordinate2DIsValid(region.center),
               region.span.latitudeDelta.isFinite, region.span.longitudeDelta.isFinite,
               region.span.latitudeDelta > 0, region.span.longitudeDelta > 0 else { return nil }
@@ -47,6 +48,7 @@ struct PocketCityViewport: Equatable {
         latitude = region.center.latitude
         width = min(360, region.span.longitudeDelta)
         height = min(170, region.span.latitudeDelta)
+        self.requestID = requestID
     }
 
     var bounds: [Double] {
