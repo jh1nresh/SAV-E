@@ -1,6 +1,6 @@
 // Inventory the actual promoted pins plus public classes with a recognisable built form.
 // A source pin or a model file alone never closes visual review.
-import {readFileSync, existsSync, mkdirSync, writeFileSync} from 'node:fs';
+import {readFileSync, realpathSync, existsSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {gunzipSync} from 'node:zlib';
@@ -101,7 +101,7 @@ export function report(data,output,base='http://127.0.0.1:42104/taipei-pocket-ci
   writeFileSync(path.join(output,'taipei-landmark-coverage.md'),lines.join('\n')+'\n');
   return summary;
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
+if(process.argv[1]&&realpathSync(process.argv[1])===fileURLToPath(import.meta.url)){
   const [data,output,preview,evidence]=process.argv.slice(2);
   if(!data||!output)throw Error('Usage: node tools/landmark-coverage.mjs <packaged PocketCity/data> <output directory> [preview URL] [evidence directory]');
   const summary=report(data,output,preview,evidence);

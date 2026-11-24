@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {mkdirSync,mkdtempSync,writeFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,symlinkSync,writeFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
@@ -16,6 +18,11 @@ test('a promoted POI and a new museum enter the queue even when both lack a mode
     feature('poi/way/189788192','國父紀念館','yes'),feature('poi/node/42','新館','museum'),
     feature('poi/node/43','國父紀念館咖啡','cafe')]})));
   const result=report(data,path.join(runtime,'report'));
+  const alias=path.join(runtime,'linked-tools');
+  symlinkSync(fileURLToPath(new URL('.',import.meta.url)),alias,'dir');
+  const cli=spawnSync(process.execPath,[path.join(alias,'landmark-coverage.mjs'),data,path.join(runtime,'cli-report')],{encoding:'utf8'});
+  assert.equal(cli.status,1,cli.stderr);
+  assert.equal(JSON.parse(cli.stdout).candidates,2);
   assert.equal(result.candidates,2);
   assert.equal(result.counts['待核對造型'],2);
   assert.ok(!result.missingPriority.includes('poi/way/189788192'));
