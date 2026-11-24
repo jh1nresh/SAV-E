@@ -16,9 +16,7 @@ function spring(response,damping){
 }
 
 const badge=spring(.46,.61);
-const opening=spring(.22,.9);
 const closing=spring(.20,.95);
-const limit=value=>Math.max(0,Math.min(1,value));
 
 export function bouncePhotoPin(element,from){
   if(!element||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
@@ -26,31 +24,13 @@ export function bouncePhotoPin(element,from){
   element.animate(badge.samples.map(p=>({transform:'scale('+(from+(1-from)*p)+')'})),{duration:badge.duration});
 }
 
-export function morphPlaceCard(card,photo,origin,reverse=false){
-  const curve=reverse?closing:opening;
-  const fractions=curve.samples.map(p=>reverse?1-p:p);
-  const options={duration:curve.duration,fill:'both'};
-  const cover=card.querySelector('.place-morph');
-  cover.style.backgroundImage=photo?'url("'+photo.src+'")':'none';
-  const width=card.offsetWidth,height=card.offsetHeight;
-  const diameter=origin.diameter;
-  const frames=fractions.map(p=>{
-    const remaining=1-p;
-    const x=(origin.x-diameter/2)*remaining,y=(origin.y-diameter/2)*remaining;
-    const scaleX=p+remaining*diameter/width,scaleY=p+remaining*diameter/height;
-    return {transformOrigin:'0 0',transform:`translate(${x}px,${y}px) scale(${scaleX},${scaleY})`,
-      borderRadius:(13+278*(1-limit(p))**1.6)+'px'};
-  });
-  const shape=card.animate(frames,options);
-  const animations=[shape,cover.animate(fractions.map(p=>({opacity:limit(1-(p-.05)*2.4)})),options)];
-  const contentFrames=fractions.map(p=>({opacity:limit((p-.18)*2.2)}));
-  for(const element of card.querySelectorAll(':scope > :not(.place-morph)')){
-    animations.push(element.animate(contentFrames,options));
-  }
-  card.classList.add('morphing');
-  const cancel=()=>{
-    animations.forEach(a=>a.cancel());
-    card.classList.remove('morphing');
-  };
-  return {shape,cancel};
+export function setPlacePinEmphasis(art,selected){
+  if(!art)return;
+  const start=Number.parseFloat(getComputedStyle(art).scale)||1;
+  const end=selected?1.24:1;
+  art.getAnimations().forEach(animation=>animation.cancel());
+  art.style.scale=String(end);
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches||start===end)return;
+  const curve=selected?badge:closing;
+  art.animate(curve.samples.map(t=>({scale:String(start+(end-start)*t)})),{duration:curve.duration});
 }

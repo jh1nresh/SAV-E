@@ -21,7 +21,9 @@
 
 - 首次執行下方的 `prepare_data.py` 後，透過 [loadCityPlaces](city-place-index.js) 取得 GeoJSON FeatureCollection。這個快照收錄台北 12 區共 39,664 筆。每筆以 `properties.placeId` 識別，Point 座標順序為經度、緯度。行政區和分類在 `district`、`category` 與 `categoryLabel`，部分地點沒有名稱。如果已有舊版 `data/`，可在本次提交的新工作目錄重新還原。
 - App 接入時，請把已確認的 Savvy 分店識別碼和地圖的 `placeId` 建立對應，再帶入該分店的已審核貼文。開啟 pin、瀏覽公開來源或找到同名分店都不會建立使用者收藏。無法確認分店的貼文留待核對。
-- [地點卡](place-callout.js) 與 [照片解析](place-photos.js) 是網頁原型的接入位置。目前只有三筆附來源的示範照片。接入貼文時，有可展示的原圖就顯示圖片及來源，只有原文連結就保留文字卡與連結。請用有圖、無圖、同名不同分店三種情境驗收。
+- [地點卡](place-callout.js) 與 [照片解析](place-photos.js) 是網頁原型的接入位置。目前有九筆附來源且對應到分店識別碼的照片。接入貼文時，有可展示的原圖就顯示圖片及來源，只有原文連結就保留文字卡與連結。請用有圖、無圖、同名不同分店三種情境驗收。
+
+iPhone Debug 預覽以 `SAVVY_DATE_PLAN_PHONE_PREVIEW` 與 `SAVVY_TAIPEI_SOURCE_SNAPSHOT` 啟用本地來源。建置時，`SAVVY_LOCAL_POCKET_CITY_SOURCES` 指向下方轉換出的地圖 JSON，`SAVVY_LOCAL_NATIVE_SOURCES` 指向同一批已審核、仍有效的原生公開貼文快照。兩者皆為本地輸入。分店詳情由 Savvy 的原生面板顯示，地圖保留選中 pin 的動畫。
 
 從 repo 根目錄把已審核的公開索引轉成這個預覽的地點資料。最後一個參數是同一套索引版本的已編譯後端驗證器。
 

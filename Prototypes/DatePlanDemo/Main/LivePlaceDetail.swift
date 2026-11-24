@@ -14,6 +14,7 @@ struct LivePlaceDetail: View {
     let sessionGeneration: Int?
     let onSave: (() -> Void)?
     let onOpenSaved: (() -> Void)?
+    let onShowPocketCity: (() -> Void)?
     let onDirections: () -> Void
     let onAddToOuting: (() -> Void)?
     let canAddToOuting: Bool
@@ -29,7 +30,7 @@ struct LivePlaceDetail: View {
          ownerSubject: String? = nil, sessionGeneration: Int? = nil,
          informationModel: LivePlaceInformationModel? = nil, websitePhotoModel: LiveBusinessWebsitePhotoModel? = nil,
          onSave: (() -> Void)?, onOpenSaved: (() -> Void)?,
-         onDirections: @escaping () -> Void, onAddToOuting: (() -> Void)?,
+         onShowPocketCity: (() -> Void)? = nil, onDirections: @escaping () -> Void, onAddToOuting: (() -> Void)?,
          canAddToOuting: Bool, onClose: @escaping () -> Void) {
         self.pin = pin
         self.isSaving = isSaving
@@ -40,6 +41,7 @@ struct LivePlaceDetail: View {
         _websitePhoto = StateObject(wrappedValue: websitePhotoModel ?? LiveBusinessWebsitePhotoModel())
         self.onSave = onSave
         self.onOpenSaved = onOpenSaved
+        self.onShowPocketCity = onShowPocketCity
         self.onDirections = onDirections
         self.onAddToOuting = onAddToOuting
         self.canAddToOuting = canAddToOuting
@@ -122,12 +124,11 @@ struct LivePlaceDetail: View {
                 .padding(.horizontal, 20).padding(.vertical, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(DateTheme.canvas.ignoresSafeArea())
+            .background(Color.clear)
             .foregroundStyle(DateTheme.ink).tint(DateTheme.blue)
             .navigationTitle(copy("Place", "地點"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(DateTheme.canvas, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(copy("Done", "完成"), action: onClose)
@@ -141,21 +142,14 @@ struct LivePlaceDetail: View {
     @ViewBuilder
     private var neighborhoodMap: some View {
         if pin.place.isMapKitMappable {
-            Map(position: .constant(.region(MKCoordinateRegion(
-                center: pin.coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.008, longitudeDelta: 0.010)
-            ))), interactionModes: []) {
-                Marker(pin.place.name, systemImage: pin.origin == .saved ? "bookmark.fill" : "mappin",
-                       coordinate: pin.coordinate)
+            if let onShowPocketCity {
+                Button(action: onShowPocketCity) {
+                    Label(copy("Show in Pocket City", "在 Pocket City 顯示"), systemImage: "map")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("live.place.map")
             }
-            .mapStyle(.standard(elevation: .flat))
-            .tint(DateTheme.blue)
-            .frame(height: 210)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
-            // Keep MapKit's own Apple attribution and legal controls visible.
-            // Empty interaction modes disable camera gestures without covering them.
-            .accessibilityLabel(copy("Map for \(pin.place.name)", "\(pin.place.name) 的位置地圖"))
-            .accessibilityIdentifier("live.place.map")
         } else {
             Label(copy("Location unavailable", "尚無可顯示的位置"), systemImage: "mappin.slash")
                 .font(.subheadline).foregroundStyle(DateTheme.muted)
@@ -198,16 +192,17 @@ struct LivePlaceDetail: View {
     }
 
     private var primaryAction: some View {
-        Button {
-            if pin.origin == .saved { onOpenSaved?() } else { onSave?() }
+        let saved = pin.origin == .saved || onOpenSaved != nil
+        return Button {
+            if saved { onOpenSaved?() } else { onSave?() }
         } label: {
             HStack(spacing: 8) {
-                if isSaving && pin.origin != .saved {
+                if isSaving && !saved {
                     ProgressView().tint(DateTheme.actionInk)
                 } else {
-                    Image(systemName: pin.origin == .saved ? "bookmark.fill" : "bookmark")
+                    Image(systemName: saved ? "bookmark.fill" : "bookmark")
                 }
-                Text(pin.origin == .saved
+                Text(saved
                      ? copy("Open saved", "開啟收藏")
                      : (isSaving ? copy("Saving…", "儲存中…") : copy("Save", "收藏")))
                     .fixedSize(horizontal: false, vertical: true)
@@ -217,8 +212,8 @@ struct LivePlaceDetail: View {
             .background(DateTheme.action, in: RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
-        .disabled(isSaving || (pin.origin == .saved ? onOpenSaved == nil : onSave == nil))
-        .accessibilityIdentifier(pin.origin == .saved ? "live.place.openSaved" : "live.place.save")
+        .disabled(isSaving || (saved ? onOpenSaved == nil : onSave == nil))
+        .accessibilityIdentifier(saved ? "live.place.openSaved" : "live.place.save")
     }
 
     private var directionsAction: some View {

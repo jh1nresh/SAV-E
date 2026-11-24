@@ -62,7 +62,7 @@
         <small>市區路網示意 · 列車動畫為模擬</small>
       </section>
       <section id="place-card" aria-labelledby="place-name" hidden>
-        <span class="place-morph" aria-hidden="true"></span>
+        <div class="sheet-handle" aria-hidden="true"></div>
         <button type="button" id="place-close" aria-label="關閉地點資訊"><span class="close-cross" aria-hidden="true"></span></button>
         <button type="button" class="place-photo" hidden><img alt=""><span aria-hidden="true">⤢</span></button>
         <div class="place-copy">
@@ -71,10 +71,18 @@
           <p class="place-detail" hidden></p>
           <div class="place-choices" hidden></div>
           <div class="place-links"><a class="photo-credit" target="_blank" rel="noopener" hidden></a>
-          <a class="place-source" target="_blank" rel="noopener" hidden></a></div>
+          <a class="place-directions" target="_blank" rel="noopener noreferrer" hidden>用 Apple 地圖導航 ↗</a>
+          <a class="place-official" target="_blank" rel="noopener noreferrer" hidden>官方資訊 ↗</a></div>
           <ul class="savvy-posts" aria-label="Savvy 相關貼文" hidden></ul>
+          <button type="button" id="place-in-explore" hidden>在探索中查看</button>
+          <button type="button" id="place-in-friends" hidden>查看朋友分享</button>
         </div>
       </section>
+      <dialog id="map-credits" aria-labelledby="map-credits-title">
+        <h3 id="map-credits-title">圖資來源</h3>
+        <div class="credit-list"></div>
+        <form method="dialog"><button type="submit">關閉</button></form>
+      </dialog>
       <dialog id="place-original" aria-labelledby="original-name">
         <form method="dialog"><button aria-label="關閉完整照片"><span class="close-cross" aria-hidden="true"></span></button></form>
         <img alt="">
@@ -92,6 +100,7 @@
           <label><input id="models" type="checkbox" checked> 台北實測建物</label>
           <label><input id="grid" type="checkbox"> 170 公尺格網</label>
         <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
+          <button type="button" id="show-map-credits">圖資來源</button>
           <small>全台地形採數值高程，街廓、山水與店家採公開圖資。台北建物採市府 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。缺少樓高時採示意高度；窗框、雨棚、林冠與天氣為插畫示意。</small>
         </div>
       </details>

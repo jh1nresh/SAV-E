@@ -82,6 +82,7 @@ test('a missing or expired cover preserves the original link and rejects foreign
   const posts=validSavvyPosts([{...item,cover:approved},{...item,cover:{...approved,expiresAt:at}},
     {...item,url:'https://www.threads.com.evil.test/@example/post/AbcDef'},
     {...item,expiresAt:at},null],time);
+  assert.deepEqual(posts.map(post=>post.coverPermission),['author',null]);
   assert.deepEqual(posts.map(({url,cover})=>[url,cover]),[[url,approved.url],[url,null]]);
 });
 

@@ -1,6 +1,7 @@
 import {bouncePhotoPin} from './photo-pin-motion.js';
 import {createPlaceCallout} from './place-callout.js';
 import {originalPlacePhoto,photoPlaces} from './place-photos.js';
+import {cityPlaceID} from './savvy-place-sources.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
 import {StreetPeople} from './street-people.js';
 import {StreetScenery} from './street-scenery.js';
@@ -122,24 +123,27 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     },'survey');
   }
 
-  const photoButtons=new Map();
-  const callout=createPlaceCallout(map,(src,rebound)=>{
-    for(const [button,image] of photoButtons){
-      const returning=rebound&&button.classList.contains('photo-open');
-      button.classList.toggle('photo-open',image===src);
-      if(returning&&button.isConnected)bouncePhotoPin(button.querySelector('.photo-badge'),.82);
-    }
+  let accountPlaceIds=new Set();
+  map.on('pocketaccountpins',event=>{
+    accountPlaceIds=new Set(event.placeIds);
+    update();
   });
+  const callout=createPlaceCallout(map);
   const pause=document.querySelector('#street-motion');
   let mappedStores=new Set();
   let paused=false;
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
-  const pinsFor=({key,data})=>data.places.map(place=>{
+  const photoIds=new Set(photoPlaces.map(place=>place.placeId));
+  const pinsFor=({key,data})=>data.places
+    .filter(place=>key==='photos'||!photoIds.has(cityPlaceID(place)))
+    .map(place=>({key,place,point:place.point,minZoom:place.minZoom??16.65,priority:place.priority??0,active:false}));
+  function createMarker(pin){
+    const {place}=pin;
     const button=document.createElement('button');
     button.type='button';
     button.className='street-pin';
     button.dataset.kind=place.kind;
-    button.dataset.place=place.id??place.name;
+    button.dataset.place=place.placeId??place.id??place.name;
     button.dataset.name=place.name;
     const {canvas,color}=placeButtonIcon(place.kind);
     button.style.setProperty('--pin',color);
@@ -148,11 +152,11 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     button.setAttribute('aria-expanded','false');
     const photo=originalPlacePhoto(place);
     if(photo){
-      photoButtons.set(button,photo.src);
       button.classList.add('photo-pin');
       button.setAttribute('aria-label',place.name+'，查看照片');
       const thumb=document.createElement('img');
       thumb.alt='';
+      thumb.decoding='async';
       thumb.src=photo.src;
       const badge=document.createElement('span');
       badge.className='photo-badge';
@@ -168,8 +172,9 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
       if(callout.trigger===button){callout.dismiss();return;}
       callout.open(place,button);
     });
-    return {key,button,point:place.point,minZoom:place.minZoom??16.65,priority:place.priority??0,marker:new Marker({element:button,anchor:photo?'bottom':'left',offset:photo?[0,0]:[-15.5,0]}).setLngLat(place.point)};
-  });
+    pin.button=button;
+    pin.marker=new Marker({element:button,anchor:photo?'bottom':'left',offset:photo?[0,0]:[-15.5,0]}).setLngLat(place.point);
+  }
 
   function update(){
     const zoom=map.getZoom();
@@ -177,15 +182,22 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     const width=viewport.clientWidth;
     const height=viewport.clientHeight;
     const available=[];
+    const photoRects=[];
     const bounds=map.getBounds();
     const near=allScenes().some(({model})=>model.isActive(bounds));
     pause.hidden=!near||motion.matches;
     for(const pin of pins){
-      let visible=zoom>=pin.minZoom&&bounds.contains(pin.point)&&(pin.key==='photos'||!mappedStores.has(pin.button.dataset.place));
+      const photo=pin.key==='photos';
+      let visible=!accountPlaceIds.has(cityPlaceID(pin.place))&&zoom>=pin.minZoom&&bounds.contains(pin.point)&&(photo||!mappedStores.has(pin.place.id??pin.place.name));
       if(visible){
-        const {x,y}=map.project(pin.point), extent=pin.button.textContent.length*7+24;
-        const rectangle=[x-16,y-14,x+Math.max(extent,pin.button.textContent.length*12+20),y+14];
-        if(limitsStreetLabels(pin.key)&&callout.trigger!==pin.button){
+        const {x,y}=map.project(pin.point);
+        const length=pin.place.name.length;
+        const rectangle=photo?[x-22,y-44,x+28+length*13,y]:[x-16,y-14,x+Math.max(length*7+24,length*12+20),y+14];
+        if(photo){
+          visible=!(x<0||x>width||y<0||y>height)&&!photoRects.some(([x1,y1,x2,y2])=>
+            rectangle[0]<x2&&rectangle[2]>x1&&rectangle[1]<y2&&rectangle[3]>y1);
+          if(visible)photoRects.push(rectangle);
+        }else if(limitsStreetLabels(pin.key)&&callout.trigger!==pin.button){
           visible=rectangle[0]>=9&&rectangle[2]<=width-9&&rectangle[1]>=0&&rectangle[3]<=height
             &&!available.some(([x1,y1,x2,y2])=>rectangle[0]<x2&&rectangle[2]>x1&&rectangle[1]<y2&&rectangle[3]>y1);
         }
@@ -194,12 +206,16 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
       if(visible===pin.active)continue;
       pin.active=visible;
       if(visible){
+        if(!pin.marker)createMarker(pin);
         pin.marker.addTo(map);
-        if(photoButtons.has(pin.button))bouncePhotoPin(pin.button.querySelector('.photo-badge'),0);
+        if(photo)bouncePhotoPin(pin.button.querySelector('.photo-badge'),0);
       }
       else{
-        if(callout.trigger===pin.button)callout.close();
         pin.marker.remove();
+        if(photo){
+          pin.marker=null;
+          pin.button=null;
+        }
       }
     }
   }
@@ -281,6 +297,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     if(!label)return false;
     return pins.some(pin=>{
       if(!pin.active || Math.hypot((pin.point[0]-lng)*100850,(pin.point[1]-lat)*110800)>=12)return false;
+      if(pin.key==='photos'&&feature.id===pin.place.placeId)return true;
       const title=normalize(pin.button.dataset.name);
       const [short,long]=title.length<label.length?[title,label]:[label,title];
       return title===label || (short.length>=3 && long.startsWith(short) && long.slice(short.length).endsWith('店'));

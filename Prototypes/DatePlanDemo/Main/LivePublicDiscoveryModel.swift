@@ -19,6 +19,30 @@ extension LivePublicDiscoveryBackend {
 
 extension SupabaseService: LivePublicDiscoveryBackend {}
 
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_TAIPEI_SOURCE_SNAPSHOT
+@MainActor
+private final class BundledTaipeiPublicDiscoveryBackend: LivePublicDiscoveryBackend {
+    static let shared = BundledTaipeiPublicDiscoveryBackend()
+    private let snapshot: LivePublicDiscoveryLocalSnapshot?
+
+    private init(bundle: Bundle = .main) {
+        snapshot = bundle.url(forResource: "TaipeiPublicSourceSnapshot", withExtension: "json")
+            .flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
+            .flatMap { try? LivePublicDiscoveryLocalSnapshot(data: $0) }
+    }
+
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?) async throws -> LivePublicDiscoveryPage {
+        try await fetchPublicDiscovery(viewport: viewport, cursor: cursor, venue: nil)
+    }
+
+    func fetchPublicDiscovery(viewport: LivePublicDiscoveryViewport, cursor: String?,
+                              venue: LivePublicDiscoveryVenueKey?) async throws -> LivePublicDiscoveryPage {
+        guard let snapshot else { throw LivePublicDiscoveryValidationError.invalidPage }
+        return try snapshot.page(viewport: viewport, cursor: cursor, venue: venue, at: Date())
+    }
+}
+#endif
+
 @MainActor
 final class LivePublicDiscoveryModel: ObservableObject {
     @Published private(set) var page: LivePublicDiscoveryValidatedPage?
@@ -37,7 +61,12 @@ final class LivePublicDiscoveryModel: ObservableObject {
     private var authObservation: AnyCancellable?
 
     convenience init(ownerSubject: String, sessionGeneration: Int) {
-        self.init(backend: SupabaseService.shared, sessionIsCurrent: {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_TAIPEI_SOURCE_SNAPSHOT
+        let backend: any LivePublicDiscoveryBackend = BundledTaipeiPublicDiscoveryBackend.shared
+#else
+        let backend: any LivePublicDiscoveryBackend = SupabaseService.shared
+#endif
+        self.init(backend: backend, sessionIsCurrent: {
             let auth = PrivyAuthService.shared
             guard case .authenticated(let owner) = auth.authState else { return false }
             return owner == ownerSubject && auth.currentUserId == ownerSubject

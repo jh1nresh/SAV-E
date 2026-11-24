@@ -5,12 +5,14 @@ import Network
 @MainActor
 final class PocketCityAssetServer {
     private let root: URL
+    private let allowsRemoteTiles: Bool
     private var listener: PocketCityHTTPListener?
     private var readyURL: URL?
     private var callbacks: [(URL?) -> Void] = []
 
-    init(root: URL) {
+    init(root: URL, allowsRemoteTiles: Bool) {
         self.root = root
+        self.allowsRemoteTiles = allowsRemoteTiles
     }
 
     func start(onReady: @escaping (URL?) -> Void) {
@@ -20,7 +22,7 @@ final class PocketCityAssetServer {
         }
         callbacks.append(onReady)
         guard listener == nil else { return }
-        let session = PocketCityHTTPListener(root: root)
+        let session = PocketCityHTTPListener(root: root, allowsRemoteTiles: allowsRemoteTiles)
         listener = session
         session.start { [weak self, weak session] url in
             Task { @MainActor in
@@ -51,14 +53,16 @@ final class PocketCityAssetServer {
 /// All mutable Network.framework state and file handles are confined to queue.
 private nonisolated final class PocketCityHTTPListener: @unchecked Sendable {
     private let root: URL
+    private let allowsRemoteTiles: Bool
     private let token = UUID().uuidString
     private let queue = DispatchQueue(label: "savvy.pocket-city.assets", qos: .userInitiated)
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: NWConnection] = [:]
     private var headerTimers: [ObjectIdentifier: DispatchWorkItem] = [:]
 
-    init(root: URL) {
+    init(root: URL, allowsRemoteTiles: Bool) {
         self.root = root.standardizedFileURL.resolvingSymlinksInPath()
+        self.allowsRemoteTiles = allowsRemoteTiles
     }
 
     func start(ready: @escaping @Sendable (URL?) -> Void) {
@@ -84,7 +88,8 @@ private nonisolated final class PocketCityHTTPListener: @unchecked Sendable {
                     switch state {
                     case .ready:
                         guard let port = server.port else { self.shutDown(); ready(nil); return }
-                        ready(URL(string: "http://127.0.0.1:\(port.rawValue)/\(self.token)/index.html"))
+                        let query = self.allowsRemoteTiles ? "" : "?tiles=bundled"
+                        ready(URL(string: "http://127.0.0.1:\(port.rawValue)/\(self.token)/index.html\(query)"))
                     case .failed:
                         self.shutDown()
                         ready(nil)
@@ -218,7 +223,7 @@ private nonisolated final class PocketCityHTTPListener: @unchecked Sendable {
             "HTTP/1.1 200 OK", "Connection: close", "Content-Length: \(size)",
             "Content-Type: \(Self.mimeTypes[ext] ?? "application/octet-stream")",
             "Referrer-Policy: no-referrer", "X-Content-Type-Options: nosniff",
-            "Cross-Origin-Resource-Policy: same-origin", "Content-Security-Policy: \(Self.policy)"
+            "Cross-Origin-Resource-Policy: same-origin", "Content-Security-Policy: \(policy)"
         ] + (gzipPBF ? ["Content-Encoding: gzip"] : [])
         send(client, headers: head) { [weak self] error in
             guard let self else { return }
@@ -259,10 +264,12 @@ private nonisolated final class PocketCityHTTPListener: @unchecked Sendable {
         "gz": "application/gzip", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
         "webp": "image/webp", "svg": "image/svg+xml", "woff2": "font/woff2"
     ]
-    private static let policy = [
-        "default-src 'none'", "script-src 'self'", "worker-src 'self'", "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: blob: https://tiles.openfreemap.org https://s3.amazonaws.com/elevation-tiles-prod/",
-        "connect-src 'self' https://tiles.openfreemap.org https://s3.amazonaws.com/elevation-tiles-prod/",
-        "font-src 'self'", "frame-ancestors 'none'", "form-action 'none'", "base-uri 'none'"
-    ].joined(separator: "; ")
+    private var policy: String {
+        let tileOrigins = allowsRemoteTiles ? " https://tiles.openfreemap.org https://s3.amazonaws.com/elevation-tiles-prod/" : ""
+        return [
+            "default-src 'none'", "script-src 'self'", "worker-src 'self'", "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: blob:\(tileOrigins)", "connect-src 'self'\(tileOrigins)",
+            "font-src 'self'", "frame-ancestors 'none'", "form-action 'none'", "base-uri 'none'"
+        ].joined(separator: "; ")
+    }
 }

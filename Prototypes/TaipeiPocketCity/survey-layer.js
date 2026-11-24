@@ -386,6 +386,20 @@ async function unpack(url,signal){
 }
 
 export const buildingZoom=14.4;
+const MiB=1024*1024;
+
+// Both Taipei survey levels contain the same vertices. Small tiles allow the
+// phone to fill the nearest streets progressively without decoding a 25 MiB block.
+function phoneNeighborhood(tiles){
+  const chosen=[];
+  let bytes=0;
+  for(const tile of tiles){
+    bytes+=tile.verts*24;
+    if(bytes>16*MiB||chosen.length>=48)break;
+    chosen.push(tile);
+  }
+  return chosen;
+}
 
 // The survey format is an unindexed triangle list with six floats per vertex.
 // Give both halves of a planar wall the same direction even if their winding differs.
@@ -426,8 +440,11 @@ export class SurveyLayer {
   #matrix=new Float32Array(16);
   visibleWallTiles=new Set();
   #disposed=false;
+  #phoneTiles;
+  #resetPhoneTiles=()=>{this.#phoneTiles=undefined;};
 
-  constructor(index,status,landmark,anatomy,streetCenters,linkScene,districtMaterial,hybrid=false,cityLandmarks=[]) {
+  constructor(index,status,landmark,anatomy,streetCenters,linkScene,districtMaterial,hybrid=false,cityLandmarks=[],phone=false) {
+    this.phone=phone;
     this.districtMaterial=districtMaterial;
     this.linkScene=linkScene;
     this.streetCenters=streetCenters;
@@ -440,6 +457,10 @@ export class SurveyLayer {
   }
   onAdd(map,gl) {
     this.map=map;this.gl=gl;
+    if(this.phone){
+      map.on('moveend',this.#resetPhoneTiles);
+      map.on('resize',this.#resetPhoneTiles);
+    }
     this.program=program(gl);
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
     this.zoomLocation=gl.getUniformLocation(this.program,'u_zoom');
@@ -483,6 +504,10 @@ export class SurveyLayer {
   }
   onRemove(){
     this.#disposed=true;
+    if(this.phone){
+      this.map.off('moveend',this.#resetPhoneTiles);
+      this.map.off('resize',this.#resetPhoneTiles);
+    }
     for(const ctl of this.#pending.values())ctl.abort();
     for(const b of this.#fetched.values())this.#delete(b);
     this.gl.deleteProgram(this.program);
@@ -557,13 +582,15 @@ export class SurveyLayer {
   }
   #update(zoom){
     const eligible=zoom>=buildingZoom&&this.#enabled;
-    const mid=eligible?this.#select(1000):[];
+    const mid=eligible&&!this.phone?this.#select(1000):[];
     const use=eligible&&mid.length<=60;
-    const closeCandidates=zoom>=16.4&&use?this.#select(200):[];
+    const closeCandidates=this.phone
+      ?(eligible?(this.#phoneTiles??=phoneNeighborhood(this.#select(200))):[])
+      :(zoom>=16.4&&use?this.#select(200):[]);
     const near=closeCandidates.length<=170?closeCandidates:[];
     const queue=(level,tiles)=>tiles.map(tile=>({key:level+'/'+tile.id,tile,level}));
     const close=queue(200,near), distant=queue(1000,use?mid:[]);
-    const completeClose=close.length>0&&close.every(t=>this.#fetched.has(t.key));
+    const drawClose=close.length>0&&(this.phone||close.every(t=>this.#fetched.has(t.key)));
     this.#wanted=close.length?close:distant;
     // The upper tower can still be in frame when its footprint is outside the ground view.
     // Submit the separate mesh at both detail levels and let the GPU clip it to the camera.
@@ -581,16 +608,16 @@ export class SurveyLayer {
     for(const [key,ctl] of this.#pending)if(!keys.has(key))ctl.abort();
     const now=performance.now();
     for(const {key,tile,level} of wanted){
-      if(this.#pending.size>=9)break;
+      if(this.#pending.size>=(this.phone?2:9))break;
       if(!this.#fetched.has(key)&&!this.#pending.has(key)&&!(this.#failures.get(key)>now)) this.#start(key,tile,level);
     }
     // Switch at one instant. A building is never drawn from both tile levels.
-    this.#mode=use?(completeClose?200:1000):null;
-    const current=completeClose?close:distant;
+    this.#mode=use?(drawClose?200:1000):null;
+    const current=drawClose?close:distant;
     this.#displayed=current.filter(t=>this.#fetched.has(t.key)).map(t=>({...t.tile,key:t.key}));
-    const wallRows=completeClose?close:[];
-    if(this.visibleWallTiles.size!==wallRows.length || wallRows.some(t=>!this.visibleWallTiles.has(t.tile.id))){
-      this.visibleWallTiles=new Set(wallRows.map(t=>t.tile.id));
+    const wallRows=drawClose?this.#displayed:[];
+    if(this.visibleWallTiles.size!==wallRows.length || wallRows.some(t=>!this.visibleWallTiles.has(t.id))){
+      this.visibleWallTiles=new Set(wallRows.map(t=>t.id));
     }
     this.#landmarkDrawn=!!art&&this.#fetched.has(art.key);
     if(this.#landmarkDrawn)this.#displayed.push({...art.tile,key:art.key});
@@ -611,11 +638,11 @@ export class SurveyLayer {
     }
     let bytes=0;
     for(const b of this.#fetched.values())bytes+=b.bytes;
-    if(bytes>95*1024*1024||this.#fetched.size>235){
+    if(bytes>(this.phone?24:95)*MiB||this.#fetched.size>(this.phone?72:235)){
       const stale=[...this.#fetched].filter(([k])=>!keys.has(k)).sort((a,b)=>a[1].seen-b[1].seen);
       for(const [key,item] of stale){
         this.#delete(item);this.#fetched.delete(key);bytes-=item.bytes;
-        if(bytes<80*1024*1024&&this.#fetched.size<190) break;
+        if(bytes<(this.phone?20:80)*MiB&&this.#fetched.size<(this.phone?60:190))break;
       }
     }
     const landmarkFailed=art&&this.#failures.has(art.key)&&intersects(art.tile,this.map.getBounds().toArray().flat());
@@ -642,8 +669,10 @@ export class SurveyLayer {
   }
   render(gl,options) {
     const zoom=this.map.getZoom();
-    this.#update(zoom);
-    if(!this.#displayed.length)return;
+    // Reuse already uploaded geometry while a pinch or camera flight is in progress.
+    // The settled view starts its own bounded requests on the next render.
+    if(!this.phone||!this.map.isMoving())this.#update(zoom);
+    if(!this.#enabled||zoom<buildingZoom||!this.#displayed.length)return;
     gl.useProgram(this.program);
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
     gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);
