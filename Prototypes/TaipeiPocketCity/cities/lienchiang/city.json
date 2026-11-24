@@ -48,7 +48,34 @@
       }
     ]
   },
-  "buildings": {},
+  "buildings": {
+    "w868658005": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w868658006": {
+      "taiwanStreetFinish": true,
+      "wall": "#dcd2bd",
+      "roofColour": "#ccb196",
+      "flatRoof": "#ccb196",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    }
+  },
   "palette": {
     "ground": "#d8d0ac",
     "road": "#a3958f",
@@ -83,7 +110,7 @@
         "mix": [
           {
             "style": 2,
-            "height": 8.0,
+            "height": 8,
             "share": 3
           },
           {

@@ -3,11 +3,11 @@ import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1'
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
-import {addTaiwanCells} from './taiwan-cells.js?v=street-walls-1';
+import {addTaiwanCells} from './taiwan-cells.js?v=city-colour-3';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
-import {addCityContext} from './city-context.js?v=street-walls-1';
+import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
-import {addCityAtlas} from './city-atlas-layer.js?v=shuqi-light-2';
+import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
 import {cityPlaceLayers} from './city-place-index.js';
 import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
 import * as ml from './assets/maplibre-gl.mjs';
@@ -640,6 +640,7 @@ try{
       coverageRequest=Promise.all([readTaiwanJSON('townships.geojson.gz'),readTaiwanJSON('cells.json')])
         .then(([towns,grid])=>{
           taiwanCoverage=makeTaiwanCoverage(towns,grid);
+          context.refresh();
           taiwanCells=addTaiwanCells(map,firstLabel,{contains:inTown,exclude,overlapsAuthored},context);
           appliedNames=undefined;applyLocalNames(!$('#fuxing-controls').hidden);
           updateGrid();updateUI();

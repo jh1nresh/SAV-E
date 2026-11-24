@@ -1,4 +1,5 @@
 import {plotOverlaps,footprintKey} from './authored-footprint.js?v=street-walls-1';
+import {footprintStyle} from './taiwan-cell-geometry.js?v=city-colour-3';
 import {placePinStyle} from './place-pins.js';
 // Continue the built streets between authored landmarks with the visible OpenMapTiles
 // building tiles. Style the original tile fragments, retaining courtyards and min heights.
@@ -20,7 +21,7 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
   map.addSource(id,{type:'geojson',data:data([]),maxzoom:16});
   map.addLayer({id,source:id,type:'fill-extrusion',minzoom:15,filter:['==',['geometry-type'],'Polygon'],paint:{
     'fill-extrusion-height':['get','height'],'fill-extrusion-base':['get','base'],
-    'fill-extrusion-color':['match',['get','material'],0,'#e1c7aa',1,'#ddc0ab',2,'#cec5ae',3,'#e1cdb2','#cdbaa6'],
+    'fill-extrusion-color':['coalesce',['get','wall'],['match',['get','material'],0,'#e1c7aa',1,'#ddc0ab',2,'#cec5ae',3,'#e1cdb2','#cdbaa6']],
     'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':true,
   }},before);
   const placeLayer='city-atlas-context-places';
@@ -53,7 +54,7 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
         seen.add(key);
         const height=Math.max(1,Number(p.render_height)||5.5),base=Math.min(height,Math.max(0,Number(p.render_min_height)||0));
         features.push({type:'Feature',geometry:{type:'Polygon',coordinates:polygon},properties:{
-          footprint:key,height,base,material:Math.abs(Math.round(ring[0][0]*3000+ring[0][1]*17000))%5}});
+          footprint:key,height,base,...(inTaiwan(...ring[0])?{wall:footprintStyle(feature,polygon,bounds).wall}:{}),material:Math.abs(Math.round(ring[0][0]*3000+ring[0][1]*17000))%5}});
       }
     }
     if(z>=16.6)for(const feature of map.querySourceFeatures('openmaptiles',{sourceLayer:'poi'})){
@@ -67,7 +68,7 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
       features.push({type:'Feature',geometry:feature.geometry,properties:{
         name,rank:Number(p.rank)||30,category:p.subclass||p.class||'other',categoryLabel:'地圖地點'}});
     }
-    const signature=[...seen].sort().join('|');
+    const signature=(inTaiwan(lng,lat)?'tw|':'world|')+[...seen].sort().join('|');
     if(signature!==previous){map.getSource(id).setData(data(features));previous=signature;}
     active=true;
   }
@@ -76,7 +77,7 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
   map.on('sourcedata',e=>{if(e.sourceId==='openmaptiles'&&e.sourceDataType==='content')schedule();});
   map.on('remove',()=>clearTimeout(timer));schedule();
   let prior=[];
-  return {setDetailedFootprints(keys){
+  return {refresh:schedule,setDetailedFootprints(keys){
     keys.sort();
     if(keys.length===prior.length&&keys.every((v,i)=>v===prior[i]))return;
     prior=keys;

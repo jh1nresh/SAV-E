@@ -1,11 +1,38 @@
 // Offline street geometry from the same dated OSM extract as the national POI index.
-import {readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
-import {taiwanCellAt} from './taiwan-cell-geometry.js?v=streets-2';
+import {readTaiwanJSON} from './taiwan-coverage.js?v=city-colour-3';
+import {taiwanCellAt} from './taiwan-cell-geometry.js?v=city-colour-3';
 
-const SCALE=100000,SPAN=3125,START=16;
+const SCALE=100000,SPAN=3125,START=15;
+const squareMetresPerDegree=111320*Math.cos(23.5*Math.PI/180)*110574;
 const empty=()=>({roads:[],buildings:[],pois:[],tiles:0});
 const intersects=(a,b)=>a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];
 const collection=features=>({type:'FeatureCollection',features});
+const materialFields=['building','building:use','building:material','building:colour','roof:shape','roof:material',
+  'roof:colour','building:levels','roof:levels','amenity','shop','tourism','office','historic','leisure'];
+
+export function decodeMaterialShard({profiles,rows}){
+  const dictionary=profiles.map(p=>{
+    const tags={};
+    for(let i=0;i<p.length;i+=2)tags[materialFields[p[i]]]=p[i+1];
+    return tags;
+  });
+  let id=0;
+  const result=new Map();
+  for(let i=0;i<rows.length;i+=2){
+    id+=rows[i];result.set(id,dictionary[rows[i+1]]);
+  }
+  return result;
+}
+export function applyStreetMaterials(buildings,packs){
+  for(const building of buildings){
+    const id=building.properties.osmBuildingId;
+    for(const pack of packs){
+      const tags=pack.get(id);
+      if(tags){Object.assign(building.properties,tags);break;}
+    }
+  }
+}
+
 function walkCoords(line,tile,visit){
   let x=tile[0]*SPAN,y=tile[1]*SPAN;
   for(let i=0;i<line.length;i+=2){x+=line[i];y+=line[i+1];visit(x,y);}
@@ -31,7 +58,7 @@ export function localStreetFeatures(shards,view,zoom,{contains,exclude,overlapsA
   const touchesAuthored=overlapsAuthored(view);
   const allowed=(x,y)=>(interiorTiles?.has(Math.floor(x*32)+'-'+Math.floor(y*32))||contains(x,y))&&!exclude(x,y);
   for(const shard of shards)for(const {tile,row,bounds} of shard){
-    if(!intersects(view,bounds)||row[0]===1&&zoom<17)continue;
+    if(!intersects(view,bounds)||zoom<START||row[0]===0&&zoom<16)continue;
     const id=row.slice(0,3).join('/');
     if(seen.has(id))continue;
     seen.add(id);
@@ -56,7 +83,10 @@ export function localStreetFeatures(shards,view,zoom,{contains,exclude,overlapsA
       const rings=encoded.map(line=>{const p=coords(line,tile);p.push(p[0]);return p;});
       if(!allowed(...rings[0][0])||(touchesAuthored&&overlapsAuthored(bounds,rings)))continue;
       result.buildings.push({type:'Feature',id:Math.abs(osmId),geometry:{type:'Polygon',coordinates:rings},
-        properties:{localFootprint:true,render_height:height}});
+        properties:{localFootprint:true,render_height:height,osmBuildingId:osmId,styleHeight:height,
+          styleArea:(bounds[2]-bounds[0])*(bounds[3]-bounds[1])*squareMetresPerDegree,
+          ...(shops.length?{mappedShopKind:shops[0][1]}:{})}});
+      if(zoom<18)continue;
       for(const [place,kind,x,y] of shops){
         if(places.has(place))continue;
         places.add(place);
@@ -142,7 +172,7 @@ function coversBuilding(rings,box,items){
   return false;
 }
 // Retain the primary source's surveyed/supplied height wherever it already draws the building.
-export function missingStreetBuildings(mapped,local,view){
+function* uncoveredBuildings(mapped,local,view,onCovered){
   if(!mapped.length)return local;
   const buckets=new Map();
   function cells(box,visit){
@@ -152,20 +182,116 @@ export function missingStreetBuildings(mapped,local,view){
     for(let x=left;x<=right;x++)for(let y=bottom;y<=top;y++)visit(x+','+y);
   }
   for(const f of mapped){
+    yield;
     if(f.properties.hide_3d===true)continue;
     const g=f.geometry,parts=g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
-    for(const rings of parts){
-      const item={rings,bounds:ringBounds(rings[0])};
+    for(const [index,rings] of parts.entries()){
+      if(index%64===63)yield;
+      const item={rings,bounds:ringBounds(rings[0]),feature:f,index};
       cells(item.bounds,key=>{if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(item);});
     }
   }
-  return local.filter(f=>{
+  const rest=[];
+  for(const f of local){
+    yield;
     const rings=f.geometry.coordinates,b=ringBounds(rings[0]),checked=new Set();
     cells(b,key=>{for(const item of buckets.get(key)??[]){
       if(intersects(item.bounds,b))checked.add(item);
     }});
-    return !coversBuilding(rings,b,[...checked]);
+    const choices=[...checked],subject={rings,bounds:b};
+    if(coversBuilding(subject.rings,subject.bounds,choices)){
+      if(onCovered)onCovered(f,subject,choices);
+    }else rest.push(f);
+  }
+  return rest;
+}
+function finish(iterator){
+  let step;
+  do{step=iterator.next();}while(!step.done);
+  return step.value;
+}
+export function missingStreetBuildings(mapped,local,view){
+  return finish(uncoveredBuildings(mapped,local,view));
+}
+function typedBuildingID(properties){
+  const recorded=properties.osmBuildingId;
+  if(Number.isSafeInteger(recorded)&&recorded!==0)return recorded;
+  const id=Number(properties.osm_id);
+  if(!Number.isSafeInteger(id)||id<=0)return;
+  if(properties.osm_type==='way')return id;
+  if(properties.osm_type==='relation')return -id;
+}
+// Rendering can select material from a local OSM object even when higher-priority base geometry
+// supplies the actual outline/height. Only transfer to a strong two-way geometric match.
+// Adjacent roofs and ambiguous overlaps never acquire a neighbor's tags.
+function* mergedBuildings(mapped,local,view){
+  if(!mapped.length)return local;
+  const matches=new Map();
+  const rest=yield* uncoveredBuildings(mapped,local,view,(source,subject,choices)=>{
+    const groups=new Map();
+    for(const item of choices){
+      const f=item.feature,explicit=typedBuildingID(f.properties);
+      if(explicit!==undefined&&explicit!==source.properties.osmBuildingId)continue;
+      // Buffered copies and clipped pieces of the same vector feature share its tile-source ID.
+      const id=f.id??item;
+      if(!groups.has(id))groups.set(id,[]);
+      groups.get(id).push(item);
+    }
+    for(const group of groups.values()){
+      if(!coversBuilding(subject.rings,subject.bounds,group,.85))continue;
+      const fitting=group.filter(item=>coversBuilding(item.rings,item.bounds,[subject],.85));
+      // Buffered copies can repeat a whole outline. Distinct extents that together cover
+      // the source are fragments, each with an artificial tile edge instead of an eave.
+      const split=fitting.length>1&&fitting.some(item=>item.bounds.some((value,i)=>
+        Math.abs(value-fitting[0].bounds[i])>1e-8));
+      for(const item of fitting){
+        const f=item.feature;
+        if(!matches.has(f))matches.set(f,new Map());
+        const parts=matches.get(f);
+        if(!parts.has(item.index))parts.set(item.index,{source:source.properties,split});
+        else if(parts.get(item.index)?.source.osmBuildingId!==source.properties.osmBuildingId)parts.set(item.index,null);
+      }
+    }
   });
+  const result=[];
+  for(const f of mapped){
+    yield;
+    const match=matches.get(f);
+    if(!match){result.push(f);continue;}
+    const g=f.geometry,parts=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+    for(const [index,rings] of parts.entries()){
+      if(index%64===63)yield;
+      const properties={...f.properties},hit=match.get(index),src=hit?.source;
+      if(src){
+        properties.osmBuildingId=src.osmBuildingId;
+        if(hit.split)properties.suppressPitchedRoof=true;
+        for(const key of ['styleHeight','styleArea','mappedShopKind']){
+          if(src[key]!==undefined)properties[key]=src[key];
+        }
+        for(const key of materialFields)if(src[key]!==undefined&&properties[key]===undefined)properties[key]=src[key];
+      }
+      result.push({type:'Feature',id:f.id,geometry:{type:'Polygon',coordinates:rings},properties});
+    }
+  }
+  return result.concat(rest);
+}
+export function mergeStreetBuildings(mapped,local,view){
+  return finish(mergedBuildings(mapped,local,view));
+}
+// Do not block a map gesture on the exact overlap of thousands of clipped online footprints.
+// Wake in small slices; a newer camera/data revision can cancel before another slice starts.
+export async function mergeVisibleBuildings(mapped,local,view,current){
+  if(!local.length)return mapped;
+  const work=mergedBuildings(mapped,local,view);
+  while(current()){
+    const stop=performance.now()+5;
+    let step;
+    do{
+      step=work.next();
+      if(step.done)return step.value;
+    }while(performance.now()<stop);
+    await new Promise(resolve=>setTimeout(resolve,0));
+  }
 }
 // Detect an existing base-map label only on a parallel segment of the same named street.
 // Adjacent alley names or another same-named road elsewhere in the viewport stay visible.
@@ -267,26 +393,27 @@ export function addTaiwanStreets(map,before,predicates,onChange){
   map.addSource(id,{type:'geojson',data:collection([]),maxzoom:19});
   map.addSource(labels,{type:'geojson',data:collection([]),maxzoom:19});
   const ground=map.getLayer('city-atlas-context')?'city-atlas-context':before;
-  const lines={type:'line',source:id,minzoom:START,layout:{'line-join':'round','line-cap':'round'}};
-  map.addLayer({...lines,id:id+'-edges',paint:{'line-color':'#b9b1a0','line-width':roadWidth(.75)}},ground);
+  const lines={type:'line',source:id,minzoom:16,layout:{'line-join':'round','line-cap':'round'}};
+  map.addLayer({...lines,id:id+'-edges',paint:{'line-color':'#e0d1b5','line-width':roadWidth(1.5)}},ground);
   map.addLayer({...lines,id:id+'-pavement',paint:{
-    'line-color':['match',['get','roadClass'],0,'#e8cc9d',1,'#eddfc8',2,'#f1e7d8','#d6cbac'],'line-width':roadWidth(0)}},ground);
+    'line-color':['match',['get','roadClass'],0,'#b3acb0',1,'#beb3ac',2,'#c6bdb0','#e5d3b3'],'line-width':roadWidth(0)}},ground);
   map.addLayer({id:id+'-names',type:'symbol',source:labels,minzoom:16.4,filter:['!=',['get','label'],''],
     layout:{'symbol-placement':'line-center','text-field':['get','label'],'text-font':['Noto Sans Regular'],
       'text-size':['interpolate',['linear'],['zoom'],16,10,19,13],'text-padding':4,'symbol-spacing':280,
       'symbol-sort-key':['get','roadClass'],'text-max-angle':38},
     paint:{'text-color':'#665849','text-halo-color':'#fff6e6','text-halo-width':1.5}},before);
 
-  const cache=new Map(),pending=new Map(),failures=new Map();
+  const cache=new Map(),materials=new Map(),pending=new Map(),failures=new Map();
+  let materialKeys,streetHash,materialRevision=0,appliedMaterials=-1,activeMaterials=[];
   let keys,interiorTiles,dead=false,packVersion=0,baseVersion=0,lastBase=-1,last='',labelIDs='',result=empty(),activeKeys=[];
   map.on('sourcedata',event=>{if(event.sourceId==='openmaptiles'&&event.sourceDataType==='content')baseVersion++;});
-  function load(key,file,accept){
+  function load(key,file,accept,material=false){
     if(pending.has(key)||(failures.get(key)??0)>Date.now()-5000)return;
     const controller=new AbortController();
     pending.set(key,controller);
     readTaiwanJSON(file,{signal:controller.signal}).then(data=>{
       if(dead||pending.get(key)!==controller)return;
-      accept(data);packVersion++;failures.delete(key);onChange();
+      accept(data);if(material)materialRevision++;else packVersion++;failures.delete(key);onChange();
     }).catch(error=>{
       if(!dead&&!controller.signal.aborted){failures.set(key,Date.now());console.warn('Taiwan streets',file,error);}
     }).finally(()=>{if(pending.get(key)===controller)pending.delete(key);});
@@ -297,7 +424,7 @@ export function addTaiwanStreets(map,before,predicates,onChange){
     if(visible){
       if(!keys)load('index','streets/index.json?rev=261123-2',m=>{
         if(m.version!==1||m.tileSpan!==SPAN||m.scale!==SCALE)throw Error('Unsupported street index');
-        keys=new Set(m.tiles);interiorTiles=new Set(m.interiorTiles??[]);
+        keys=new Set(m.tiles);interiorTiles=new Set(m.interiorTiles??[]);streetHash=m.sha256;
       });
       if(keys){
         for(let x=Math.floor(view[0]*32);x<=Math.floor(view[2]*32);x++)for(let y=Math.floor(view[1]*32);y<=Math.floor(view[3]*32);y++){
@@ -316,13 +443,44 @@ export function addTaiwanStreets(map,before,predicates,onChange){
       }
     }
     activeKeys=wanted;
-    for(const [key,controller] of pending)if(key!=='index'&&!wanted.includes(key)){controller.abort();pending.delete(key);}
-    const signature=visible?[packVersion,...view,zoom>=17].join('/'):'off';
+    activeMaterials=[];
+    if(wanted.length&&streetHash){
+      if(!materialKeys)load('material-index','materials/index.json',m=>{
+        if(m.version!==1||m.sha256!==streetHash||m.tilesPerGroup!==8||String(m.fields)!==String(materialFields))
+          throw Error('Material packs differ from the street snapshot');
+        materialKeys=new Set(m.tiles);
+      },true);
+      if(materialKeys){
+        const coarse=new Set(wanted.map(key=>key.split('-').map(n=>Math.floor(Number(n)/8)).join('-')));
+        activeMaterials=[...coarse].filter(k=>materialKeys.has(k));
+        for(const key of activeMaterials){
+          if(materials.has(key)){
+            const pack=materials.get(key);materials.delete(key);materials.set(key,pack);
+          }else load('material/'+key,'materials/'+key+'.json.gz',rows=>{
+            materials.set(key,decodeMaterialShard(rows));
+            for(const old of materials.keys()){
+              if(materials.size<=5)break;
+              if(!activeMaterials.includes(old))materials.delete(old);
+            }
+          },true);
+        }
+      }
+    }
+    for(const [key,controller] of pending){
+      if(key==='index'||key==='material-index'||wanted.includes(key)||
+          (key.startsWith('material/')&&activeMaterials.includes(key.slice(9))))continue;
+      controller.abort();pending.delete(key);
+    }
+    const signature=visible?[packVersion,...view,zoom>=16,zoom>=18].join('/'):'off';
     const changed=signature!==last;
     if(changed){
       last=signature;
       result=visible?localStreetFeatures(wanted.filter(k=>cache.has(k)).map(k=>cache.get(k)),view,zoom,{...predicates,interiorTiles}):empty();
       map.getSource(id).setData(collection(result.roads));
+    }
+    if(changed||materialRevision!==appliedMaterials){
+      appliedMaterials=materialRevision;
+      applyStreetMaterials(result.buildings,activeMaterials.filter(k=>materials.has(k)).map(k=>materials.get(k)));
     }
     if(changed||baseVersion!==lastBase){
       lastBase=baseVersion;
@@ -343,7 +501,7 @@ export function addTaiwanStreets(map,before,predicates,onChange){
     }
     return result;
   }
-  map.on('remove',()=>{dead=true;for(const controller of pending.values())controller.abort();pending.clear();cache.clear();});
+  map.on('remove',()=>{dead=true;for(const controller of pending.values())controller.abort();pending.clear();cache.clear();materials.clear();});
   return {refresh,state:()=>({shards:result.tiles,streets:result.roads.length,named:result.roads.filter(r=>r.properties.name).length,
     buildings:result.buildings.length,mappedShopfronts:result.pois.length})};
 }

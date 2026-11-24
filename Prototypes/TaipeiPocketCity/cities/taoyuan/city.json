@@ -194,6 +194,97 @@
       "facade": "civic",
       "wall": "#d6b99c",
       "roof": "flat"
+    },
+    "w405959862": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w406005642": {
+      "taiwanStreetFinish": true,
+      "wall": "#d2cab2",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w406005647": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w406005648": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w612008240": {
+      "taiwanStreetFinish": true,
+      "wall": "#d2cab2",
+      "roofColour": "#bbbba8",
+      "flatRoof": "#bbbba8",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w612008241": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w1461665808": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
     }
   }
 }

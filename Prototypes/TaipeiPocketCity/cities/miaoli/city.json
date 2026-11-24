@@ -188,5 +188,33 @@
       "label": "Wikimedia Commons · 園區外觀與館方模型照片",
       "url": "https://commons.wikimedia.org/wiki/Category:Taiwan_Hakka_Museum"
     }
-  ]
+  ],
+  "buildings": {
+    "w200028240": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5beb4",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w739699496": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    }
+  }
 }

@@ -187,5 +187,205 @@
       "label": "OpenStreetMap contributors (ODbL)",
       "url": "https://www.openstreetmap.org/copyright"
     }
-  ]
+  ],
+  "buildings": {
+    "w294961634": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e",
+      "shop": "poi",
+      "shopWall": "#b5cba8",
+      "awnings": [
+        "#cfb274"
+      ],
+      "fascia": [
+        "#5e4634"
+      ]
+    },
+    "w368940462": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w368940463": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w548547381": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w569913307": {
+      "taiwanStreetFinish": true,
+      "wall": "#f7d785",
+      "roofColour": "#9e9a94",
+      "flatRoof": "#9e9a94",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w569913313": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w569913334": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w654379096": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w866696038": {
+      "taiwanStreetFinish": true,
+      "wall": "#e27351",
+      "roofColour": "#7c7f88",
+      "flatRoof": "#7c7f88",
+      "frame": "#4f596f",
+      "trim": "#e1dbd1",
+      "glass": [
+        "#7e9298"
+      ],
+      "dark": "#4f596f",
+      "wood": "#4f596f",
+      "shop": "poi",
+      "shopWall": "#e27351",
+      "awnings": [
+        "#f3ead6"
+      ],
+      "fascia": [
+        "#3d4a53"
+      ]
+    },
+    "w1174538726": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w1174538727": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w1240409630": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    },
+    "w1240418636": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w1240418637": {
+      "taiwanStreetFinish": true,
+      "wall": "#f5c460",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    }
+  }
 }

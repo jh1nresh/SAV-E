@@ -183,5 +183,20 @@
       "label": "OpenStreetMap contributors (ODbL)",
       "url": "https://www.openstreetmap.org/copyright"
     }
-  ]
+  ],
+  "buildings": {
+    "w1425385899": {
+      "taiwanStreetFinish": true,
+      "wall": "#e3b88e",
+      "roofColour": "#a9a39a",
+      "flatRoof": "#a9a39a",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    }
+  }
 }

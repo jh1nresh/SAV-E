@@ -136,7 +136,7 @@ export function indexAuthoredPlaces(features){
   };
 }
 export async function addCityAtlas(map,before,open,onChange){
-  const rows=await read('catalog.json?rev=shuqi-lantern-1'),mesh=new LandmarkLayer(),trees=new CityNature();
+  const rows=await read('catalog.json?rev=city-colour-3'),mesh=new LandmarkLayer(),trees=new CityNature();
   trees.id='city-atlas-trees';
   const places=[{id:'taipei',name:'台北',landmark:'台北 101',center:[121.56481,25.03367]},...rows];
   const overview=['taipei','beijing','shanghai','los-angeles'];

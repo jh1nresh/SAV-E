@@ -167,5 +167,33 @@
         }
       ]
     }
-  ]
+  ],
+  "buildings": {
+    "w827525335": {
+      "taiwanStreetFinish": true,
+      "wall": "#f3ddba",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#665438",
+      "trim": "#f3dfb6",
+      "glass": [
+        "#a5a694"
+      ],
+      "dark": "#665438",
+      "wood": "#665438"
+    },
+    "w827525336": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    }
+  }
 }

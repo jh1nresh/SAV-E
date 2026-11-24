@@ -1,3 +1,4 @@
+import {buildingStyle,storefrontStyle} from '../taiwan-building-style.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -81,7 +82,8 @@ test('Q凍屋 display and category fascia face 勝利路 on the west exterior, a
   const canopy=shop.find(f=>f.properties.kind==='awning').geometry.coordinates[0];
   assert.ok(canopy[2][0]<canopy[0][0]-.000008);
   assert.ok(shop.some(f=>f.properties.kind==='door-glass'));
-  assert.ok(shop.some(f=>f.properties.kind==='shop-sign'&&f.properties.color==='#ab4232'));
+  const {sign}=storefrontStyle('food','w1163794705',buildingStyle(1163794705));
+  assert.ok(shop.some(f=>f.properties.kind==='shop-sign'&&f.properties.color===sign));
 });
 test('a close 65 m Q凍屋 view has at most one 勝利路 label, including adjacent split ways',()=>{
   const x=120.217746,y=22.990214,key=keyFor(x,y),view=[x-.00032,y-.00028,x+.00032,y+.00028];

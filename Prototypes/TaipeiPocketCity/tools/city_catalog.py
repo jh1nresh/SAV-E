@@ -46,6 +46,9 @@ def catalog():
             for filename in ('scene.json','map-mesh.json','map-mesh.bin'):
                 digest.update((folder/filename).read_bytes())
             assets['revision'] = digest.hexdigest()[:12]
+        elif any(s.get('taiwanStreetFinish') for s in json.loads((folder/'city.json').read_text()).get('buildings',{}).values()):
+            # Only rebuilt Taiwan streets opt in; other published asset URLs stay stable.
+            assets['revision'] = hashlib.sha256((folder/'map-mesh.bin').read_bytes()).hexdigest()[:12]
         rows.append(dict(id=key,area=area,**assets,landmarkPlaceIds=verified_landmark_places(folder,meta),**{k:meta[k] for k in ('name','landmark','center','bounds','sizeMeters','landmarkIds','landmarkSites','footprint','camera') if k in meta}))
     return rows
 if __name__=='__main__':

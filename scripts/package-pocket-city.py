@@ -70,7 +70,7 @@ def runtime_paths():
                      'scenery/places.geojson.gz', 'scenery/river-search.json.gz',
                      'scenery/rivers.geojson.gz', 'scenery/waters.geojson.gz'):
         include('taiwan/' + filename)
-    for directory in ('places', 'streets'):
+    for directory in ('places', 'streets', 'materials'):
         for key in document(f'taiwan/{directory}/index.json')['tiles']:
             include(f'taiwan/{directory}/{key}.json.gz')
     for directory in ('relief', 'mountains'):

@@ -183,5 +183,72 @@
       "label": "OpenStreetMap contributors (ODbL)",
       "url": "https://www.openstreetmap.org/copyright"
     }
-  ]
+  ],
+  "buildings": {
+    "w545177163": {
+      "taiwanStreetFinish": true,
+      "wall": "#f7d785",
+      "roofColour": "#9e9a94",
+      "flatRoof": "#9e9a94",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w699259875": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1a672",
+      "roofColour": "#cb7753",
+      "flatRoof": "#cb7753",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w1283230306": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w1382327248": {
+      "taiwanStreetFinish": true,
+      "wall": "#f4e4c1",
+      "roofColour": "#c58067",
+      "flatRoof": "#c58067",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
+    },
+    "w1473296954": {
+      "taiwanStreetFinish": true,
+      "wall": "#e9ddc4",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#526764",
+      "trim": "#eef0e7",
+      "glass": [
+        "#a4b9af"
+      ],
+      "dark": "#526764",
+      "wood": "#526764"
+    }
+  }
 }

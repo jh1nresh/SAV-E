@@ -3,6 +3,7 @@
 import {readFile,writeFile} from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
 import {geographicPoint} from '../geography.js';
+import {buildingStyle} from '../../taiwan-building-style.js';
 
 const local=name=>new URL(name,import.meta.url);
 const source=JSON.parse(gunzipSync(await readFile(local('source.json.gz'))));
@@ -140,18 +141,39 @@ function lightWoodBox(item,offset,lamps){
     }
   }
 }
+// Tint only the reusable shop-house finishes. Identifiable buildings, signs, lanterns,
+// greenery, the stone foundations and the stair flight keep their recovered materials.
+const plaster = new Set(['b69170','d0b18b','976952','a98869','b48265','c5a278','c3a081',
+  '9c775f','ccb793','b09073','a77658','bda888','bd9877','bdad93']);
+const tiles = new Set(['59666a','716050','766156','566669','704d43','5d6261','794d46',
+  '52615e','6c615d','634f45','646967','555f5b','79584e','64706d']);
+const sash = new Set(['5f7165','63493b','817961']);
+function streetFinish(item, style){
+  if(!style)return item.tint;
+  const src=item.tint;
+  const finish = plaster.has(src)?style.wall : tiles.has(src)?style.roof :
+    sash.has(src)?style.frame : paneTints.has(src)||src==='aab5a6'?style.glass :
+    src==='a05545'?style.awning : null;
+  if(!finish)return src;
+  // Let the hillside street retain its weathered pigment underneath the illustrated wash.
+  const old=src.match(/../g).map(v=>parseInt(v,16)), paint=finish.slice(1).match(/../g).map(v=>parseInt(v,16));
+  return mix(old,paint,.72).map(v=>v.toString(16).padStart(2,'0')).join('');
+}
 for(const group of groups){
   const first=triangles.length,base=group.meshes[0].matrix;
   // Rigid shop walls, windows, lamps and sign move as one. Individual treads follow the DEM correction.
   const offset=group.id==='steps'?undefined:adjustment(base[12],base[14]);
   const teahouse=group.id==='shop-5';
+  const streetShop=!teahouse&&group.id.startsWith('shop-');
+  const style=streetShop||group.id==='neighbor-2' ? buildingStyle('jiufen/'+group.id,
+    {building:streetShop?'retail':'residential'}) : null;
   const localLights=teahouse?group.meshes.filter(m=>lampTints.has(m.tint)).map(m=>m.matrix.slice(12,15)):[];
   for(const item of group.meshes){
     if(lampTints.has(item.tint)){paperLantern(item,offset,teahouse);continue;}
     if(teahouse&&item.geometry===1&&warmWood.has(item.tint)){lightWoodBox(item,offset,localLights);continue;}
     if(item.sign){paintSign(item,offset);continue;}
     const {positions,normals,colors,indices}=geometries[item.geometry];
-    const color=toLinear(item.tint),basis=normalMatrix(item.matrix);
+    const color=toLinear(streetFinish(item,style)),basis=normalMatrix(item.matrix);
     const count=indices?.length??positions.length/3;
     for(let j=0;j<count;j++){
       const i=(indices?.[j]??j)*3,n=normals.slice(i,i+3);

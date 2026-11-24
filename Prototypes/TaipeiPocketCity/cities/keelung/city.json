@@ -207,6 +207,97 @@
       "levels": 6,
       "wall": "#ac6551",
       "roof": "flat"
+    },
+    "w367861774": {
+      "taiwanStreetFinish": true,
+      "wall": "#dcd2bd",
+      "roofColour": "#ccb196",
+      "flatRoof": "#ccb196",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w533464225": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w533464227": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w533464230": {
+      "taiwanStreetFinish": true,
+      "wall": "#edb19b",
+      "roofColour": "#a49d94",
+      "flatRoof": "#a49d94",
+      "frame": "#654e63",
+      "trim": "#efddcb",
+      "glass": [
+        "#a49b9d"
+      ],
+      "dark": "#654e63",
+      "wood": "#654e63"
+    },
+    "w533464232": {
+      "taiwanStreetFinish": true,
+      "wall": "#f1e7d0",
+      "roofColour": "#74767e",
+      "flatRoof": "#74767e",
+      "frame": "#624534",
+      "trim": "#eddbb9",
+      "glass": [
+        "#978f72"
+      ],
+      "dark": "#624534",
+      "wood": "#624534"
+    },
+    "w533464234": {
+      "taiwanStreetFinish": true,
+      "wall": "#c7866d",
+      "roofColour": "#858b9b",
+      "flatRoof": "#858b9b",
+      "frame": "#695444",
+      "trim": "#dfccb1",
+      "glass": [
+        "#a49d8f"
+      ],
+      "dark": "#695444",
+      "wood": "#695444"
+    },
+    "w533464237": {
+      "taiwanStreetFinish": true,
+      "wall": "#b5cba8",
+      "roofColour": "#9ab0b9",
+      "flatRoof": "#9ab0b9",
+      "frame": "#45655e",
+      "trim": "#e6ddc6",
+      "glass": [
+        "#85a39a"
+      ],
+      "dark": "#45655e",
+      "wood": "#45655e"
     }
   }
 }

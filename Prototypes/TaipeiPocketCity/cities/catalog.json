@@ -2,6 +2,7 @@
   {
     "id": "tamsui",
     "area": "新北市",
+    "revision": "20d6776b605a",
     "landmarkPlaceIds": {
       "w290499654": "poi/way/290499654",
       "w297301287": "poi/way/297301287",
@@ -29,7 +30,7 @@
   {
     "id": "jiufen-shuqi",
     "area": "新北市",
-    "revision": "02b1f87560e3",
+    "revision": "7d490f8c207f",
     "landmarkPlaceIds": {},
     "name": "九份",
     "landmark": "豎崎路、阿妹茶樓與昇平戲院",
@@ -350,6 +351,7 @@
   {
     "id": "keelung",
     "area": "基隆市",
+    "revision": "0e61e4cfcde4",
     "landmarkPlaceIds": {
       "w253032621": "poi/relation/7667653"
     },
@@ -373,6 +375,7 @@
   {
     "id": "taoyuan",
     "area": "桃園市",
+    "revision": "c49b3ea10f61",
     "landmarkPlaceIds": {
       "w405959857": "poi/way/405959857",
       "w405959863": "poi/way/405959863"
@@ -398,6 +401,7 @@
   {
     "id": "hsinchu-city",
     "area": "新竹市",
+    "revision": "57ccdf2ab73a",
     "landmarkPlaceIds": {
       "w293504390": "poi/way/293504390"
     },
@@ -421,6 +425,7 @@
   {
     "id": "hsinchu-county",
     "area": "新竹縣",
+    "revision": "5d2ea6c33a49",
     "landmarkPlaceIds": {
       "r7290036": "poi/relation/7290036"
     },
@@ -444,6 +449,7 @@
   {
     "id": "miaoli",
     "area": "苗栗縣",
+    "revision": "acc9632d1d04",
     "landmarkPlaceIds": {
       "w200028241": "poi/way/355386414"
     },
@@ -467,6 +473,7 @@
   {
     "id": "taichung",
     "area": "臺中市",
+    "revision": "856980b46946",
     "landmarkPlaceIds": {
       "w569913342": "poi/way/569913342"
     },
@@ -490,6 +497,7 @@
   {
     "id": "changhua",
     "area": "彰化縣",
+    "revision": "27a2c431c194",
     "landmarkPlaceIds": {
       "w220285047": "poi/way/220285047",
       "w307329570": "poi/way/307329570"
@@ -515,6 +523,7 @@
   {
     "id": "nantou",
     "area": "南投縣",
+    "revision": "63035eca1d6a",
     "landmarkPlaceIds": {
       "w1198896246": "poi/way/1198896246"
     },
@@ -571,6 +580,7 @@
   {
     "id": "yunlin",
     "area": "雲林縣",
+    "revision": "c04895562f2b",
     "landmarkPlaceIds": {
       "w1274037894": "poi/way/1274037894",
       "w1274037895": "poi/way/1274037895",
@@ -629,6 +639,7 @@
   {
     "id": "chiayi-city",
     "area": "嘉義市",
+    "revision": "b5e4f2976530",
     "landmarkPlaceIds": {
       "w286891391": "poi/way/286891391"
     },
@@ -652,6 +663,7 @@
   {
     "id": "chiayi-county",
     "area": "嘉義縣",
+    "revision": "dc2939b92cc0",
     "landmarkPlaceIds": {
       "w1352427633": "poi/way/1352427633"
     },
@@ -675,6 +687,7 @@
   {
     "id": "tainan",
     "area": "臺南市",
+    "revision": "2158c34c8684",
     "landmarkPlaceIds": {
       "w183052614": "poi/way/183052614",
       "w561994806": "poi/way/561994806",
@@ -704,6 +717,7 @@
   {
     "id": "kaohsiung",
     "area": "高雄市",
+    "revision": "ef48779584b6",
     "landmarkPlaceIds": {
       "w205060859": "poi/way/205060859"
     },
@@ -727,6 +741,7 @@
   {
     "id": "pingtung",
     "area": "屏東縣",
+    "revision": "28c413d305b6",
     "landmarkPlaceIds": {
       "w310320724": "poi/way/310320724"
     },
@@ -773,6 +788,7 @@
   {
     "id": "hualien",
     "area": "花蓮縣",
+    "revision": "6e4661c74a30",
     "landmarkPlaceIds": {
       "w1350032556": "poi/way/712411693"
     },
@@ -872,6 +888,7 @@
   {
     "id": "lienchiang",
     "area": "連江縣",
+    "revision": "e2ed260f0306",
     "landmarkPlaceIds": {},
     "name": "連江",
     "landmark": "東湧燈塔",
