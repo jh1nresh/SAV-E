@@ -12,6 +12,7 @@ import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index
 import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=point-icons-5';
 import {streetShopProperties} from './shop-trades.js?v=point-icons-5';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
+import {withMarketScenery} from './taipei-market-stalls.js';
 
 const collection = features => ({type: 'FeatureCollection', features});
 const overlaps = ([w,s,e,n], [left,bottom,right,top]) => w <= right && e >= left && s <= top && n >= bottom;
@@ -150,7 +151,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   let marketData;
   async function loadMarkets(){
     if(marketData || map.getZoom()<15.6)return;
-    marketData=readPocketCityAsset('city170-markets').then(value=>map.getSource('city170-markets').setData(value))
+    marketData=readPocketCityAsset('city170-markets')
+      .then(value=>map.getSource('city170-markets').setData(collection(value.features.map(withMarketScenery))))
       .catch(error=>{marketData=null;console.warn('Taipei markets',error.message);});
   }
   map.on('moveend',loadMarkets);

@@ -6,6 +6,7 @@ import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1'
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
 import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-4';
+import {marketStallLife} from './taipei-market-stalls.js';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
 import {addTaiwanCells} from './taiwan-cells.js?v=city-colour-3';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
@@ -17,7 +18,7 @@ import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
-import {addStreetDetail} from './street-detail.js?v=shop-floor-1';
+import {addStreetDetail} from './street-detail.js?v=markets-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
@@ -25,7 +26,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
 import {addShopSearch} from './city-shop-search.js?v=shop-floor-1';
-import {addCity170,dihuaSearch} from './city170.js?v=point-icons-5';
+import {addCity170,dihuaSearch} from './city170.js?v=markets-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=retail-displays-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
@@ -560,6 +561,7 @@ try{
     const localLife=(records,visiblePacks=[])=>{
       if(preview.get('dihua')!=='before'&&visiblePacks.includes('p221_2038'))
         records=[{objects:{},paths:{'dihua-arcade':dihuaWalk}},...records];
+      if(preview.get('markets')!=='before')records=marketStallLife(records,visiblePacks);
       streetDetail.setLocalLife(records);
     };
     const openMapLabel=place=>{
