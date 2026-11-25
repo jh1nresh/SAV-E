@@ -19,6 +19,8 @@ export const retailWindowTypes = new Map([
   ['perfumery','fragrance'], ['music','record-shelves'],
 ]);
 
+export const parcelPickupWindow='parcel-pickup';
+
 export function drawRetailWindow(trade, {face,slab,shape,rod,rim,bottle}, paint){
   const {ink,wood,cream,glass,teal,leather,berry,ochre,sage,grape}=paint;
   const counter=(height=.49)=>slab(-.74,.74,height-.11,height,.22,wood);
@@ -26,6 +28,18 @@ export function drawRetailWindow(trade, {face,slab,shape,rod,rim,bottle}, paint)
   const palette=[teal,ochre,berry,sage,grape];
 
   switch(trade){
+    case parcelPickupWindow:
+      for(const [tier,level] of [.29,.72,1.15].entries()){
+        shelf(level);
+        for(const [box,x] of [-.47,-.03,.42].entries()){
+          const halfWidth=box===1?.165:.12;
+          const height=box===tier?.27:.21;
+          face(x-halfWidth,x+halfWidth,level,level+height,.17,box===1?ochre:leather);
+          face(x-.018,x+.018,level,level+height,.18,cream);
+          face(x+.035,x+.087,level+.06,level+.11,.185,cream);
+        }
+      }
+      break;
     case 'books':
       // Modular shelving refers to the 0.44 × 0.4 m Polyfork bookshelf-5e881a.
       face(-.68,.68,.10,1.50,.075,wood);
