@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import math
 import os
 import tarfile
 import tempfile
@@ -37,6 +38,34 @@ class PocketCityPackageTests(unittest.TestCase):
         self.assertFalse(any(name.startswith(('examples/', 'bundles/', 'tools/', 'scripts/')) or
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))
+
+    def test_default_bundle_covers_taipei_at_every_intermediate_zoom(self):
+        root = 'cities/map-tiles/'
+        catalog = json.loads((pkg.WEB / root / 'index.json').read_text())
+        region = json.loads((pkg.WEB / root / 'taipei-bundled/index.json').read_text())
+        packaged = set(pkg.runtime_paths())
+        self.assertIn(root + 'taipei-bundled/index.json', packaged)
+        self.assertEqual(region['source'], catalog['vectorTemplate'])
+        bundled = {(z, x, y) for z, x, y in region['tiles']}
+        shared = {(14, x, y) for x, y in catalog['tiles']}
+        self.assertEqual(len(bundled), len(region['tiles']))
+        for name in pkg.regional_tile_names(region):
+            path = root + 'taipei-bundled/' + name
+            self.assertIn(path, packaged)
+            self.assertEqual(gzip.decompress((pkg.WEB / path).read_bytes())[:1], b'\x1a')
+
+        def tile(z, lon, lat):
+            side = 2**z
+            return (math.floor((lon + 180) / 360 * side),
+                    math.floor((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * side))
+
+        west, south, east, north = 121.43, 24.95, 121.68, 25.211
+        self.assertEqual(region['bounds'], [west, south, east, north])
+        for z in range(3, 15):
+            left, top = tile(z, west, north)
+            right, bottom = tile(z, east, south)
+            required = {(z, x, y) for x in range(left, right + 1) for y in range(top, bottom + 1)}
+            self.assertEqual(required - (bundled | shared), set(), f'missing tiles at zoom {z}')
 
     def test_stage_updates_removes_stale_and_recovers_from_interruption(self):
         with tempfile.TemporaryDirectory() as temporary:
