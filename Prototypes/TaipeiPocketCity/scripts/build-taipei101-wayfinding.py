@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 from shapely import get_parts, transform
-from shapely.geometry import LineString, Point, Polygon, mapping, shape
+from shapely.geometry import LineString, MultiLineString, Point, Polygon, mapping, shape
 
 
 SOURCES = {
@@ -91,6 +91,36 @@ MARKS = {
 }
 
 
+# Plaza geometry descends toward the mapped B1 exit. Coordinates come from
+# OSM ways 1038711407 v2, 1339499070 v2 and 1038711411 v3 (ODbL).
+PLAZA_WAYS = (
+    (1038711407, "plaza-walk", [(121.5642987, 25.0333434), (121.5643842, 25.0333416),
+                              (121.5644215, 25.0333408)]),
+    (1339499070, "plaza-stair", [(121.5641415, 25.0333467), (121.5642987, 25.0333434)]),
+    (1038711411, "plaza-wall", [(121.5641432, 25.0334137), (121.5642377, 25.0334117),
+                              (121.5642452, 25.0334027), (121.5642619, 25.0333951),
+                              (121.5642805, 25.0333947), (121.5642975, 25.0334017),
+                              (121.5643094, 25.0334147), (121.5643140, 25.0334311),
+                              (121.5643102, 25.0334477), (121.5642989, 25.0334611),
+                              (121.5642958, 25.0334625), (121.5642959, 25.0334665),
+                              (121.5644339, 25.0334639), (121.5644288, 25.0332434),
+                              (121.5641390, 25.0332494)]),
+)
+
+
+def plaza_treads(stair):
+    # Ink ticks are illustrative. Neither their count nor the width is surveyed.
+    start, end = np.array(stair)
+    metres = np.array([111_320 * np.cos(np.radians(start[1])), 111_320])
+    dx, dy = (end - start) * metres
+    half_tick = np.array([-dy, dx]) / np.hypot(dx, dy) / metres * 1.6
+    ticks = []
+    for fraction in np.linspace(.12, .88, 8):
+        centre = start + (end - start) * fraction
+        ticks.append((centre - half_tick, centre + half_tick))
+    return MultiLineString(ticks)
+
+
 def calibrate(entrances):
     # Degree coordinates are sufficient for interpolating on the 120 m retail wing.
     # Calibrate the ground diagram to three mutually independent OSM entrance points.
@@ -146,6 +176,15 @@ def assemble(venue):
         if label == "1F":
             for key, _, name in ENTRANCES:
                 features.append(feature(Point(entrances[key]), "entrance", name, "east" if key == ENTRANCES[1][0] else ""))
+        if label == "B1":
+            # The B1 plaza is south of the retail-wing cutaway. Keep its
+            # measured centre lines separate from the schematic indoor plan.
+            for osm_id, role, coords in PLAZA_WAYS:
+                row = feature(LineString(coords), role)
+                row["properties"]["osm"] = f"way/{osm_id}"
+                features.append(row)
+                if role == "plaza-stair":
+                    features.append(feature(plaza_treads(coords), "plaza-tread"))
         filename, checksum = SOURCES[label]
         plans[label] = dict(source=DIAGRAM_BASE + filename, sourceSHA256=checksum,
                             drawing=dict(type="FeatureCollection", features=features))
