@@ -1,6 +1,30 @@
 import MapKit
+import OSLog
 import SwiftUI
 import WebKit
+
+struct PocketCityRecoveryBudget {
+    enum Decision: Equatable { case reload, lighterRenderer, exhausted }
+
+    private(set) var attempts = 0
+    private var healthySince: TimeInterval?
+
+    func acceptsProcessExit(committed: Bool) -> Bool {
+        committed || attempts == 0
+    }
+
+    mutating func acknowledged(at time: TimeInterval) {
+        if healthySince == nil { healthySince = time }
+    }
+
+    mutating func failed(at time: TimeInterval) -> Decision {
+        if let healthySince, time - healthySince >= 60 { attempts = 0 }
+        healthySince = nil
+        guard attempts < 2 else { return .exhausted }
+        attempts += 1
+        return attempts == 1 ? .reload : .lighterRenderer
+    }
+}
 
 /// Only the fields a button on the map needs. Source posts, notes, account IDs
 /// and location history stay with the native screen that owns the selection.
@@ -280,7 +304,12 @@ struct PocketCityMap: UIViewRepresentable {
         private var sentPresentation: PocketCityPresentation?
         private var watchdog: Task<Void, Never>?
         private var pageGeneration = 0
-        private var lastRecovery: TimeInterval?
+        private var recovery = PocketCityRecoveryBudget()
+        private var navigationCommitted = false
+        private var bridgeInFlight = false
+        private var basePage: URL?
+        private var navigation: WKNavigation?
+        private let log = Logger(subsystem: "com.wanderly.app", category: "PocketCity")
         private var viewportSerial = 0
         private var lastCamera: [Double]?
         private var cameraToRestore: [Double]?
@@ -303,42 +332,59 @@ struct PocketCityMap: UIViewRepresentable {
             server.start { [weak self] url in
                 guard let self, let web = self.web else { return }
                 guard let url else { self.fail(); return }
-                self.page = url
-                web.load(URLRequest(url: url))
+                self.basePage = url
+                self.loadPage(in: web, reducedLoad: false)
             }
+        }
+
+        private func loadPage(in view: WKWebView, reducedLoad: Bool) {
+            guard let basePage, var components = URLComponents(url: basePage, resolvingAgainstBaseURL: false)
+            else { fail(); return }
+            var query = components.queryItems ?? []
+            query.append(URLQueryItem(name: "pocketPage", value: String(pageGeneration)))
+            if reducedLoad { query.append(URLQueryItem(name: "renderer", value: "light")) }
+            components.queryItems = query
+            guard let url = components.url else { fail(); return }
+            page = url
+            navigationCommitted = false
+            navigation = view.load(URLRequest(url: url))
+            startWatchdog()
         }
 
         private func startWatchdog() {
             watchdog?.cancel()
             watchdog = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(35))
-                if !Task.isCancelled { self?.fail() }
+                guard !Task.isCancelled, let self else { return }
+                if let view = self.web, self.basePage != nil {
+                    self.recover(view, reason: "ready-timeout")
+                } else {
+                    self.fail()
+                }
             }
         }
 
-        private func recoverContentProcess(_ view: WKWebView) {
-            guard web === view, let page else { return }
-            let now = ProcessInfo.processInfo.systemUptime
-            guard lastRecovery.map({ now - $0 > 60 }) ?? true else {
-                // The process notification and a failed bridge call can describe the same exit.
-                if ready { fail() }
-                return
-            }
-            lastRecovery = now
+        private func recover(_ view: WKWebView, reason: String, code: Int = 0) {
+            guard web === view, basePage != nil else { return }
+            let decision = recovery.failed(at: ProcessInfo.processInfo.systemUptime)
+            log.warning("Map recovery \(reason, privacy: .public) code=\(code, privacy: .public) attempts=\(self.recovery.attempts, privacy: .public)")
+            guard decision != .exhausted else { fail(); return }
             screen.placeDrawer?.dismiss()
             screen.onPlaceSheet(false)
             pendingMapCredits = false
-            cameraToRestore = lastCamera
-            viewportBeforeRecovery = sentViewport
+            if ready, let lastCamera {
+                cameraToRestore = lastCamera
+                viewportBeforeRecovery = sentViewport
+            }
             pageGeneration += 1
             ready = false
+            bridgeInFlight = false
             sentPins = nil
             sentDot = nil
             sentViewport = nil
             sentPresentation = nil
             sentRoutes = []
-            startWatchdog()
-            view.load(URLRequest(url: page))
+            loadPage(in: view, reducedLoad: decision == .lighterRenderer)
         }
 
         func stop() {
@@ -375,7 +421,7 @@ struct PocketCityMap: UIViewRepresentable {
         }
 
         func sync() {
-            guard ready, let web else { return }
+            guard ready, !bridgeInFlight, let web else { return }
             let pinsChanged = screen.pins != sentPins
             let viewportChanged = screen.viewport != sentViewport
             let dotChanged = screen.userDot != sentDot
@@ -403,20 +449,35 @@ struct PocketCityMap: UIViewRepresentable {
             if let cameraToRestore, viewportBeforeRecovery == screen.viewport {
                 args["restoreCamera"] = cameraToRestore
             }
-            cameraToRestore = nil
             sentPins = screen.pins
             sentViewport = screen.viewport
             sentRoutes = routes
             sentPresentation = screen.presentation
             let generation = pageGeneration
+            bridgeInFlight = true
             web.callAsyncJavaScript("window.savvyPocketHost.update(state)", arguments: ["state": args],
-                                    in: nil, in: .page) { [weak self] result in
-                guard let self, self.pageGeneration == generation, case .failure(let error) = result else { return }
-                let failure = error as NSError
-                if failure.domain == WKError.errorDomain, failure.code == WKError.webContentProcessTerminated.rawValue {
-                    self.recoverContentProcess(web)
+                                    in: nil, in: .page) { [weak self, weak web] result in
+                guard let self, let web, self.web === web, self.pageGeneration == generation else { return }
+                self.bridgeInFlight = false
+                if case .failure(let error) = result {
+                    let failure = error as NSError
+                    if failure.domain == WKError.errorDomain, failure.code == WKError.webContentProcessTerminated.rawValue {
+                        // The navigation delegate usually reports the same process exit.
+                        // Use the generation to keep this fallback from replacing its new page.
+                        self.bridgeInFlight = true
+                        Task { [weak self, weak web] in
+                            try? await Task.sleep(for: .milliseconds(300))
+                            guard let self, let web, self.pageGeneration == generation else { return }
+                            self.recover(web, reason: "bridge-process-terminated", code: failure.code)
+                        }
+                    } else {
+                        self.recover(web, reason: "bridge", code: failure.code)
+                    }
                 } else {
-                    self.fail()
+                    self.cameraToRestore = nil
+                    self.recovery.acknowledged(at: ProcessInfo.processInfo.systemUptime)
+                    // While WebKit applied the previous state, SwiftUI may have sent a newer one.
+                    self.sync()
                 }
             }
         }
@@ -434,26 +495,47 @@ struct PocketCityMap: UIViewRepresentable {
             }
         }
 
-        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { recoverContentProcess(webView) }
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            guard web === webView, let navigation, navigation === self.navigation else { return }
+            navigationCommitted = true
+        }
+
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            // When a navigation error has already replaced the page, this callback can
+            // still describe the old process. Wait for the new navigation or its watchdog.
+            guard recovery.acceptsProcessExit(committed: navigationCommitted) else { return }
+            recover(webView, reason: "web-content-terminated")
+        }
+
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
                      withError error: Error) {
+            navigationFailed(webView, navigation, error)
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            navigationFailed(webView, navigation, error)
+        }
+
+        private func navigationFailed(_ view: WKWebView, _ navigation: WKNavigation?, _ error: Error) {
+            guard let navigation, navigation === self.navigation else { return }
             let failure = error as NSError
             if failure.domain == NSURLErrorDomain, failure.code == NSURLErrorCancelled { return }
-            fail()
+            recover(view, reason: "navigation", code: failure.code)
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard web != nil, message.frameInfo.isMainFrame, let page,
                   let url = message.frameInfo.request.url,
                   url.scheme == page.scheme, url.host == page.host, url.port == page.port,
-                  url.path == page.path, let body = message.body as? [String: Any] else { return }
+                  url.path == page.path, url.query == page.query, let body = message.body as? [String: Any] else { return }
             switch body["event"] as? String {
-            case "ready":
+            case "ready" where !ready:
                 watchdog?.cancel()
                 ready = true
                 sync()
                 if pendingMapCredits { showMapCredits() }
-            case "failure": fail()
+            case "failure", "rendererLost":
+                if let web { recover(web, reason: body["event"] as? String == "rendererLost" ? "webgl-context-lost" : "initialization") }
             case "placeDetail" where ready:
                 guard screen.pageVisible, let drawer = screen.placeDrawer,
                       let data = body["detail"] as? [String: Any], let detail = PocketCityPlaceDetail(data)
