@@ -2,6 +2,7 @@
 // Here each spray stays on its tree in 3D while its outline faces the reader.
 import {MercatorCoordinate,LngLat} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
+import {plainCanopy,treeCanopyKey} from './taipei-tree-canopies.js';
 
 const vertex=`#version 300 es
 layout(location=0) in vec3 p;
@@ -9,14 +10,16 @@ layout(location=1) in vec2 leaf;
 layout(location=2) in vec3 ink;
 layout(location=3) in vec4 root;
 layout(location=4) in float turn;
+layout(location=5) in vec4 canopy;
 uniform mat4 matrix;
 uniform vec3 rightAxis,upAxis;
 out vec3 tint;
 void main(){
   float c=cos(turn),s=sin(turn);
-  vec3 q=vec3(c*p.x-s*p.y,s*p.x+c*p.y,p.z)+rightAxis*leaf.x+upAxis*leaf.y;
+  vec3 q=vec3(c*p.x-s*p.y,s*p.x+c*p.y,p.z)+rightAxis*(leaf.x*canopy.w)+upAxis*leaf.y;
   gl_Position=matrix*vec4(root.xyz+q*root.w,1.);
-  tint=ink*(.97+.05*sin(turn));
+  vec3 foliage=ink.g>ink.r?ink*canopy.rgb:ink;
+  tint=foliage*(.97+.05*sin(turn));
 }`;
 const fragment=`#version 300 es
 precision mediump float;
@@ -26,6 +29,7 @@ void main(){pixel=vec4(tint,1.);}
 `;
 const forms=['broad','round','column','palm'];
 const tau=Math.PI*2;
+const instanceFloats=9;
 const bark=[.45,.35,.26], barkLight=[.61,.47,.34];
 const palette=[[.28,.43,.31],[.36,.53,.35],[.49,.64,.38],[.63,.73,.45]];
 function plant(form,detail){
@@ -214,10 +218,24 @@ export class CityNature {
     this.revision++;
     this.onRootsChanged?.();
   }
+  constructor(loadCanopies){
+    this.loadCanopies=loadCanopies;
+  }
   setRows(rows){
     this.rows=rows;
     this.dirty=true;
     this.map.triggerRepaint();
+    if(rows.length && this.loadCanopies){
+      const load=this.loadCanopies;
+      this.loadCanopies=null;
+      load().then(canopies=>this.setCanopies(canopies))
+        .catch(error=>console.warn(`Taipei tree canopies: ${error.message}`));
+    }
+  }
+  setCanopies(canopies){
+    this.canopies=canopies;
+    this.dirty=true;
+    this.map?.triggerRepaint();
   }
   onAdd(map,gl){
     this.map=map;
@@ -240,9 +258,9 @@ export class CityNature {
         gl.vertexAttribPointer(slot,size,gl.FLOAT,false,32,offset);
       }
       gl.bindBuffer(gl.ARRAY_BUFFER,instances);
-      for(const [slot,size,offset] of [[3,4,0],[4,1,16]]){
+      for(const [slot,size,offset] of [[3,4,0],[4,1,16],[5,4,20]]){
         gl.enableVertexAttribArray(slot);
-        gl.vertexAttribPointer(slot,size,gl.FLOAT,false,20,offset);
+        gl.vertexAttribPointer(slot,size,gl.FLOAT,false,instanceFloats*4,offset);
         gl.vertexAttribDivisor(slot,1);
       }
       gl.bindVertexArray(null);
@@ -259,7 +277,7 @@ export class CityNature {
     const groups=this.forms.map(()=>[]);
     const visible=[];
     for(const row of this.rows){
-      const [lon,lat,h,form]=row;
+      const [lon,lat,h,form,kind]=row;
       if(lon<w-dx||lat<s-dy||lon>e+dx||lat>n+dy)continue;
       const z=this.map.terrain?.getDrawnElevationForLngLat(new LngLat(lon,lat));
       if(!Number.isFinite(z))continue;
@@ -268,11 +286,12 @@ export class CityNature {
       visible.push(row);
       const q=MercatorCoordinate.fromLngLat([lon,lat]),i=this.forms.indexOf(alpine?'fir':form);
       const height=h>0?h:form==='palm'?7:6;
-      groups[i<0?1:i].push((q.x-base.x)/m,(base.y-q.y)/m,z,height,((lon*26553+lat*8179)%1)*tau);
+      const canopy=this.canopies?.get(treeCanopyKey(lon,lat,kind))??plainCanopy;
+      groups[i<0?1:i].push((q.x-base.x)/m,(base.y-q.y)/m,z,height,((lon*26553+lat*8179)%1)*tau,...canopy);
     }
     for(const [i,mesh] of this.meshes.entries()){
       const instances=new Float32Array(groups[i]);
-      mesh.count=instances.length/5;
+      mesh.count=instances.length/instanceFloats;
       gl.bindBuffer(gl.ARRAY_BUFFER,mesh.instances);
       gl.bufferData(gl.ARRAY_BUFFER,instances,gl.DYNAMIC_DRAW);
     }
@@ -306,6 +325,7 @@ export class CityNature {
   }
   onRemove(map,gl){
     map.off('sourcedata',this.terrainChanged);
+    this.map=null;
     for(const {vao,shape,instances} of this.meshes){
       gl.deleteVertexArray(vao);gl.deleteBuffer(shape);gl.deleteBuffer(instances);
     }

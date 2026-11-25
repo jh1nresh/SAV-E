@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {readFileSync} from 'node:fs';
+import {gunzipSync} from 'node:zlib';
 import {CityNature} from '../city-nature.js';
+import {indexTreeCanopies,plainCanopy} from '../taipei-tree-canopies.js';
 
-function scene(id) {
+function scene(id,loadCanopies) {
   const models=[], uploads=[], draws=[];
   let zoom=17, elevation=12;
   const gl=new Proxy({
@@ -15,7 +18,7 @@ function scene(id) {
   const map={getZoom:()=>zoom,getBounds:()=>bounds,getPitch:()=>45,getBearing:()=>0,
     getCenter:()=>[121.51,25.04],terrain:{getDrawnElevationForLngLat:()=>elevation},
     triggerRepaint(){},on(){},off(){}};
-  const art=new CityNature();
+  const art=new CityNature(loadCanopies);
   if(id)art.id=id;
   art.onAdd(map,gl);
   return {art,models,uploads,draws,zoom:z=>{zoom=z;},terrain:z=>{elevation=z;},
@@ -71,4 +74,39 @@ test('regional mountain trees retain their fir and original mesh levels',()=>{
   assert.equal(s.art.meshes[0].street/3,1552);
   assert.ok(s.art.meshes.every(m=>m.overview===0));
   assert.deepEqual(s.draws,[{first:0,count:s.art.meshes.at(-1).street,instances:1}]);
+});
+
+test('surveyed foliage changes only after the first populated tree view', async()=>{
+  const row=[121.51,25.04,8,'round',1];
+  const canopies=indexTreeCanopies({version:1,species:{paperbark:[[row[0],row[1],1]]}});
+  let reads=0;
+  const s=scene(undefined,async()=>{reads++;return canopies;});
+  const roadside=[...row.slice(0,4),0];
+  s.art.setRows([]);s.render();
+  assert.equal(reads,0);
+  s.art.setRows([row,roadside]);s.render();
+  const before=s.uploads[1];
+  assert.equal(reads,1);
+  assert.deepEqual([...before.slice(5,9)],plainCanopy);
+  await Promise.resolve();
+  s.render();
+  const after=s.uploads[5];
+  assert.deepEqual(after.slice(0,5),before.slice(0,5));
+  assert.notDeepEqual([...after.slice(5,9)],plainCanopy);
+  assert.deepEqual([...after.slice(14,18)],plainCanopy);
+  assert.deepEqual(s.art.activeTrees.rows,[row,roadside]);
+  s.art.setRows([row]);
+  assert.equal(reads,1);
+});
+
+test('all authored inventory palettes load as distinct, non-expanding leaf styles',()=>{
+  const asset=new URL('../assets/taipei-tree-canopies.json.gz',import.meta.url);
+  const {species,...provenance}=JSON.parse(gunzipSync(readFileSync(asset)));
+  assert.deepEqual(Object.keys(species).sort(),
+    ['banyan','bishopwood','camphor','cypress','goldenrain','paperbark','sweetgum']);
+  const lookup=indexTreeCanopies({...provenance,species});
+  assert.equal(lookup.size,Object.values(species).reduce((n,rows)=>n+rows.length,0));
+  const firstStyles=Object.values(species).map(([row])=>lookup.get(row.join(',')));
+  assert.equal(new Set(firstStyles.map(style=>style.join(','))).size,7);
+  assert.ok(firstStyles.every(([r,g,b,width])=>r>0 && g>0 && b>0 && width>0 && width<=1));
 });

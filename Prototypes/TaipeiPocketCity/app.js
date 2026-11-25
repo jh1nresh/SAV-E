@@ -27,7 +27,8 @@ import {loadSongyanNear} from './songyan-detail.js?v=5';
 import {addShopSearch} from './city-shop-search.js?v=shop-floor-1';
 import {addCity170,dihuaSearch} from './city170.js?v=point-icons-5';
 import {addCityShopfronts} from './city-shopfronts.js?v=retail-displays-1';
-import {CityNature} from './city-nature.js?v=canopies-1';
+import {CityNature} from './city-nature.js?v=canopies-2';
+import {loadTreeCanopies} from './taipei-tree-canopies.js';
 
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
@@ -554,7 +555,7 @@ try{
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);
   if(rerun && streetDetail){
-    cityNature=new CityNature();
+    cityNature=new CityNature(loadTreeCanopies);
     map.addLayer(cityNature,firstLabel);
     const localLife=(records,visiblePacks=[])=>{
       if(preview.get('dihua')!=='before'&&visiblePacks.includes('p221_2038'))

@@ -41,7 +41,8 @@ def runtime_paths():
 
     for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
-                 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz'):
+                 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
+                 'assets/taipei-tree-canopies.json.gz'):
         include(path)
     # Start from the iOS entry point and follow static ESM and module-worker references.
     modules = ['app.js', 'assets/maplibre-gl-worker.mjs']
