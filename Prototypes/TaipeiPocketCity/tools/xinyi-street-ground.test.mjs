@@ -61,10 +61,12 @@ test('normal street zoom installs one draped road surface below landmarks, label
   let requests=0;
   t.mock.method(globalThis,'fetch',async()=>{requests++;return new Response(bytes);});
   addXinyiStreetGround(map);zoom=17.6;await events.get('moveend')();assert.equal(requests,0);
-  near=true;await events.get('moveend')();assert.equal(requests,1);assert.equal(events.has('moveend'),false);
+  near=true;zoom=15.95;await events.get('moveend')();assert.equal(requests,1);assert.equal(events.has('moveend'),false);
   assert.equal(sources.length,1);assert.equal(sources[0][1].data.features.length,ground.features.length);
   assert.ok(layers.every(([l,before])=>before==='taipei101-single-ground'&&['fill','line'].includes(l.type)));
   assert.deepEqual(layers.map(([l])=>l.id.substring('xinyi-street-ground-'.length)),['paving','asphalt','concrete-joints','kerb']);
+  assert.ok(layers[1][0].minzoom<15.95);
+  assert.ok(layers[1][0].paint['fill-opacity'].at(-2)<=16.3);
   assert.equal(layers[1][0].paint['fill-color'],'#929394');assert.equal(layers.at(-1)[0].paint['line-color'],'#e3c477');
   // Street-scale A/B showed rectangular artefacts on patterned asphalt. Only
   // mapped paved walks get a texture; dirt trails and the carriageway remain clear.

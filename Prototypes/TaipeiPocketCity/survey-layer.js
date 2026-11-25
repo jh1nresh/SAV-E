@@ -239,7 +239,11 @@ void main() {
     }
   }
   vec3 surface=authored?original:wall(tone,height);
-  float neighborhood=smoothstep(16.5,17.55,u_zoom)
+  // The full-tower portrait frames 101 at zoom 15.9–16.6. Bring the surrounding
+  // measured facades into the same drawing scale without changing the camera.
+  float towerVicinity=1.0-smoothstep(650.0,1050.0,length(site));
+  float materialZoom=u_zoom+(u_hybrid&&!authored?towerVicinity:0.0);
+  float neighborhood=smoothstep(16.5,17.55,materialZoom)
     *(1.0-smoothstep(140.0,207.0,length((site-vec2(63.0,60.0))*vec2(.96,.85))));
   bool mall=site.x>-103.0&&site.x<56.0&&site.y>-53.0&&site.y<104.0;
   bool east=site.x>82.0;
@@ -307,7 +311,7 @@ void main() {
     vec2 edges=max(run.xy-linkSite,linkSite-run.zw);
     linkCoverage=max(linkCoverage,1.0-smoothstep(0.0,15.0,max(edges.x,edges.y)));
   }
-  float link=linkCoverage*smoothstep(16.55,17.6,u_zoom)*(1.0-neighborhood);
+  float link=linkCoverage*smoothstep(16.55,17.6,materialZoom)*(1.0-neighborhood);
   if(link>0.0){
     vec3 sandstone=mix(vec3(.904,.788,.634),vec3(.743,.550,.470),smoothstep(.10,.90,tone));
     vec3 modern=mix(vec3(.738,.777,.702),vec3(.515,.657,.672),smoothstep(27.0,81.0,height));
@@ -319,7 +323,7 @@ void main() {
   if(u_districtMaterialDetail && u_zoom>14.4){
     vec2 uv=u_districtMaterialTransform.xy+v_position.xy*u_districtMaterialTransform.zw;
     vec2 mask=texture(u_districtMaterialMask,uv).rg;
-    float district=mask.r*smoothstep(16.50,17.65,u_zoom)
+    float district=mask.r*smoothstep(16.50,17.65,materialZoom)
       *(1.0-neighborhood)*(1.0-linkCoverage);
     if(district>0.0&&!authored){
       vec3 terracotta=mix(vec3(.905,.791,.651),vec3(.754,.566,.473),smoothstep(.08,.92,tone));

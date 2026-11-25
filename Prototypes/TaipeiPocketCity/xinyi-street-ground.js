@@ -7,6 +7,8 @@ const extent=[121.55252,25.00810,121.59216,25.04951];
 const groundId='xinyi-street-ground';
 const street='#929394',walk='#e6c9a6',path='#dcc5a3',kerb='#e3c477',marking='#f0dfc0';
 const asset=new URL('./assets/xinyi-street-ground.json.gz',import.meta.url);
+// The narrow full-tower camera reaches street scale below the detail-pack zoom.
+const roadOverviewZoom=15.35;
 const fade=(z,full)=>['interpolate',['linear'],['zoom'],z,0,full,1];
 
 function unpackRing(values){
@@ -69,12 +71,12 @@ function install(map,data){
   const foreground=new Set(['taipei101-single-ground','songyan-woods','atlas-shadows','city170-prepared-lane','city170-prepared-crossing','survey']);
   const before=order.find(layer=>foreground.has(layer.id))?.id;
   map.addSource(groundId,{type:'geojson',data,maxzoom:20,tolerance:0,buffer:96});
-  const material=(id,kinds,paint,minzoom=16.35)=>{
+  const material=(id,kinds,paint,minzoom=roadOverviewZoom)=>{
     map.addLayer({id:groundId+'-'+id,type:'fill',source:groundId,minzoom,
       filter:['in',['get','kind'],['literal',kinds]],paint:{'fill-antialias':false,...paint}},before);
   };
-  material('paving',['walk','path'],{'fill-color':['match',['get','kind'],'path',path,walk],'fill-opacity':fade(16.35,17)});
-  material('asphalt',['road'],{'fill-color':street,'fill-opacity':fade(16.35,17)});
+  material('paving',['walk','path'],{'fill-color':['match',['get','kind'],'path',path,walk],'fill-opacity':fade(roadOverviewZoom,16.25)});
+  material('asphalt',['road'],{'fill-color':street,'fill-opacity':fade(roadOverviewZoom,16.25)});
   material('concrete-joints',['walk'],{'fill-pattern':sidewalkPattern(map),
     'fill-opacity':['interpolate',['linear'],['zoom'],17,0,17.9,.55]},17);
   map.addLayer({id:groundId+'-kerb',type:'line',source:groundId,minzoom:16.65,
@@ -92,7 +94,7 @@ function install(map,data){
 export function addXinyiStreetGround(map){
   let request,removed=false,ready=false;
   async function near(){
-    if(request||ready||removed||map.getZoom()<16.35)return;
+    if(request||ready||removed||map.getZoom()<roadOverviewZoom)return;
     const [[w,s],[e,n]]=map.getBounds().toArray();
     if(e<extent[0]||n<extent[1]||w>extent[2]||s>extent[3])return;
     request=new AbortController();
