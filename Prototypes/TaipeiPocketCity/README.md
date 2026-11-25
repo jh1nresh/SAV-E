@@ -85,6 +85,8 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 
 - 道路、建物輪廓與地點採 © OpenStreetMap contributors。OSM 衍生資料以 ODbL 1.0 提供，原始出處與擷取版本隨資料附於 `data/city170/index.json`。地圖署名見圖面。[OpenStreetMap 授權](https://www.openstreetmap.org/copyright)
 - 臺北市政府都市發展局提供 2025 年 LOD1 模型。市府商業處、衛生局、市場處、公園處與捷運工程局提供其他圖層，各來源列於圖面及資料摘要。[LOD1 服務](https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer) · [都發局資料開放宣告](https://udd.gov.taipei/QA/article/ngork7d) · [公共樹籍](https://data.gov.tw/dataset/128274)
+iPhone 離線地圖隨附台北的第 3–14 倍率向量圖磚，以 `cities/map-tiles/taipei-bundled/index.json` 的範圍為準。圖磚取自與共用底圖相同的 OpenFreeMap 快照，並沿用圖面上的 OpenFreeMap、OpenMapTiles 與 OpenStreetMap 署名。[OpenFreeMap](https://openfreemap.org/)
+
 - 3D 街景使用 OpenFreeMap、OpenMapTiles、Mapzen 地形及 MapLibre GL JS。插畫參考 April Zhu 的 Pocket City 與 Pocket Nature。[Pocket City](https://april-zhu.com/pocketcity) · [Pocket Nature](https://april-zhu.com/pocketnature) · [Pocket City 授權](assets/Pocket-City-LICENSE.txt) · [MapLibre 授權](assets/MapLibre-LICENSE.txt)
 
 `prepare_data.py` 會查核每包 SHA-256，還原完成才建立 `data/`。可用 `tools/bundle_data.py <準備好的圖資資料夾> <輸出資料夾>` 重新封裝。封裝與還原會保留每份資料解壓後的內容，gzip 壓縮位元組可能不同。`scripts/` 保留地圖資料與模型的製作工具，各自使用原始來源與額外的製圖相依套件。
