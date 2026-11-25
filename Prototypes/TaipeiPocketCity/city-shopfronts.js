@@ -13,7 +13,7 @@ import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
 import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
 import {completeFrontagePack} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 
-import {isXinyiShopWall,shopDetailZoom,xinyiFrontageZoom} from './xinyi-shop-frontages.js';
+import {isNeighborhoodShopWall,shopDetailZoom,neighborhoodFrontageZoom} from './xinyi-shop-frontages.js';
 const layerId='city-shopfronts';
 const vertex=`#version 300 es
 layout(location=0) in vec3 position;
@@ -521,7 +521,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   const matrix=new Float32Array(16);
   let active=new Set(),enabled=true,removed=false,dirty=true;
   let anchor,window,shown=[],vertices=0,textureLimit,tap,queries=[];
-  const xinyiWalls=new WeakSet();
+  const neighborhoodWalls=new WeakSet();
   let overview=false;
   let lastPick=null,walls,retry,showNames=true,fuxingEnabled=true,namesLocation;
   let gl,buffer,vao,pipeline,texture,matrixLocation,signLocation;
@@ -533,7 +533,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   }
   function kick(){
     clearTimeout(retry);
-    if(!enabled||removed||map.getZoom()<xinyiFrontageZoom)return;
+    if(!enabled||removed||map.getZoom()<neighborhoodFrontageZoom)return;
     const blocked=[...active].map(id=>failures.get(id)).filter(t=>t>Date.now());
     if(blocked.length)retry=setTimeout(kick,Math.max(1,Math.min(...blocked)-Date.now()+5));
     for(const id of active){
@@ -544,7 +544,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       readShopfrontPack(id,controller.signal).then(payload=>{
         if(removed||controller.signal.aborted)return;
         const rows=payload.filter(shopRow);
-        for(const row of rows)if(isXinyiShopWall(row,districtAt))xinyiWalls.add(row);
+        for(const row of rows)if(isNeighborhoodShopWall(row,districtAt))neighborhoodWalls.add(row);
         cache.set(id,rows);
         failures.delete(id);
         for(const key of cache.keys()){
@@ -567,7 +567,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   const click=event=>{
     unloadQueries();
     if(event.defaultPrevented)return;
-    if(!enabled||map.getZoom()<xinyiFrontageZoom||!shown.length){onPickMiss(event.point);return;}
+    if(!enabled||map.getZoom()<neighborhoodFrontageZoom||!shown.length){onPickMiss(event.point);return;}
     const {clientWidth,clientHeight}=map.getCanvas();
     if(!shown.some(shop=>hitShop(shop,matrix,event.point,clientWidth,clientHeight))){
       lastPick={tested:0,visible:0,id:null};
@@ -584,7 +584,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
     const data=new Map();
     for(const id of active){
       for(const row of cache.get(id)??[]){
-        if(!walls?.has(row.surveyTile)||(overview&&!xinyiWalls.has(row)))continue;
+        if(!walls?.has(row.surveyTile)||(overview&&!neighborhoodWalls.has(row)))continue;
         const [lon,lat]=row.center;
         if(lon>=west&&lon<=east&&lat>=south&&lat<=north)data.set(row.id,row);
       }
@@ -691,7 +691,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       map.on('click',click);
     },
     render(_gl,options){
-      if(!enabled||map.getZoom()<xinyiFrontageZoom||!active.size){
+      if(!enabled||map.getZoom()<neighborhoodFrontageZoom||!active.size){
         if(shown.length){shown=[];updateBuilt([]);dirty=true;}
         unloadQueries();
         return;
