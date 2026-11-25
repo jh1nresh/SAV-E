@@ -2,6 +2,7 @@ import {program,transform} from './survey-layer.js';
 import {drawMarketStall} from './taipei-market-stalls.js';
 import {drawPlaygroundObject} from './taipei-playground-mesh.js';
 import {drawParkFitness} from './taipei-park-fitness-mesh.js';
+import {drawRiversidePavilion} from './taipei-riverside-pavilion-mesh.js';
 
 const vertex=`#version 300 es
 layout(location=0) in vec3 point;
@@ -63,6 +64,9 @@ function buildObject(kind,size,angle,index,origin,vertices,anatomy,hybrid){
     ? (kind==='entrance'?'#c67a3d':'#927a62')
     : (hybrid?hybridAccents:accents)[index%3];
   switch(kind){
+    case 'river-pavilion': case 'river-canopy':
+      drawRiversidePavilion(kind,{box,face});
+      break;
     case 'fitness-pullup': case 'fitness-parallel': case 'fitness-walker': case 'fitness-twister':
     case 'fitness-wheel': case 'fitness-shoulder': case 'fitness-back': case 'fitness-pull':
     case 'fitness-ski': case 'fitness-bench': case 'fitness-rower': case 'fitness-ladder':
