@@ -1,6 +1,6 @@
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
-import {addTaipei101Indoor} from './taipei101-indoor.js?v=wayfinding-1';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=directory-map-1';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';

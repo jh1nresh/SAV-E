@@ -19,6 +19,10 @@
 #mall101-control [data-directory]{list-style:none;position:absolute;left:0;bottom:calc(100% + 6px);margin:0;padding:5px 9px;background:#fffaf0;border:1px solid #cfbe9e;border-radius:12px;max-height:min(42vh,290px);overflow:auto;width:min(230px,76vw);box-shadow:0 3px 12px #48351624}
 #mall101-control li+li{border-top:1px solid #e5dac5}
 #mall101-control a{display:block;padding:9px 2px;color:#614d28;text-decoration:none}
+#mall101-control .mall101-located-shop{display:flex;align-items:center;gap:8px}
+#mall101-control .mall101-located-shop button{flex:1;border:0;border-radius:0;background:none;box-shadow:none;text-align:left;padding:5px 2px}
+#mall101-control .mall101-located-shop small{display:block;font-size:11px;color:#8a561c}
+#mall101-control .mall101-located-shop a{display:grid;place-items:center;min-width:44px;min-height:44px;padding:0;text-decoration:underline}
 #mall101-control [data-floor-exit]{font-size:12px;color:#655c4a}
 
 #mall101-official-guide{position:absolute;z-index:2;right:12px;bottom:calc(var(--map-footer-bottom,44px) + 52px);width:clamp(158px,21vw,225px);max-height:65%;overflow:auto;box-sizing:border-box;background:#fcf9ef;border:1px solid #c9bca0;border-radius:12px;box-shadow:0 3px 12px #513b1d20;color:#584a31;font:600 13px/1.25 system-ui,sans-serif}

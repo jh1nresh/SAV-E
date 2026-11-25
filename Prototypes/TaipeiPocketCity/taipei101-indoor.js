@@ -82,7 +82,8 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   }
   const mappedPlace=feature=>({
     id:feature.properties.id??feature.id,placeId:'poi/'+(feature.properties.id??feature.id),name:feature.properties.name,
-    point:feature.geometry.coordinates,indoorFloor:current,categoryLabel:[venue.name,current].join(' · '),
+    point:feature.geometry.coordinates,category:feature.properties.category,
+    indoorFloor:current,categoryLabel:[venue.name,current].join(' · '),
     detail:feature.properties.detail||feature.properties.categoryLabel||'',source:feature.properties.source,url:feature.properties.url,
   });
   function setNames(visible){
@@ -113,14 +114,43 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     const entries=venue.directory?.[label]??[];
     summary.textContent=entries.length?'本層店家（'+entries.length+'）':'本層店家';
     shops.replaceChildren();
-    const addLink=(name,url)=>{
-      if(!url||!/^https:\/\//.test(url))return;
-      const li=document.createElement('li'),link=document.createElement('a');
+    const addLink=(li,name,url)=>{
+      const link=document.createElement('a');
       link.textContent=name;link.href=url;link.target='_blank';link.rel='noopener noreferrer';
-      li.append(link);shops.append(li);
+      li.append(link);
+      return link;
     };
-    for(const entry of entries)addLink(entry.name,entry.url);
-    addLink('查看 101 官方樓層圖','https://www.taipei-101.com.tw/tw/shopping/floorcon/'+encodeURIComponent(label));
+    const located=floorData(venue,label).features.filter(f=>f.geometry.type==='Point'
+      &&f.properties.kind==='shop'&&f.properties.level===label&&insideMall(f.geometry.coordinates,ring));
+    for(const entry of entries){
+      if(!entry.url?.startsWith('https://'))continue;
+      const li=document.createElement('li');
+      // Only the same official shop record on this floor can link to a mapped point.
+      const matches=located.filter(f=>f.properties.floorSourceUrl===entry.url);
+      if(matches.length===1){
+        const place=mappedPlace(matches[0]);
+        const button=document.createElement('button'),hint=document.createElement('small');
+        button.type='button';button.textContent=entry.name;
+        hint.textContent='在地圖查看';button.append(hint);
+        button.addEventListener('click',()=>{
+          directory.open=false;
+          summary.focus({preventScroll:true});
+          const zoom=Math.max(map.getZoom(),entryZoom()+.05);
+          map.jumpTo(indoorCamera(place.point,map.getBearing(),zoom),{pocketPlaceReveal:true});
+          openPlace(place);
+        });
+        li.className='mall101-located-shop';
+        li.append(button);
+        addLink(li,'官網',entry.url).setAttribute('aria-label',entry.name+'的官網');
+        shops.prepend(li);
+      }else{
+        addLink(li,entry.name,entry.url);
+        shops.append(li);
+      }
+    }
+    const floorLink=document.createElement('li');
+    addLink(floorLink,'查看 101 官方樓層圖','https://www.taipei-101.com.tw/tw/shopping/floorcon/'+encodeURIComponent(label));
+    shops.append(floorLink);
     updateFloorPoints();
     toggle.textContent=label;toggle.setAttribute('aria-label',label+'，選擇樓層');
     for(const button of menu.querySelectorAll('[data-floor]'))button.setAttribute('aria-pressed',String(button.dataset.floor===label));
