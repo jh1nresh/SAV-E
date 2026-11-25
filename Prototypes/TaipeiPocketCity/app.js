@@ -14,7 +14,7 @@ import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
 import {metroExitDataset} from './taipei-metro-exits.js';
-import {cityPlaceLayers} from './city-place-index.js?v=metro-street-1';
+import {cityPlaceLayers} from './city-place-index.js?v=survey-edge-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
@@ -26,9 +26,9 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=metro-street-1';
-import {addCity170,dihuaSearch} from './city170.js?v=metro-street-1';
-import {addCityShopfronts} from './city-shopfronts.js?v=neighborhood-services-1';
+import {addShopSearch} from './city-shop-search.js?v=survey-edge-1';
+import {addCity170,dihuaSearch} from './city170.js?v=survey-edge-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=survey-edge-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
 

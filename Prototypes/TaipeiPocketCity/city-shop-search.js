@@ -1,10 +1,10 @@
 import {additionalShopFloor,shopFloorLabel} from './shop-floor-labels.js';
 import {frontageCamera} from './fuxing-block.js?v=frontage-views-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
-import {loadCityPlaces} from './city-place-index.js?v=metro-street-1';
+import {loadCityPlaces} from './city-place-index.js?v=survey-edge-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
-import {frontageSearchRow} from './taipei-frontage-pack.js?v=compact-frontages-1';
+import {frontageSearchRow} from './taipei-frontage-pack.js?v=survey-edge-1';
 
 const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
 export function surveyedShopCamera(row,views,viewport){
@@ -55,7 +55,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
   }
   function loadCameras(){
     if(cameraRequest)return cameraRequest;
-    const url=new URL('./taipei-frontage-cameras.js?v=compact-frontages-1',import.meta.url);
+    const url=new URL('./taipei-frontage-cameras.js?v=survey-edge-1',import.meta.url);
     if(cameraAttempts)url.searchParams.set('retry',String(cameraAttempts));
     cameraAttempts++;
     cameraRequest=import(url.href).then(views=>{cameras=views;}).catch(()=>{cameraRequest=null;});

@@ -27,7 +27,7 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taipei-metro-exits.js', 'taipei-metro-exit-data.js',
                          'taiwan/mountains/yushan-ridges.webp', 'taiwan/mountains/taiwan-highlands.webp',
                          'taipei-river-art.js', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
-                         'taipei-frontage-cameras.js', 'city170-bike-docks.js', 'shop-categories.js',
+                         'taipei-frontage-cameras.js', 'taipei-edge-frontages.js', 'city170-bike-docks.js', 'shop-categories.js',
                          'taipei-tree-canopies.js', 'assets/taipei-tree-canopies.json.gz',
                          'taipei-market-stalls.js', 'taipei-market-stalls-data.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
