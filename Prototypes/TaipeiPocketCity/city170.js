@@ -1,3 +1,4 @@
+import {inside101Ground,planting101} from './taipei101-single-ground.js';
 import {metroExitCard,metroExitLayer} from './taipei-metro-exits.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
@@ -394,7 +395,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
             .catch(error=>{console.warn('臺北樹籍',id,error.message);return null;}))),
         ]);
         if(epoch!==current)return;
-        nature.setRows(inventories.flatMap(pack=>pack??[]));
+        nature.setRows([...inventories.flatMap(pack=>pack??[]).filter(([x,y])=>!inside101Ground(x,y)),...planting101]);
         lifeRecords=records.map((record,i)=>{
           const playground=parkPlaygrounds[packIds[i]];
           const fitness=parkFitness[packIds[i]];

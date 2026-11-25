@@ -36,7 +36,7 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taipei-registered-frontages.js', 'taipei-friendly-frontages.js',
                          'shop-convenience-fascias.js', 'taipei-convenience-art.js',
                          'city170-fountain-water-data.js', 'assets/taipei-streetlights.json.gz',
-                         'taipei-eslite-songyan.js', 'assets/taipei-eslite-songyan.bin.gz',
+                         'taipei-eslite-songyan.js', 'assets/taipei101-single-ground.png', 'assets/taipei101-pocket-city.bin.gz', 'assets/taipei-eslite-songyan.bin.gz',
                          'taipei-market-stalls.js', 'taipei-market-stalls-data.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)

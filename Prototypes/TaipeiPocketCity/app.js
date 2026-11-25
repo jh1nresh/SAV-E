@@ -18,11 +18,13 @@ import {metroExitDataset} from './taipei-metro-exits.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=eslite-songyan-1';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei101-source-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
 import {esliteSongyan} from './taipei-eslite-songyan.js';
 import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
 import {addMetroPreview} from './metro-preview.js';
+import {streetObjects101} from './taipei101-single-furniture.js';
+import {add101Ground,planting101,walks101} from './taipei101-single-ground.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
@@ -237,9 +239,10 @@ function locate(record,animate=true){
 function focus101Street(animate=true){
   if(!map)return;
   manualPitch=true;
-  const compact=stage.clientWidth<600;
-  const camera={center:compact?[121.56491,25.03355]:[121.56551,25.034],
-    bearing:compact?-15:-22,zoom:compact?17.55:17.98,pitch:compact?46:48};
+  // Fit the 508 m spire and the 200 m plaza to the visible map, including short landscape windows.
+  const scale=Math.min(stage.clientHeight/810,stage.clientWidth/325);
+  const zoom=Math.max(buildingZoom,Math.min(16.35,16.12+Math.log2(Math.max(.1,scale))));
+  const camera={center:[121.56425,25.03492],bearing:-28,zoom,pitch:40};
   if(animate)jump(camera);
   else map.jumpTo(camera);
 }
@@ -553,6 +556,11 @@ try{
       data.ground.features.push(...walkingDetails[key].ground);
     }
   }
+  const street101=streets.find(street=>street.key==='101');
+  if(street101){
+    street101.data.paths.unshift(...walks101);
+    street101.data.objects.push(...streetObjects101);
+  }
   streetDistricts=new Map(streets.map(({key,data})=>[key,data]));
   const streetCenters=['yongchun','songshan'].map(key=>{
     const detail=streets.find(street=>street.key===key);
@@ -641,6 +649,12 @@ try{
     }
     compare.addEventListener('click',()=>{previousFronts=!previousFronts;applyComparison();});
     applyComparison();
+  }
+  add101Ground(map);
+  if(!cityNature){
+    cityNature=new CityNature();
+    map.addLayer(cityNature,firstLabel);
+    cityNature.setRows(planting101);
   }
   const orderSongyanSurface=cityIndex&&preview.get('songyan')!=='before'
     ?loadSongyanNear(map,asset=>layer.setSongyan(asset)):null;

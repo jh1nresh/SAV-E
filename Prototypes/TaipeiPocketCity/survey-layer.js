@@ -1,4 +1,4 @@
-import {buildTaipei101Tower} from './taipei101-tower.js';
+import {taipei101Exterior,taipei101SurveyTiles,taipei101ShellMatch} from './taipei101-exterior.js';
 import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
 import {esliteSongyan,esliteSurveyTiles,esliteSurveyMatch} from './taipei-eslite-songyan.js';
@@ -39,6 +39,7 @@ uniform sampler2D u_districtMaterialMask;
 uniform bool u_districtMaterialDetail;
 uniform vec4 u_districtMaterialTransform;
 uniform vec3 u_cityLandmarks;
+uniform int u_taipei101Mode; // 1 = matched survey tile, 2 = the authored exterior
 uniform bool u_replaceMemorialShell;
 uniform bool u_replaceDomeShell;
 uniform bool u_replaceEsliteShell;
@@ -172,6 +173,7 @@ vec3 heritageFinish(float code,vec3 normal,float level,float height){
 }
 
 ${esliteSurveyMatch}
+${taipei101ShellMatch}
 
 void main() {
   if(u_replaceEsliteShell&&isEsliteSurveyPart(v_building))discard;
@@ -186,7 +188,7 @@ void main() {
   float level=v_position.z-base;
   vec2 site=v_position.xy+u_focusOffset;
   vec2 mallSite=v_position.xy*u_mallTile.z+u_mallTile.xy;
-  if(u_mallCorners>0&&all(greaterThanEqual(mallSite,u_mallBounds.xy))&&all(lessThanEqual(mallSite,u_mallBounds.zw))){
+  if(u_taipei101Mode!=2&&u_mallCorners>0&&all(greaterThanEqual(mallSite,u_mallBounds.xy))&&all(lessThanEqual(mallSite,u_mallBounds.zw))){
     bool inMall=false;
     vec2 a=u_mallRing[u_mallCorners-1];
     for(int i=0;i<u_mallCorners;i++){
@@ -196,13 +198,14 @@ void main() {
     }
     if(inMall)discard;
   }
-  // Taipei 101's four survey strips are separate 129.06 m features within 32 m of its center.
-  // The tower mesh already draws its own trim. Hide both the survey core and these strips.
-  bool towerTrim=tone<1.0&&abs(height-129.06038)<.02&&abs(base-4.94)<.02&&dot(site,site)<1024.0;
-  if(tone<0.0||towerTrim)discard;
+  if(u_taipei101Mode==1&&isTaipei101Shell(v_building,site))discard;
+  // The mall wall paint projects slightly beyond its OSM ring. Remove the
+  // entire exported mall group during cutaway, including its skylight and trim.
+  if(u_taipei101Mode==2&&u_mallCorners>0&&height>42.03&&height<42.05)discard;
   bool authored=tone>=2.0;
   float packedColor=max(0.0,tone-2.0);
   vec3 original=vec3(floor(packedColor/65536.0),mod(floor(packedColor/256.0),256.0),mod(packedColor,256.0))/255.0;
+  if(u_taipei101Mode==2){outColor=vec4(original,1.0);return;}
   if(u_songyanTile){
     vec3 ink=anatomyTone(original,n);
     if(height>4.2&&n.z>.66&&abs(level-height)<.14){
@@ -495,7 +498,8 @@ export class SurveyLayer {
     this.streetCenters=streetCenters;
     this.anatomy=anatomy;
     this.hybrid=hybrid;
-    this.index=index;this.landmark=landmark;
+    this.index=index;
+    this.landmark=Number.isFinite(landmark?.source?.min)?{...landmark,...taipei101Exterior}:null;
     this.cityLandmarks=cityLandmarks;
     this.songyan=null;
     this.#status=status;
@@ -522,6 +526,7 @@ export class SurveyLayer {
     this.districtMaterialTransformLocation=gl.getUniformLocation(this.program,'u_districtMaterialTransform');
     this.districtMaterialMaskLocation=gl.getUniformLocation(this.program,'u_districtMaterialMask');
     this.cityLandmarkLocation=gl.getUniformLocation(this.program,'u_cityLandmarks');
+    this.taipei101ModeLocation=gl.getUniformLocation(this.program,'u_taipei101Mode');
     this.memorialShellLocation=gl.getUniformLocation(this.program,'u_replaceMemorialShell');
     this.domeShellLocation=gl.getUniformLocation(this.program,'u_replaceDomeShell');
     this.esliteShellLocation=gl.getUniformLocation(this.program,'u_replaceEsliteShell');
@@ -613,9 +618,7 @@ export class SurveyLayer {
     this.#pending.set(k,ctl);
     const url=tile.mesh??new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
-    const builder=level==='landmark'&&tile.id==='101'
-      ?()=>buildTaipei101Tower(tile.source.min)
-      :level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
+    const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
     const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
     payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
@@ -775,6 +778,9 @@ export class SurveyLayer {
     }
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
+      const exact101=this.#landmarkDrawn&&this.landmark?.mesh===taipei101Exterior.mesh;
+      const mode101=exact101?(tile.key==='landmark/101'?2:taipei101SurveyTiles.has(tile.key)?1:0):0;
+      gl.uniform1i(this.taipei101ModeLocation,mode101);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
       gl.uniform1i(this.domeShellLocation,this.domeDrawn&&isDomeSurveyTile(tile.key)?1:0);
       gl.uniform1i(this.esliteShellLocation,this.esliteDrawn&&esliteSurveyTiles.has(tile.key)?1:0);
