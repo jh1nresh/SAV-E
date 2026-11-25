@@ -41,3 +41,14 @@ test('retail fittings stay within the measured bay at any representative width a
     }
   }
 });
+
+test('documented specialty categories show merchandise without guessing from shop names',()=>{
+  const tagged=['telecommunication','mobile','kitchen','outdoor','bed','confectionery',
+    'herbalist','curtain','paint','hifi','bag'];
+  const generic=draw('yes');
+  for(const category of tagged){
+    assert.ok(retailWindowTypes.has(category),category);
+    assert.notDeepEqual(draw(category),generic,category);
+  }
+  assert.deepEqual(draw('yes',4,0,{name:'寢具音響戶外用品'}),generic);
+});
