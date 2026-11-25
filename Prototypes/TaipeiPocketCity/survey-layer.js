@@ -1,3 +1,4 @@
+import {buildTaipei101Tower} from './taipei101-tower.js';
 import {buildPalaceModel} from './palace-museum.js';
 import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
 
@@ -599,7 +600,9 @@ export class SurveyLayer {
     this.#pending.set(k,ctl);
     const url=new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
-    const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
+    const builder=level==='landmark'&&tile.id==='101'
+      ?()=>buildTaipei101Tower(tile.source.min)
+      :level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
     const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
     payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
@@ -672,7 +675,10 @@ export class SurveyLayer {
       this.visibleWallTiles=new Set(wallRows.map(t=>t.id));
     }
     this.#landmarkDrawn=!!art&&this.#fetched.has(art.key);
-    if(this.#landmarkDrawn)this.#displayed.push({...art.tile,key:art.key});
+    if(this.#landmarkDrawn){
+      const {verts}=this.#fetched.get(art.key);
+      this.#displayed.push({...art.tile,key:art.key,verts});
+    }
     this.#songyanDrawn=!!songyan&&this.#fetched.has(songyan.key);
     if(this.#songyanDrawn)this.#displayed.push({...songyan.tile,key:songyan.key});
     this.dihuaDrawn=!!dihua&&this.#fetched.has(dihua.key);

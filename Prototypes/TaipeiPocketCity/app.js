@@ -17,7 +17,7 @@ import {metroExitDataset} from './taipei-metro-exits.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei101-tower-1';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
 import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
 import {addMetroPreview} from './metro-preview.js';
