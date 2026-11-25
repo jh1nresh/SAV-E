@@ -814,6 +814,7 @@ def main():
                     "taipei-address-frontages.js",
                     "taipei-compact-frontages.js",
                     "taipei-edge-frontages.js",
+                    "taipei-registered-frontages.js",
                 ]
             ],
             args.osm,

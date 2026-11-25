@@ -1,5 +1,5 @@
 import {metroExitCard,metroExitLayer} from './taipei-metro-exits.js';
-import {withShopFacts} from './taipei-frontage-pack.js?v=survey-edge-1';
+import {withShopFacts} from './taipei-frontage-pack.js?v=registered-frontages-1';
 import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
 import {addCityHydrants} from './city170-hydrants.js?v=street-furniture-1';
 import {addParkWater} from './city170-park-water.js';
@@ -16,7 +16,7 @@ import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-nets-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
-import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=survey-edge-1';
+import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=registered-frontages-1';
 import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=fountain-water-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';

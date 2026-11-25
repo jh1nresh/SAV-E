@@ -6,6 +6,7 @@ import test from 'node:test';
 import {addressFronts} from '../taipei-address-frontages.js';
 import {surveyFronts} from '../taipei-survey-frontages.js';
 import {edgeFronts} from '../taipei-edge-frontages.js';
+import {registeredFronts} from '../taipei-registered-frontages.js';
 import {compactFronts} from '../taipei-compact-frontages.js';
 import {groundFronts} from '../taipei-ground-frontages.js';
 import {completeFrontagePack,frontageSearchRow} from '../taipei-frontage-pack.js';
@@ -100,3 +101,26 @@ test('nearby cross-source identities with a parent doorplate keep their independ
       assert.ok(!groundFronts.some(row=>row.id===id));
     }
   });
+
+test('verified registry floors add exposed shop fronts without adding merchant records',()=>{
+  assert.deepEqual(registeredFronts.map(row=>row.id),[
+    'poi/node/11390928051','poi/node/2300640533','poi/node/5095512233',
+  ]);
+  for(const row of registeredFronts){
+    assert.equal(row.groundEvidence,'business-and-tax-addresses');
+    assert.equal(row.frontageLocator,'municipal-address');
+    assert.ok(row.addressNode.startsWith('node/'));
+    assert.ok(!Object.hasOwn(row,'detail'));
+    assert.ok(row.width>=2.45&&row.width<=4.2);
+    assert.ok(row.surveyTop-row.groundZ>=2.3);
+    const entry=[row.name,row.district,row.street,...row.poiCenter,null,row.id];
+    assert.deepEqual(frontageSearchRow(entry).slice(3),[...row.center,row.angle,row.id]);
+    assert.equal(completeFrontagePack(row.pack,[]).filter(r=>r.id===row.id).length,1);
+    assert.ok(Object.hasOwn(views.frontageViews,row.id));
+    const vertices=[];
+    const base=Math.max(row.surveyBase,row.groundZ)-row.groundZ;
+    const scale=Math.min(1,(row.surveyTop-row.groundZ-base-.13)/3.25);
+    const shop=buildShop(vertices,row,[0,0,base],scale,{write:()=>null});
+    assert.ok(shop.count>=6&&shop.count<=540&&vertices.every(Number.isFinite),row.id);
+  }
+});

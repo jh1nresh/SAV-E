@@ -6,8 +6,9 @@ import {surveyFronts} from './taipei-survey-frontages.js';
 import {dihuaNorthFronts} from './dihua-north-frontages.js';
 import {compactFronts} from './taipei-compact-frontages.js';
 import {edgeFronts} from './taipei-edge-frontages.js';
+import {registeredFronts} from './taipei-registered-frontages.js';
 
-export const supplements=[...recoveredFronts,...dihuaNorthFronts,...groundFronts,...addressFronts,...surveyFronts,...compactFronts,...edgeFronts];
+export const supplements=[...recoveredFronts,...dihuaNorthFronts,...groundFronts,...addressFronts,...surveyFronts,...compactFronts,...edgeFronts,...registeredFronts];
 const recoveredByID=new Map(supplements.map(row=>[row.id,row]));
 
 export function frontageSearchRow(row){

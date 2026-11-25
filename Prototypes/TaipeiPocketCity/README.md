@@ -75,6 +75,8 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 
 台北 12 區按 170 公尺街廓整理。3D 版保留市府建物量體、24,072 筆可定位的來源店家和公共樹籍。7,906 筆可對上臨街外牆。復興南路示範街廓有 19 間店面。信義書局的紅招牌與騎樓參照紀錄照片，書架、入口深度及鄰店外觀為插畫重建。[信義書局紀錄](https://www.dream-land.com.tw/56%E4%BF%A1%E7%BE%A9%E6%9B%B8%E5%B1%80/)
 
+臺北地面店家的樓層核對使用經濟部商業發展署的開放資料。[台北市商業登記資料-F零售、批發及餐飲業](https://data.gov.tw/dataset/53661) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
+
 - 道路、建物輪廓與地點採 © OpenStreetMap contributors。OSM 衍生資料以 ODbL 1.0 提供，原始出處與擷取版本隨資料附於 `data/city170/index.json`。地圖署名見圖面。[OpenStreetMap 授權](https://www.openstreetmap.org/copyright)
 - 臺北市政府都市發展局提供 2025 年 LOD1 模型。市府商業處、衛生局、市場處、公園處與捷運工程局提供其他圖層，各來源列於圖面及資料摘要。[LOD1 服務](https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer) · [都發局資料開放宣告](https://udd.gov.taipei/QA/article/ngork7d) · [公共樹籍](https://data.gov.tw/dataset/128274)
 iPhone 離線地圖隨附台北的第 3–14 倍率向量圖磚，以 `cities/map-tiles/taipei-bundled/index.json` 的範圍為準。圖磚取自與共用底圖相同的 OpenFreeMap 快照，並沿用圖面上的 OpenFreeMap、OpenMapTiles 與 OpenStreetMap 署名。[OpenFreeMap](https://openfreemap.org/)
