@@ -1,3 +1,4 @@
+import {taipeiDome,addDomeApron} from './taipei-dome.js';
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
 import {addTaipei101Indoor} from './taipei101-indoor.js?v=1f-entrances-1';
@@ -17,7 +18,7 @@ import {metroExitDataset} from './taipei-metro-exits.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei-dome-1';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
 import {addStreetDetail} from './street-detail.js?v=taipei-pedestrian-bins-1';
 import {addMetroPreview} from './metro-preview.js';
@@ -534,7 +535,7 @@ try{
   const linkScene=linked?{anchor:ml.MercatorCoordinate.fromLngLat(linked.origin),runs:linked.runs}:null;
   const districtMaterial=cityMask?{image:cityMask,bounds:cityIndex.materialBounds}
     :atlas&&sharedMask?{image:sharedMask,bounds:atlas.materialBounds}:null;
-  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall];
+  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall,taipeiDome];
   layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks,appChrome);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
   map.addSource('taiwan-grid',{type:'geojson',data:empty});
@@ -560,6 +561,7 @@ try{
   updateAlpineColors();
   installTaiwanRelief(map,'water');
   if (preview.get('river') !== 'before') addTaipeiRiverArt(map,firstLabel);
+  addDomeApron(map,firstLabel);
   map.addLayer(layer,firstLabel);
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);

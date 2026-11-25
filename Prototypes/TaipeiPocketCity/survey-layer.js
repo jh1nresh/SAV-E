@@ -1,7 +1,8 @@
+import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
 import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
 
-const landmarkBuilders=new Map([['palace-museum',buildPalaceModel],[sunYatSenHall.id,buildSunYatSenHall]]);
+const landmarkBuilders=new Map([['palace-museum',buildPalaceModel],[sunYatSenHall.id,buildSunYatSenHall],[taipeiDome.id,buildTaipeiDome]]);
 
 const vertexSource=`#version 300 es
 layout(location=0) in vec3 a_position;
@@ -37,6 +38,7 @@ uniform bool u_districtMaterialDetail;
 uniform vec4 u_districtMaterialTransform;
 uniform vec3 u_cityLandmarks;
 uniform bool u_replaceMemorialShell;
+uniform bool u_replaceDomeShell;
 uniform vec3 u_songyanOffset;
 uniform vec3 u_dihuaOffset;
 uniform vec4 u_songyanLimit;
@@ -170,6 +172,10 @@ void main() {
   vec3 n=normalize(cross(dFdx(v_position),dFdy(v_position)));
   if(n.z<-.5)n=-n;
   float base=v_building.x, height=v_building.y, tone=v_building.z;
+  // Exact signatures of the surveyed stadium body and its narrow surrounding apron.
+  if(u_replaceDomeShell&&abs(base-7.52979)<.002&&
+      ((abs(height-60.41006)<.002&&abs(tone-.315)<.0001)||
+       (abs(height-55.75004)<.002&&abs(tone-.345)<.0001)))discard;
   if(u_replaceMemorialShell && abs(base-8.23)<.006 && abs(height-9.77)<.006 && abs(tone-.495)<.0002)discard;
   float level=v_position.z-base;
   vec2 site=v_position.xy+u_focusOffset;
@@ -497,6 +503,7 @@ export class SurveyLayer {
     this.districtMaterialMaskLocation=gl.getUniformLocation(this.program,'u_districtMaterialMask');
     this.cityLandmarkLocation=gl.getUniformLocation(this.program,'u_cityLandmarks');
     this.memorialShellLocation=gl.getUniformLocation(this.program,'u_replaceMemorialShell');
+    this.domeShellLocation=gl.getUniformLocation(this.program,'u_replaceDomeShell');
     this.dihuaLocation=gl.getUniformLocation(this.program,'u_dihuaOffset');
     this.songyanOffsetLocation=gl.getUniformLocation(this.program,'u_songyanOffset');
     this.songyanTileLocation=gl.getUniformLocation(this.program,'u_songyanTile');
@@ -663,11 +670,13 @@ export class SurveyLayer {
     if(this.dihuaDrawn)this.#displayed.push({...dihua.tile,key:dihua.key});
     this.#cityLandmarksVisible.fill(0);
     this.memorialDrawn=false;
+    this.domeDrawn=false;
     for(const {key,tile} of heritage){
       const asset=this.#fetched.get(key);
       if(!asset)continue;
       this.#displayed.push({...tile,key,verts:asset.verts});
       if(tile.id===sunYatSenHall.id)this.memorialDrawn=true;
+      else if(tile.id===taipeiDome.id)this.domeDrawn=true;
       else this.#cityLandmarksVisible[tile.style]=1;
     }
     for(const t of wanted){
@@ -737,6 +746,7 @@ export class SurveyLayer {
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
+      gl.uniform1i(this.domeShellLocation,this.domeDrawn&&isDomeSurveyTile(tile.key)?1:0);
       if(this.mallMask){
         const {mx,my,m}=this.mallMask;
         gl.uniform3f(this.mallTileLocation,(tile.mx-mx)/m,(my-tile.my)/m,tile.m/m);

@@ -11,6 +11,7 @@ import {cityLandmarks,districtLandmarks} from '../taipei-priority-places.js';
 const tools=path.dirname(fileURLToPath(import.meta.url));
 const categories=new Set(['museum','memorial','monument','theatre','arts_centre','attraction','zoo']);
 const models={
+  'pitch/way/442195153':['taipei-dome','taipei-dome.js'],
   'poi/way/1159328965':['101','data/landmark/101.bin.gz'],
   'poi/way/1052759757':['chiang-kai-shek','data/city-streets/landmark/chiang-kai-shek.bin.gz'],
   'poi/way/557039975':['grand-hotel','data/city-streets/landmark/grand-hotel.bin.gz'],
@@ -19,6 +20,7 @@ const models={
   'poi/way/189788192':['sun-yat-sen-hall','sun-yat-sen-hall.js'],
 };
 const focalViews={
+  'pitch/way/442195153':{bearing:-23,pitch:49,near:17.4},
   'poi/way/189788192':{center:[121.56029,25.03998],bearing:-9,pitch:56,near:18.05},
   'poi/way/1159328965':{bearing:-25,pitch:54,near:17.55},
   'poi/way/229061328':{center:[121.56149,25.04350],bearing:-65,pitch:42,near:17.62},
