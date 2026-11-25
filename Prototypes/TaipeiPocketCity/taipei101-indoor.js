@@ -1,6 +1,6 @@
 import {mallStreetExit4,metroExitLayer} from './taipei-metro-exits.js';
 import {mallAdjacentTenants} from './taipei101-mall-tenants.js';
-import {addMallWayfinding,mallMetroExit4} from './taipei101-wayfinding.js?v=metro-exit-1';
+import {addMallWayfinding,mallMetroExit4} from './taipei101-wayfinding.js?v=b1-arrival-1';
 
 // All plans, marks and camera changes share the outdoor map's geographic coordinates.
 const prefix='taipei101-indoor';
@@ -66,6 +66,34 @@ function pointColor(){
   return ['case',transitExit,'#a33c36',['match',['get','kind'],'facility','#58847d','entrance','#8b7848','#ad7d27']];
 }
 
+const b1StorefrontImage='taipei101-din-tai-fung-facade';
+const b1StorefrontId='node/2718780533';
+
+function addB1StorefrontImage(map){
+  if(map.hasImage(b1StorefrontImage))return;
+  const canvas=document.createElement('canvas');
+  canvas.width=76;
+  canvas.height=50;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(2,2);
+  function paint(color,x,y,width,height){
+    ctx.fillStyle=color;
+    ctx.fillRect(x,y,width,height);
+  }
+  // Draw the photographed entrance as a screen-sized elevation. The mapped
+  // branch position remains the anchor and the illustration shows no footprint.
+  paint('#695648',1,4,36,18);
+  paint('#e6d6bd',2,5,34,16);
+  paint('#ccc0a7',2,5,34,2);
+  paint('#557570',22,9,12,12);
+  paint('#8cae9f',23,10,10,3);
+  paint('#ddcba8',27,10,1,11);
+  paint('#b34840',5,11,14,4);
+  paint('#d76d5c',6,11,12,1);
+  paint('#8d7462',2,21,34,1);
+  map.addImage(b1StorefrontImage,ctx.getImageData(0,0,canvas.width,canvas.height),{pixelRatio:2});
+}
+
 function addPlanLayers(map,venue,namesVisible){
   map.addSource(prefix+'-plan',{type:'geojson',data:empty(),maxzoom:21,tolerance:0});
   map.addSource(prefix+'-places',{type:'geojson',data:empty(),maxzoom:21,tolerance:0});
@@ -78,6 +106,13 @@ function addPlanLayers(map,venue,namesVisible){
   add('dots','circle','-places',{filter:['all',['==',['geometry-type'],'Point'],['in',['get','kind'],['literal',pointKinds]]],
     paint:{'circle-radius':['interpolate',['linear'],['zoom'],18,['case',transitExit,6,4],21,['case',transitExit,8,6]],'circle-color':pointColor(),
       'circle-stroke-color':'#fffaf0','circle-stroke-width':1.8}});
+  addB1StorefrontImage(map);
+  add('storefront','symbol','-places',{minzoom:17.6,
+    // GeoJSON tile feature IDs may be numeric. The place ID property is stable.
+    filter:['==',['get','id'],b1StorefrontId],
+    layout:{'icon-image':b1StorefrontImage,'icon-anchor':'bottom','icon-offset':[0,-2],
+      'icon-size':['interpolate',['linear'],['zoom'],17.6,.76,19,1],
+      'icon-allow-overlap':true,'icon-ignore-placement':true}});
   add('names','symbol','-places',{minzoom:17.45,filter:['all',['==',['geometry-type'],'Point'],['has','name']],
     layout:{visibility:namesVisible?'visible':'none','text-field':['get','name'],'text-font':['Noto Sans Bold'],'text-size':['interpolate',['linear'],['zoom'],18,12,21,15],
       'text-anchor':'top','text-offset':[0,.7],'text-padding':9,'text-max-width':8,
@@ -170,7 +205,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(!venue.levels.some(f=>f.label===label))return;
     current=label;
     floorNote.hidden=!wayfinding.show(label);
-    floorNote.textContent=label==='B1'?'樓層示意 · 連通捷運 4 號出口':'樓層示意';
+    floorNote.textContent=label==='B1'?'樓層示意 · 鼎泰豐在捷運 4 號出口旁':'樓層示意';
     directory.open=false;
     const entries=venue.directory?.[label]??[];
     summary.textContent=entries.length?'本層店家（'+entries.length+'）':'本層店家';
@@ -316,7 +351,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       enter(null,true);return;
     }
     const features=map.queryRenderedFeatures([[point[0]-9,point[1]-9],[point[0]+9,point[1]+9]],
-      {layers:['names','dots','rooms','corridor'].map(k=>prefix+'-'+k)});
+      {layers:['names','dots','storefront','rooms','corridor'].map(k=>prefix+'-'+k)});
     const hit=features.find(f=>f.properties.name&&(inVenue||f.properties.adjacent));
     if(!inVenue&&!hit)return;
     event.stopImmediatePropagation();

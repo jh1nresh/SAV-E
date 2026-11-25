@@ -43,7 +43,11 @@ test('mall camera keeps bearing, and the official directory supplies floor names
 });
 test('zoom in, expand, select, inspect, leave and re-enter the same map',async t=>{
   const doc=globalThis.document;
-  globalThis.document={createElement:tag=>Object.assign(new Element(),{tag}),createElementNS:()=>new Element()};
+  const context={scale(){},fillRect(){},getImageData:()=>({width:76,height:50,data:new Uint8ClampedArray(76*50*4)})};
+  globalThis.document={
+    createElement:tag=>Object.assign(new Element(),{tag,getContext:()=>context}),
+    createElementNS:()=>new Element(),
+  };
   t.after(()=>{if(doc===undefined)delete globalThis.document;else globalThis.document=doc;});
   const stage=new Element(),nav=new Element(),els={};
   for(const key of ['[data-floor-toggle]','[data-floor-list]','[data-floor-exit]','details','[data-directory-summary]','[data-directory]','[data-floor-note]'])els[key]=new Element();
@@ -61,7 +65,8 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   ]);
   const outdoorPaint=new Map(paint);
   const loc={lng:mall[0],lat:mall[1],toArray(){return [this.lng,this.lat];}};
-  let z=16.7,pitch=47,hit,lastJump;
+  const images=new Map();
+  let z=16.7,pitch=47,hit,lastJump,hitLayers;
   canvas.getBoundingClientRect=()=>({left:0,top:0});
   const map={isMoving:()=>false,getCanvasContainer:()=>container,getCanvas:()=>canvas,getCenter:()=>loc,getZoom:()=>z,getPitch:()=>pitch,getBearing:()=>76,
     getBounds:()=>({getWest:()=>121.562,getEast:()=>121.569,getSouth:()=>25.032,getNorth:()=>25.037}),
@@ -71,10 +76,11 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
     setPaintProperty:(id,prop,value)=>value==null?paint.delete(id+':'+prop):paint.set(id+':'+prop,value),
     addSource:(id,spec)=>sources.set(id,{...spec,setData(data){this.data=data;}}),getSource:id=>sources.get(id),
     addLayer:l=>layers.push(l),
+    hasImage:id=>images.has(id),addImage:(id,data,options)=>images.set(id,{data,options}),
     setLayoutProperty:(id,prop,value)=>{layers.find(layer=>layer.id===id).layout[prop]=value;},
     on:(e,f)=>{const prev=events[e];events[e]=prev?(event)=>{prev(event);f(event);}:f;},
     fire:(e,data)=>events[e]?.(data),off:()=>{},jumpTo:(c,eventData)=>{pitch=c.pitch;z=c.zoom??z;lastJump={c,eventData};},
-    queryRenderedFeatures:()=>hit?[hit]:[]};
+    queryRenderedFeatures:(_,options)=>{hitLayers=options.layers;return hit?[hit]:[];}};
   const markers=new Set();
   class Marker{
     constructor({element}){this.el=element;}
@@ -135,7 +141,20 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
     ['interpolate',['linear'],['zoom'],17.8,['*',0,.36],18.35,['*',.98,.36]]);
   assert.equal(paint.get('taipei-place-neighbors:circle-opacity'),0);
   assert.equal(paint.get('city170-road-names:text-color'),'#4c4b43');
-  assert(planLabels().includes('美食廣場'));assert.match(els['[data-floor-note]'].textContent,/捷運 4 號出口/);
+  assert(planLabels().includes('美食廣場'));
+  assert.match(els['[data-floor-note]'].textContent,/鼎泰豐在捷運 4 號出口旁/);
+  const plazaWays=()=>plan.data.features.filter(f=>f.properties.role.startsWith('plaza-'));
+  const path=plazaWays().find(f=>f.properties.role==='plaza-walk');
+  const steps=plazaWays().find(f=>f.properties.role==='plaza-stair');
+  const treads=plazaWays().find(f=>f.properties.role==='plaza-tread');
+  assert.deepEqual(path.geometry.coordinates.at(-1),mallMetroExit4.geometry.coordinates);
+  assert.deepEqual(steps.geometry.coordinates.at(-1),path.geometry.coordinates[0]);
+  assert.equal(treads.geometry.type,'MultiLineString');
+  assert.equal(plazaWays().length,4);
+  const facade=layers.find(l=>l.id==='taipei101-indoor-storefront');
+  assert.deepEqual(facade.filter,['==',['get','id'],dinTaiFung.properties.id]);
+  assert.equal(facade.minzoom,17.6);
+  assert.equal(images.get(facade.layout['icon-image']).options.pixelRatio,2);
   assert.equal(els['[data-floor-note]'].hidden,false);
   assert(sharedIsVisible());assert(!source.data.features.some(f=>f.id===tenant.id));assert.equal(pitch,0);assert.equal(nav.hidden,false);
   assert.equal(els['[data-floor-list]'].hidden,true);
@@ -163,6 +182,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert.equal(paint.get('city170-poi-labels:text-color'),'#645d50');
   assert(planLabels().includes('松智路入口'));assert(planLabels().includes('信義南'));
   assert(!planLabels().includes('美食廣場'));
+  assert.equal(plazaWays().length,0);
   choose('B1');assert(sharedIsVisible());assert(!pointIds().includes(tenant.id));
   bridge.update({pins:[streetExit]});assert(!sharedIsVisible());assert(pointIds().includes(tenant.id));
   assert.equal(source.data.features.length,floorData(venue,'B1').features.length+2);
@@ -184,9 +204,11 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   [loc.lng,loc.lat]=dinTaiFung.geometry.coordinates;
   let stopped=false;
   const original=dinTaiFung.geometry.coordinates;
-  hit={...dinTaiFung,geometry:{type:'Point',coordinates:[original[0]+.0000005,original[1]]}};
+  // The worker casts a non-numeric GeoJSON feature ID to NaN. The real place ID is in properties.
+  hit={...dinTaiFung,id:NaN,geometry:{type:'Point',coordinates:[original[0]+.0000005,original[1]]}};
   const tap=()=>container.handlers.get('click')({target:canvas,clientX:8,clientY:9,stopImmediatePropagation(){stopped=true;}});
   tap();assert(stopped);assert.equal(cards.at(-1).placeId,'poi/'+dinTaiFung.id);
+  assert(hitLayers.includes(facade.id));
   assert.deepEqual(cards.at(-1).point,original);
   assert.equal(cards.at(-1).category,'restaurant');
   hit=tenant;stopped=false;tap();assert(!stopped);
