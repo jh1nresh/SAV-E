@@ -62,14 +62,31 @@ test('close-up equipment follows both ends of the measured court, independent of
   }
 });
 
-test('tennis net fits one mapped court and raised or covered courts stay clear',()=>{
+test('ground courts get sport-specific posts and a supported net within either mapped winding',()=>{
   const [x,y]=ring[0];
-  const length=23.77/110574;
-  const width=10.97/(111320*Math.cos(y*Math.PI/180));
-  const pitch=court([[[x,y],[x,y+length],[x+width,y+length],[x+width,y],[x,y]]],'tennis');
-  const parts=courtDetails(pitch,true);
-  assert.deepEqual(parts.slice(1).map(f=>f.id.split('/').at(-1)),['net-post--1','net-post-1','net-tape']);
-  for(const tags of [{layer:'1'},{bridge:'yes'},{indoor:'yes'},{covered:'yes'},{tunnel:'yes'}]){
-    assert.deepEqual(courtDetails({...pitch,properties:{...pitch.properties,...tags}},true),[]);
+  for(const [sport,l,w,postHeight,centre] of [
+    ['tennis',23.77,10.97,1.07,.914],['volleyball',18,9,2.55,2.24],['badminton',13.4,6.1,1.55,1.524],
+  ]){
+    const length=l/110574,width=w/(111320*Math.cos(y*Math.PI/180));
+    const corners=[[x,y],[x,y+length],[x+width,y+length],[x+width,y],[x,y]];
+    for(const outline of [corners,corners.toReversed()]){
+      const pitch=court([outline],sport);
+      assert.equal(courtDetails(pitch).length,1);
+      const parts=courtDetails(pitch,true).slice(1);
+      assert.equal(parts.length,32);
+      const posts=parts.filter(f=>f.id.includes('/net-post-'));
+      const tape=parts.filter(f=>f.id.includes('/net-tape-'));
+      assert.deepEqual(posts.map(f=>f.properties.top),[postHeight,postHeight]);
+      assert.ok(posts.every(f=>f.properties.base===0));
+      assert.ok(Math.abs(Math.min(...tape.map(f=>f.properties.top))-centre)<.006);
+      assert.ok(parts.slice(2).every(f=>f.properties.base>0&&f.properties.top<=postHeight));
+      for(const f of parts)for(const [lon,lat] of f.geometry.coordinates[0]){
+        assert.ok(lon>=x&&lon<=x+width&&lat>=y&&lat<=y+length);
+        assert.ok(Math.abs(lat-(y+length/2))*110574<.1);
+      }
+      for(const tags of [{layer:'1'},{bridge:'yes'},{indoor:'yes'},{covered:'yes'},{tunnel:'yes'},{offGround:true}]){
+        assert.deepEqual(courtDetails({...pitch,properties:{...pitch.properties,...tags}},true),[]);
+      }
+    }
   }
 });
