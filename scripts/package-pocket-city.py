@@ -68,6 +68,9 @@ def runtime_paths():
         for x in range(2**z):
             for y in range(2**z):
                 include(f'cities/map-tiles/overview/{z}-{x}-{y}.pbf')
+    region = 'cities/map-tiles/taipei-bundled/'
+    for name in regional_tile_names(document(region + 'index.json')):
+        include(region + name)
     for filename in ('cells.json', 'town-index.json', 'townships.geojson.gz', 'places/names.json.gz',
                      'scenery/places.geojson.gz', 'scenery/river-search.json.gz',
                      'scenery/rivers.geojson.gz', 'scenery/waters.geojson.gz'):
@@ -198,18 +201,19 @@ def build(output, cache, preview):
     print(f'Packaged Pocket City ({len(files)} files, {sum(s[1] for s in files.values()):,} bytes).')
 
 
-def preview_tile_inputs(source):
-    manifest = source / 'index.json'
-    tiles = json.loads(manifest.read_text())['tiles']
-    prefix = 'cities/map-tiles/taipei-preview/'
-    inputs = {prefix + manifest.name: manifest}
-    for zoom, x, y in tiles:
+def regional_tile_names(manifest):
+    for zoom, x, y in manifest['tiles']:
         if (not all(type(n) is int for n in (zoom, x, y)) or not 3 <= zoom <= 14
                 or not 0 <= x < 2**zoom or not 0 <= y < 2**zoom):
-            raise ValueError(f'Invalid preview tile: {zoom}/{x}/{y}')
-        name = f'{zoom}-{x}-{y}.pbf'
-        inputs[prefix + name] = source / name
-    return inputs
+            raise ValueError(f'Invalid regional tile: {zoom}/{x}/{y}')
+        yield f'{zoom}-{x}-{y}.pbf'
+
+
+def preview_tile_inputs(source):
+    manifest = source / 'index.json'
+    prefix = 'cities/map-tiles/taipei-preview/'
+    names = ('index.json', *regional_tile_names(json.loads(manifest.read_text())))
+    return {prefix + name: source / name for name in names}
 
 
 if __name__ == '__main__':
