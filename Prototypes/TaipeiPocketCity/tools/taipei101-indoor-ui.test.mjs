@@ -12,6 +12,7 @@ class Element {
   children=[]; attrs={};dataset={};style={};hidden=false; handlers=new Map();
   classList={add(){},remove(){},toggle(){}};
   append(...items){this.children.push(...items);}
+  prepend(item){this.children.unshift(item);}
   replaceChildren(){this.children=[];}
   setAttribute(k,v){this.attrs[k]=v;}
   getAttribute(k){return this.attrs[k];}
@@ -22,7 +23,7 @@ class Element {
   dispatchEvent(event){this.handlers.get(event.type)?.(event);}
   removeEventListener(k){this.handlers.delete(k);}
   click(){this.handlers.get('click')?.({stopPropagation(){}});}
-  focus(){} remove(){}
+  focus(){this.focused=true;} remove(){}
   querySelectorAll(){return this.children;}
   querySelector(k){return this.children.find(b=>b.getAttribute('aria-pressed')==='true');}
 }
@@ -37,7 +38,7 @@ test('mall camera keeps bearing, and the official directory supplies floor names
 });
 test('zoom in, expand, select, inspect, leave and re-enter the same map',async t=>{
   const doc=globalThis.document;
-  globalThis.document={createElement:()=>new Element(),createElementNS:()=>new Element()};
+  globalThis.document={createElement:tag=>Object.assign(new Element(),{tag}),createElementNS:()=>new Element()};
   t.after(()=>{if(doc===undefined)delete globalThis.document;else globalThis.document=doc;});
   const stage=new Element(),nav=new Element(),els={};
   for(const key of ['[data-floor-toggle]','[data-floor-list]','[data-floor-exit]','details','[data-directory-summary]','[data-directory]','[data-floor-note]'])els[key]=new Element();
@@ -45,7 +46,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   nav.querySelector=k=>els[k];stage.querySelector=()=>nav;
   const container=new Element(),canvas=new Element(),events={},sources=new Map(),layers=[],filters=new Map(),cards=[],cut=[];
   const loc={lng:mall[0],lat:mall[1],toArray(){return [this.lng,this.lat];}};
-  let z=16.7,pitch=47,hit;
+  let z=16.7,pitch=47,hit,lastJump;
   canvas.getBoundingClientRect=()=>({left:0,top:0});
   const map={isMoving:()=>false,getCanvasContainer:()=>container,getCanvas:()=>canvas,getCenter:()=>loc,getZoom:()=>z,getPitch:()=>pitch,getBearing:()=>76,
     getBounds:()=>({getWest:()=>121.562,getEast:()=>121.569,getSouth:()=>25.032,getNorth:()=>25.037}),
@@ -55,7 +56,8 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
     addLayer:l=>layers.push(l),
     setLayoutProperty:(id,prop,value)=>{layers.find(layer=>layer.id===id).layout[prop]=value;},
     on:(e,f)=>{const prev=events[e];events[e]=prev?(event)=>{prev(event);f(event);}:f;},
-    fire:(e,data)=>events[e]?.(data),off:()=>{},jumpTo:c=>{pitch=c.pitch;z=c.zoom??z;},queryRenderedFeatures:()=>hit?[hit]:[]};
+    fire:(e,data)=>events[e]?.(data),off:()=>{},jumpTo:(c,eventData)=>{pitch=c.pitch;z=c.zoom??z;lastJump={c,eventData};},
+    queryRenderedFeatures:()=>hit?[hit]:[]};
   const markers=new Set();
   class Marker{
     constructor({element}){this.el=element;}
@@ -116,10 +118,24 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   hit=source.data.features.find(f=>f.properties.kind==='shop');
   container.handlers.get('click')({target:canvas,clientX:8,clientY:9,stopImmediatePropagation(){}});
   assert.equal(cards[0].placeId,'poi/'+hit.id);assert.equal(cards[0].name,hit.properties.name);assert.match(cards[0].categoryLabel,/B1/);
+  const shopList=els['[data-directory]'];
+  const [mapButton,officialLink]=shopList.children[0].children;
+  assert.equal(mapButton.tag,'button');assert.equal(mapButton.textContent,tenant.properties.name);
+  assert.equal(officialLink.href,tenant.properties.floorSourceUrl);
+  assert.equal(shopList.children.filter(row=>row.children.some(el=>el.tag==='button')).length,1);
+  const directoryOnly=shopList.children.find(row=>row.children[0].textContent==='鼎泰豐');
+  assert.deepEqual(directoryOnly.children.map(el=>el.tag),['a']);
+  els.details.open=true;mapButton.click();
+  assert.equal(els.details.open,false);assert.equal(els['[data-directory-summary]'].focused,true);
+  assert.deepEqual(lastJump,{c:indoorCamera(tenant.geometry.coordinates,76,19),eventData:{pocketPlaceReveal:true}});
+  assert.deepEqual(cards.at(-1).point,tenant.geometry.coordinates);
+  assert.equal(cards.at(-1).placeId,canonical);assert.equal(cards.at(-1).category,'restaurant');
+  assert.equal(cards.at(-1).indoorFloor,'B1');assert.equal(panel.state().floor,'B1');
   assert(!panel.isPinVisible(hit.geometry.coordinates,'account-id'));
   assert(panel.isPinVisible(hit.geometry.coordinates,'poi/'+hit.id));
   assert(panel.isPinVisible([121.57,25.04],'account-id'));
   choose('2F');assert.equal(source.data.features.length,0);assert(els['[data-directory]'].children.length>1);
+  assert(els['[data-directory]'].children.every(row=>row.children.every(el=>el.tag==='a')));
   assert.equal(plan.data.features.length,0);assert.equal(els['[data-floor-note]'].hidden,true);
   els['[data-floor-exit]'].click();assert.equal(panel.state().active,false);assert.equal(pitch,47);
   assert.equal(plan.data.features.length,0);
