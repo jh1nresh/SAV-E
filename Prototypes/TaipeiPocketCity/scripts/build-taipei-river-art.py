@@ -12,7 +12,7 @@ import random
 
 import osmium
 from shapely import STRtree, from_wkb, get_parts, to_geojson, set_precision
-from shapely.affinity import affine_transform
+from shapely.affinity import affine_transform, translate
 from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.ops import unary_union
 
@@ -25,10 +25,18 @@ def metric(geometry, inverse=False):
 
 
 def source_geometries(pbf, extent):
-    areas, axes, piers = [], [], []
+    areas, axes, piers, banks = [], [], [], []
     factory = osmium.geom.WKBFactory()
     for obj in osmium.FileProcessor(pbf).with_locations().with_areas():
         tags = obj.tags
+        if obj.is_area():
+            habitat = tags.get('wetland') or tags.get('natural')
+            if habitat in ('mangrove', 'reedbed', 'marsh', 'tidalflat', 'mud') or tags.get('man_made') == 'bridge':
+                geometry = from_wkb(factory.create_multipolygon(obj))
+                if extent.intersects(geometry):
+                    identity = ('way/' if obj.from_way() else 'relation/') + str(obj.orig_id())
+                    kind = 'bridge' if tags.get('man_made') == 'bridge' else habitat
+                    banks.append((identity, kind, metric(geometry if geometry.is_valid else geometry.buffer(0))))
         if tags.get('man_made') == 'pier' and obj.is_area():
             geometry = from_wkb(factory.create_multipolygon(obj))
             target = piers
@@ -47,24 +55,24 @@ def source_geometries(pbf, extent):
             continue
         if extent.intersects(geometry):
             target.append(metric(geometry if geometry.is_valid else geometry.buffer(0)))
-    return unary_union(areas), axes, piers
+    return unary_union(areas), axes, piers, banks
 
 
 def build(pbf, boundary):
     with open(boundary) as stream:
         city = metric(shape(json.load(stream))).simplify(6)
     area = city.buffer(850)
-    water, axes, piers = source_geometries(pbf, metric(area, True))
+    water, axes, piers, banks = source_geometries(pbf, metric(area, True))
     tree = STRtree(axes)
     features = []
 
-    def emit(kind, geometry, opacity=1):
+    def emit(kind, geometry, opacity=1, **tags):
         for part in get_parts(geometry):
             if part.geom_type not in ('Polygon', 'LineString') or part.is_empty:
                 continue
             geo = set_precision(metric(part, True), .000001)
             if not geo.is_empty:
-                features.append(dict(type='Feature', properties={'k': kind, 'alpha': round(opacity, 3)}, geometry=json.loads(to_geojson(geo))))
+                features.append(dict(type='Feature', properties={'k': kind, 'alpha': round(opacity, 3), **tags}, geometry=json.loads(to_geojson(geo))))
 
     # Form the inner washes before clipping: tile boundaries and the edge of the atlas are not banks.
     # Blend back into the surrounding atlas across the final 240 metres.
@@ -136,6 +144,29 @@ def build(pbf, boundary):
         if ribbon.is_valid:
             for i in water_tree.query(ribbon, predicate='intersects'):
                 emit('current', ribbon.intersection(water_parts[i]), f['properties']['alpha'])
+
+    # Draw documented tidal habitats with their own boundaries. A riverbank polygon
+    # can contain mangroves and exposed mud, so a water fill alone hides the shore.
+    for identity, kind, outline in banks:
+        if not area.intersects(outline) or water.distance(outline) > 12:
+            continue
+        properties = {'osm': identity, 'habitat': kind}
+        if kind == 'bridge':
+            # Cast a short cartographic shadow from the real bridge deck onto open water.
+            footprint = translate(outline, xoff=7, yoff=-10).difference(outline).intersection(water)
+            label = 'bridge-reflection'
+        else:
+            footprint = outline
+            label = 'bank-mud' if kind in ('tidalflat', 'mud') else 'bank-marsh'
+        near_zones = [(z, a) for z, a in zones if z.intersects(footprint)]
+        for zone, alpha in near_zones:
+            emit(label, footprint.intersection(zone), alpha, **properties)
+        if label == 'bank-marsh':
+            # A narrow water-side shadow follows the wetland edge, including real inlets.
+            fringe = outline.buffer(5, quad_segs=2).difference(outline).intersection(water)
+            for zone, alpha in zones:
+                if zone.intersects(fringe):
+                    emit('bank-reflection', fringe.intersection(zone), alpha, **properties)
 
     # Only depict mapped landing structures physically adjoining these rivers.
     for pier in piers:
