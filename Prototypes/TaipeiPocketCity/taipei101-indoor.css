@@ -37,3 +37,5 @@
 
 /* The same card may be rendered over the map by SwiftUI or by the web fallback. */
 .ios-map #stage:has(#place-card:not([hidden])) :is(#mall101-control,#mall101-official-guide){visibility:hidden}
+#mall101-control [data-floor-note]{position:absolute;bottom:calc(100% + 6px);left:0;padding:3px 7px;border-radius:7px;background:#fffaf0;color:#634c34;white-space:nowrap;font-size:11px;pointer-events:none}
+#mall101-control:has([aria-expanded="true"],details[open]) [data-floor-note]{visibility:hidden}

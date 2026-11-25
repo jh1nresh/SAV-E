@@ -40,7 +40,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   globalThis.document={createElement:()=>new Element(),createElementNS:()=>new Element()};
   t.after(()=>{if(doc===undefined)delete globalThis.document;else globalThis.document=doc;});
   const stage=new Element(),nav=new Element(),els={};
-  for(const key of ['[data-floor-toggle]','[data-floor-list]','[data-floor-exit]','details','[data-directory-summary]','[data-directory]'])els[key]=new Element();
+  for(const key of ['[data-floor-toggle]','[data-floor-list]','[data-floor-exit]','details','[data-directory-summary]','[data-directory]','[data-floor-note]'])els[key]=new Element();
   els['[data-floor-list]'].hidden=true;nav.hidden=true;
   nav.querySelector=k=>els[k];stage.querySelector=()=>nav;
   const container=new Element(),canvas=new Element(),events={},sources=new Map(),layers=[],filters=new Map(),cards=[],cut=[];
@@ -85,6 +85,8 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert.deepEqual(panel.state(),{ready:true,active:false,floor:null});
   assert.equal(filters.get('city170-poi-labels')[2][1][0],'within');
   const source=sources.get('taipei101-indoor-places');
+  const plan=sources.get('taipei101-wayfinding');
+  const planLabels=()=>plan.data.features.map(feature=>feature.properties.name);
   const validator={version:8,glyphs:'https://localhost/{fontstack}/{range}.pbf',sources:Object.fromEntries(sources),layers:[]};
   for(const layer of layers){
     const errors=[];
@@ -93,6 +95,8 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
     assert.deepEqual(errors,[],layer.id);
   }
   z=19;events.moveend();assert.equal(panel.state().floor,'B1');
+  assert(planLabels().includes('美食廣場'));assert.match(els['[data-floor-note]'].textContent,/捷運 4 號出口/);
+  assert.equal(els['[data-floor-note]'].hidden,false);
   assert(sharedIsVisible());assert(!source.data.features.some(f=>f.id===tenant.id));assert.equal(pitch,0);assert.equal(nav.hidden,false);
   assert.equal(els['[data-floor-list]'].hidden,true);
   els['[data-floor-toggle]'].click();assert.equal(els['[data-floor-list]'].hidden,false);
@@ -104,6 +108,8 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(!pointIds().includes(tenant.id));
   assert(pointIds().includes('node/7004289008')); // Sawadee shares the floor, not this pin.
   choose('1F');assert(!sharedIsVisible());assert.equal(source.data.features.length,1);
+  assert(planLabels().includes('松智路入口'));assert(planLabels().includes('信義南'));
+  assert(!planLabels().includes('美食廣場'));
   choose('B1');assert(sharedIsVisible());assert(!pointIds().includes(tenant.id));
   bridge.update({pins:[]});assert(!sharedIsVisible());assert(pointIds().includes(tenant.id));
   assert.equal(source.data.features.length,floorData(venue,'B1').features.length);
@@ -114,7 +120,9 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(panel.isPinVisible(hit.geometry.coordinates,'poi/'+hit.id));
   assert(panel.isPinVisible([121.57,25.04],'account-id'));
   choose('2F');assert.equal(source.data.features.length,0);assert(els['[data-directory]'].children.length>1);
+  assert.equal(plan.data.features.length,0);assert.equal(els['[data-floor-note]'].hidden,true);
   els['[data-floor-exit]'].click();assert.equal(panel.state().active,false);assert.equal(pitch,47);
+  assert.equal(plan.data.features.length,0);
   assert.equal(nav.hidden,true);assert.deepEqual(cut,[true,false]);assert.deepEqual(selected,['B1','B1','1F','B1','2F',null]);
   z=19;events.moveend();assert.equal(panel.state().active,false);
   z=16;events.moveend();z=19;events.moveend();assert.equal(panel.state().floor,'1F');
