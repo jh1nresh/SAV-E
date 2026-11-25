@@ -18,7 +18,7 @@ import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
-import {addStreetDetail} from './street-detail.js?v=markets-1';
+import {addStreetDetail} from './street-detail.js?v=playgrounds-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
@@ -26,7 +26,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
 import {addShopSearch} from './city-shop-search.js?v=shop-floor-1';
-import {addCity170,dihuaSearch} from './city170.js?v=park-water-1';
+import {addCity170,dihuaSearch} from './city170.js?v=playgrounds-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=neighborhood-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
@@ -480,6 +480,7 @@ try{
     '<a href="https://data.taipei/dataset/detail?id=59579c19-a561-4564-8c0f-545bfb32c0f6" target="_blank" rel="noopener">臺北市衛生局</a>',
     '<a href="https://data.gov.tw/dataset/128274" target="_blank" rel="noopener">臺北市公園處樹籍</a>',
     '<a href="https://data.gov.tw/dataset/128640" target="_blank" rel="noopener">臺北自來水事業處直飲臺</a>',
+    '<a href="https://data.gov.tw/dataset/136476" target="_blank" rel="noopener">臺北市公園處遊戲場</a>',
     '<a href="https://april-zhu.com/pocketnature" target="_blank" rel="noopener">Pocket Nature</a>',
     '<a href="https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer/layers/0?f=pjson" target="_blank" rel="noopener">臺北市都發局 2025</a>',
   ]});

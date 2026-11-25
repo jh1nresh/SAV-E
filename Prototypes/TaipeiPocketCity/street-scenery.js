@@ -1,5 +1,6 @@
 import {program,transform} from './survey-layer.js';
 import {drawMarketStall} from './taipei-market-stalls.js';
+import {drawPlaygroundObject} from './taipei-playground-mesh.js';
 
 const vertex=`#version 300 es
 layout(location=0) in vec3 point;
@@ -61,6 +62,10 @@ function buildObject(kind,size,angle,index,origin,vertices,anatomy,hybrid){
     ? (kind==='entrance'?'#c67a3d':'#927a62')
     : (hybrid?hybridAccents:accents)[index%3];
   switch(kind){
+    case 'play-tower': case 'play-slide': case 'play-swing':
+    case 'play-rider': case 'play-climb': case 'play-sand':
+      drawPlaygroundObject(kind,index,{box,prism,face});
+      break;
     case 'market-canopy': case 'market-grill': case 'market-counter':
       drawMarketStall(kind,index,{box,prism,face});
       break;
