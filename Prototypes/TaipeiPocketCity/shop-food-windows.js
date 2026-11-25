@@ -1,9 +1,15 @@
-// Only explicit food or equipment terms identify a speciality. Country/region alone does not.
+// Explicit menu and service tags support these illustrative displays.
 const cues=new Map([
   ['bubble-tea',['bubble_tea']], ['noodle-bowls',['noodle','noodles','ramen','beef_noodle','beef_noodles','udon']],
   ['hot-pot',['hotpot','hot_pot']], ['dumplings',['dumpling','dumplings','gyoza']],
   ['pizza-slices',['pizza']], ['burger-tray',['burger','burgers']], ['sushi',['sushi']],
   ['tea-service',['tea','teahouse']], ['pastries',['cake','pastry']], ['espresso',['coffee','coffee_shop']],
+].flatMap(([cue,values])=>values.map(value=>[value,cue])));
+const localCues=new Map([
+  ['morning-griddle',['breakfast','brunch']], ['sandwich-board',['sandwich','bagel']],
+  ['iron-grill',['teppanyaki']], ['char-grill',['steak_house','steak','barbecue']],
+  ['seafood-counter',['seafood']], ['rice-bowls',['beef_bowl']],
+  ['curry-counter',['curry']], ['dessert-case',['dessert']], ['box-counter',['bento','便當']],
 ].flatMap(([cue,values])=>values.map(value=>[value,cue])));
 const cafeCategories=new Set(['cafe','restaurant','fast_food']);
 export function cuisineWindow(category,cuisine){
@@ -16,13 +22,16 @@ export function cuisineWindow(category,cuisine){
   if(category==='cafe'){
     for(const drink of ['bubble-tea','tea-service','espresso'])if(known.includes(drink))return drink;
   }
-  return known[0]??null;
+  // Keep the existing explicit specialty when a multi-tag record also has a broader service cue.
+  return known[0]??tokens.map(token=>localCues.get(token)).find(Boolean)??null;
 }
 
 const diningWindows=['dining','menu-stand','sideboard'];
 const cafeWindows=['coffee-counter','cafe-table'];
-export function categoryFoodWindow(category,seed){
+export function categoryFoodWindow(category,seed,categoryLabel){
   switch(category){
+    case 'commerce_store':return categoryLabel==='餐飲店家'?'pickup-counter':null;
+    case 'inspection_store':return 'pickup-counter';
     case 'restaurant':return diningWindows[seed%diningWindows.length];
     case 'cafe':return cafeWindows[seed%cafeWindows.length];
     case 'fast_food':return 'pickup-counter';
@@ -30,6 +39,7 @@ export function categoryFoodWindow(category,seed){
     case 'bar':case 'pub':return 'bar-counter';
     case 'ice_cream':return 'ice-case';
     case 'deli':return 'deli-counter';
+    case 'seafood':return 'seafood-counter';
     default:return null;
   }
 }
@@ -61,6 +71,93 @@ export function drawFoodWindow(trade,tools,paint){
     slab(x-.22,x+.22,.61,.70,.19,teal);
   }
   switch(trade){
+    case 'morning-griddle':
+      // Breakfast service counters are intentionally unstocked when the menu is unknown.
+      counter();
+      slab(-.63,.12,.45,.57,.22,ink);
+      face(-.55,.04,.57,.65,.20,glass);
+      for(const x of [-.50,-.29,-.08])face(x,x+.08,.48,.52,.224,cream);
+      menu(.22,.45,.43,.66);
+      face(.45,.60,.46,.55,.18,teal);
+      break;
+    case 'sandwich-board':
+      counter();
+      slab(-.67,.25,.45,.50,.22,ochre);
+      for(const x of [-.50,-.19,.11]){
+        shape([[x-.10,.50],[x+.09,.50],[x+.03,.65],[x-.09,.60]],.17,cream);
+        rod(x-.10,.54,x+.07,.54,.025,.18,sage);
+        rod(x-.08,.58,x+.05,.61,.024,.19,ochre);
+      }
+      menu(.34,.45,.32,.73);
+      break;
+    case 'iron-grill':
+      counter();
+      slab(-.67,.66,.45,.53,.23,ink);
+      face(-.61,.61,.53,.59,.216,glass);
+      for(const x of [-.45,.13]){
+        face(x,x+.21,.60,.65,.20,cream);
+        rod(x+.08,.63,x+.23,.93,.041,.19,ink);
+      }
+      slab(-.42,.42,1.12,1.25,.14,ink);
+      face(-.35,.35,1.10,1.13,.176,cream);
+      break;
+    case 'char-grill':
+      counter();
+      slab(-.65,.57,.45,.65,.24,ink);
+      for(const x of [-.48,-.22,.04,.30]){
+        rod(x,.65,x+.22,.79,.029,.21,glass);
+      }
+      for(const x of [-.35,.18]){
+        shape([[x-.11,.70],[x+.10,.69],[x+.13,.80],[x-.05,.84]],.22,leather);
+      }
+      face(-.63,-.39,.79,1.16,.15,wood);
+      break;
+    case 'seafood-counter':
+      // Polyfork's 0.70 m seafood ice platter informs the raised chilled display.
+      slab(-.71,.71,.11,.42,.23,teal);
+      face(-.67,.67,.44,.73,.17,glass);
+      for(const [x,color] of [[-.41,cream],[.02,berry],[.42,sage]]){
+        shape([[x-.14,.55],[x+.07,.53],[x+.13,.63],[x-.04,.70]],.20,color);
+        shape([[x+.07,.60],[x+.21,.53],[x+.19,.69],[x+.11,.63]],.20,color);
+      }
+      slab(-.70,.70,.72,.78,.22,cream);
+      break;
+    case 'rice-bowls':
+    case 'curry-counter':{
+      const curry=trade==='curry-counter';
+      counter();
+      for(const [x,y] of [[-.40,.49],[0,.48],[.42,.47]]){
+        shape([[x-.10,y],[x+.10,y],[x+.19,y+.12],[x-.19,y+.12]],.18,curry?ochre:leather);
+        face(x-.18,x+.18,y+.11,y+.15,.188,cream);
+        face(x+.02,x+.13,y+.15,y+.21,.183,curry?leather:ochre);
+      }
+      if(curry)menu(-.42,.88,.66,.52);
+      else for(const x of [-.16,.13])rod(x,.69,x+.16,.96,.026,.19,ink);
+      break;
+    }
+    case 'dessert-case':
+      slab(-.71,.71,.08,.49,.22,teal);
+      for(const y of [.56,1.05]){
+        slab(-.68,.68,y-.05,y,.20,wood);
+        for(const [x,color] of [[-.46,cream],[-.06,berry],[.36,ochre]]){
+          face(x-.13,x+.13,y,y+.045,.206,cream);
+          face(x-.10,x+.10,y+.045,y+.20,.177,color);
+          face(x-.09,x+.09,y+.19,y+.23,.182,cream);
+        }
+      }
+      face(-.67,-.63,.49,1.38,.22,glass);
+      face(.63,.67,.49,1.38,.22,glass);
+      face(-.67,.67,1.34,1.38,.22,glass);
+      break;
+    case 'box-counter':
+      counter();
+      for(const [x,y,color] of [[-.43,.46,cream],[.06,.46,ochre],[.28,.68,cream]]){
+        slab(x-.20,x+.20,y,y+.12,.20,color);
+        face(x-.18,x+.18,y+.080,y+.100,.214,ink);
+        face(x-.06,x+.06,y+.025,y+.069,.216,teal);
+      }
+      menu(-.63,.89,.40,.52);
+      break;
     case 'menu-stand':
       rod(-.26,.015,-.14,.44,.062,.12,wood);
       rod(.32,.015,.22,.44,.062,.12,wood);

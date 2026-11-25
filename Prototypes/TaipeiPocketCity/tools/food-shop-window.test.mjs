@@ -23,11 +23,18 @@ test('寧波西街相鄰兩家店使用同一份 170m 地圖的料理證據',()=
   assert.notDeepEqual(draw(hotPot),draw({...hotPot,cuisine:'regional'}));
 });
 test('broad cuisines, names, and unrelated retailers cannot infer a signature dish',()=>{
-  for(const cuisine of ['japanese','chinese;regional','breakfast',undefined]){
+  for(const cuisine of ['japanese','chinese;regional','台灣',undefined]){
     assert.equal(cuisineWindow('restaurant',cuisine),null);
   }
   assert.equal(cuisineWindow('cafe',' cake ; Bubble_Tea '),'bubble-tea');
   assert.equal(cuisineWindow('clothes','pizza'),null);
+  assert.equal(cuisineWindow('restaurant','breakfast;burger;sandwich'),'burger-tray');
+  assert.equal(cuisineWindow('restaurant','breakfast'),'morning-griddle');
+  assert.equal(cuisineWindow('restaurant','breadfast'),null);
+  assert.equal(cuisineWindow('clothes','breakfast'),null);
+  assert.equal(categoryFoodWindow('inspection_store',0),'pickup-counter');
+  assert.equal(categoryFoodWindow('commerce_store',0,'餐飲店家'),'pickup-counter');
+  assert.equal(categoryFoodWindow('commerce_store',0,'特色店家'),null);
   assert.equal(cuisineWindow('tea','tea'),null);
   assert.deepEqual(draw({category:'restaurant'}),draw({category:'restaurant',name:'火鍋拉麵珍珠奶茶'}));
   assert.deepEqual(new Set([0,1,2].map(seed=>categoryFoodWindow('restaurant',seed))),
@@ -35,7 +42,8 @@ test('broad cuisines, names, and unrelated retailers cannot infer a signature di
   assert.deepEqual(draw({category:'restaurant',cuisine:'chinese'}),draw({category:'restaurant'}));
 });
 test('typed dish displays retain distinct geometry, fit the wall, and rotate with it',()=>{
-  const rows=['hotpot','dumplings','beef_noodle','sushi','burger','pizza'].map(cuisine=>({category:'restaurant',cuisine}));
+  const rows=['hotpot','dumplings','beef_noodle','sushi','burger','pizza',
+    'breakfast','sandwich','teppanyaki','barbecue','seafood','beef_bowl','curry','dessert','bento'].map(cuisine=>({category:'restaurant',cuisine}));
   rows.push({category:'cafe',cuisine:'bubble_tea'},{category:'cafe',cuisine:'tea'},{category:'cafe',cuisine:'coffee_shop'},
     ...['tea','ice_cream','pub','deli','fast_food'].map(category=>({category})));
   const shapes=new Set(rows.map(row=>JSON.stringify(draw(row).filter((_,i)=>i%13<3))));
