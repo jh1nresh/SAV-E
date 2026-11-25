@@ -1,6 +1,6 @@
 import {additionalShopFloor,shopFloorLabel} from './shop-floor-labels.js';
 import {frontageCamera} from './fuxing-block.js?v=frontage-views-1';
-import {streetShopProperties} from './shop-trades.js?v=point-icons-5';
+import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {loadCityPlaces} from './city-place-index.js?v=shop-address-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';

@@ -136,6 +136,219 @@ export function drawServiceWindow(category,tools,paint){
       slab(-.43,.43,.24,.43,.24,teal);
       for(const x of [-.44,.31])slab(x,x+.13,.43,.63,.255,sage);
       break;
+    case 'interior_decoration':
+      slab(-.66,.54,.08,.36,.20,wood);
+      // A working material board with long finish samples and a fabric roll.
+      slab(-.69,.49,.45,1.41,.10,ink);
+      for(const [x,z,color] of [[-.58,1.26,sage],[-.35,1.18,cream],[-.12,1.33,teal],[.11,1.11,leather]]){
+        face(x,x+.15,.55,z,.13,color);
+      }
+      slab(.35,.65,.36,.50,.22,ochre);
+      rim(.64,.43,.067,.224,cream,8);
+      break;
+    case 'pawnbroker':
+      // A secure service counter, with no suggestion about what is held behind it.
+      slab(-.74,.74,.13,.65,.21,wood);
+      slab(-.76,.76,.64,.72,.23,leather);
+      face(-.64,.64,.72,1.42,.11,glass);
+      for(const x of [-.63,-.39,-.16,.09,.35,.61])face(x-.019,x+.019,.76,1.39,.17,ink);
+      face(-.65,.65,1.39,1.45,.19,ink);
+      slab(-.22,.17,.72,.79,.215,cream);
+      break;
+    case 'medical_supply':
+      // The large wheel and foot support keep a generic mobility aid identifiable.
+      rim(-.37,.37,.27,.18,ink,12);
+      rim(-.37,.37,.19,.184,glass,9);
+      rim(.23,.24,.12,.18,ink,8);
+      rod(-.63,.74,-.41,.30,.048,.20,teal);
+      rod(-.40,.30,.24,.37,.053,.19,teal);
+      rod(.24,.37,.25,.24,.056,.19,teal);
+      slab(-.40,.08,.50,.56,.19,teal);
+      face(.12,.38,.14,.20,.21,ink);
+      slab(.40,.69,.10,.57,.095,cream);
+      face(.44,.65,.26,.32,.105,teal);
+      break;
+    case 'travel_agency':
+      slab(-.72,.72,.15,.54,.20,teal);
+      slab(-.74,.71,.53,.61,.22,wood);
+      // A folded route map and two stacks of leaflets.
+      shape([[-.61,.75],[-.29,.86],[-.29,1.35],[-.61,1.23]],.12,glass);
+      shape([[-.29,.86],[.04,.77],[.04,1.25],[-.29,1.35]],.14,cream);
+      shape([[.04,.77],[.39,.87],[.39,1.35],[.04,1.25]],.12,glass);
+      rod(-.52,.98,-.20,1.11,.025,.155,berry);
+      rod(-.20,1.11,.23,1.03,.025,.155,berry);
+      for(const [x,y,color] of [[.45,.61,ochre],[.41,.69,sage]])slab(x,.67,y,y+.068,.19,color);
+      break;
+    case 'funeral_directors':
+      // Quiet reception setting. No religious objects are inferred from the trade tag.
+      slab(-.71,.71,.22,.45,.22,wood);
+      face(-.58,-.49,.04,.23,.14,ink);
+      face(.49,.58,.04,.23,.14,ink);
+      shape([[-.27,.45],[.27,.45],[.18,.70],[-.18,.70]],.18,cream);
+      for(const [x,z,color] of [[-.37,.96,cream],[-.18,1.17,glass],[.02,1.29,cream],[.23,1.11,cream],[.37,.93,glass]]){
+        rod(x*.35,.65,x,z,.022,.15,sage);
+        shape([[x-.07,z],[x-.035,z+.084],[x+.052,z+.08],[x+.075,z+.011]],.17,color);
+      }
+      break;
+    case 'baby_goods':
+      // Baby Pram (Polyfork, 1.15 m side profile, 1.24 m tall) informs the silhouette.
+      for(const x of [-.40,.37])rim(x,.23,.139,.21,ink,10);
+      rod(-.40,.25,.19,.71,.052,.18,wood);
+      rod(.36,.25,-.20,.72,.052,.18,wood);
+      shape([[-.47,.73],[.41,.73],[.30,.51],[-.36,.51]],.18,sage);
+      shape([[-.42,.73],[.035,.73],[-.04,1.08],[-.31,1.14]],.16,ochre);
+      rod(-.30,1.11,-.08,.77,.023,.17,cream);
+      rod(.32,.73,.55,1.08,.045,.18,ink);
+      rod(.55,1.08,.72,1.12,.047,.18,teal);
+      break;
+    case 'tattoo':
+      // Adjustable studio chair and an articulated lamp.
+      rod(-.50,.12,.15,.12,.063,.14,ink);
+      rod(-.07,.13,-.07,.55,.087,.14,ink);
+      slab(-.37,.18,.52,.67,.22,grape);
+      shape([[.11,.61],[.29,.56],[.53,1.09],[.40,1.16]],.21,grape);
+      slab(.39,.59,1.10,1.23,.18,ink);
+      rod(-.55,.03,-.55,1.04,.047,.16,wood);
+      rod(-.55,1.04,-.36,1.39,.042,.16,wood);
+      rod(-.36,1.39,-.13,1.33,.041,.16,wood);
+      shape([[-.24,1.34],[-.04,1.34],[-.09,1.20],[-.27,1.21]],.18,cream);
+      break;
+    case 'repair':
+      // Field Workbench (Polyfork) supplies proportions for the feet and bench height.
+      for(const x of [-.60,.55])face(x-.047,x+.047,.06,.58,.14,ink);
+      slab(-.71,.70,.53,.65,.23,wood);
+      slab(-.53,-.23,.65,.83,.17,teal);
+      face(-.60,-.13,.79,.88,.204,ink);
+      face(-.47,-.24,.827,.90,.22,cream);
+      rod(-.58,.73,-.32,.73,.028,.224,cream);
+      slab(.14,.59,.65,1.02,.15,leather);
+      face(.20,.53,.77,.80,.16,cream);
+      face(.20,.53,.91,.94,.16,cream);
+      break;
+    case 'second_hand':
+      // A small changing assortment of pre-owned lamps, bags and a folded textile.
+      slab(-.72,.72,.20,.32,.19,wood);
+      face(-.52,-.48,.32,.80,.15,ink);
+      shape([[-.71,.79],[-.30,.79],[-.37,1.11],[-.61,1.11]],.16,ochre);
+      slab(-.14,.30,.32,.61,.20,sage);
+      rod(-.09,.59,-.065,.74,.033,.21,leather);
+      rod(-.065,.74,.19,.74,.033,.21,leather);
+      rod(.19,.74,.24,.59,.033,.21,leather);
+      for(const y of [.32,.40,.48])slab(.39,.64,y,y+.06,.19,y>.4?cream:berry);
+      break;
+    case 'pet_grooming':
+      slab(-.70,.57,.56,.65,.23,teal);
+      for(const dx of [-.39,.21]){
+        rod(dx-.18,.07,dx+.17,.55,.035,.12,ink);
+        rod(dx+.18,.07,dx-.17,.55,.035,.11,ink);
+      }
+      rod(.49,.65,.49,1.37,.052,.15,wood);
+      rod(.49,1.37,.09,1.37,.047,.15,wood);
+      rod(.09,1.35,.09,.93,.020,.16,ochre);
+      rim(.09,.87,.073,.16,ochre,8);
+      for(const y of [.65,.73])slab(-.55,-.27,y,y+.061,.17,cream);
+      break;
+    case 'party':
+      slab(-.67,.60,.15,.34,.21,berry);
+      for(const [x,z,color] of [[-.46,1.18,teal],[-.08,1.43,berry],[.30,1.20,ochre],[.53,1.02,grape]]){
+        rod(x,z-.18,.05,.39,.018,.13,wood);
+        shape([[x-.14,z],[x-.087,z+.13],[x+.08,z+.15],[x+.15,z+.043]],.18,color);
+        shape([[x-.14,z],[x+.15,z+.043],[x+.09,z-.13],[x-.053,z-.16]],.18,color);
+        face(x-.06,x-.031,z+.047,z+.09,.185,cream);
+      }
+      break;
+    case 'wigs':
+      slab(-.71,.71,.26,.35,.20,wood);
+      for(const [x,y,color] of [[-.36,.43,ink],[.34,.46,leather]]){
+        face(x-.048,x+.048,.34,y+.15,.15,cream);
+        shape([[x-.13,y+.13],[x+.14,y+.12],[x+.12,y+.47],[x-.10,y+.48]],.17,cream);
+        shape([[x-.21,y+.18],[x-.12,y+.24],[x-.05,y+.50],[x-.14,y+.57]],.19,color);
+        shape([[x-.17,y+.37],[x+.16,y+.35],[x+.10,y+.62],[x-.086,y+.63]],.20,color);
+        shape([[x+.07,y+.43],[x+.04,y+.24],[x+.18,y+.13],[x+.17,y+.52]],.19,color);
+      }
+      break;
+    case 'houseware':
+      slab(-.65,.65,.16,.34,.22,wood);
+      // Simple cookware and plates do not depend on a brand or shelf inventory.
+      for(const [x,z,color] of [[-.43,.46,cream],[-.21,.51,ochre],[.04,.47,sage]]){
+        rim(x,z,.13,.17,color,8);
+        face(x-.048,x+.048,z-.052,z+.05,.14,glass);
+      }
+      slab(.26,.59,.34,.59,.18,teal);
+      rod(.59,.51,.71,.62,.039,.18,wood);
+      face(.30,.56,.57,.63,.19,ink);
+      break;
+    case 'bathroom_furnishing':
+      // Basin and faucet. The reference sink is about a metre wide.
+      face(-.44,.30,.74,1.39,.11,glass);
+      face(-.44,.30,1.38,1.42,.14,cream);
+      rod(-.36,.90,-.09,1.18,.025,.13,cream);
+      slab(-.58,.49,.13,.59,.21,sage);
+      shape([[-.54,.72],[.51,.72],[.41,.55],[-.45,.55]],.22,cream);
+      face(-.49,.46,.699,.748,.23,glass);
+      rod(-.04,.74,-.04,.95,.041,.20,ink);
+      rod(-.04,.95,.15,.96,.044,.21,ink);
+      break;
+    case 'fishing':
+      slab(-.69,.70,.10,.22,.22,wood);
+      for(const [x,dx,h,color] of [[-.57,.36,1.34,ochre],[-.27,.36,1.38,teal],[.01,.38,1.29,cream]]){
+        rod(x,.20,x+dx,h,.026,.14,color);
+        rod(x+.027,.29,x+.09,.48,.043,.17,ink);
+        rim(x+.14,.43,.057,.18,leather,8);
+      }
+      slab(.37,.67,.21,.47,.21,teal);
+      break;
+    case 'fashion_accessories':
+      slab(-.71,.70,.24,.36,.19,wood);
+      shape([[-.62,.81],[.05,.81],[-.04,.75],[-.54,.75]],.20,leather);
+      shape([[-.54,.79],[-.05,.79],[-.14,1.06],[-.42,1.06]],.18,ochre);
+      face(-.49,-.095,.81,.85,.20,grape);
+      face(-.30,-.25,.36,.76,.14,ink);
+      slab(.22,.64,.37,.64,.19,berry);
+      rod(.30,.64,.36,.79,.026,.195,wood);
+      rod(.36,.79,.52,.79,.026,.195,wood);
+      rod(.52,.79,.57,.64,.026,.195,wood);
+      break;
+    case 'hearing_aids':
+      slab(-.67,.67,.16,.48,.21,sage);
+      for(const [x,color] of [[-.28,cream],[.29,ochre]]){
+        slab(x-.17,x+.17,.48,.85,.12,ink);
+        rod(x-.07,.59,x-.12,.72,.064,.17,color);
+        rod(x-.12,.72,x+.04,.80,.064,.17,color);
+        rod(x+.04,.80,x+.12,.73,.046,.17,color);
+        rod(x+.12,.73,x+.08,.65,.025,.17,color);
+      }
+      face(-.48,.48,.49,.53,.16,glass);
+      break;
+    case 'photograph':
+      face(-.66,.07,.15,1.47,.08,glass);
+      face(-.63,-.59,.18,1.47,.09,cream);
+      for(const x of [.01,.53])rod(.27,.85,x,.10,.047,.147,ink);
+      rod(.27,.85,.33,.065,.043,.158,ink);
+      slab(.08,.48,.85,1.09,.18,ink);
+      rim(.30,.96,.134,.206,glass,10);
+      slab(.17,.34,1.08,1.15,.17,wood);
+      break;
+    case 'appliance':
+      slab(-.67,.67,.12,.33,.22,teal);
+      face(-.33,-.26,.31,.73,.14,wood);
+      rim(-.30,.96,.275,.16,ink,12);
+      for(const [x,y] of [[-.43,.93],[-.33,1.12],[-.16,.90]]){
+        rod(-.30,.96,x,y,.080,.164,cream);
+      }
+      rim(-.30,.96,.059,.18,ochre,8);
+      slab(.16,.58,.33,.61,.17,sage);
+      face(.21,.53,.56,.61,.185,ink);
+      break;
+    case 'outpost':
+      slab(-.72,.71,.15,.50,.21,teal);
+      slab(-.73,.72,.48,.56,.225,wood);
+      for(const [x,y,w,h] of [[-.59,.57,.49,.30],[-.45,.87,.28,.26],[.14,.56,.52,.43]]){
+        slab(x,x+w,y,y+h,.185,ochre);
+        face(x+w*.41,x+w*.55,y,y+h,.20,cream);
+        face(x+w*.59,x+w*.87,y+h*.53,y+h*.68,.205,glass);
+      }
+      break;
     case 'computer':
     case 'electronics':
     case 'mobile_phone':

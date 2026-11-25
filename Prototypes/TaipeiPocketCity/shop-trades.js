@@ -1,5 +1,5 @@
 // Street-scale glyphs refine existing POIs using declared trades only.
-import {serviceWindowLabels} from './shop-service-labels.js';
+import {serviceWindowLabels} from './shop-service-labels.js?v=neighborhood-services-1';
 import {shopCategories} from './shop-categories.js';
 import {foodBadges,foodPinExpression,neighborhoodBadges,preciseShopLabels} from './shop-pin-badges.js';
 import {bikeStationPlace} from './city170-bike-docks.js';

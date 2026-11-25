@@ -12,8 +12,8 @@ import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-nets-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=shop-address-1';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=point-icons-5';
-import {streetShopProperties} from './shop-trades.js?v=point-icons-5';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=neighborhood-services-1';
+import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
 
