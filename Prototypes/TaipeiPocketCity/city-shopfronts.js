@@ -1,6 +1,6 @@
 import {storefrontCategory} from './shop-categories.js';
 import {drawServiceWindow} from './shop-service-windows.js';
-import {drawRetailWindow,retailWindowTypes} from './shop-retail-windows.js?v=specialty-1';
+import {drawRetailWindow,retailWindowTypes} from './shop-retail-windows.js?v=neighborhood-1';
 import {serviceWindowLabels} from './shop-service-labels.js';
 import {categoryFoodWindow,cuisineWindow,drawFoodWindow} from './shop-food-windows.js';
 import {mappedFoodWindow} from './taipei-food-window-evidence.js';

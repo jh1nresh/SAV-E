@@ -10,6 +10,13 @@ export const retailWindowTypes = new Map([
   ['confectionery','confections'], ['herbalist','herb-drawers'],
   ['curtain','curtains'], ['paint','paint-swatches'], ['hifi','speakers'],
   ['bag','luggage'],
+  ['variety_store','mixed-shelves'], ['religion','ritual-goods'],
+  ['antiques','curio-cabinet'], ['art','gallery'], ['frame','frame-rack'],
+  ['food','pantry-goods'], ['grocery','pantry-goods'], ['general','pantry-goods'],
+  ['nuts','pantry-goods'], ['oil','pantry-goods'], ['health_food','pantry-goods'],
+  ['butcher','wrapped-meat'], ['garden_centre','nursery'],
+  ['locksmith','key-board'], ['tailor','sewing-bench'],
+  ['perfumery','fragrance'], ['music','record-shelves'],
 ]);
 
 export function drawRetailWindow(trade, {face,slab,shape,rod,rim,bottle}, paint){
@@ -268,6 +275,147 @@ export function drawRetailWindow(trade, {face,slab,shape,rod,rim,bottle}, paint)
         for(const dx of [-.12,0,.12])face(x+dx-.013,x+dx+.013,.35,.19+h,.213,cream);
         for(const dx of [-.135,.135])face(x+dx-.046,x+dx+.046,.22,.29,.213,ink);
       }
+      break;
+    case 'mixed-shelves':
+      for(const [index,y] of [.25,.63,1.02].entries()){
+        shelf(y);
+        for(const [i,x] of [-.52,-.18,.16,.49].entries()){
+          const w=[.13,.102,.14,.086][(index+i)%4],h=[.16,.23,.12,.20][(index*2+i)%4];
+          face(x-w,x+w,y,y+h,.18,palette[(index+i)%5]);
+          face(x-w+.025,x+w-.025,y+h-.06,y+h-.023,.186,cream);
+        }
+      }
+      break;
+    case 'ritual-goods':
+      shelf(.34);shelf(.89);
+      for(const [i,x] of [-.49,-.17,.17,.49].entries()){
+        const h=[.12,.18,.15,.19][i];
+        slab(x-.13,x+.13,.34,.34+h,.19,i%2?ochre:berry);
+        face(x-.12,x+.12,.37,.402,.195,cream);
+      }
+      for(const [x,color] of [[-.40,leather],[.33,ochre]]){
+        shape([[x-.16,1.04],[x+.16,1.04],[x+.11,.91],[x-.11,.91]],.196,color);
+        face(x-.18,x+.18,1.035,1.061,.204,cream);
+      }
+      face(-.078,.078,.90,1.29,.176,wood);
+      for(const x of [-.046,0,.045])rod(x,1.28,x+.026,1.49,.016,.178,ochre);
+      break;
+    case 'curio-cabinet':
+      face(-.64,.64,.14,1.39,.087,wood);
+      for(const y of [.34,.83]){
+        shelf(y);
+        bottle(-.41,y,.37,.188,y>.5?grape:sage);
+        face(-.14,.14,y+.02,y+.29,.19,cream);
+        rim(.38,y+.16,.128,.198,y>.5?leather:teal,8);
+        face(.30,.46,y+.015,y+.078,.179,ink);
+      }
+      break;
+    case 'gallery':
+      // Polyfork's 0.51 by 0.70 m framed-wall-art-d2c8a2 informs frame proportions.
+      face(-.68,.68,.24,1.44,.083,cream);
+      for(const [x,y,w,h,color] of [[-.35,.54,.49,.67,teal],[.30,.48,.45,.57,berry]]){
+        face(x-w/2,x+w/2,y,y+h,.122,wood);
+        face(x-w/2+.04,x+w/2-.04,y+.049,y+h-.05,.131,cream);
+        shape([[x-w*.36,y+h*.29],[x+w*.36,y+h*.34],[x+w*.16,y+h*.69],[x-w*.22,y+h*.60]],.138,color);
+      }
+      break;
+    case 'frame-rack':
+      shelf(.23);
+      for(const [x,w,y,h,color] of [[-.38,.49,.25,.98,wood],[.26,.49,.27,.78,ochre],[.05,.41,.29,.58,leather]]){
+        const left=x-w/2,right=x+w/2;
+        face(left,right,y,y+h,.14+y*.1,color);
+        face(left+.065,right-.065,y+.063,y+h-.064,.141+y*.1,cream);
+      }
+      break;
+    case 'pantry-goods':
+      for(const y of [.33,.79]){
+        shelf(y);
+        for(const [i,x] of [-.50,-.18,.14,.47].entries()){
+          if((i+(y>.5?1:0))%2===0){
+            const h=.25+i*.022;
+            bottle(x,y,h,.195,i%2?ochre:sage);
+            face(x-.04,x+.04,y+.055,y+.115,.199,cream);
+          }else{
+            shape([[x-.122,y],[x+.122,y],[x+.09,y+.29],[x-.09,y+.29]],.173,i%3===0?berry:ochre);
+            face(x-.067,x+.067,y+.10,y+.18,.177,cream);
+          }
+        }
+      }
+      break;
+    case 'wrapped-meat':
+      slab(-.71,.71,.15,.67,.222,teal);
+      face(-.67,.67,.51,.63,.226,cream);
+      face(-.69,.69,.69,1.05,.132,glass);
+      for(const [x,color] of [[-.44,berry],[0,leather],[.43,berry]]){
+        shape([[x-.17,.72],[x+.17,.72],[x+.142,.89],[x-.142,.89]],.178,cream);
+        face(x-.108,x+.108,.759,.84,.185,color);
+        face(x-.022,x+.093,.803,.849,.189,cream);
+      }
+      face(-.70,.70,1.01,1.066,.237,ink);
+      break;
+    case 'nursery':
+      // Compare the 0.62 m tall Polyfork potted-autumn-mums-08db8c for scale.
+      // The nursery keeps the Pocket Nature greens without assigning a species.
+      face(-.66,.66,.13,1.49,.089,cream);
+      shelf(.19);
+      for(const [x,y,h,color] of [[-.46,.20,.69,sage],[0,.45,.78,teal],[.46,.20,.56,sage]]){
+        const base=y+.22;
+        shape([[x-.14,base],[x+.14,base],[x+.101,y],[x-.101,y]],.169,leather);
+        face(x-.155,x+.155,base-.045,base,.18,ochre);
+        rod(x,base,x+.018,base+h*.61,.022,.174,color);
+        for(const [side,height] of [[-1,.30],[1,.54],[-1,.71]]){
+          const z=base+h*height;
+          shape([[x,z],[x+side*.065,z+.124],[x+side*.17,z+.15],[x+side*.12,z+.034]],.186,color);
+        }
+      }
+      face(-.17,.17,.38,.45,.16,wood);
+      break;
+    case 'key-board':
+      slab(-.68,.68,.21,.34,.218,wood);
+      face(-.64,.32,.45,1.30,.108,teal);
+      for(const y of [.70,1.04])for(const x of [-.46,-.16,.13]){
+        rim(x,y,.047,.158,ochre,6);
+        face(x-.015,x+.015,y-.158,y-.037,.16,cream);
+        face(x,x+.051,y-.146,y-.11,.16,cream);
+      }
+      slab(.32,.67,.34,.47,.211,ink);
+      face(.39,.56,.46,.70,.209,glass);
+      face(.49,.69,.62,.70,.206,ink);
+      break;
+    case 'sewing-bench':
+      slab(-.72,.72,.32,.43,.231,wood);
+      slab(-.64,-.06,.43,.52,.207,ink);
+      face(-.26,-.099,.52,.93,.205,teal);
+      face(-.62,-.11,.80,.93,.204,teal);
+      face(-.58,-.49,.63,.81,.209,ink);
+      rod(-.536,.55,-.536,.67,.016,.22,cream);
+      for(const [x,color] of [[.08,berry],[.31,grape],[.55,sage]]){
+        face(x-.067,x+.067,.44,1.11,.175,color);
+        face(x-.044,x+.044,1.04,1.10,.185,cream);
+      }
+      break;
+    case 'fragrance':
+      for(const y of [.33,.67,1.01]){
+        shelf(y);
+        for(const [i,x] of [-.46,-.15,.17,.48].entries()){
+          const top=y+.18+(i%2)*.067;
+          face(x-.088,x+.088,y,top,.181,palette[i]);
+          face(x-.037,x+.037,top,top+.066,.181,wood);
+          face(x-.059,x+.059,y+.057,y+.13,.189,cream);
+        }
+      }
+      break;
+    case 'record-shelves':
+      slab(-.70,.70,.24,.42,.222,wood);
+      for(const [i,x] of [-.46,-.16,.15,.46].entries()){
+        face(x-.12,x+.12,.41,.75,.182,palette[i]);
+        face(x-.088,x+.088,.60,.68,.185,cream);
+      }
+      rim(-.36,1.12,.178,.172,ink,10);
+      rim(-.36,1.12,.039,.179,ochre,6);
+      face(.07,.53,.89,1.32,.158,leather);
+      face(.136,.466,.94,1.27,.165,cream);
+      rod(.22,1.03,.39,1.19,.046,.172,teal);
       break;
   }
 }
