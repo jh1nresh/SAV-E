@@ -1,11 +1,12 @@
-import {placePinStyle,pinLabelColor} from './place-pins.js?v=category-badges-1';
+import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
+import {streetShopPinStyle} from './shop-trades.js?v=service-windows-4';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
 
 const name = ['coalesce', ['get', 'name'], ''];
 const category = ['coalesce', ['get', 'category'], ''];
 const named = ['!=', name, ''];
 const inCityDetail = ['!=', ['get', 'protected'], true];
-const atGround = ['all', ['==', ['to-number', ['get', 'layer'], 0], 0],
+const atGround = ['all', ['!=',['get','offGround'],true], ['==', ['to-number', ['get', 'layer'], 0], 0],
   ...['bridge', 'tunnel', 'indoor'].map(tag => ['==', ['coalesce', ['get', tag], 'no'], 'no']),
 ];
 
@@ -151,7 +152,8 @@ export function addCity170Style(map, sourceId, firstLabel) {
   const schools = map.getSource('city170-schools') ? 'city170-schools' : sourceId;
   const prepared = 'city170-prepared';
   const underRoads = map.getLayer('waterway_tunnel') ? 'waterway_tunnel' : firstLabel;
-  const underSand = map.getLayer('landcover_sand') ? 'landcover_sand' : underRoads;
+  // River art and the generic water layer load independently. Keep the illustration visible in either order.
+  const underRiver = ['taipei-river-art-shore', 'landcover_sand'].find(id => map.getLayer(id)) ?? underRoads;
   // Existing authored streets and survey buildings remain above the shared ground detail.
   const underStreet = layers.find(layer => /^street-.+-(road-edge|road|walk-edge|walk)$/.test(layer.id))?.id
     ?? (map.getLayer('atlas-shadows') ? 'atlas-shadows' : map.getLayer('survey') ? 'survey' : firstLabel);
@@ -167,7 +169,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     minzoom: 12.65,
     filter: kinds('forest'),
     paint: {
-      'fill-color': '#83a56b',
+      'fill-color': ['match',category,'grassland','#c3ce83','wetland','#86b7a0','scrub','#a6b97e','#83a56b'],
       'fill-opacity': fade(12.65, 15, 0.82),
     },
   }, underRoads);
@@ -203,7 +205,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'fill-outline-color': '#6ea7b3',
       'fill-opacity': fade(12.85, 15.2, 0.9),
     },
-  }, underSand);
+  }, underRiver);
   addSprite(map, 'city170-water-texture', drawWaterTexture, 128);
   add({
     id: 'city170-water-texture',
@@ -214,7 +216,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'fill-pattern': 'city170-water-texture',
       'fill-opacity': fade(17, 18.4, 0.68),
     },
-  }, underSand);
+  }, underRiver);
   for (const [id, color, width, opacity] of [
     ['shallows', '#b9d9bf', 2.8, 0.58],
     ['shoreline', '#629a9e', 0.85, 0.76],
@@ -230,7 +232,54 @@ export function addCity170Style(map, sourceId, firstLabel) {
         'line-width': ['interpolate', ['linear'], ['zoom'], 17, width * 0.64, 20, width * 1.42],
         'line-opacity': fade(17, 18.15, opacity),
       },
-    }, underSand);
+    }, underRiver);
+  }
+  if(map.getSource('city170-farmland')){
+    add({
+      id:'city170-field-plots',source:'city170-farmland',type:'fill',minzoom:14,
+      paint:{'fill-color':['match',category,'orchard','#a3ba76','#c7c789'],
+      'fill-outline-color':'#a5ae77','fill-opacity':fade(14,16,.80)},
+    },'city170-forest');
+    // Cartographic textures distinguish cultivation at street scale. Boundaries follow OSM.
+    for(const orchard of [false,true]){
+      const id=orchard?'city170-orchard-texture':'city170-farm-texture';
+      addSprite(map,id,ctx=>{
+        ctx.lineCap='round';
+        if(orchard){
+          for(const [x,y] of [[8,9],[25,25]]){
+            ctx.fillStyle='#73894f88';ctx.beginPath();ctx.ellipse(x,y,2.7,2,.2,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#dae4ad';ctx.fillRect(x-.6,y-1.25,1.5,.8);
+          }
+        }else{
+          ctx.strokeStyle='#8d9d684d';ctx.lineWidth=1;
+          for(let x=-32;x<64;x+=8){ctx.beginPath();ctx.moveTo(x,32);ctx.lineTo(x+16,0);ctx.stroke();}
+        }
+      },32);
+      add({id,type:'fill',source:'city170-farmland',minzoom:16,
+        filter:['==',category,orchard?'orchard':'farmland'],
+        paint:{'fill-pattern':id,'fill-opacity':fade(16,17.5,.72)}},'city170-forest');
+    }
+  }
+  if(map.getSource('city170-waterways')){
+    for(const seasonal of [false,true])add({
+      id:seasonal?'city170-seasonal-stream':'city170-surface-stream',source:'city170-waterways',
+      type:'line',minzoom:14,filter:['==',['get','seasonal'],seasonal],
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{'line-color':seasonal?'#89aaa1':'#70aeb9','line-opacity':fade(14,16,.85),
+        'line-width':['interpolate',['exponential',1.55],['zoom'],14,.6,18,
+          ['match',category,'river',4,'canal',3,'stream',2.5,1.4],21,
+          ['match',category,'river',12,'canal',8,'stream',5.8,3]],
+        ...(seasonal?{'line-dasharray':[2,2]}:{})},
+    },underRoads);
+    // Where only a stream centreline is surveyed, keep the light within its cartographic stroke.
+    add({
+      id:'city170-stream-glints', source:'city170-waterways', type:'line', minzoom:16.8,
+      filter:['all',['==',['get','seasonal'],false],['in',category,['literal',['river','stream']]]],
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{'line-color':'#d4e8cb','line-opacity':fade(16.8,18.2,.78),
+        'line-width':['interpolate',['linear'],['zoom'],16.8,.45,19,.9,21,1.4],
+        'line-dasharray':[3,8]},
+    },underRoads);
   }
   add({
     id: 'city170-school',
@@ -248,7 +297,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-pitch',
     type: 'fill',
     minzoom: 15.25,
-    filter: kinds('pitch'),
+    filter: ['all',kinds('pitch'),atGround],
     paint: {
       'fill-color': ['case', ['==', category, 'track'], '#bd856e',
         ['match', ['coalesce', ['get', 'sport'], category],
@@ -266,7 +315,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-pitch-linework',
     type: 'line',
     minzoom: 16.8,
-    filter: ['all', kinds('pitch'), ['!=', category, 'track']],
+    filter: ['all', kinds('pitch'),atGround, ['!=', category, 'track']],
     paint: {
       'line-color': '#fbf0d2',
       'line-width': ['interpolate', ['linear'], ['zoom'], 16.8, 0.7, 20, 1.65],
@@ -278,7 +327,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     id: 'city170-track-outline',
     type: 'line',
     minzoom: 16.65,
-    filter: ['all', kinds('pitch'), ['==', category, 'track']],
+    filter: ['all', kinds('pitch'),atGround, ['==', category, 'track']],
     paint: {
       'line-color': '#835d49',
       'line-width': ['interpolate', ['linear'], ['zoom'], 16.65, 0.65, 20, 1.5],
@@ -407,6 +456,29 @@ export function addCity170Style(map, sourceId, firstLabel) {
     },
   }, underStreet);
 
+  // Keep a court's pigment and lines in the same terrain paint pass.
+  add({
+    id:'city170-playing-area-fill',source:'city170-playing-areas',type:'fill',minzoom:17,filter:kinds('pitch'),
+    paint:{'fill-color':['match',['get','sport'],['basketball','volleyball'],'#bc836c','#7d9e93'],
+      'fill-outline-color':'#f6edcf'},
+  },underBuildings);
+  add({
+    id:'city170-court-markings',source:'city170-playing-areas',type:'line',minzoom:17,filter:kinds('court-markings'),
+    paint:{'line-color':'#fff2d5','line-width':['interpolate',['linear'],['zoom'],17,.7,20,1.65],
+      'line-opacity':fade(17,18,.92)},
+  },underBuildings);
+  add({
+    id:'city170-court-equipment',source:'city170-equipment',type:'fill-extrusion',minzoom:18.5,filter:kinds('court-equipment','bike-dock'),
+    paint:{'fill-extrusion-base':['get','base'],'fill-extrusion-height':['get','top'],
+      'fill-extrusion-color':['get','color'],'fill-extrusion-vertical-gradient':false},
+  },firstLabel);
+  add({
+    id:'city170-stair-treads',type:'line',minzoom:17.35,
+    filter:['all',gradeFilter('walk'),['==',category,'steps'],['==',['coalesce',['get','covered'],'no'],'no']],
+    layout:{'line-cap':'butt','line-join':'round'},
+    paint:{'line-color':'#94765c','line-width':groundWidth(1.6,5),
+      'line-dasharray':[.15,.50],'line-opacity':fade(17.35,18.4,.9)},
+  },underBuildings);
   // Street names use the base map and the existing authored road-name layer.
   // Campus and shop labels share the map's collision pass with those labels.
   const pin=placePinStyle(map);
@@ -485,7 +557,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     type: 'symbol',
     minzoom: 17.8,
     filter: ['all', places, named],
-    ...pin,
+    ...streetShopPinStyle(map,pin),
   }, underLabels);
   return pin;
 }

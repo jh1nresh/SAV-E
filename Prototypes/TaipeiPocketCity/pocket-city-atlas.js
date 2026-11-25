@@ -1,9 +1,16 @@
+// Both raw .gz files and HTTP-decoded JSON are served by supported map hosts.
+export async function decodeMapJSON(response){
+  const blob=await response.blob();
+  const magic=new Uint8Array(await blob.slice(0,2).arrayBuffer());
+  if(magic[0]!==31||magic[1]!==139)return JSON.parse(await blob.text());
+  return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).json();
+}
+
 export async function readPocketCityAsset(name){
   const url=new URL(`./data/${name}.json.gz`,import.meta.url);
   const response=await fetch(url);
   if(!response.ok||!response.body)throw Error(`Pocket City asset ${response.status} ${name}`);
-  const decoded=response.body.pipeThrough(new DecompressionStream('gzip'));
-  return new Response(decoded).json();
+  return decodeMapJSON(response);
 }
 
 function pavingJoints(){

@@ -1,16 +1,45 @@
-import {loadCityPlaces} from './city-place-index.js';
+import {frontageCamera} from './fuxing-block.js?v=frontage-views-1';
+import {streetShopProperties} from './shop-trades.js?v=service-windows-4';
+import {loadCityPlaces} from './city-place-index.js?v=shop-address-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
+import {frontageSearchRow} from './taipei-frontage-pack.js?v=shop-address-1';
 
 const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
+export function surveyedShopCamera(row,views,viewport){
+  const [, , ,x,y,angle,id]=row;
+  if(!Number.isFinite(angle) || !views || !Object.hasOwn(views.frontageViews,id))return;
+  const area={center:[x,y],bearing:0,pitch:12,mobilePitch:12,zoom:18.8,mobileZoom:18.8};
+  if(!viewport?.clientHeight)return area;
+  const compact=viewport.clientWidth<600;
+  const {mobile,desktop}=views.frontageViewHeights;
+  const heights=compact?mobile:desktop;
+  const common=views.frontageViews[id];
+  const partial=common<0 ? views.frontagePartialViews?.[id] : null;
+  // MapLibre's eye distance scales as canvas height / 2^zoom. Match a ray actually checked
+  // by the solver instead of interpolating between unobstructed rays through another building.
+  let zoom, selected, best=Infinity;
+  for(const [index,reference] of heights.entries()){
+    const preset=views.frontageViewPresets[partial?partial[(compact?0:mobile.length)+index]:common];
+    if(!preset)continue;
+    const offset=Math.log2(viewport.clientHeight/reference), adjusted=preset[compact?3:2]+offset;
+    if(adjusted>views.frontageViewMaxZoom || adjusted<17.55 || Math.abs(offset)>=best)continue;
+    best=Math.abs(offset);
+    zoom=adjusted;
+    selected=preset;
+  }
+  if(!selected)return area;
+  return {...frontageCamera(x,y,angle,selected),zoom,mobileZoom:zoom};
+}
+
 export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNation){
-  let pending,frontages,verifiedPending,verifiedEntries;
+  let pending,frontages,verifiedPending,verifiedEntries,cameras,cameraRequest,cameraAttempts=0;
   const forms=document.querySelectorAll('.shop-search');
   function entry(row){
     return {row,key:fold(row[0]),area:fold([row[1],row[2],row[7]?.categoryLabel].filter(Boolean).join(' '))};
   }
   function indexedRow(feature){
-    const place=feature.properties;
+    const place=streetShopProperties(feature.properties);
     return [place.name,place.district??'',(place.detail??'').replace(place.district??'','').replace(/^\s*·\s*/,'').trim(),
       ...feature.geometry.coordinates,null,place.placeId,place];
   }
@@ -23,6 +52,14 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
       return verifiedEntries;
     });
   }
+  function loadCameras(){
+    if(cameraRequest)return cameraRequest;
+    const url=new URL('./taipei-frontage-cameras.js?v=address-rays-4',import.meta.url);
+    if(cameraAttempts)url.searchParams.set('retry',String(cameraAttempts));
+    cameraAttempts++;
+    cameraRequest=import(url.href).then(views=>{cameras=views;}).catch(()=>{cameraRequest=null;});
+    return cameraRequest;
+  }
   function load(){
     frontages??=readPocketCityAsset('city170-frontages/search').catch(error=>{frontages=null;throw error;});
     return pending??=Promise.allSettled([frontages,loadCityPlaces()]).then(([shops,city])=>{
@@ -32,7 +69,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
       const records=new Map(heritage.map(row=>[row[6],row]));
       for(const row of rows){
         const id=row[6];
-        if(!records.has(id))records.set(id,[...row.slice(0,7),indexed.get(id)?.properties]);
+        if(!records.has(id))records.set(id,[...frontageSearchRow(row),indexed.has(id)?streetShopProperties(indexed.get(id).properties):undefined]);
       }
       for(const [id,feature] of indexed){
         if(records.has(id))continue;
@@ -70,9 +107,10 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
           for(const f of forms){f.querySelector('input').value=name;f.querySelector('.shop-options').hidden=true;}
           hide();document.querySelector('.mobile').open=false;
           if(heritagePlace?.camera){locate(heritagePlace.camera);return;}
+          const surveyed=surveyedShopCamera(row,cameras,map.getCanvas());
           if(angle!==null && focusFront?.(row))return;
           const a=(angle??0)*Math.PI/180,offset=angle===null?0:2.5;
-          locate(heritagePlace?.mapView??{center:[x+Math.cos(a)*offset/100780,y+Math.sin(a)*offset/110800],
+          locate(heritagePlace?.mapView??surveyed??{center:[x+Math.cos(a)*offset/100780,y+Math.sin(a)*offset/110800],
             bearing:angle===null?0:270-angle,zoom:heritagePlace?.mapZoom??(angle===null?18.4:20.75),
             mobileZoom:heritagePlace?.mapZoom??(angle===null?18.4:20.45),pitch:42,mobilePitch:42});
           const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
@@ -100,7 +138,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
         render([...byId.values()],query,terms);
       }
       const results=await Promise.allSettled([
-        load().then(rows=>{nearby=rows;display();}),
+        Promise.all([load(),loadCameras()]).then(([rows])=>{nearby=rows;display();}),
         loadVerifiedEntries().then(rows=>{saved=rows;if(rows.length)display();}),
         searchNation?.(query,map.getCenter()).then(rows=>{national=rows.map(entry);if(rows.length)display();}),
       ]);
