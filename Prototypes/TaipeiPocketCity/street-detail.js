@@ -130,7 +130,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
   });
   const callout=createPlaceCallout(map);
   const pause=document.querySelector('#street-motion');
-  let mappedStores=new Set(),visiblePlaceFilter;
+  let mappedStores=new Set(),visiblePlaceFilter,isContextPin;
   let paused=false;
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
   const photoIds=new Set(photoPlaces.map(place=>place.placeId));
@@ -204,10 +204,13 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
         }
         if(visible)available.push(rectangle);
       }
+      if(visible){
+        if(!pin.marker)createMarker(pin);
+        pin.button.classList.toggle('mall101-context-pin',!!isContextPin?.(pin.point));
+      }
       if(visible===pin.active)continue;
       pin.active=visible;
       if(visible){
-        if(!pin.marker)createMarker(pin);
         pin.marker.addTo(map);
         if(photo)bouncePhotoPin(pin.button.querySelector('.photo-badge'),0);
       }
@@ -304,7 +307,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
       return title===label || (short.length>=3 && long.startsWith(short) && long.slice(short.length).endsWith('店'));
     });
   }
-  return {state,addStreets,setVisiblePlaceFilter(filter){visiblePlaceFilter=filter;update();},closeMappedPlace:callout.close,openMappedPlace:callout.open,setLocalLife,hasFocalPin,authoredRoads:focalRoads.length>3?focalRoads:false,setMappedStores(ids){
+  return {state,addStreets,setVisiblePlaceFilter(filter,contextPin){visiblePlaceFilter=filter;isContextPin=contextPin;update();},closeMappedPlace:callout.close,openMappedPlace:callout.open,setLocalLife,hasFocalPin,authoredRoads:focalRoads.length>3?focalRoads:false,setMappedStores(ids){
     mappedStores=new Set(ids.map(id=>id.replace(/^poi\/(node|way|relation)\//,'osm-$1-')));
     update();
   },setRain(share){
