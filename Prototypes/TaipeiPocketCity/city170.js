@@ -5,6 +5,7 @@ import {addCityHydrants} from './city170-hydrants.js?v=street-furniture-1';
 import {addParkWater} from './city170-park-water.js';
 import parkPlaygrounds from './city170-playground-points.js';
 import parkFitness from './city170-park-fitness-points.js';
+import riverPavilions from './city170-riverside-pavilion-points.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
@@ -375,7 +376,9 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         lifeRecords=records.map((record,i)=>{
           const playground=parkPlaygrounds[packIds[i]];
           const fitness=parkFitness[packIds[i]];
-          return playground||fitness?{...record,objects:{...record.objects,...playground,...fitness}}:record;
+          const pavilions=riverPavilions[packIds[i]];
+          return playground||fitness||pavilions
+            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions}}:record;
         });
         lifeRevision=-1;
         lifeKey=inventories.every(Boolean)?key:'retry-trees';
