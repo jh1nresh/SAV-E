@@ -33,6 +33,7 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taipei-bike-rack-mesh.js', 'city170-bike-rack-points.js',
                          'taipei-trail-sign-mesh.js', 'city170-trail-sign-points.js',
                          'taipei-registered-frontages.js',
+                         'shop-convenience-fascias.js', 'taipei-convenience-art.js',
                          'city170-fountain-water-data.js',
                          'taipei-market-stalls.js', 'taipei-market-stalls-data.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',

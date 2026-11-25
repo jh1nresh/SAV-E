@@ -1,6 +1,7 @@
 import {storefrontCategory} from './shop-categories.js';
+import {convenienceFascia} from './shop-convenience-fascias.js';
 import {drawServiceWindow} from './shop-service-windows.js?v=neighborhood-services-1';
-import {drawRetailWindow,retailWindowTypes} from './shop-retail-windows.js?v=neighborhood-1';
+import {drawRetailWindow,parcelPickupWindow,retailWindowTypes} from './shop-retail-windows.js?v=convenience-fascias-1';
 import {neighborhoodServiceLabels,serviceWindowLabels} from './shop-service-labels.js?v=neighborhood-services-1';
 import {categoryFoodWindow,cuisineWindow,drawFoodWindow} from './shop-food-windows.js';
 import {mappedFoodWindow} from './taipei-food-window-evidence.js';
@@ -131,7 +132,7 @@ const tradeWindows = new Map([
   ['clothes','garments'], ['bakery','bread'], ['pastry','pastries'],
   ['beverages','bottles'], ['chemist','drugstore'],
 ]);
-const retailWindowNames=new Set(retailWindowTypes.values());
+const retailWindowNames=new Set([...retailWindowTypes.values(),parcelPickupWindow]);
 const tradePaint={
   salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe',
   'morning-griddle':'morning','sandwich-board':'morning','box-counter':'morning',
@@ -343,7 +344,8 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const type=storefrontCategory(row)[1];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
   const knownCuisine=typeof row.cuisine==='string'?cuisineWindow(row.category,row.cuisine):mappedFoodWindow(row);
-  const trade=knownCuisine??categoryFoodWindow(row.category,seed,row.categoryLabel)??tradeWindows.get(row.category)
+  const convenience=convenienceFascia(row);
+  const trade=convenience?.brand==='shopee'?parcelPickupWindow:knownCuisine??categoryFoodWindow(row.category,seed,row.categoryLabel)??tradeWindows.get(row.category)
     ??(serviceWindowLabels.has(row.category)?row.category:retailWindowTypes.get(row.category));
   const paint=colored[tradePaint[trade]??type];
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
@@ -379,9 +381,16 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   }
   panel(-half,half,.08,top,0,paint.wall);
   panel(-half,half,.08,.35,.018,stone);
-  panel(-half,half,top-.57,top-.045,.036,paint.fascia);
+  panel(-half,half,top-.57,top-.045,.036,convenience?.background??paint.fascia);
   const nameUV=atlas.write(row.name);
-  if(nameUV)panel(-half+.10,half-.10,top-.52,top-.10,.057,cream,nameUV);
+  const nameBottom=top-(convenience ? .35 : .52);
+  if(nameUV)panel(-half+.10,half-.10,nameBottom,top-.10,.057,convenience?.ink??cream,nameUV);
+  if(convenience){
+    for(const [i,color] of convenience.bands.entries()){
+      const bottom=top-.562+i*.067;
+      panel(-half+.018,half-.018,bottom,bottom+.055,.058,color);
+    }
+  }
   // A narrow cornice, a threshold and end posts give the one-storey bay a readable edge.
   panel(-half,half,.07,.14,.14,stone);
   for(const side of [-half+.02,half-.12])panel(side,side+.10,.15,2.70,.093,trim);
@@ -394,7 +403,11 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   panel(dl-.085,dr+.085,.12,2.67,.025,paint.frame);
   panel(dl,dr,.22,2.56,.041,paint.glass);
   panel(dl+.06,dr-.06,1.45,2.44,.049,highlights);
-  panel(dr-.18,dr-.11,1.07,1.40,.053,cream);
+  if(convenience&&half>=1.3){
+    panel(doorCenter-.025,doorCenter+.025,.19,2.58,.054,paint.frame);
+    panel(doorCenter-.14,doorCenter-.09,1.07,1.34,.061,cream);
+    panel(doorCenter+.09,doorCenter+.14,1.07,1.34,.061,cream);
+  }else panel(dr-.18,dr-.11,1.07,1.40,.053,cream);
   for(const [start,end] of [[-half+.10,dl-.13],[dr+.13,half-.10]]){
     if(end-start<.25)continue;
     panel(start,end,.44,2.60,.02,paint.frame);
