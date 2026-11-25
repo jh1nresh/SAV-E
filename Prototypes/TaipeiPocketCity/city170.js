@@ -1,3 +1,4 @@
+import {metroExitCard,metroExitLayer} from './taipei-metro-exits.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=survey-store-1';
 import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
 import {addCityHydrants} from './city170-hydrants.js?v=street-furniture-1';
@@ -11,7 +12,7 @@ import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-nets-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
-import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=mall-tenants-1';
+import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=metro-street-1';
 import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=neighborhood-services-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
@@ -174,6 +175,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     return hits.find(f=>!basePlaces.includes(f.layer.id)||basePlaceName(f.properties));
   }
   function openFeature(feature,point){
+    if(feature.layer.id===metroExitLayer){
+      const exit=metroExitCard(feature.properties.placeId);
+      if(exit)openPlace(exit);
+      return;
+    }
     const props={...streetShopProperties(feature.properties)};
     if(props.placeId && feature.geometry.type==='Point'){
       const choices=nearbyPlaces(map,feature.geometry.coordinates);
@@ -199,7 +205,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   }
   map.on('click',event=>{
     const feature=hitPlace(event.point);
-    if(!['city170-shop-names','city170-poi-labels'].includes(feature?.layer.id)){
+    if(!['city170-shop-names','city170-poi-labels',metroExitLayer].includes(feature?.layer.id)){
       const entrance=entranceCards.get(dihuaLayer?.pickDihuaEntrance(event.point));
       if(entrance){event.preventDefault();openPlace(entrance);return;}
     }

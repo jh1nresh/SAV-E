@@ -5,6 +5,7 @@ import {gunzipSync} from 'node:zlib';
 import {addTaipei101Indoor,floorData,indoorCamera,insideMall} from '../taipei101-indoor.js';
 import {addOfficialFloorGuide} from '../taipei101-floor-guide.js';
 import {taipei101Indoor as venue} from '../taipei101-indoor-data.js';
+import {mallStreetExit4,metroExitCard} from '../taipei-metro-exits.js';
 import {mallMetroExit4} from '../taipei101-wayfinding.js';
 import {mallAdjacentTenants} from '../taipei101-mall-tenants.js';
 import {officialFloorDirectory as directory} from '../taipei101-directory.js';
@@ -83,14 +84,22 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   const [dinTaiFung,apple]=mallAdjacentTenants;
   const canonical='poi/'+tenant.id,venueKey='public:apple_maps:tenant-fixture';
   const shared={id:'friend/shared-tenant',name:tenant.properties.name,label:'好友分享',kind:'shared',point:tenant.geometry.coordinates,publicVenueID:venueKey};
+  const streetVenueKey='public:apple_maps:exit-fixture';
+  const {name:exitName,point:exitPoint}=metroExitCard(mallStreetExit4);
+  const streetExit={id:'friend/shared-outdoor-exit',name:exitName,label:'好友分享',kind:'shared',point:exitPoint,publicVenueID:streetVenueKey};
   let panel;
   const bridge=connectIOSMap(map,Marker,{postMessage(){}},undefined,{
-    button:new Element(),venues:new Map([[venueKey,{placeId:canonical,expiresAt:Date.now()+30000}]])
+    button:new Element(),venues:new Map([
+      [venueKey,{placeId:canonical,expiresAt:Date.now()+30000}],
+      [streetVenueKey,{placeId:mallStreetExit4,expiresAt:Date.now()+30000}],
+    ])
   },{floorEvents:stage,visiblePin:(...args)=>panel?.isPinVisible(...args)??true});
-  const sharedIsVisible=()=>[...markers].some(m=>m.getElement().placeIDs?.includes(shared.id));
+  const markerVisible=pin=>[...markers].some(m=>m.getElement().placeIDs?.includes(pin.id));
+  const sharedIsVisible=()=>markerVisible(shared);
   t.after(()=>events.remove());
-  bridge.update({pins:[shared]}); // Coverage already exists before the indoor controller or its sources.
-  assert(sharedIsVisible());assert.deepEqual(map.savvyAccountPlaceIds,[canonical]);
+  bridge.update({pins:[shared,streetExit]}); // Coverage already exists before the indoor controller or its sources.
+  assert(sharedIsVisible());assert(markerVisible(streetExit));
+  assert.deepEqual(map.savvyAccountPlaceIds,[mallStreetExit4,canonical]);
   const selected=[];stage.addEventListener('mall101-floor',e=>selected.push(e.detail.floor));
   panel=addTaipei101Indoor(map,{stage,Marker,startFloor:'B1',setCutaway:v=>cut.push(v),closePlace(){},openPlace:p=>cards.push(p),
     load:async()=>({...venue,directory})});
@@ -118,6 +127,8 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   }
   z=19;events.moveend();assert.equal(panel.state().floor,'B1');
   assert(panel.isContextPin(outside));assert(!panel.isContextPin(mall));
+  assert(!markerVisible(streetExit));
+  assert(panel.isPinVisible(exitPoint,'unrelated-saved-pin'));
   assert.equal(paint.get('city170-poi-labels:text-color'),'#645d50');
   assert.deepEqual(paint.get('city170-poi-labels:icon-opacity'),['*',1,.36]);
   assert.deepEqual(paint.get('city170-poi-dots:circle-opacity'),
@@ -138,8 +149,9 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(pointIds().includes('node/7004289008')); // Sawadee shares the floor, not this pin.
   assert(pointIds().includes(dinTaiFung.id));
   assert(pointIds().includes(mallMetroExit4.id));
-  assert.deepEqual(map.savvyMallAdjacentPlaceIds,[...mallAdjacentTenants,mallMetroExit4].map(f=>'poi/'+f.id));
-  choose('1F');assert(!sharedIsVisible());
+  assert.deepEqual(map.savvyMallAdjacentPlaceIds,[...[...mallAdjacentTenants,mallMetroExit4].map(f=>'poi/'+f.id),mallStreetExit4]);
+  assert.notDeepEqual(metroExitCard(mallStreetExit4).point,mallMetroExit4.geometry.coordinates);
+  choose('1F');assert(!sharedIsVisible());assert(!markerVisible(streetExit));
   assert(pointIds().includes(apple.id));assert(!pointIds().includes(dinTaiFung.id));
   assert(!pointIds().includes(mallMetroExit4.id));
   assert(!panel.isPinVisible(mallMetroExit4.geometry.coordinates,'poi/'+mallMetroExit4.id));
@@ -152,7 +164,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(planLabels().includes('松智路入口'));assert(planLabels().includes('信義南'));
   assert(!planLabels().includes('美食廣場'));
   choose('B1');assert(sharedIsVisible());assert(!pointIds().includes(tenant.id));
-  bridge.update({pins:[]});assert(!sharedIsVisible());assert(pointIds().includes(tenant.id));
+  bridge.update({pins:[streetExit]});assert(!sharedIsVisible());assert(pointIds().includes(tenant.id));
   assert.equal(source.data.features.length,floorData(venue,'B1').features.length+2);
   hit=source.data.features.find(f=>f.properties.kind==='shop');
   container.handlers.get('click')({target:canvas,clientX:8,clientY:9,stopImmediatePropagation(){}});
@@ -209,6 +221,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert.equal(plan.data.features.length,0);assert.equal(els['[data-floor-note]'].hidden,true);
   els['[data-floor-exit]'].click();assert.equal(panel.state().active,false);assert.equal(pitch,47);
   assert.deepEqual(map.savvyMallAdjacentPlaceIds,[]);
+  assert(markerVisible(streetExit));
   assert(panel.isPinVisible(dinTaiFung.geometry.coordinates,'poi/'+dinTaiFung.id));
   assert(panel.isStreetPinVisible(dinTaiFung.geometry.coordinates,'din-tai-fung'));
   assert.deepEqual(paint,outdoorPaint);assert(!panel.isContextPin(outside));

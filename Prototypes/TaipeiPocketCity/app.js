@@ -1,6 +1,6 @@
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
-import {addTaipei101Indoor} from './taipei101-indoor.js?v=metro-exit-1';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=metro-street-1';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
@@ -13,7 +13,8 @@ import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
 import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
-import {cityPlaceLayers} from './city-place-index.js?v=mall-tenants-1';
+import {metroExitDataset} from './taipei-metro-exits.js';
+import {cityPlaceLayers} from './city-place-index.js?v=metro-street-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
@@ -25,8 +26,8 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=neighborhood-services-1';
-import {addCity170,dihuaSearch} from './city170.js?v=mall-tenants-1';
+import {addShopSearch} from './city-shop-search.js?v=metro-street-1';
+import {addCity170,dihuaSearch} from './city170.js?v=metro-street-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=neighborhood-services-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
@@ -481,6 +482,7 @@ try{
     '<a href="https://data.taipei/dataset/detail?id=1601ef3a-c253-4988-b047-943d9e786143" target="_blank" rel="noopener">臺北市區界</a>',
     '<a href="https://data.taipei/dataset/detail?id=c013d9ec-a550-46bd-ac60-45f085930706" target="_blank" rel="noopener">臺北市市場處</a>',
     '<a href="https://data.taipei/dataset/detail?id=59579c19-a561-4564-8c0f-545bfb32c0f6" target="_blank" rel="noopener">臺北市衛生局</a>',
+    `<a href="${metroExitDataset}" target="_blank" rel="noopener">臺北捷運出口座標</a>`,
     '<a href="https://data.gov.tw/dataset/128274" target="_blank" rel="noopener">臺北市公園處樹籍</a>',
     '<a href="https://data.gov.tw/dataset/128640" target="_blank" rel="noopener">臺北自來水事業處直飲臺</a>',
     '<a href="https://data.gov.tw/dataset/136476" target="_blank" rel="noopener">臺北市公園處遊具及體健設施</a>',
