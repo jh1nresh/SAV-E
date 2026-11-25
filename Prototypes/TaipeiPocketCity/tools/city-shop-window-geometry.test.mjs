@@ -30,7 +30,11 @@ test('actual subtype chooses recognisable furniture independently of name and fa
   }
   assert.equal(painted(shop('clothes').vs,typeColors.hairdresser).length,0);
   assert.equal(painted(shop('grocery').vs,typeColors.florist).length,0);
-  assert.equal(painted(shop('books').vs,typeColors.bicycle).length,0);
+  const wheelDepth=.14+.10;
+  const wheelVertices=category=>painted(shop(category).vs,typeColors.optician)
+    .filter(([depth])=>Math.abs(depth-wheelDepth)<1e-8);
+  assert.ok(wheelVertices('bicycle').length>=2*8*6);
+  assert.equal(wheelVertices('books').length,0);
   assert.notDeepEqual(shop('restaurant').vs,shop('cafe').vs);
   assert.notDeepEqual(shop('cafe').vs,shop('coffee').vs);
   assert.deepEqual(storefrontCategory({category:'unexpected'}),['店家','retail']);

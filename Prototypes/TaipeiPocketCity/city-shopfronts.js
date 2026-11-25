@@ -1,5 +1,6 @@
 import {storefrontCategory} from './shop-categories.js';
 import {drawServiceWindow} from './shop-service-windows.js';
+import {drawRetailWindow,retailWindowTypes} from './shop-retail-windows.js';
 import {serviceWindowLabels} from './shop-service-labels.js';
 import {categoryFoodWindow,cuisineWindow,drawFoodWindow} from './shop-food-windows.js';
 import {mappedFoodWindow} from './taipei-food-window-evidence.js';
@@ -126,6 +127,7 @@ const tradeWindows = new Map([
   ['clothes','garments'], ['bakery','bread'], ['pastry','pastries'],
   ['beverages','bottles'], ['chemist','drugstore'],
 ]);
+const retailWindowNames=new Set(retailWindowTypes.values());
 const tradePaint={salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe'};
 const fixtureInk=rgb('#494845'), timber=rgb('#a87554'), porcelain=rgb('#f2dfb5'),
   teal=rgb('#47877e'), leather=rgb('#ac6856'), petal=rgb('#d47774'), leaf=rgb('#688c5e');
@@ -319,6 +321,7 @@ function tradeWindow(trade, left, right, point, quad){
     default:{
       const tools={face,slab,shape,rod,rim,bottle};
       if(serviceWindowLabels.has(trade))drawServiceWindow(trade,tools,servicePaint);
+      else if(retailWindowNames.has(trade))drawRetailWindow(trade,tools,servicePaint);
       else drawFoodWindow(trade,tools,servicePaint);
     }
   }
@@ -333,7 +336,7 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
   const knownCuisine=typeof row.cuisine==='string'?cuisineWindow(row.category,row.cuisine):mappedFoodWindow(row);
   const trade=knownCuisine??categoryFoodWindow(row.category,seed)??tradeWindows.get(row.category)
-    ??(serviceWindowLabels.has(row.category)?row.category:null);
+    ??(serviceWindowLabels.has(row.category)?row.category:retailWindowTypes.get(row.category));
   const paint=colored[tradePaint[trade]??type];
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
   const trim=timbers[seed%timbers.length];

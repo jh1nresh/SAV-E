@@ -25,7 +25,7 @@ import {loadSongyanNear} from './songyan-detail.js?v=5';
 
 import {addShopSearch} from './city-shop-search.js?v=shop-floor-1';
 import {addCity170,dihuaSearch} from './city170.js?v=point-icons-5';
-import {addCityShopfronts} from './city-shopfronts.js?v=survey-store-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=retail-displays-1';
 import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);
