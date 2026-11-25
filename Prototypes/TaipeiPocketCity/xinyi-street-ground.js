@@ -4,11 +4,8 @@
 import {decodeMapJSON} from './pocket-city-atlas.js';
 import {plotOverlaps} from './authored-footprint.js';
 
-// The broad-phase boxes come from the 170 m index. The map supplies the official district polygons.
-const districts=[
-  {name:'信義區',id:'xinyi',mask:1,bounds:[121.55252,25.00810,121.59216,25.04951]},
-  {name:'松山區',id:'songshan',mask:2,bounds:[121.53834422,25.04429119,121.58006742,25.07597382]},
-];
+import {streetDistricts as districts} from './taipei-street-districts.js';
+
 const districtMasks=new Map(districts.map(row=>[row.name,row.mask]));
 const street='#929394',walk='#e6c9a6',path='#dcc5a3',kerb='#e3c477',marking='#f0dfc0';
 // The narrow full-tower camera reaches street scale below the detail-pack zoom.
@@ -99,33 +96,53 @@ export function addDistrictStreetGround(map){
   const markings=['city170-prepared-lane','city170-prepared-crossing']
     .filter(id=>map.getLayer(id)).map(id=>[id,map.getPaintProperty(id,'fill-color')]);
   let removed=false,pattern;
+  function refreshMarkings(){
+    // A boundary cell needs every contributing district. Checking the missing bits
+    // keeps the expression linear even when all twelve assets have been visited.
+    const missing=regions.filter(r=>!r.ready);
+    const bits=['number',['get','districtStreetMask'],0];
+    const eligible=['all',['has','districtStreetMask'],...missing.map(r=>
+      ['==',['%',['floor',['/',bits,r.mask]],2],0])];
+    for(const [id,base] of markings)map.setPaintProperty(id,'fill-color',['case',eligible,marking,base]);
+  }
+  function unload(region){
+    for(const suffix of ['kerb','concrete-joints','asphalt','paving'])map.removeLayer(region.groundId+'-'+suffix);
+    map.removeSource(region.groundId);
+    region.ready=false;
+  }
   async function load(region){
-    region.request=new AbortController();
+    const request=new AbortController();
+    region.request=request;
     try{
       const asset=new URL('./assets/'+region.groundId+'.json.gz',import.meta.url);
-      const response=await fetch(asset,{signal:region.request.signal});
+      const response=await fetch(asset,{signal:request.signal});
       if(!response.ok)throw Error(region.groundId+' '+response.status);
       const data=unpackDistrictGround(await decodeMapJSON(response));
-      if(removed)return;
+      if(removed||request.signal.aborted)return;
       pattern??=sidewalkPattern(map);
       const nextDistrict=regions.slice(regions.indexOf(region)+1).find(r=>r.ready);
       install(map,region.groundId,data,pattern,nextDistrict);
       region.ready=true;
-      const ready=regions.reduce((mask,r)=>r.ready?mask|r.mask:mask,0);
-      const available=regions.filter(r=>r.ready).map(r=>r.mask);
-      if(available.length>1)available.push(ready);
-      for(const [id,base] of markings){
-        map.setPaintProperty(id,'fill-color',['case',
-          ['in',['get','districtStreetMask'],['literal',available]],marking,base]);
-      }
-      if(regions.every(r=>r.ready))map.off('moveend',near);
+      refreshMarkings();
     }catch(error){
-      if(!removed)console.warn(region.name+'道路',error.message);
-    }finally{region.request=null;}
+      if(!removed&&!request.signal.aborted)console.warn(region.name+'道路',error.message);
+    }finally{if(region.request===request)region.request=null;}
   }
   function near(){
-    if(removed||map.getZoom()<roadOverviewZoom)return;
+    if(removed)return;
+    const streetScale=map.getZoom()>=roadOverviewZoom;
     const [[w,s],[e,n]]=map.getBounds().toArray();
+    // Retain a one-kilometre margin so a short pan across a border reuses both sides.
+    const retain=[w-.011,s-.010,e+.011,n+.010];
+    let changed=false;
+    for(const region of regions){
+      if((region.ready||region.request)&&(!streetScale||!plotOverlaps(region,retain))){
+        if(region.request){region.request.abort();region.request=null;}
+        if(region.ready){unload(region);changed=true;}
+      }
+    }
+    if(changed)refreshMarkings();
+    if(!streetScale)return;
     return Promise.all(regions.filter(region=>!region.ready&&!region.request&&
       plotOverlaps(region,[w,s,e,n])).map(load));
   }

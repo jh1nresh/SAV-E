@@ -336,7 +336,7 @@ function tradeWindow(trade, left, right, point, quad){
   }
 }
 
-export function buildShop(vertices,row,center,scale,atlas,fuxing=false,overview=false){
+export function buildShop(vertices,row,center,scale,atlas,fuxing=false,overview=false,grade=center[2]){
   const [x,y,z]=center;
   const angle=row.angle*Math.PI/180, nx=Math.cos(angle),ny=Math.sin(angle);
   const tx=-ny,ty=nx;
@@ -350,7 +350,6 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false,overview=
   const paint=colored[tradePaint[trade]??type];
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
   const trim=timbers[seed%timbers.length];
-  const first=vertices.length/13;
   function point(s,h,d){return [x+tx*s+nx*(offset+d),y+ty*s+ny*(offset+d),z+h*scale];}
   function quad(points,color,texture){
     const uv=texture?[[texture[0],texture[3]],[texture[2],texture[3]],
@@ -374,6 +373,11 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false,overview=
     const color=uv?[-1-field[0],field[1],field[2]]:field;
     panel(a,b,low,high,depth,color,uv);
   }
+  // On a raised survey foundation, continue the unbranded base down to the
+  // measured sidewalk. Shop picking and its verified eye-level camera both
+  // use the original sill, glazing and sign elevations.
+  if(grade<z)panel(-half,half,(grade-z)/scale,.08,0,stone);
+  const first=vertices.length/13;
   const geometry={half,top,point,quad,panel,rgb,sign,plaque};
   if(drawDihuaShop(row,geometry) || (fuxing && buildFuxingFront(row,geometry))){
     return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055),
@@ -602,7 +606,8 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       if(height<1.9)continue;
       const world=MercatorCoordinate.fromLngLat(row.center);
       const origin=[(world.x-anchor.mx)/anchor.m,(anchor.my-world.y)/anchor.m,z];
-      shown.push(buildShop(out,row,origin,Math.min(1,(height-.13)/3.25),atlas,fuxingEnabled,overview));
+      const grade=neighborhoodWalls.has(row)?ground:z;
+      shown.push(buildShop(out,row,origin,Math.min(1,(height-.13)/3.25),atlas,fuxingEnabled,overview,grade));
     }
     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(out),gl.STATIC_DRAW);
