@@ -21,6 +21,7 @@ import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=fountain
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
+import {loadStreetlightPacks,streetlightObjects,streetlightZoom} from './taipei-streetlight-data.js';
 
 const collection = features => ({type: 'FeatureCollection', features});
 const overlaps = ([w,s,e,n], [left,bottom,right,top]) => w <= right && e >= left && s <= top && n >= bottom;
@@ -238,6 +239,16 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   let index, schoolData, grid, pendingGrid, current = 0, timer, failures = 0;
   let lifeKey='';
   let lifeRecords=[],lifeRevision=-1,sceneKey='';
+  let publicLights,lightsPending=false,removed=false;
+  function loadStreetlights(){
+    if(publicLights||lightsPending)return;
+    lightsPending=true;
+    loadStreetlightPacks().then(packs=>{
+      publicLights=packs;
+      if(!removed&&map.getZoom()>=streetlightZoom)void refresh();
+    }).catch(error=>{if(!removed)console.warn('臺北路燈',error.message);})
+      .finally(()=>{lightsPending=false;});
+  }
   function resetLife(){
     setShopPacks([]);
     if(lifeKey){setLocalLife([]);nature.setRows([]);lifeKey='';lifeRecords=[];lifeRevision=-1;sceneKey='';}
@@ -313,6 +324,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     });
   }
   async function refresh() {
+    if(removed)return;
     const epoch = ++current;
     loadLandDetails();
     clearTimeout(timer);
@@ -369,7 +381,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       const packs = await Promise.all(visible.map(item => pack(item.id)));
       if (epoch !== current) return;
       const key=packIds.join(',');
-      if(key!==lifeKey){
+      const showStreetlights=map.getZoom()>=streetlightZoom&&packIds.length>0;
+      if(showStreetlights)loadStreetlights();
+      const lightPacks=showStreetlights?publicLights:null;
+      const lifeScope=key+(lightPacks?'|streetlights':'');
+      if(lifeScope!==lifeKey){
         const [records,inventories]=await Promise.all([
           Promise.all(packIds.map(id=>remember('life/'+id,()=>readPocketCityAsset('city170-life/'+id)))),
           Promise.all(packIds.map(id=>remember('trees/'+id,()=>readPocketCityAsset('city170-nature/'+id))
@@ -383,11 +399,13 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           const pavilions=riverPavilions[packIds[i]];
           const racks=bikeRacks[packIds[i]];
           const signs=trailSigns[packIds[i]];
-          return playground||fitness||pavilions||racks||signs
-            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions,...racks,...signs}}:record;
+          const lamps=lightPacks?.[packIds[i]];
+          return playground||fitness||pavilions||racks||signs||lamps
+            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions,...racks,...signs,
+              ...(lamps&&streetlightObjects(lamps))}}:record;
         });
         lifeRevision=-1;
-        lifeKey=inventories.every(Boolean)?key:'retry-trees';
+        lifeKey=inventories.every(Boolean)?lifeScope:'retry-trees';
       }
       if(lifeRevision!==nature.revision){
         const scenery=lifeRecords.map(r=>({...r,objects:Object.fromEntries(Object.entries(r.objects).filter(([,obj])=>
@@ -522,6 +540,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   };
   map.on('moveend', refresh);
   map.on('resize', refresh);
+  map.on('remove',()=>{
+    removed=true;
+    ++current;
+    clearTimeout(timer);
+  });
   refresh();
   return {
     openNearbyPlace,
