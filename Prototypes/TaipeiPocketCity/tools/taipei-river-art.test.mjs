@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {gzipSync,gunzipSync} from 'node:zlib';
 import {readFileSync} from 'node:fs';
 import {addCity170Style} from '../city170-style.js';
+import fountainWater,{fountainSnapshot} from '../city170-fountain-water-data.js';
 import {addTaipeiRiverArt} from '../taipei-river-art.js';
 
 function mockCanvas(t) {
@@ -89,12 +90,19 @@ test('river artwork loads on entering Taipei, stays below roads and survives a t
 test('late city tile installation keeps fallback water below the illustrated river', t=>{
   mockCanvas(t);
   const layers=new Map();
-  const map={getStyle:()=>({layers:[]}),getSource:()=>null,hasImage:()=>true,
+  const map={getStyle:()=>({layers:[]}),getSource:id=>id==='city170-fountain-water'?{}:null,hasImage:()=>true,
     getLayer:id=>['taipei-river-art-shore','landcover_sand'].includes(id),addImage:()=>{},
-    addLayer:(layer,before)=>layers.set(layer.id,before)};
+    addLayer:(layer,before)=>layers.set(layer.id,{layer,before})};
   addCity170Style(map,'atlas','labels');
   for(const id of ['city170-water','city170-water-texture','city170-water-shallows','city170-water-shoreline']){
-    assert.equal(layers.get(id),'taipei-river-art-shore');
+    assert.equal(layers.get(id).before,'taipei-river-art-shore');
+  }
+  for(const key of ['shallows','surface','depth','glints']){
+    const {layer,before}=layers.get('city170-fountain-water-'+key);
+    assert.equal(layer.source,'city170-fountain-water');
+    assert.equal(before,'taipei-river-art-shore');
+    assert.equal(layer.type,key==='glints'?'line':'fill');
+    assert(layer.minzoom>=16.85);
   }
 });
 
@@ -122,4 +130,22 @@ test('Guandu marsh and mud stay on the bank while reflections land in the mapped
       f.properties.habitat===habitat && contains(f.geometry,point)),kind+' must keep its source position');
     assert.equal(water.some(f=>contains(f.geometry,point)),inWater,kind);
   }
+});
+
+test('fountain illustrations have unique mapped IDs, water surfaces and stationary glints',()=>{
+  const features=fountainWater.features;
+  const water=new Set(), surface=new Set();
+  for(const {id,geometry,properties:{osm,role}} of features){
+    assert(![1390847382,484330232].includes(osm));
+    assert(id.startsWith('water/way/'+osm+'/'));
+    if(role==='glint')assert.equal(geometry.type,'LineString');
+    else assert.equal(geometry.type,'Polygon');
+    if(role==='shallows')water.add(osm);
+    if(role==='surface')surface.add(osm);
+  }
+  assert.deepEqual(water,surface);
+  assert.equal(water.size,fountainSnapshot.illustrated);
+  assert.equal(Object.values(fountainSnapshot.excluded).reduce((sum,n)=>sum+n,water.size),fountainSnapshot.sourceBasins);
+  assert.equal(new Set(features.map(f=>f.id)).size,features.length);
+  assert(features.some(f=>f.properties.role==='glint'));
 });

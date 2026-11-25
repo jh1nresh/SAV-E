@@ -234,6 +234,24 @@ export function addCity170Style(map, sourceId, firstLabel) {
       },
     }, underRiver);
   }
+  const fountains='city170-fountain-water';
+  if(map.getSource(fountains)){
+    const role=['get','role'];
+    for(const [key,color] of [['shallows','#aad5ca'],['surface','#75b8b2'],['depth','#5a9da6']]){
+      add({
+        id:fountains+'-'+key,source:fountains,type:'fill',minzoom:16.85,
+        filter:['==',role,key],
+        paint:{'fill-color':color,'fill-opacity':fade(16.85,17.85,.94)},
+      },underRiver);
+    }
+    add({
+      id:fountains+'-glints',source:fountains,type:'line',minzoom:17.55,
+      filter:['==',role,'glint'],
+      layout:{'line-cap':'round','line-join':'round'},
+      paint:{'line-color':'#d8eee1','line-width':['interpolate',['linear'],['zoom'],17.55,.55,20.5,1.25],
+        'line-opacity':fade(17.55,18.45,.82)},
+    },underRiver);
+  }
   if(map.getSource('city170-farmland')){
     add({
       id:'city170-field-plots',source:'city170-farmland',type:'fill',minzoom:14,
