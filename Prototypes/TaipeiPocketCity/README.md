@@ -77,6 +77,8 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 
 臺北地面店家的樓層核對使用經濟部商業發展署的開放資料。[台北市商業登記資料-F零售、批發及餐飲業](https://data.gov.tw/dataset/53661) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
+部分店家以臺北市商業處「台北友善店家」2026 年 7 月 20 日的中文清冊核對位置與樓層，店面沿實測外牆繪製。[台北友善店家清冊](https://data.taipei/dataset/detail?id=d807396c-e41f-4005-be42-0160280783a1) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
+
 路燈位置、桿高與燈數來自臺北市政府工務局公園路燈工程管理處，資料快照為 2025 年 10 月 25 日。燈頭外觀為插畫。[臺北市路燈位置分布圖](https://data.taipei/dataset/detail?id=262e80cf-579c-4bfb-ba73-31621bc84616) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
 行人清潔箱採用臺北市政府環境保護局 2026 年 10 月 21 日更新的逐點清冊。箱體、顏色與朝向為插畫。[臺北市行人專用清潔箱](https://data.taipei/dataset/detail?id=a835f3ba-7f50-4b0d-91a6-9df128632d1c) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)

@@ -98,7 +98,8 @@ def unique_municipal_plate(nearby):
     return first if all(first[1].distance(row[1]) <= .02 for row in nearby) else None
 
 
-def measured_bay(store, point, nearby, road_name, roads, survey, streets, footprints, tags):
+def measured_bay(store, point, nearby, road_name, roads, survey, streets, footprints, tags,
+                 *, locator="municipal-address"):
     owners = streets.footprints.query(point, predicate="covered_by")
     plate = unique_municipal_plate(nearby)
     if len(owners) > 1 or (nearby and plate is None):
@@ -108,12 +109,12 @@ def measured_bay(store, point, nearby, road_name, roads, survey, streets, footpr
         building = streets.buildings[owner]
         if not G["small_building"](building, tags[building.id.split("/", 1)[1]]):
             return None
-    samples = [(None, point)]
+    samples = [(None, point, False)]
     if plate is not None:
-        samples.append(plate[:2])
+        samples.append((*plate[:2], True))
 
     fits = []
-    for plate_id, marker in samples:
+    for plate_id, marker, independent in samples:
         found = G["shop_bay"](survey, streets, marker, store, owner, road_name)
         if found is None:
             continue
@@ -125,7 +126,7 @@ def measured_bay(store, point, nearby, road_name, roads, survey, streets, footpr
         if grade is None:
             continue
         row.update(evidence="registered-ground-measured-bay", groundZ=round(grade, 3),
-                   frontageLocator="municipal-address" if plate_id is not None else "ground-shop-pin")
+                   frontageLocator=locator if independent else "ground-shop-pin")
         if plate_id is not None:
             row["addressNode"] = f"node/{plate_id}"
         fits.append((site, row, wall))

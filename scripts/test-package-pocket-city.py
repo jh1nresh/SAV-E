@@ -32,7 +32,7 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taipei-riverside-pavilion-mesh.js', 'city170-riverside-pavilion-points.js',
                          'taipei-bike-rack-mesh.js', 'city170-bike-rack-points.js',
                          'taipei-trail-sign-mesh.js', 'city170-trail-sign-points.js',
-                         'taipei-registered-frontages.js',
+                         'taipei-registered-frontages.js', 'taipei-friendly-frontages.js',
                          'shop-convenience-fascias.js', 'taipei-convenience-art.js',
                          'city170-fountain-water-data.js', 'assets/taipei-streetlights.json.gz',
                          'taipei-market-stalls.js', 'taipei-market-stalls-data.js',

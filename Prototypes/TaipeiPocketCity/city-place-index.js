@@ -1,6 +1,6 @@
 import {cityLandmarks,districtLandmarks} from './taipei-priority-places.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
-import {withShopFacts} from './taipei-frontage-pack.js?v=registered-frontages-1';
+import {withShopFacts} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 import {metroExitFeatures,metroExitLayer} from './taipei-metro-exits.js';
 import {photoPlaces} from './place-photos.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
