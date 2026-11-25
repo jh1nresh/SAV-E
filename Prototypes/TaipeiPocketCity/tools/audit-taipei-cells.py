@@ -812,6 +812,7 @@ def main():
                     "dihua-north-frontages.js",
                     "taipei-ground-frontages.js",
                     "taipei-address-frontages.js",
+                    "taipei-compact-frontages.js",
                 ]
             ],
             args.osm,
