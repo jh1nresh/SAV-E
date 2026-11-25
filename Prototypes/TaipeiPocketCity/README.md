@@ -79,6 +79,8 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 
 路燈位置、桿高與燈數來自臺北市政府工務局公園路燈工程管理處，資料快照為 2025 年 10 月 25 日。燈頭外觀為插畫。[臺北市路燈位置分布圖](https://data.taipei/dataset/detail?id=262e80cf-579c-4bfb-ba73-31621bc84616) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
+行人清潔箱採用臺北市政府環境保護局 2026 年 10 月 21 日更新的逐點清冊。箱體、顏色與朝向為插畫。[臺北市行人專用清潔箱](https://data.taipei/dataset/detail?id=a835f3ba-7f50-4b0d-91a6-9df128632d1c) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
+
 - 道路、建物輪廓與地點採 © OpenStreetMap contributors。OSM 衍生資料以 ODbL 1.0 提供，原始出處與擷取版本隨資料附於 `data/city170/index.json`。地圖署名見圖面。[OpenStreetMap 授權](https://www.openstreetmap.org/copyright)
 - 臺北市政府都市發展局提供 2025 年 LOD1 模型。市府商業處、衛生局、市場處、公園處與捷運工程局提供其他圖層，各來源列於圖面及資料摘要。[LOD1 服務](https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer) · [都發局資料開放宣告](https://udd.gov.taipei/QA/article/ngork7d) · [公共樹籍](https://data.gov.tw/dataset/128274)
 iPhone 離線地圖隨附台北的第 3–14 倍率向量圖磚，以 `cities/map-tiles/taipei-bundled/index.json` 的範圍為準。圖磚取自與共用底圖相同的 OpenFreeMap 快照，並沿用圖面上的 OpenFreeMap、OpenMapTiles 與 OpenStreetMap 署名。[OpenFreeMap](https://openfreemap.org/)

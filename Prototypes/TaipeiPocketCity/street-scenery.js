@@ -6,6 +6,7 @@ import {drawRiversidePavilion} from './taipei-riverside-pavilion-mesh.js';
 import {drawBicycleRack} from './taipei-bike-rack-mesh.js';
 import {drawTrailGuidepost} from './taipei-trail-sign-mesh.js';
 import {drawStreetlight} from './taipei-streetlight-mesh.js';
+import {drawPedestrianBin} from './taipei-pedestrian-bin-mesh.js';
 
 const vertex=`#version 300 es
 layout(location=0) in vec3 point;
@@ -69,6 +70,9 @@ function buildObject(kind,size,angle,index,origin,vertices,anatomy,hybrid){
   switch(kind){
     case 'street-light':
       drawStreetlight(index,{box,prism});
+      break;
+    case 'pedestrian-bin':
+      drawPedestrianBin({box,prism});
       break;
     case 'trail-guidepost':
       drawTrailGuidepost({box});
