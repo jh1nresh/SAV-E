@@ -53,3 +53,36 @@ test('textures are attached when in view and leave water and streets above them'
   zoom=17;extent=[121.56,25.0,121.58,25.1];moveend();
   assert.equal(layers.size,0);
 });
+
+test('Taipei intermediate terrain resolves to bundled Terrarium RGB tiles',async()=>{
+  const {default:taipei}=await import('../taiwan/taipei-relief/index.js');
+  const digest=createHash('sha256');
+  const bundled=new Set(taipei.dem);
+  assert.equal(taipei.dem.length,bundled.size);
+  for(const key of taipei.dem){
+    const tile=new URL('../taiwan/taipei-relief/dem/'+key+'.png',import.meta.url);
+    assert.equal(taiwanLocalDEM(coverage.terrainSource+'/'+key.replaceAll('-','/')+'.png'),tile.href);
+    const bytes=await readFile(tile);
+    assert.equal(bytes.readUInt32BE(16),256);assert.equal(bytes.readUInt32BE(20),256);
+    assert.equal(bytes[25],2); // Terrarium height is encoded in three channels.
+    digest.update(bytes);
+  }
+  assert.equal(digest.digest('hex'),taipei.demSha256);
+  for(const key of ['10-857-438','11-1715-876','12-3431-1753','13-6862-3507','13-6862-3506']){
+    assert.ok(bundled.has(key),'Xiangshan and the Keelung River need '+key);
+  }
+  assert.ok(!bundled.has('14-13724-7014')); // Preserve the calibrated Songyan/101 tile.
+});
+
+test('every Taipei map tile at zoom 10–14 has matching local height data', {skip:!process.env.POCKET_TAIPEI_DATA},async()=>{
+  const {join}=await import('node:path');
+  const region=JSON.parse(await readFile(new URL('../cities/map-tiles/taipei-bundled/index.json',import.meta.url)));
+  const city=JSON.parse(await readFile(join(process.env.POCKET_TAIPEI_DATA,'city-streets/index.json')));
+  const calibrated=new Set(city.terrainTiles);
+  const shared=JSON.parse(await readFile(new URL('../cities/map-tiles/index.json',import.meta.url)));
+  const sharedTiles=new Set(shared.tiles.map(([x,y])=>x+'/'+y));
+  for(const [z,x,y] of region.tiles.filter(([z])=>z>=10&&z<=14)){
+    if(z===14&&(calibrated.has(x+'/'+y)||sharedTiles.has(x+'/'+y)))continue;
+    assert.ok(taiwanLocalDEM(coverage.terrainSource+'/'+[z,x,y].join('/')+'.png'),[z,x,y].join('/'));
+  }
+});

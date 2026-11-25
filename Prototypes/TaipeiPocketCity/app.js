@@ -3,9 +3,11 @@ import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
 import {addTaipei101Indoor} from './taipei101-indoor.js?v=original-ink-2';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
-import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
+import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=taipei-relief-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
+import {addXinyiRidgeWoods} from './xinyi-ridge-woods.js';
+import {addSongshanRiverMeadow} from './songshan-river-meadow.js';
 import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-4';
 import {marketStallLife} from './taipei-market-stalls.js';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
@@ -627,6 +629,8 @@ try{
       if(!place.placeId || !shopfronts?.openNamedPlace(place.placeId))streetDetail.openMappedPlace(place);
     };
     atlas170=addCity170(map,firstLabel,openMapLabel,setPreparedGround,streetDetail.setMappedStores,localLife,streetDetail.authoredRoads,streetDetail.hasFocalPin,preview.get('dihua')!=='before'?layer:null,cityNature,ids=>shopfronts?.setPacks(ids));
+    addSongshanRiverMeadow(map,firstLabel);
+    addXinyiRidgeWoods(map,firstLabel);
     const focusBookshop=(card,x,y)=>{
       if(previousFronts||card.id!==bookstoreId)return false;
       locate(bookshopView);
