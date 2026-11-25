@@ -16,16 +16,16 @@ import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=mall-cutaway-1';
-import {addStreetDetail} from './street-detail.js?v=mall-pins-1';
+import {addStreetDetail} from './street-detail.js?v=survey-store-3';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=shop-address-1';
-import {addCity170,dihuaSearch} from './city170.js?v=arcade-sections-2';
-import {addCityShopfronts} from './city-shopfronts.js?v=shop-address-1';
+import {addShopSearch} from './city-shop-search.js?v=survey-store-3';
+import {addCity170,dihuaSearch} from './city170.js?v=survey-store-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=survey-store-1';
 import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);

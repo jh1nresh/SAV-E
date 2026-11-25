@@ -1,4 +1,4 @@
-import {withShopFacts} from './taipei-frontage-pack.js?v=shop-address-1';
+import {withShopFacts} from './taipei-frontage-pack.js?v=survey-store-1';
 import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
 import {addCityHydrants} from './city170-hydrants.js';
 import {addCityBenches} from './city170-benches.js';
