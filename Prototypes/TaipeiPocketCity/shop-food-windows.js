@@ -1,6 +1,6 @@
 // Explicit menu and service tags support these illustrative displays.
 const cues=new Map([
-  ['bubble-tea',['bubble_tea']], ['noodle-bowls',['noodle','noodles','ramen','beef_noodle','beef_noodles','udon']],
+  ['bubble-tea',['bubble_tea']], ['noodle-bowls',['noodle','noodles','ramen','beef_noodle','beef_noodles','udon','chinese_noodles','牛肉麵','牛肉面']],
   ['hot-pot',['hotpot','hot_pot']], ['dumplings',['dumpling','dumplings','gyoza']],
   ['pizza-slices',['pizza']], ['burger-tray',['burger','burgers']], ['sushi',['sushi']],
   ['tea-service',['tea','teahouse']], ['pastries',['cake','pastry']], ['espresso',['coffee','coffee_shop']],
@@ -10,6 +10,9 @@ const localCues=new Map([
   ['iron-grill',['teppanyaki']], ['char-grill',['steak_house','steak','barbecue']],
   ['seafood-counter',['seafood']], ['rice-bowls',['beef_bowl']],
   ['curry-counter',['curry']], ['dessert-case',['dessert']], ['box-counter',['bento','便當']],
+  ['braised-display',['滷味','魯味']], ['braised-rice',['滷肉飯','魯肉飯']],
+  ['fried-counter',['fried_chicken','雞排','鹽酥雞','鹹酥雞']],
+  ['steamer-buns',['小籠包','小籠湯包']],
 ].flatMap(([cue,values])=>values.map(value=>[value,cue])));
 const cafeCategories=new Set(['cafe','restaurant','fast_food']);
 export function cuisineWindow(category,cuisine){
@@ -24,6 +27,30 @@ export function cuisineWindow(category,cuisine){
   }
   // Keep the existing explicit specialty when a multi-tag record also has a broader service cue.
   return known[0]??tokens.map(token=>localCues.get(token)).find(Boolean)??null;
+}
+
+const advertisedSpecialties=[
+  ['noodle-bowls',/牛肉[麵面]|拉[麵面]|涼[麵面]|刀削[麵面]|陽春[麵面]|擔仔[麵面]|米粉湯|粄條|客家板條/],
+  ['dumplings',/水餃|鍋貼|煎餃|蒸餃/],
+  ['steamer-buns',/小籠(?:包|湯包)/],
+  ['morning-griddle',/早餐|早午餐/],
+  ['box-counter',/便當|餐盒|鐵路飯包/],
+  ['braised-display',/滷味|魯味/],
+  ['braised-rice',/滷肉飯|魯肉飯/],
+  ['fried-counter',/雞排(?!骨)|炸雞(?!排骨)|鹽酥雞|鹹酥雞/],
+];
+const otherFoods=/[，、,／/]|咖啡|奶茶|豆漿|火鍋|麻辣燙|壽司|鐵板燒|咖[哩喱]|披薩|漢堡|burger|潤餅|蔥油餅|斤餅|韭菜盒|水煎包|雲吞|餛飩|麵食|黑白切|清粥|炒[飯麵]|雞湯|雞肉飯|豬排飯|高麗菜飯|丼飯|油飯|肉羹|羹麵|魷魚羹|虱目魚湯|清燉豬腳/i;
+const grilled=/[炭碳燒串]烤|烤雞/;
+// Only the source build uses business names. Treat a named dish as a
+// display cue when the mapped food business advertises a single specialty.
+export function advertisedFoodWindow(category,name){
+  if(!cafeCategories.has(category)||typeof name!=='string')return null;
+  const matches=advertisedSpecialties.filter(([,words])=>words.test(name));
+  if(matches.length!==1)return null;
+  const [cue,words]=matches[0];
+  if(otherFoods.test(name.replace(words,'')))return null;
+  if(category==='cafe'&&cue!=='morning-griddle')return null;
+  return cue==='fried-counter'&&grilled.test(name)?null:cue;
 }
 
 const diningWindows=['dining','menu-stand','sideboard'];
@@ -158,6 +185,43 @@ export function drawFoodWindow(trade,tools,paint){
       }
       menu(-.63,.89,.40,.52);
       break;
+    case 'braised-display':
+      counter();
+      // Broad shallow trays read through the cabinet without individual food textures.
+      for(const [x,color] of [[-.45,leather],[0,ochre],[.45,teal]]){
+        slab(x-.195,x+.195,.46,.53,.225,ink);
+        for(const [dx,dy] of [[-.10,0],[.032,.034]]){
+          shape([[x+dx-.048,.54],[x+dx+.082,.54],[x+dx+.062,.65+dy],[x+dx-.064,.64+dy]],.194,color);
+        }
+      }
+      face(-.67,-.64,.51,.84,.235,glass);
+      face(.64,.67,.51,.84,.235,glass);
+      face(-.67,.67,.82,.85,.235,glass);
+      break;
+    case 'braised-rice':
+      counter();
+      // A wide rim and a single dark topping make the rice bowls legible.
+      for(const x of [-.39,.31]){
+        shape([[x-.12,.46],[x+.12,.46],[x+.25,.63],[x-.25,.63]],.19,cream);
+        shape([[x-.23,.63],[x+.23,.63],[x+.17,.72],[x-.15,.71]],.18,cream);
+        face(x-.11,x+.12,.64,.72,.204,leather);
+        face(x+.13,x+.19,.64,.69,.2,sage);
+      }
+      slab(-.25,.25,.89,.94,.15,wood);
+      face(-.17,.17,1.02,1.23,.15,teal);
+      break;
+    case 'fried-counter':
+      counter();
+      slab(-.64,.09,.46,.62,.235,ink);
+      slab(-.59,.03,.62,.66,.234,glass);
+      rod(-.44,.66,-.31,.91,.049,.21,ink);
+      rod(-.14,.66,-.02,.92,.049,.21,ink);
+      for(const [x,y] of [[.28,.46],[.53,.49]]){
+        shape([[x-.09,y],[x+.09,y],[x+.14,y+.30],[x-.14,y+.30]],.198,cream);
+        face(x-.13,x+.13,y+.24,y+.28,.205,ochre);
+      }
+      face(-.61,-.23,1.015,1.19,.16,teal);
+      break;
     case 'menu-stand':
       rod(-.26,.015,-.14,.44,.062,.12,wood);
       rod(.32,.015,.22,.44,.062,.12,wood);
@@ -243,6 +307,17 @@ export function drawFoodWindow(trade,tools,paint){
         shape([[x-.11,.50],[x+.11,.50],[x+.067,.63],[x-.029,.65]],.17,cream);
         rod(x-.031,.64,x+.012,.57,.021,.18,ochre);
       }
+      break;
+    case 'steamer-buns':
+      counter();
+      slab(-.66,-.06,.45,.59,.21,leather);
+      for(const seam of [.49,.54])face(-.64,-.08,seam,seam+.018,.216,cream);
+      for(const x of [-.52,-.34,-.16]){
+        shape([[x-.073,.58],[x+.073,.58],[x+.050,.70],[x-.042,.72]],.19,cream);
+      }
+      slab(.13,.61,.45,.71,.2,leather);
+      for(const seam of [.51,.58,.65])face(.16,.59,seam,seam+.016,.206,ochre);
+      shape([[.12,.71],[.63,.71],[.52,.78],[.25,.78]],.20,cream);
       break;
     case 'pizza-slices':
       counter();
