@@ -1,3 +1,5 @@
+import {addMallWayfinding} from './taipei101-wayfinding.js';
+
 // All plans, marks and camera changes share the outdoor map's geographic coordinates.
 const prefix='taipei101-indoor';
 
@@ -36,6 +38,7 @@ function addPlanLayers(map,venue,namesVisible){
   const add=(key,type,source,options)=>map.addLayer({id:prefix+'-'+key,type,source:prefix+source,...options});
   add('paper','fill','-plan',{paint:{'fill-color':'#faf3df','fill-opacity':1}});
   add('edge','line','-plan',{paint:{'line-color':'#af8b4b','line-width':2}});
+  const wayfinding=addMallWayfinding(map,namesVisible);
   add('rooms','fill','-places',{filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':'#e8dbbc','fill-outline-color':'#a99472'}});
   add('corridor','line','-places',{filter:['==',['geometry-type'],'LineString'],paint:{'line-color':'#b2a586','line-width':3}});
   add('dots','circle','-places',{filter:['all',['==',['geometry-type'],'Point'],['in',['get','kind'],['literal',pointKinds]]],
@@ -52,14 +55,16 @@ function addPlanLayers(map,venue,namesVisible){
   for(const id of outdoorPlaces){
     if(map.getLayer(id))map.setFilter(id,['all',map.getFilter(id)??true,outside]);
   }
+  return wayfinding;
 }
 
 export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closePlace,startFloor,namesVisible=true,load}){
   const control=stage.querySelector('#mall101-control'),toggle=control.querySelector('[data-floor-toggle]');
   const menu=control.querySelector('[data-floor-list]'),leave=control.querySelector('[data-floor-exit]');
+  const floorNote=control.querySelector('[data-floor-note]');
   const directory=control.querySelector('details'),summary=control.querySelector('[data-directory-summary]'),shops=control.querySelector('[data-directory]');
   let venue,ring,center,current,active=false,loading=false,removed=false,suppressed=false,lastPitch=0;
-  let guide,outline,badge,marker,pendingSearch,entranceMarks=[],returnFloor=startFloor;
+  let guide,outline,badge,marker,wayfinding,pendingSearch,entranceMarks=[],returnFloor=startFloor;
   const entryZoom=()=>stage.clientWidth && stage.clientWidth<600 ? 17.6 : 18.35;
   const exitZoom=()=>entryZoom()-.5;
   const mappedFeatures=new Map();
@@ -83,6 +88,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   function setNames(visible){
     namesVisible=visible;
     if(venue)map.setLayoutProperty(prefix+'-names','visibility',visible?'visible':'none');
+    wayfinding?.setNames(visible);
   }
   function isPinVisible(point,id){
     if(!active||!insideMall(point,ring))return true;
@@ -101,6 +107,8 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   function selectFloor(label){
     if(!venue.levels.some(f=>f.label===label))return;
     current=label;
+    floorNote.hidden=!wayfinding.show(label);
+    floorNote.textContent=label==='B1'?'樓層示意 · 連通捷運 4 號出口':'樓層示意';
     directory.open=false;
     const entries=venue.directory?.[label]??[];
     summary.textContent=entries.length?'本層店家（'+entries.length+'）':'本層店家';
@@ -137,6 +145,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(!active)return;
     active=false;suppressed=explicit;returnFloor=null;closeMenu();directory.open=false;control.hidden=true;closePlace();
     map.getSource(prefix+'-places').setData(empty());map.getSource(prefix+'-plan').setData(empty());
+    wayfinding.show(null);
     stage.classList.remove('mall101-inside');setCutaway(false);
     stage.dispatchEvent(new CustomEvent('mall101-floor',{detail:{floor:null}}));
     if(explicit)map.jumpTo({pitch:lastPitch,zoom:Math.min(map.getZoom(),exitZoom()-.2)});
@@ -225,7 +234,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       ring=data.footprint.coordinates[0];
       const xs=ring.map(c=>c[0]),ys=ring.map(c=>c[1]);
       center=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2];
-      addPlanLayers(map,data,namesVisible);
+      wayfinding=addPlanLayers(map,data,namesVisible);
       venue=data;
       for(const level of data.levels)for(const f of level.features.features)if(f.geometry.type==='Point')mappedFeatures.set(mappedId(f.properties.id??f.id),f);
       for(const {label} of [...data.levels].reverse()){
