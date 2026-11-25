@@ -1,5 +1,18 @@
 import {mallWayfinding} from './taipei101-wayfinding-data.js';
 
+// Use the B1 passage endpoint mapped by OSM node 2718780534. Taipei Metro's
+// R03 station diagram distinguishes the concourse exit from the mall passage.
+export const mallMetroExit4={
+  type:'Feature',id:'node/2718780534',
+  geometry:{type:'Point',coordinates:[121.5644215,25.0333408]},
+  properties:{
+    id:'node/2718780534',name:'捷運 4 號出口',kind:'entrance',category:'subway_entrance',
+    level:'B1',adjacent:true,source:'臺北捷運',
+    detail:'台北101／世貿站 · 淡水信義線 R03 · 台北101 B1 廣場端',
+    url:'https://web.metro.taipei/pages2026/WebStation/100',
+  },
+};
+
 const id='taipei101-wayfinding';
 const empty={type:'FeatureCollection',features:[]};
 const textPaint={

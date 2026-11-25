@@ -1,5 +1,5 @@
 import {mallAdjacentTenants} from './taipei101-mall-tenants.js';
-import {addMallWayfinding} from './taipei101-wayfinding.js';
+import {addMallWayfinding,mallMetroExit4} from './taipei101-wayfinding.js?v=metro-exit-1';
 
 // All plans, marks and camera changes share the outdoor map's geographic coordinates.
 const prefix='taipei101-indoor';
@@ -7,6 +7,8 @@ const prefix='taipei101-indoor';
 const empty=()=>({type:'FeatureCollection',features:[]});
 const svgNS='http://www.w3.org/2000/svg';
 const pointKinds=['shop','facility','entrance'];
+const adjacentPoints=[...mallAdjacentTenants,mallMetroExit4];
+const transitExit=['==',['get','category'],'subway_entrance'];
 const outdoorPlaces=['taipei-outdoor-names','taipei-place-names','taipei-place-neighbors','taipei-savvy-place-names','taipei-savvy-place-neighbors',
   'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places',
   'tw-public-places','poi_r1','city170-vendor-awnings'];
@@ -60,7 +62,7 @@ export function indoorCamera(center,bearing,zoom){
 }
 
 function pointColor(){
-  return ['match',['get','kind'],'facility','#58847d','entrance','#8b7848','#ad7d27'];
+  return ['case',transitExit,'#a33c36',['match',['get','kind'],'facility','#58847d','entrance','#8b7848','#ad7d27']];
 }
 
 function addPlanLayers(map,venue,namesVisible){
@@ -73,13 +75,13 @@ function addPlanLayers(map,venue,namesVisible){
   add('rooms','fill','-places',{filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':'#e8dbbc','fill-outline-color':'#a99472'}});
   add('corridor','line','-places',{filter:['==',['geometry-type'],'LineString'],paint:{'line-color':'#b2a586','line-width':3}});
   add('dots','circle','-places',{filter:['all',['==',['geometry-type'],'Point'],['in',['get','kind'],['literal',pointKinds]]],
-    paint:{'circle-radius':['interpolate',['linear'],['zoom'],18,4,21,6],'circle-color':pointColor(),
+    paint:{'circle-radius':['interpolate',['linear'],['zoom'],18,['case',transitExit,6,4],21,['case',transitExit,8,6]],'circle-color':pointColor(),
       'circle-stroke-color':'#fffaf0','circle-stroke-width':1.8}});
   add('names','symbol','-places',{minzoom:17.45,filter:['all',['==',['geometry-type'],'Point'],['has','name']],
     layout:{visibility:namesVisible?'visible':'none','text-field':['get','name'],'text-font':['Noto Sans Bold'],'text-size':['interpolate',['linear'],['zoom'],18,12,21,15],
       'text-anchor':'top','text-offset':[0,.7],'text-padding':9,'text-max-width':8,
-      'symbol-sort-key':['match',['get','kind'],'shop',0,'facility',2,3]},
-    paint:{'text-color':'#695536','text-halo-color':'#faf3df','text-halo-width':1.7}});
+      'symbol-sort-key':['case',transitExit,-1,['match',['get','kind'],'shop',0,'facility',2,3]]},
+    paint:{'text-color':['case',transitExit,'#7f332c','#695536'],'text-halo-color':'#faf3df','text-halo-width':1.7}});
   // Replace independent indoor POIs with the venue overview. Neighbouring streets retain their own labels.
   map.savvyMallFootprint=venue.footprint;
   const outside=['!',['within',venue.footprint]];
@@ -100,7 +102,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   const entryZoom=()=>stage.clientWidth && stage.clientWidth<600 ? 17.6 : 18.35;
   const exitZoom=()=>entryZoom()-.5;
   const mappedFeatures=new Map();
-  const adjacentPlaceIds=mallAdjacentTenants.map(f=>'poi/'+f.id);
+  const adjacentPlaceIds=adjacentPoints.map(f=>'poi/'+f.id);
   const mappedId=id=>String(id??'').replace(/^poi\//,'').replace(/^osm-(node|way|relation)-/,'$1/');
   let coveredIds=new Set((map.savvyAccountPlaceIds??[]).map(mappedId));
   function updateFloorPoints(){
@@ -132,7 +134,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   }
   function isStreetPinVisible(point,id){
     // The legacy 101 street scene already carries the same Din Tai Fung branch.
-    return !(active&&mallAdjacentTenants.some(tenant=>tenant.id===mappedId(id)||(id&&tenant.properties.streetPinId===id)))
+    return !(active&&adjacentPoints.some(feature=>feature.id===mappedId(id)||(id&&feature.properties.streetPinId===id)))
       &&isPinVisible(point,id);
   }
   const isContextPin=point=>active&&!insideMall(point,ring);
@@ -155,7 +157,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     }
     map.jumpTo(indoorCamera(focus,map.getBearing(),zoom),{pocketPlaceReveal:true});
   }
-  function showAdjacentTenants(visible){
+  function showAdjacentPoints(visible){
     map.savvyMallAdjacentPlaceIds=visible?adjacentPlaceIds:[];
     map.fire('pocketmallplaces');
   }
@@ -177,6 +179,12 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       li.append(link);
       return link;
     };
+    function openFromDirectory(feature){
+      directory.open=false;
+      summary.focus({preventScroll:true});
+      focusMappedPlace(feature);
+      openPlace(mappedPlace(feature));
+    }
     const located=floorData(venue,label).features.filter(f=>f.geometry.type==='Point'
       &&f.properties.kind==='shop'&&f.properties.level===label
       &&(f.properties.adjacent||insideMall(f.geometry.coordinates,ring)));
@@ -186,16 +194,10 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       // Only the same official shop record on this floor can link to a mapped point.
       const matches=located.filter(f=>f.properties.floorSourceUrl===entry.url);
       if(matches.length===1){
-        const place=mappedPlace(matches[0]);
         const button=document.createElement('button'),hint=document.createElement('small');
         button.type='button';button.textContent=entry.name;
         hint.textContent='在地圖查看';button.append(hint);
-        button.addEventListener('click',()=>{
-          directory.open=false;
-          summary.focus({preventScroll:true});
-          focusMappedPlace(matches[0]);
-          openPlace(place);
-        });
+        button.addEventListener('click',()=>openFromDirectory(matches[0]));
         li.className='mall101-located-shop';
         li.append(button);
         addLink(li,'官網',entry.url).setAttribute('aria-label',entry.name+'的官網');
@@ -208,6 +210,15 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     const floorLink=document.createElement('li');
     addLink(floorLink,'查看 101 官方樓層圖','https://www.taipei-101.com.tw/tw/shopping/floorcon/'+encodeURIComponent(label));
     shops.append(floorLink);
+    if(label===mallMetroExit4.properties.level){
+      const row=document.createElement('li');
+      row.className='mall101-located-shop';
+      const button=document.createElement('button');
+      button.type='button';button.textContent=mallMetroExit4.properties.name;
+      button.addEventListener('click',()=>openFromDirectory(mallMetroExit4));
+      row.append(button);
+      shops.prepend(row);
+    }
     updateFloorPoints();
     toggle.textContent=label;toggle.setAttribute('aria-label',label+'，選擇樓層');
     for(const button of menu.querySelectorAll('[data-floor]'))button.setAttribute('aria-pressed',String(button.dataset.floor===label));
@@ -219,7 +230,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     suppressed=false;
     if(!active){
       active=true;lastPitch=map.getPitch();
-      setCutaway(true,ring);stage.classList.add('mall101-inside');muteContextPins(true);showAdjacentTenants(true);
+      setCutaway(true,ring);stage.classList.add('mall101-inside');muteContextPins(true);showAdjacentPoints(true);
       control.hidden=false;
       map.getSource(prefix+'-plan').setData({type:'Feature',geometry:venue.footprint,properties:{}});
       const first=venue.levels.find(f=>f.label===label)??venue.levels.find(f=>f.label==='1F')??venue.levels[0];
@@ -233,7 +244,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     active=false;suppressed=explicit;returnFloor=null;closeMenu();directory.open=false;control.hidden=true;closePlace();
     map.getSource(prefix+'-places').setData(empty());map.getSource(prefix+'-plan').setData(empty());
     wayfinding.show(null);
-    stage.classList.remove('mall101-inside');setCutaway(false);muteContextPins(false);showAdjacentTenants(false);
+    stage.classList.remove('mall101-inside');setCutaway(false);muteContextPins(false);showAdjacentPoints(false);
     stage.dispatchEvent(new CustomEvent('mall101-floor',{detail:{floor:null}}));
     if(explicit)map.jumpTo({pitch:lastPitch,zoom:Math.min(map.getZoom(),exitZoom()-.2)});
     else if(map.getPitch()===0&&lastPitch&&map.getZoom()>16.5)map.jumpTo({pitch:lastPitch});
@@ -310,8 +321,8 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(!hit){closePlace();return;}
     const p=hit.properties;
     if(p.adjacent){
-      const tenant=mappedFeatures.get(mappedId(p.id??hit.id));
-      if(tenant?.properties.level===current)openPlace(mappedPlace(tenant));
+      const feature=mappedFeatures.get(mappedId(p.id??hit.id));
+      if(feature?.properties.level===current)openPlace(mappedPlace(feature));
       return;
     }
     openPlace({id:p.id??hit.id,placeId:'poi/'+(p.id??hit.id),name:p.name,
@@ -330,7 +341,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       const rank=label=>label.startsWith('B')?-parseInt(label.slice(1),10):parseInt(label,10);
       const data={...loaded,levels:labels.sort((a,b)=>rank(a)-rank(b)).map(label=>{
         const floor=floorData(loaded,label);
-        const adjacent=mallAdjacentTenants.filter(f=>f.properties.level===label);
+        const adjacent=adjacentPoints.filter(f=>f.properties.level===label);
         return {label,features:{...floor,features:floor.features.concat(adjacent)}};
       })};
       if(removed)return;
