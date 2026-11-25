@@ -135,7 +135,7 @@ export function indexAuthoredPlaces(features){
     },
   };
 }
-export async function addCityAtlas(map,before,open,onChange){
+export async function addCityAtlas(map,before,open,onChange,{settleCamera=false}={}){
   const rows=await read('catalog.json?rev=city-colour-3'),mesh=new LandmarkLayer(),trees=new CityNature();
   trees.id='city-atlas-trees';
   const places=[{id:'taipei',name:'台北',landmark:'台北 101',center:[121.56481,25.03367]},...rows];
@@ -204,7 +204,21 @@ export async function addCityAtlas(map,before,open,onChange){
     trees.setRows([...loaded.values()].flatMap(s=>s.trees));
     onChange();
   }
+  let timer,removed=false;
+  function cancelScheduled(){
+    clearTimeout(timer);
+    timer=undefined;
+  }
+  function cancelPending(){
+    for(const task of pending.values())task.abort();
+    pending.clear();
+  }
+  function schedule(){
+    cancelScheduled();
+    timer=setTimeout(()=>{timer=undefined;update();},150);
+  }
   function update(){
+    if(removed||(settleCamera&&map.isMoving()))return;
     const b=map.getBounds(),bounds=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
     const wanted=new Set(rows.filter(row=>map.getZoom()>=14&&spans(row.bounds,bounds)).map(row=>row.id));
     let changed=false;
@@ -215,6 +229,7 @@ export async function addCityAtlas(map,before,open,onChange){
     }
     if(changed)refresh();
     for(const id of wanted){
+      if(settleCamera&&pending.size>=2)break;
       if(loaded.has(id)||pending.has(id)||(errors.get(id)??0)>Date.now()-5000)continue;
       const task=new AbortController();pending.set(id,task);
       const row=rows.find(r=>r.id===id),version=row.revision?'?v='+row.revision:'';
@@ -229,10 +244,18 @@ export async function addCityAtlas(map,before,open,onChange){
         loaded.set(id,{features:geographicScene(scene,row.landmarkIds,row.landmarkSites,row.landmarkPlaceIds),trees:plants,people});
         errors.delete(id);refresh();
       }).catch(e=>{if(!task.signal.aborted){errors.set(id,Date.now());console.warn('Pocket City',id,e);onChange();}})
-        .finally(()=>{if(pending.get(id)===task)pending.delete(id);});
+        .finally(()=>{
+          if(pending.get(id)!==task)return;
+          pending.delete(id);
+          if(settleCamera&&timer===undefined)update();
+        });
     }
   }
-  map.on('moveend',update);map.on('remove',()=>{for(const task of pending.values())task.abort();});update();
+  if(settleCamera)map.on('movestart',()=>{cancelScheduled();cancelPending();});
+  map.on('moveend',settleCamera?schedule:update);
+  map.on('remove',()=>{removed=true;cancelScheduled();cancelPending();});
+  if(settleCamera)schedule();
+  else update();
   const duskRoads=new Map(),daytimeWalls=new Map();
   return {rows,setDusk(visible){
     for(const id of ['city-atlas-context','taiwan-cell-details']){

@@ -15,6 +15,8 @@
 
 ## Savvy App 地點與貼文接入
 
+台北 101 塔樓沿用同一張地圖的市府測量座標和地面高程。插畫版按單景重建八節塔身、斜面細窗格與基座，實際高度 508 公尺。窗格和銅飾以插畫表現。[台北 101 設計](https://www.taipei-101.com.tw/tw/concept) · [結構工程顧問](https://www.thorntontomasetti.com/project/taipei-101)
+
 [臺北大巨蛋預覽](http://127.0.0.1:42418/index.html?landmark=taipei-dome)。銀色屋頂沿用實測位置和樓高，分段屋面及淺色接縫參考建築師照片。周圍鋪面接在地形上，旋轉時可連續看到大巨蛋與松菸之間的街景。[建築師資料](https://www.archasia.asia/en/projects/taipeidome)
 
 [101 周邊的分類 pin 預覽](http://127.0.0.1:42418/index.html?view=121.5657,25.0348,17.65&bearing=-8)。城市、街區和街口依縮放層級顯示地點。下圖為同一鏡位，左為前版、右為本版。
@@ -84,6 +86,8 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 路燈位置、桿高與燈數來自臺北市政府工務局公園路燈工程管理處，資料快照為 2025 年 10 月 25 日。燈頭外觀為插畫。[臺北市路燈位置分布圖](https://data.taipei/dataset/detail?id=262e80cf-579c-4bfb-ba73-31621bc84616) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
 行人清潔箱採用臺北市政府環境保護局 2026 年 10 月 21 日更新的逐點清冊。箱體、顏色與朝向為插畫。[臺北市行人專用清潔箱](https://data.taipei/dataset/detail?id=a835f3ba-7f50-4b0d-91a6-9df128632d1c) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
+
+街邊紅綠郵筒採用中華郵政的設置位置、郵務類別與投信口數。用 2026 年 11 月 25 日下載的資料核對 170 公尺格、實測建物及步行空間。箱體與朝向為插畫。合用、共址及造型郵筒保留給逐點核對。圖資未收錄門牌、電話或收信時間。[信筒（箱）設置地點](https://data.gov.tw/dataset/7964) · [特色郵筒清冊](https://data.gov.tw/dataset/52781) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
 - 道路、建物輪廓與地點採 © OpenStreetMap contributors。OSM 衍生資料以 ODbL 1.0 提供，原始出處與擷取版本隨資料附於 `data/city170/index.json`。地圖署名見圖面。[OpenStreetMap 授權](https://www.openstreetmap.org/copyright)
 - 臺北市政府都市發展局提供 2025 年 LOD1 模型。市府商業處、衛生局、市場處、公園處與捷運工程局提供其他圖層，各來源列於圖面及資料摘要。[LOD1 服務](https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer) · [都發局資料開放宣告](https://udd.gov.taipei/QA/article/ngork7d) · [公共樹籍](https://data.gov.tw/dataset/128274)

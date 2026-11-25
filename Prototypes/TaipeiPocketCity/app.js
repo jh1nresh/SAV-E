@@ -20,7 +20,7 @@ import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei-dome-1';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
-import {addStreetDetail} from './street-detail.js?v=taipei-pedestrian-bins-1';
+import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
@@ -28,7 +28,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
 import {addShopSearch} from './city-shop-search.js?v=friendly-frontages-1';
-import {addCity170,dihuaSearch} from './city170.js?v=friendly-frontages-1';
+import {addCity170,dihuaSearch} from './city170.js?v=taipei-post-boxes-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=friendly-frontages-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
@@ -40,6 +40,7 @@ if(iosChannel) document.documentElement.classList.add('ios-map');
 const preview=new URLSearchParams(location.search);
 const bundledTiles=preview.get('tiles')==='bundled';
 const appChrome=Boolean(iosChannel&&bundledTiles);
+const reducedLoad=appChrome&&preview.get('renderer')==='light';
 if(appChrome)document.documentElement.classList.add('ios-app-map');
 const lanternCamera={center:[121.84363,25.10852],zoom:20.25,mobileZoom:19.8,pitch:58,mobilePitch:56,bearing:138};
 let lanternView=preview.get('street')==='amei-lanterns';
@@ -470,7 +471,7 @@ try{
     transformRequest:url=>({url:localTerrain.get(url)??taiwanLocalDEM(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
     canvasContextAttributes:{antialias:!appChrome},
-    ...(appChrome?{pixelRatio:Math.min(window.devicePixelRatio,1.5),maxTileCacheSize:16}:{}),
+    ...(appChrome?{pixelRatio:Math.min(window.devicePixelRatio,reducedLoad?1:1.5),maxTileCacheSize:reducedLoad?8:16}:{}),
   });
   if(!appChrome){
     map.addControl(new ml.NavigationControl({visualizePitch:true}),'top-right');
@@ -505,12 +506,37 @@ try{
     if(!map.isStyleLoaded())message('底圖暫時無法載入，請重新整理。');
     console.warn(event.error?.message??'Map data error');
   });
+  if(appChrome){
+    const canvas=map.getCanvas();
+    let lostTimer;
+    const restored=()=>clearTimeout(lostTimer);
+    const lost=()=>{
+      restored();
+      lostTimer=setTimeout(()=>iosChannel.postMessage({event:'rendererLost'}),2000);
+    };
+    canvas.addEventListener('webglcontextlost',lost);
+    canvas.addEventListener('webglcontextrestored',restored);
+    map.once('remove',()=>{
+      restored();
+      canvas.removeEventListener('webglcontextlost',lost);
+      canvas.removeEventListener('webglcontextrestored',restored);
+    });
+  }
   await map.once('load');
   function syncTerrain(){
-    const terrain=map.getZoom()>=12;
+    const terrain=!reducedLoad&&map.getZoom()>=12;
     if(terrain!==Boolean(map.getTerrain()))map.setTerrain(terrain?{source:'dem',exaggeration:1}:null);
   }
-  map.on('zoomend',syncTerrain);
+  if(appChrome){
+    let terrainTimer;
+    const cancelTerrain=()=>clearTimeout(terrainTimer);
+    map.on('movestart',cancelTerrain);
+    map.on('moveend',()=>{
+      cancelTerrain();
+      terrainTimer=setTimeout(syncTerrain,150);
+    });
+    map.on('remove',cancelTerrain);
+  }else map.on('zoomend',syncTerrain);
   syncTerrain();
   const streets=loadedStreets.filter(Boolean);
   const priorGround=new Map();
@@ -659,7 +685,7 @@ try{
     button.addEventListener('click',()=>{locate(dihuaViews.get(button.dataset.dihua||'dihua'));$('.mobile').open=false;});
   }
   try{
-    worldAtlas=await addCityAtlas(map,firstLabel,place=>streetDetail?.openMappedPlace(place),updateUI);
+    worldAtlas=await addCityAtlas(map,firstLabel,place=>streetDetail?.openMappedPlace(place),updateUI,{settleCamera:appChrome});
     const open=place=>streetDetail?.openMappedPlace(place);
     const inTown=(x,y)=>!!taiwanCoverage?.at(x,y);
     const overlapsAuthored=(box,rings)=>worldAtlas.rows.some(row=>plotOverlaps(row,box,rings));

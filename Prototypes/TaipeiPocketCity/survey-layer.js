@@ -1,3 +1,4 @@
+import {buildTaipei101Tower} from './taipei101-tower.js';
 import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
 import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
@@ -467,7 +468,20 @@ export class SurveyLayer {
   visibleWallTiles=new Set();
   #disposed=false;
   #phoneTiles;
-  #resetPhoneTiles=()=>{this.#phoneTiles=undefined;};
+  #phoneSettleTimer;
+  #phoneSettled=true;
+  #pausePhoneTiles=()=>{
+    clearTimeout(this.#phoneSettleTimer);
+    this.#phoneSettled=false;
+  };
+  #settlePhoneTiles=()=>{
+    this.#pausePhoneTiles();
+    this.#phoneSettleTimer=setTimeout(()=>{
+      this.#phoneTiles=undefined;
+      this.#phoneSettled=true;
+      this.map.triggerRepaint();
+    },150);
+  };
 
   constructor(index,status,landmark,anatomy,streetCenters,linkScene,districtMaterial,hybrid=false,cityLandmarks=[],phone=false) {
     this.phone=phone;
@@ -484,8 +498,9 @@ export class SurveyLayer {
   onAdd(map,gl) {
     this.map=map;this.gl=gl;
     if(this.phone){
-      map.on('moveend',this.#resetPhoneTiles);
-      map.on('resize',this.#resetPhoneTiles);
+      map.on('movestart',this.#pausePhoneTiles);
+      map.on('moveend',this.#settlePhoneTiles);
+      map.on('resize',this.#settlePhoneTiles);
     }
     this.program=program(gl);
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
@@ -537,8 +552,10 @@ export class SurveyLayer {
   onRemove(){
     this.#disposed=true;
     if(this.phone){
-      this.map.off('moveend',this.#resetPhoneTiles);
-      this.map.off('resize',this.#resetPhoneTiles);
+      clearTimeout(this.#phoneSettleTimer);
+      this.map.off('movestart',this.#pausePhoneTiles);
+      this.map.off('moveend',this.#settlePhoneTiles);
+      this.map.off('resize',this.#settlePhoneTiles);
     }
     for(const ctl of this.#pending.values())ctl.abort();
     for(const b of this.#fetched.values())this.#delete(b);
@@ -590,7 +607,9 @@ export class SurveyLayer {
     this.#pending.set(k,ctl);
     const url=new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
-    const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
+    const builder=level==='landmark'&&tile.id==='101'
+      ?()=>buildTaipei101Tower(tile.source.min)
+      :level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
     const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
     payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
@@ -663,7 +682,10 @@ export class SurveyLayer {
       this.visibleWallTiles=new Set(wallRows.map(t=>t.id));
     }
     this.#landmarkDrawn=!!art&&this.#fetched.has(art.key);
-    if(this.#landmarkDrawn)this.#displayed.push({...art.tile,key:art.key});
+    if(this.#landmarkDrawn){
+      const {verts}=this.#fetched.get(art.key);
+      this.#displayed.push({...art.tile,key:art.key,verts});
+    }
     this.#songyanDrawn=!!songyan&&this.#fetched.has(songyan.key);
     if(this.#songyanDrawn)this.#displayed.push({...songyan.tile,key:songyan.key});
     this.dihuaDrawn=!!dihua&&this.#fetched.has(dihua.key);
@@ -718,7 +740,7 @@ export class SurveyLayer {
     const zoom=this.map.getZoom();
     // Reuse already uploaded geometry while a pinch or camera flight is in progress.
     // The settled view starts its own bounded requests on the next render.
-    if(!this.phone||!this.map.isMoving())this.#update(zoom);
+    if(!this.phone||(this.#phoneSettled&&!this.map.isMoving()))this.#update(zoom);
     if(!this.#enabled||zoom<buildingZoom||!this.#displayed.length)return;
     gl.useProgram(this.program);
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);

@@ -9,6 +9,7 @@ import riverPavilions from './city170-riverside-pavilion-points.js';
 import bikeRacks from './city170-bike-rack-points.js';
 import trailSigns from './city170-trail-sign-points.js';
 import pedestrianBins from './city170-pedestrian-bin-points.js';
+import postBoxes from './city170-post-box-points.js';
 import fountainWater from './city170-fountain-water-data.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
@@ -401,9 +402,10 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           const racks=bikeRacks[packIds[i]];
           const signs=trailSigns[packIds[i]];
           const bins=pedestrianBins[packIds[i]];
+          const mailboxes=postBoxes[packIds[i]];
           const lamps=lightPacks?.[packIds[i]];
-          return playground||fitness||pavilions||racks||signs||bins||lamps
-            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions,...racks,...signs,...bins,
+          return playground||fitness||pavilions||racks||signs||bins||mailboxes||lamps
+            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions,...racks,...signs,...bins,...mailboxes,
               ...(lamps&&streetlightObjects(lamps))}}:record;
         });
         lifeRevision=-1;
