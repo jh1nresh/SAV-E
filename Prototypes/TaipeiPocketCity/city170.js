@@ -3,6 +3,7 @@ import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
 import {addCityHydrants} from './city170-hydrants.js?v=street-furniture-1';
 import {addParkWater} from './city170-park-water.js';
 import parkPlaygrounds from './city170-playground-points.js';
+import parkFitness from './city170-park-fitness-points.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
@@ -367,7 +368,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         nature.setRows(inventories.flatMap(pack=>pack??[]));
         lifeRecords=records.map((record,i)=>{
           const playground=parkPlaygrounds[packIds[i]];
-          return playground?{...record,objects:{...record.objects,...playground}}:record;
+          const fitness=parkFitness[packIds[i]];
+          return playground||fitness?{...record,objects:{...record.objects,...playground,...fitness}}:record;
         });
         lifeRevision=-1;
         lifeKey=inventories.every(Boolean)?key:'retry-trees';
