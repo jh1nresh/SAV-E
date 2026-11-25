@@ -257,7 +257,7 @@ export function createPlaceCallout(map){
     emphasize(place);
     // Reserve the sheet’s possible expanded height on entry so late-arriving
     // posts or a photo never cover the selected pin or trigger another pan.
-    if(anchor&&map.panBy){
+    if(anchor&&map.panBy&&!place.retainMapCamera){
       const viewport=map.getContainer();
       const point=map.project(anchor);
       const top=viewport.clientHeight-Math.min(viewport.clientHeight*.58,560);

@@ -3,7 +3,7 @@ import {streetShopProperties} from './shop-trades.js?v=service-windows-4';
 import {loadCityPlaces} from './city-place-index.js?v=shop-address-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
-import {frontageSearchRow} from './taipei-frontage-pack.js?v=shop-address-1';
+import {frontageSearchRow} from './taipei-frontage-pack.js?v=survey-store-1';
 
 const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
 export function surveyedShopCamera(row,views,viewport){
@@ -29,7 +29,7 @@ export function surveyedShopCamera(row,views,viewport){
     selected=preset;
   }
   if(!selected)return area;
-  return {...frontageCamera(x,y,angle,selected),zoom,mobileZoom:zoom};
+  return {...frontageCamera(x,y,angle,selected),zoom,mobileZoom:zoom,verifiedFrontage:true};
 }
 
 export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNation){
@@ -54,7 +54,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
   }
   function loadCameras(){
     if(cameraRequest)return cameraRequest;
-    const url=new URL('./taipei-frontage-cameras.js?v=address-rays-4',import.meta.url);
+    const url=new URL('./taipei-frontage-cameras.js?v=survey-store-2',import.meta.url);
     if(cameraAttempts)url.searchParams.set('retry',String(cameraAttempts));
     cameraAttempts++;
     cameraRequest=import(url.href).then(views=>{cameras=views;}).catch(()=>{cameraRequest=null;});
@@ -120,7 +120,8 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
             source:osm?'OpenStreetMap':inspected?'臺北市衛生局':commerce?'臺北市商業處':undefined,
             url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:
               inspected||commerce?'https://data.taipei/dataset/detail?id='+(inspected?'59579c19-a561-4564-8c0f-545bfb32c0f6':'0d09e03e-bb11-4213-a9c8-6bfd392fbb16'):undefined,
-            ...heritagePlace,detail:heritagePlace?.source==='Savvy'?heritagePlace.detail
+            ...heritagePlace,retainMapCamera:!heritagePlace?.mapView&&surveyed?.verifiedFrontage===true,
+            detail:heritagePlace?.source==='Savvy'?heritagePlace.detail
               :heritagePlace?.detail||[district,street].filter(Boolean).join(' · ')||''});
         });
         list.append(button);

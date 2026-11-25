@@ -24,6 +24,10 @@ PRESETS = [(-5, 58, 21.4, 21.38)]
 PRESETS += [(offset, pitch, 21.6, 21.6) for pitch in (52, 43, 35) for offset in (-5, 20, -25, 38, -42)]
 # Highly oblique views keep a narrow alley visible when it is blocked head-on.
 PRESETS += [(offset, pitch, 21.6, 21.6) for pitch in (48, 37) for offset in (53, -53)]
+# Dense blocks sometimes leave a clear diagonal over the road even when the
+# lower eye positions are blocked by the adjacent roof or street-tree canopy.
+PRESETS += [(offset, pitch, 21.6, 21.6) for pitch, offsets in ((55, (-60, 60)), (64, (-45, 45, -60, 60)))
+            for offset in offsets]
 # Width selects the browser's mobile/desktop camera; MapLibre's perspective depends on viewport height.
 MAX_ZOOM = 21.6
 VIEW_HEIGHTS = {'mobile':[440,667,845], 'desktop':[720,900,1050,1440]}

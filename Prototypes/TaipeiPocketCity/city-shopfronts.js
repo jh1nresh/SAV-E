@@ -9,7 +9,7 @@ import {program,transform} from './survey-layer.js';
 import {drawDihuaShop} from './dihua-shop-art.js?v=dihua-shops-1';
 import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
 import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
-import {completeFrontagePack} from './taipei-frontage-pack.js?v=shop-address-1';
+import {completeFrontagePack} from './taipei-frontage-pack.js?v=survey-store-1';
 
 const minZoom=17.55;
 const layerId='city-shopfronts';

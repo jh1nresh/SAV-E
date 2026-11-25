@@ -96,8 +96,18 @@ class Visibility(unittest.TestCase):
         rows={r['id']:r for r in camera['matched_rows'](data)}
         codes=artifact()['frontageViews']
         self.assertEqual(set(codes),set(rows))
+        # The recovered Wanhua storefront had no usable look with the old presets.
+        recovered = 'poi/node/11406970597'
+        row = rows[recovered]
+        self.assertEqual(camera['shop_code'](city, row, camera['PRESETS'][:20]), camera['OCCLUDED'])
+        shared, partial = camera['camera_options'](city, row)
+        self.assertEqual(shared, codes[recovered])
+        if shared < 0:
+            self.assertEqual(partial, ledger['frontagePartialViews'][recovered])
+            self.assertTrue(all(code >= 0 for code in partial))
+
         # Include both observed streets plus every recorded visibility outcome.
-        ids={'poi/node/3704017725','poi/node/6835876243'}
+        ids={'poi/node/3704017725','poi/node/6835876243','poi/node/11406970597'}
         for status in set(codes.values()):
             ids.add(next(k for k,v in codes.items() if v==status))
         for key in sorted(ids):
@@ -169,8 +179,8 @@ class Visibility(unittest.TestCase):
         geometry=camera['shop_geometry'](city,row)
         for viewport,code in zip(camera['VIEWPORTS'],alternatives):
             self.assertEqual(camera['first_visible'](geometry,row['angle'],camera['PRESETS'],[viewport]),code)
-        # The root obstruction at this shop blocks even separately evaluated anchors.
-        blocked='poi/node/7194693256'
+        # This storefront remains occluded even at each individually checked height.
+        blocked='poi/node/10049206251'
         self.assertNotIn(blocked,ledger['frontagePartialViews'])
         self.assertEqual(camera['camera_options'](city,rows[blocked]),(-1,[]))
 
