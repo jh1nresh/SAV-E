@@ -9,6 +9,14 @@ const draws={
     [[.65,0],[.65,1]],[[0,.5],[.35,.5]],[[.65,.5],[1,.5]]]},
 };
 
+// Illustrated at street zoom. The rules inform height and depth; the mapped
+// court supplies the axis and span. Keep the posts within the known outline.
+const netStyles={
+  tennis:{posts:1.07,centre:.914,edge:1.07,depth:null,frame:'#496d64'},
+  volleyball:{posts:2.55,centre:2.24,edge:2.24,depth:1,frame:'#597c78'},
+  badminton:{posts:1.55,centre:1.524,edge:1.55,depth:.76,frame:'#877055'},
+};
+
 function playingArea(feature){
   const {properties:p,geometry:g}=feature;
   if(p.offGround||p.kind!=='pitch'||p.category!=='pitch'||g.type!=='Polygon'||g.coordinates.length!==1)return;
@@ -81,11 +89,24 @@ export function courtDetails(feature, withEquipment=false){
       part(end+'-rim',circle(.29),3.02,3.10,'#ce633d',circle(.19).reverse());
     }
   }
-  if(feature.properties.sport==='tennis'){
+  const net=netStyles[feature.properties.sport];
+  if(net){
+    const span=width/2-.10;
     for(const side of [-1,1]){
-      part('net-post-'+side,rectangle(length/2,side*(width/2-.10),.09,.09),0,1.07,'#496d64');
+      part('net-post-'+side,rectangle(length/2,side*span,.085,.085),0,net.posts,net.frame);
     }
-    part('net-tape',rectangle(length/2,0,.06,width/2-.10),.91,1.02,'#f6ebd2');
+    // Use a few visible cords rather than drawing a dense, flickering mesh.
+    const segments=6, step=2*span/segments;
+    for(let i=0;i<segments;i++){
+      const y=-span+step*(i+.5);
+      const top=net.centre+(net.edge-net.centre)*Math.abs(y/span)**2;
+      const bottom=net.depth===null?.045:top-net.depth;
+      part('net-tape-'+i,rectangle(length/2,y,.045,step/2),top-.055,top,'#f6ebd2');
+      part('net-lower-'+i,rectangle(length/2,y,.031,step/2),bottom,bottom+.045,'#53645b');
+      for(let j=-1;j<=1;j++){
+        part('net-cord-'+i+'-'+j,rectangle(length/2,y+j*step/3,.031,.026),bottom+.025,top-.03,'#425950');
+      }
+    }
   }
   return result;
 }
