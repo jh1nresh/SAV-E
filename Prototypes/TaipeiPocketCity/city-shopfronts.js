@@ -59,6 +59,10 @@ const drawing={
   apparel: ['#a17080','#654e63','#ab897e','#92a29f','clothes'],
   health: ['#597e82','#426166','#a9a396','#85a49e','cross'],
   craft: ['#6c7796','#4f596f','#8c7964','#7e9298','books'],
+  morning: ['#c69957','#79553c','#ad8d65','#9fa492','awning'],
+  grill: ['#984d43','#6e4440','#9f7767','#8f9d92','awning'],
+  seafood: ['#508782','#40635f','#9d8a71','#a1bbb1','awning'],
+  dessert: ['#b57e90','#715866','#a78c83','#a5b2a5','awning'],
   salon: ['#948180','#665a58','#b09883','#95aca9','plain'],
   botanical: ['#65846b','#526b59','#ab967d','#91a79b','plain'],
   cycle: ['#567c87','#4b6367','#a3927c','#859d9b','plain'],
@@ -128,7 +132,11 @@ const tradeWindows = new Map([
   ['beverages','bottles'], ['chemist','drugstore'],
 ]);
 const retailWindowNames=new Set(retailWindowTypes.values());
-const tradePaint={salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe'};
+const tradePaint={
+  salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe',
+  'morning-griddle':'morning','sandwich-board':'morning','box-counter':'morning',
+  'iron-grill':'grill','char-grill':'grill','seafood-counter':'seafood','dessert-case':'dessert',
+};
 const fixtureInk=rgb('#494845'), timber=rgb('#a87554'), porcelain=rgb('#f2dfb5'),
   teal=rgb('#47877e'), leather=rgb('#ac6856'), petal=rgb('#d47774'), leaf=rgb('#688c5e');
 const enamel=rgb('#abccc1'), grape=rgb('#937796'), ochre=rgb('#d79e55'),
@@ -335,7 +343,7 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const type=storefrontCategory(row)[1];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
   const knownCuisine=typeof row.cuisine==='string'?cuisineWindow(row.category,row.cuisine):mappedFoodWindow(row);
-  const trade=knownCuisine??categoryFoodWindow(row.category,seed)??tradeWindows.get(row.category)
+  const trade=knownCuisine??categoryFoodWindow(row.category,seed,row.categoryLabel)??tradeWindows.get(row.category)
     ??(serviceWindowLabels.has(row.category)?row.category:retailWindowTypes.get(row.category));
   const paint=colored[tradePaint[trade]??type];
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
