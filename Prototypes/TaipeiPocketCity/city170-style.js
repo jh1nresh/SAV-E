@@ -477,7 +477,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
   // Keep a court's pigment and lines in the same terrain paint pass.
   add({
     id:'city170-playing-area-fill',source:'city170-playing-areas',type:'fill',minzoom:17,filter:kinds('pitch'),
-    paint:{'fill-color':['match',['get','sport'],['basketball','volleyball'],'#bc836c','#7d9e93'],
+    paint:{'fill-color':['match',['get','sport'],['basketball','volleyball'],'#bc836c','soccer','#a1bd74','#7d9e93'],
       'fill-outline-color':'#f6edcf'},
   },underBuildings);
   add({

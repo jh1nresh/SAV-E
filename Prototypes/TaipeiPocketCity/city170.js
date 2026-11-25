@@ -1,4 +1,4 @@
-import {onSongshanAthleticsField} from './songshan-athletics.js';
+import {misplacedIllustratedTree} from './taipei-illustrated-trees.js';
 import {inside101Ground,planting101} from './taipei101-single-ground.js';
 import {metroExitCard,metroExitLayer} from './taipei-metro-exits.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=friendly-frontages-1';
@@ -23,10 +23,10 @@ import {campusBounds,showSchool} from './school-camera.js';
 import {runningTrack} from './city170-running-tracks.js';
 import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
-import {courtDetails} from './city170-courts.js?v=court-nets-1';
+import {courtDetails} from './city170-courts.js?v=football-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=friendly-frontages-1';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=running-tracks-1';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=football-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
@@ -123,9 +123,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const paint = 'city170-prepared';
   const schools = 'city170-schools';
   const roadAnchors = 'city170-road-anchors';
-  for (const id of [data, paint, schools, 'city170-equipment']) {
+  for (const id of [data, paint, schools]) {
     map.addSource(id, {type:'geojson', data:collection([]), maxzoom:19});
   }
+  // At z18 simplification collapses narrow goal uprights and net posts to a line.
+  map.addSource('city170-equipment',{type:'geojson',data:collection([]),maxzoom:19,tolerance:0});
   // One shared vector tile holds neighboring school courts at close zoom.
   map.addSource('city170-playing-areas',{type:'geojson',data:collection([]),maxzoom:16,buffer:256,tolerance:0});
   // Keep short visible label lines intact across a native vector tile edge.
@@ -545,7 +547,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         }
       }
       map.getSource(paint).setData(collection(pieces.filter(f=>f.properties.kind!=='grove-tree'||
-        (!onSongshanAthleticsField(...f.geometry.coordinates)&&!nature.activeTrees.near(...f.geometry.coordinates,9)))));
+        (!misplacedIllustratedTree(...f.geometry.coordinates)&&!nature.activeTrees.near(...f.geometry.coordinates,9)))));
       setPrepared(packs.length > 0);
       status.prepared = pieces.length;
       failures = 0;
