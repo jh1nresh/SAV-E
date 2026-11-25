@@ -74,12 +74,12 @@ def survey_cover(survey, root):
             rows = np.frombuffer(stream.read(), dtype='<f4').reshape(-1, 3, 6)
         return rows[:, :, :2].astype('float64')
 
-    def covered(ll, point):
+    def covered(ll, point, clearance=.30):
         mx = (ll.x + 180) / 360
         my = (1 - math.asinh(math.tan(math.radians(ll.y))) / math.pi) / 2
-        for idx in survey.extents.query(point, predicate='dwithin', distance=.32):
+        for idx in survey.extents.query(point, predicate='dwithin', distance=clearance+.02):
             tile = survey.tiles[idx]
-            if footprint_hits(triangles(int(idx)), (mx - tile['mx']) / tile['m'], (tile['my'] - my) / tile['m']):
+            if footprint_hits(triangles(int(idx)), (mx - tile['mx']) / tile['m'], (tile['my'] - my) / tile['m'], clearance):
                 return True
         return False
     return covered
