@@ -19,7 +19,7 @@ import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
-import {addStreetDetail} from './street-detail.js?v=taipei-pedestrian-bins-1';
+import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
@@ -27,7 +27,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
 import {addShopSearch} from './city-shop-search.js?v=friendly-frontages-1';
-import {addCity170,dihuaSearch} from './city170.js?v=friendly-frontages-1';
+import {addCity170,dihuaSearch} from './city170.js?v=taipei-post-boxes-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=friendly-frontages-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
