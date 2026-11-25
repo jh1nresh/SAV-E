@@ -1,5 +1,5 @@
 import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
-import {streetShopPinStyle} from './shop-trades.js?v=point-icons-5';
+import {streetShopPinStyle} from './shop-trades.js?v=neighborhood-services-1';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
 
 const name = ['coalesce', ['get', 'name'], ''];

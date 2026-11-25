@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {buildShop} from '../city-shopfronts.js';
-import {serviceWindowLabels} from '../shop-service-labels.js';
+import {neighborhoodServiceLabels,serviceWindowLabels} from '../shop-service-labels.js';
 import {streetShopProperties} from '../shop-trades.js';
 
 const atlas={write:()=>[0,0,1,1]};
@@ -46,5 +46,40 @@ test('point and search cards localize documented motorcycle shops while preservi
     assert.deepEqual(streetShopProperties(place),{...place,categoryLabel:label,detail:label});
     const exact={...place,categoryLabel:'重型機車專賣店'};
     assert.equal(streetShopProperties(exact),exact);
+  }
+});
+
+test('neighborhood-service cards only localize explicit categories and keep specific source labels',()=>{
+  for(const [category,label] of [['baby_goods','嬰童用品'],['pet_grooming','寵物美容'],['outpost','包裹取貨點']]){
+    assert.deepEqual(streetShopProperties({id:'shop/verified',category,categoryLabel:category,detail:category}),
+      {id:'shop/verified',category,categoryLabel:label,detail:label});
+  }
+  const woodware={id:'shop/woodware',category:'houseware',categoryLabel:'竹木器店',detail:'竹木器店'};
+  assert.equal(streetShopProperties(woodware),woodware);
+  assert.deepEqual(draw('yes',4,0,'嬰童用品維修'),draw('yes'));
+});
+
+test('decorating a neighborhood shop keeps the coordinates of the original door and windows',()=>{
+  // Select the renderer's door and window frame, panes and highlights by their facade depth.
+  const openings=[.025,.041,.049,.053,.020,.038,.042];
+  function frames(vertices){
+    const points=[];
+    for(let i=0;i<vertices.length;i+=13){
+      if(openings.some(depth=>Math.abs(vertices[i]-(.14+depth))<1e-8)){
+        points.push(vertices.slice(i,i+3));
+      }
+    }
+    return points;
+  }
+  // Shelves and stock in the generic fixture use other depths than the openings.
+  for(const category of neighborhoodServiceLabels.keys()){
+    for(const width of [2.45,4.10,5.6,5.7,8]){
+      const mapped=frames(draw(category,width));
+      const original=frames(draw('unknown',width));
+      // Some legacy paint details decorate both windows at the door-handle depth.
+      const structural=points=>points.filter(([, ,z],i)=>
+        Math.abs(points[i][0]-.193)>1e-8||z===1.07||z===1.40);
+      assert.deepEqual(structural(mapped),structural(original),category);
+    }
   }
 });

@@ -1,7 +1,7 @@
 import {storefrontCategory} from './shop-categories.js';
-import {drawServiceWindow} from './shop-service-windows.js';
+import {drawServiceWindow} from './shop-service-windows.js?v=neighborhood-services-1';
 import {drawRetailWindow,retailWindowTypes} from './shop-retail-windows.js?v=neighborhood-1';
-import {serviceWindowLabels} from './shop-service-labels.js';
+import {neighborhoodServiceLabels,serviceWindowLabels} from './shop-service-labels.js?v=neighborhood-services-1';
 import {categoryFoodWindow,cuisineWindow,drawFoodWindow} from './shop-food-windows.js';
 import {mappedFoodWindow} from './taipei-food-window-evidence.js';
 export {storefrontCategory};
@@ -388,8 +388,8 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   quad([point(-half,top,.04),point(half,top,.04),point(half,top,.24),point(-half,top,.24)],cream);
   panel(-half,half,top-.07,top,.24,paint.frame);
   const door=Math.min(.61,half*.36);
-  // A narrow shop needs one continuous display beside the entrance.
-  const doorCenter=trade&&half<2.85?half-.14-door:0;
+  // Keep the original openings when adding stock inside an existing window.
+  const doorCenter=trade&&!neighborhoodServiceLabels.has(trade)&&half<2.85?half-.14-door:0;
   const dl=doorCenter-door,dr=doorCenter+door;
   panel(dl-.085,dr+.085,.12,2.67,.025,paint.frame);
   panel(dl,dr,.22,2.56,.041,paint.glass);
