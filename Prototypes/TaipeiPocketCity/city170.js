@@ -8,6 +8,7 @@ import parkFitness from './city170-park-fitness-points.js';
 import riverPavilions from './city170-riverside-pavilion-points.js';
 import bikeRacks from './city170-bike-rack-points.js';
 import trailSigns from './city170-trail-sign-points.js';
+import fountainWater from './city170-fountain-water-data.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
@@ -16,7 +17,7 @@ import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-nets-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=survey-edge-1';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=neighborhood-services-1';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=fountain-water-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
@@ -122,6 +123,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   for(const id of ['city170-waterways','city170-farmland']){
     map.addSource(id,{type:'geojson',data:collection([]),maxzoom:17});
   }
+  map.addSource('city170-fountain-water',{type:'geojson',data:fountainWater,maxzoom:20,tolerance:0});
   addCityAirfield(map,firstLabel);
   addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
