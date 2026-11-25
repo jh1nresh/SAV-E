@@ -1,6 +1,6 @@
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
-import {addTaipei101Indoor} from './taipei101-indoor.js?v=mall-2';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=shop-floor-1';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
@@ -16,14 +16,14 @@ import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=mall-cutaway-1';
-import {addStreetDetail} from './street-detail.js?v=survey-store-3';
+import {addStreetDetail} from './street-detail.js?v=shop-floor-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=point-icons-5';
+import {addShopSearch} from './city-shop-search.js?v=shop-floor-1';
 import {addCity170,dihuaSearch} from './city170.js?v=point-icons-5';
 import {addCityShopfronts} from './city-shopfronts.js?v=survey-store-1';
 import {CityNature} from './city-nature.js?v=canopies-1';

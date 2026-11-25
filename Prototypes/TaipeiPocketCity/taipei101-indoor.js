@@ -77,7 +77,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   }
   const mappedPlace=feature=>({
     id:feature.properties.id??feature.id,placeId:'poi/'+(feature.properties.id??feature.id),name:feature.properties.name,
-    point:feature.geometry.coordinates,categoryLabel:[venue.name,current].join(' · '),
+    point:feature.geometry.coordinates,indoorFloor:current,categoryLabel:[venue.name,current].join(' · '),
     detail:feature.properties.detail||feature.properties.categoryLabel||'',source:feature.properties.source,url:feature.properties.url,
   });
   function setNames(visible){
@@ -208,7 +208,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     const p=hit.properties;
     openPlace({id:p.id??hit.id,placeId:'poi/'+(p.id??hit.id),name:p.name,
       point:hit.geometry.type==='Point'?hit.geometry.coordinates:coords,
-      categoryLabel:[venue.name,current].join(' · '),detail:p.detail??p.categoryLabel??'',
+      indoorFloor:current,categoryLabel:[venue.name,current].join(' · '),detail:p.detail??p.categoryLabel??'',
       source:p.source,url:p.url});
   }
   async function prepare(){
