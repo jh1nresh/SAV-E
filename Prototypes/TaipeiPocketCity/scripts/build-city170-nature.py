@@ -2,6 +2,7 @@
 
 Requires Shapely 2 and pyproj. By default downloads the official bulk CSVs.
 Use --road-csv and --park-csv to replay saved official snapshots.
+Use --canopies to also write the illustrated species lookup for the same tree rows.
 """
 
 import argparse
@@ -61,6 +62,14 @@ FORMS = {
 FORM_BY_SPECIES = {species: form for form, species_names in FORMS.items() for species in species_names}
 
 
+# Use exact inventory names. Unpainted species keep the standard crown.
+PAINTED_SPECIES = {
+    "榕樹": "banyan", "茄苳": "bishopwood", "樟樹": "camphor",
+    "楓香": "sweetgum", "臺灣欒樹": "goldenrain", "白千層": "paperbark",
+    "落羽松": "cypress", "落羽杉": "cypress",
+}
+
+
 class Tree(NamedTuple):
     source_id: str
     kind: int
@@ -70,6 +79,7 @@ class Tree(NamedTuple):
     y: float
     height: float
     form: str
+    species: str
 
 
 def parse_height(raw):
@@ -103,7 +113,7 @@ def parse_source(raw, kind):
         species = normalize("NFKC", row["TreeType"]).strip().replace("台", "臺")
         trees.append(Tree(
             row["TreeID"].strip(), kind, row["Dist"].strip(), row["SurveyDate"].strip(),
-            x, y, parse_height(row["TreeHeight"]), FORM_BY_SPECIES.get(species, "round"),
+            x, y, parse_height(row["TreeHeight"]), FORM_BY_SPECIES.get(species, "round"), species,
         ))
     return trees, dict(
         fields=reader.fieldnames, newestSourceUpdate=newest_update, sha256=sha256(raw).hexdigest(),
@@ -123,7 +133,7 @@ def district_index(path):
     return names, STRtree([make_valid(shape(feature["geometry"])) for feature in features])
 
 
-def assign_packs(trees, names, district_tree, known_packs, stats):
+def assign_packs(trees, names, district_tree, known_packs, stats, canopies):
     exporter = Transformer.from_crs(CRS, GEOGRAPHIC, always_xy=True)
     importer = Transformer.from_crs(GEOGRAPHIC, CRS, always_xy=True)
     x, y = ([getattr(tree, key) for tree in trees] for key in ("x", "y"))
@@ -166,6 +176,8 @@ def assign_packs(trees, names, district_tree, known_packs, stats):
     for position, (i, pack) in sorted(unique_rows.items()):
         tree = trees[i]
         packs[pack].append([*position, tree.height, tree.form, tree.kind])
+        if canopies is not None and (code := PAINTED_SPECIES.get(tree.species)):
+            canopies[code].append([*position, tree.kind])
         counts_by_district[districts[i]][tree.kind] += 1
         counts_by_form[tree.form] += 1
         stats[tree.kind]["retained"] += 1
@@ -193,6 +205,7 @@ def main():
     parser.add_argument("--districts", type=Path, default=ROOT / "data/districts.geojson")
     parser.add_argument("--index", type=Path, default=ROOT / "data/city170/index.json")
     parser.add_argument("--out", type=Path, default=ROOT / "data/city170-nature")
+    parser.add_argument("--canopies", type=Path)
     args = parser.parse_args()
 
     index = json.loads(args.index.read_bytes())
@@ -221,7 +234,15 @@ def main():
         stats[kind] = detail["counts"]
     if not trees:
         raise ValueError("No valid source coordinates available")
-    packs, by_district, by_form = assign_packs(trees, names, district_tree, known_packs, stats)
+    canopies = defaultdict(list) if args.canopies else None
+    packs, by_district, by_form = assign_packs(trees, names, district_tree, known_packs, stats, canopies)
+    if args.canopies:
+        payload = dict(
+            version=1,
+            sourceHashes={name: source["sha256"] for name, source in sources.items() if source["available"]},
+            species=dict(sorted(canopies.items())),
+        )
+        write(args.canopies, gzip.compress(compact_json(payload), compresslevel=9, mtime=0))
 
     args.out.mkdir(parents=True, exist_ok=True)
     for pack in sorted(known_packs):

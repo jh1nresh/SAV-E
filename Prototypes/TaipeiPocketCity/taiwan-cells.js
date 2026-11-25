@@ -1,6 +1,6 @@
 import {addTaiwanStreets,mergeVisibleBuildings} from './taiwan-streets.js?v=city-colour-3';
 import {PitchedRoofs} from './taiwan-pitched-roofs.js?v=city-colour-3';
-import {CityNature} from './city-nature.js?v=alpine-1';
+import {CityNature} from './city-nature.js?v=canopies-2';
 import {buildTaiwanCells} from './taiwan-cell-geometry.js?v=city-colour-3';
 
 const sourceId='taiwan-cell-details';

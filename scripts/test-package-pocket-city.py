@@ -26,6 +26,7 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taiwan/mountains/yushan-ridges.webp', 'taiwan/mountains/taiwan-highlands.webp',
                          'taipei-river-art.js', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
                          'taipei-frontage-cameras.js', 'city170-bike-docks.js', 'shop-categories.js',
+                         'taipei-tree-canopies.js', 'assets/taipei-tree-canopies.json.gz',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)
         for directory in ('streets', 'materials'):
