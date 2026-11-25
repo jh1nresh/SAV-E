@@ -1,7 +1,17 @@
+import {withShopFacts} from './taipei-frontage-pack.js?v=survey-store-1';
+import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
+import {addCityHydrants} from './city170-hydrants.js?v=street-furniture-1';
+import {addBusShelters} from './city170-bus-shelters.js';
+import {addCityBenches} from './city170-benches.js';
+import {addCityAirfield} from './city170-airfield.js';
+import {surfaceFeature} from './city170-ground.js';
+import {bikeDockParts} from './city170-bike-docks.js';
+import {courtDetails} from './city170-courts.js?v=court-equipment-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
-import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=category-badges-1';
-import {readPocketCityAsset} from './pocket-city-atlas.js';
+import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=shop-address-1';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=point-icons-5';
+import {streetShopProperties} from './shop-trades.js?v=point-icons-5';
+import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 
 const collection = features => ({type: 'FeatureCollection', features});
 const overlaps = ([w,s,e,n], [left,bottom,right,top]) => w <= right && e >= left && s <= top && n >= bottom;
@@ -94,12 +104,22 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const paint = 'city170-prepared';
   const schools = 'city170-schools';
   const roadAnchors = 'city170-road-anchors';
-  for (const id of [data, paint, schools]) {
+  for (const id of [data, paint, schools, 'city170-equipment']) {
     map.addSource(id, {type:'geojson', data:collection([]), maxzoom:19});
   }
+  // One shared vector tile holds neighboring school courts at close zoom.
+  map.addSource('city170-playing-areas',{type:'geojson',data:collection([]),maxzoom:16,buffer:256,tolerance:0});
   // Keep short visible label lines intact across a native vector tile edge.
   map.addSource(roadAnchors,{type:'geojson',data:collection([]),maxzoom:16,buffer:512});
+  for(const id of ['city170-waterways','city170-farmland']){
+    map.addSource(id,{type:'geojson',data:collection([]),maxzoom:17});
+  }
+  addCityAirfield(map,firstLabel);
+  addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
+  addArcadeFloors(map,'survey');
+  addCityHydrants(map,firstLabel);
+  addBusShelters(map,firstLabel);
   addCityPlaceIndex(map,pin);
   const baseRoads=map.getStyle().layers.filter(l=>l['source-layer']==='transportation_name');
   let boundary,roadLabelsActive=false;
@@ -148,11 +168,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     return hits.find(f=>!basePlaces.includes(f.layer.id)||basePlaceName(f.properties));
   }
   function openFeature(feature,point){
-    const props={...feature.properties};
+    const props={...streetShopProperties(feature.properties)};
     if(props.placeId && feature.geometry.type==='Point'){
       const choices=nearbyPlaces(map,feature.geometry.coordinates);
       if(choices.length>1 && choices.some(p=>p.placeId===props.placeId)){
-        openPlace({name:'選擇地點',choices,point:feature.geometry.coordinates});return;
+        openPlace({name:'選擇地點',choices:choices.map(streetShopProperties),point:feature.geometry.coordinates});return;
       }
     }
     if(props.entranceId && entranceCards.has(props.entranceId)){
@@ -204,6 +224,19 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   function resetLife(){
     setShopPacks([]);
     if(lifeKey){setLocalLife([]);nature.setRows([]);lifeKey='';lifeRecords=[];lifeRevision=-1;sceneKey='';}
+  }
+  const landLayers=new Map();
+  function loadLandDetails(){
+    // The network is static and clipped to the city. Send it to the map worker once.
+    if(map.getZoom()<14)return;
+    const b=map.getBounds();
+    if(!overlaps([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()],[121.4588,24.9603,121.6659,25.2102]))return;
+    for(const id of ['city170-farmland','city170-waterways']){
+      if(landLayers.has(id))continue;
+      const load=readPocketCityAsset(id).then(value=>map.getSource(id).setData(value))
+        .catch(error=>{landLayers.delete(id);console.warn(id,error.message);});
+      landLayers.set(id,load);
+    }
   }
   let status = {cells:0, features:0, prepared:0};
   const cache = new Map();
@@ -264,11 +297,14 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   }
   async function refresh() {
     const epoch = ++current;
+    loadLandDetails();
     clearTimeout(timer);
     try {
       if (map.getZoom() < 13) {
         map.getSource(data).setData(collection([]));
         map.getSource(paint).setData(collection([]));
+        map.getSource('city170-equipment').setData(collection([]));
+        map.getSource('city170-playing-areas').setData(collection([]));
         map.getSource(roadAnchors).setData(collection([]));
         cityRoadLabels(false);
         resetLife();
@@ -284,9 +320,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         if (epoch !== current) return;
         const b = map.getBounds();
         const view = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-        const features = landscape.features.filter(feature => overlaps(feature.bbox, view));
+        const features = landscape.features.filter(feature => overlaps(feature.bbox, view)).map(surfaceFeature);
         map.getSource(data).setData(collection(features));
         map.getSource(paint).setData(collection([]));
+        map.getSource('city170-equipment').setData(collection([]));
+        map.getSource('city170-playing-areas').setData(collection([]));
         map.getSource(roadAnchors).setData(collection([]));
         updateStores([]);
         cityRoadLabels(false);
@@ -340,7 +378,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       const dependencies = await Promise.all([...owners].map(pack));
       if (epoch !== current) return;
       const features = [...packs,...dependencies].flatMap(p => p.features.features.filter(f =>
-        wanted.has(f.id) && !['school','school-label'].includes(f.properties.kind)));
+        wanted.has(f.id) && !['school','school-label'].includes(f.properties.kind))).map(surfaceFeature);
       // The city roster supplements the canonical street features without blocking the base map.
       let supplemental;
       try {
@@ -401,19 +439,45 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         if(f.properties.entranceId)entranceCards.set(f.properties.entranceId,{...f.properties,point:f.geometry.coordinates});
       }
       updateStores(map.getZoom() >= 18.15 ? features.filter(f => f.properties.kind === 'poi').map(f => f.id) : []);
-      const mapped=features.filter(f=>!hasFocalPin(f) &&
+      const equipment=[], playingAreas=[], detailedPitchIds=new Set();
+      if(map.getZoom()>=17)for(const feature of features){
+        if(feature.properties.kind!=='pitch'){
+          if(map.getZoom()>=18.5 && feature.properties.category==='bicycle_rental')equipment.push(...bikeDockParts(feature));
+          continue;
+        }
+        const [painted,...parts]=courtDetails(feature,map.getZoom()>=18.5);
+        if(painted){
+          detailedPitchIds.add(feature.id);
+          playingAreas.push(feature,painted);
+        }
+        equipment.push(...parts);
+      }
+      map.getSource('city170-equipment').setData(collection(equipment));
+      map.getSource('city170-playing-areas').setData(collection(playingAreas));
+      const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f) &&
         (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
-        ?{...f,properties:{...f.properties,placeId:f.id}}:f)));
+        ?withShopFacts({...f,properties:{...f.properties,placeId:f.id}}):f)));
       map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
       cityRoadLabels(cells.length>0);
       status = {cells:cells.length, features:features.length, prepared:0};
-      const paintPacks = await Promise.all(visible.map(item => markings(item.id)));
+      const [paintPacks, openGround] = await Promise.all([
+        Promise.all(visible.map(item => markings(item.id))),
+        visible.length ? remember('open-ground',()=>readPocketCityAsset('city170-open-ground'))
+          .catch(error=>{console.warn('臺北開放地貌',error.message);return {};}) : {},
+      ]);
       if (epoch !== current) return;
       const pieces = [];
       for (let i = 0; i < packs.length; i++) {
         for (const cell of packs[i].cells) {
-          if (overlaps(cell.bounds, view)) pieces.push(...(paintPacks[i][cell.id] ?? []));
+          if(!overlaps(cell.bounds,view))continue;
+          const items=paintPacks[i][cell.id]??[];
+          const blocked=openGround[cell.id];
+          if(!blocked){pieces.push(...items);continue;}
+          const roots=new Set(blocked.map(pt=>pt.join(',')));
+          for(const f of items){
+            if(f.properties.kind!=='grove-tree'||!roots.has(f.geometry.coordinates.join(',')))pieces.push(f);
+          }
         }
       }
       map.getSource(paint).setData(collection(pieces.filter(f=>f.properties.kind!=='grove-tree'||!nature.activeTrees.near(...f.geometry.coordinates,9))));

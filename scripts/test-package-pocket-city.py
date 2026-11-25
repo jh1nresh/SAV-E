@@ -20,7 +20,11 @@ class PocketCityPackageTests(unittest.TestCase):
     def test_runtime_includes_scene_worker_and_no_working_inputs(self):
         runtime = set(pkg.runtime_paths())
         self.assertTrue({'ios-map.js', 'taiwan-search-worker.js', 'assets/maplibre-gl-worker.mjs',
+                         'taipei101-indoor.js', 'taipei101-indoor-data.js', 'taipei101-indoor.css',
+                         'taipei101-floor-guide.js', 'taipei101-directory.js',
                          'taiwan/mountains/yushan-ridges.webp', 'taiwan/mountains/taiwan-highlands.webp',
+                         'taipei-river-art.js', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
+                         'taipei-frontage-cameras.js', 'city170-bike-docks.js', 'shop-categories.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)
         for directory in ('streets', 'materials'):
@@ -77,6 +81,19 @@ class PocketCityPackageTests(unittest.TestCase):
                     self.assertEqual(data.stat().st_ino, inode)
                     self.assertFalse((cache / 'staging').exists())
                     self.assertEqual(list(output.parent.iterdir()), [output])
+                snapshot = root / 'verified-sources.json'
+                snapshot.write_text('{"schemaVersion":1}')
+                local = {'SAVVY_LOCAL_POCKET_CITY_SOURCES': str(snapshot),
+                         'SAVVY_LOCAL_NATIVE_SOURCES': str(snapshot)}
+                with patch.dict(os.environ, {**local, 'CONFIGURATION': 'Debug'}):
+                    pkg.package(output)
+                    pkg.package(output)
+                    self.assertEqual((output / 'savvy-place-sources.json').read_bytes(), snapshot.read_bytes())
+                    self.assertEqual((output.parent / 'TaipeiPublicSourceSnapshot.json').read_bytes(), snapshot.read_bytes())
+                with patch.dict(os.environ, {**local, 'CONFIGURATION': 'Release'}):
+                    pkg.package(output)
+                    self.assertFalse((output / 'savvy-place-sources.json').exists())
+                    self.assertFalse((output.parent / 'TaipeiPublicSourceSnapshot.json').exists())
                 data.unlink()
                 pkg.package(output)
                 self.assertEqual(gzip.decompress(data.read_bytes()), payload)

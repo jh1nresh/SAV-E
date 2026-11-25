@@ -209,5 +209,6 @@ export function addMetroPreview(map,Marker,data,openByDefault){
   map.on('move',updateMarkers);
   control.hidden=false;
   setVisible(openByDefault);
-  return ()=>({visible,start,end,legs:legs.map(({a,b,line})=>[a,b,line]),playing:!!animation});
+  return Object.assign(()=>({visible,start,end,legs:legs.map(({a,b,line})=>[a,b,line]),playing:!!animation}),
+    {setVisible});
 }

@@ -36,7 +36,7 @@ export function validSavvyPosts(posts,time=Date.now(),snapshotExpiry=Infinity){
     const expiresAt=Math.min(Date.parse(post.expiresAt),snapshotExpiry);
     if(!url||!(expiresAt>time))return [];
     const cover=approvedCover(post.cover,time);
-    return [{...post,url,expiresAt,cover,coverExpiry:cover?Date.parse(post.cover.expiresAt):Infinity}];
+    return [{...post,url,expiresAt,cover,coverPermission:cover?post.cover.permission:null,coverExpiry:cover?Date.parse(post.cover.expiresAt):Infinity}];
   });
 }
 
@@ -48,9 +48,10 @@ async function loadSnapshot(now){
     if(data.schemaVersion!==1||!Array.isArray(data.venues)||!Array.isArray(verifiedPins)){
       throw Error('Invalid Savvy place source projection');
     }
-    const byPlace=new Map([...data.venues,...verifiedPins].map(row=>[row.placeId,row.posts]));
+    const rows=[...data.venues,...verifiedPins];
+    const byPlace=new Map(rows.map(row=>[row.placeId,row.posts]));
     if(byPlace.size!==data.venues.length+verifiedPins.length)throw Error('Duplicate Savvy place source mapping');
-    return {byPlace,verifiedPins,expiresAt:Date.parse(data.expiresAt)};
+    return {rows,byPlace,verifiedPins,expiresAt:Date.parse(data.expiresAt)};
   }).catch(()=>{snapshot=null;return null;});
   const data=await snapshot;
   if(data&&!(data.expiresAt>now)){snapshot=null;return null;}
@@ -88,4 +89,22 @@ export function verifiedSavvyMapProjection(rows,time,snapshotExpiry){
 export async function loadVerifiedSavvyMapPins(){
   const data=await loadSnapshot(Date.now());
   return verifiedSavvyMapProjection(data?.verifiedPins??[],Date.now(),data?.expiresAt??0);
+}
+
+// LiveMapPlace.discovery uses this exact provider-qualified ID. Only an active
+// reviewed mapping can replace a native Explore marker with its atlas pin.
+export function nativeExploreVenues(rows,time,snapshotExpiry){
+  const venues=new Map();
+  for(const {placeId,provider,providerPlaceID,posts} of rows){
+    const originals=validSavvyPosts(posts,time,snapshotExpiry);
+    if(originals.length)venues.set('public:'+provider+':'+providerPlaceID,{
+      placeId,expiresAt:Math.max(...originals.map(post=>post.expiresAt)),
+    });
+  }
+  return venues;
+}
+
+export async function loadNativeExploreVenues(){
+  const data=await loadSnapshot(Date.now());
+  return nativeExploreVenues(data?.rows??[],Date.now(),data?.expiresAt??0);
 }

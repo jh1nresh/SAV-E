@@ -100,33 +100,28 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
   outline:2px solid #9e5134;outline-offset:2px;
 }
 #place-card {
-  position:absolute;z-index:5;isolation:isolate;left:12px;bottom:64px;
-  width:max-content;min-width:168px;max-width:min(260px,calc(100% - 16px));
-  background:#fffdf7;color:#263c32;border:1px solid #9eaa94;border-radius:13px;
-  box-shadow:0 3px 0 #33443730,0 8px 24px #25352938;
-  transform-origin:var(--tip,50%) 100%;
+  position:absolute; z-index:5; inset:auto 0 0; margin-inline:auto; box-sizing:border-box;
+  width:min(100%,480px); max-height:min(58dvh,560px); overflow:auto; overscroll-behavior:contain;
+  background:#fffdf7; color:#263c32; border-radius:22px 22px 0 0;
+  box-shadow:0 -3px 20px #20362c22; padding:0 14px max(14px,env(safe-area-inset-bottom));
 }
-#place-card.anchored {bottom:auto}
-#place-card.below {transform-origin:var(--tip,50%) 0}
-#place-card.anchored::after {
-  content:"";position:absolute;width:11px;height:11px;
-  bottom:-7px;left:var(--tip);background:#fffdf7;border:solid #9eaa94;border-width:0 1px 1px 0;
-  transform:translateX(-50%) rotate(45deg);z-index:-1;
-}
-#place-card.below::after {bottom:auto;top:-7px;transform:translateX(-50%) rotate(225deg)}
-#place-card.has-photo {width:246px;padding:5px}
-.place-copy {padding:12px 38px 12px 14px}
-.has-photo .place-copy {padding:9px 8px 7px}
+.sheet-handle { height:24px; display:grid; place-items:center; touch-action:none; cursor:grab; }
+.sheet-handle::before { content:""; width:34px; height:4px; border-radius:4px; background:#73807670; }
+.place-copy {padding:6px 2px 10px}
+.place-focus-marker {position:absolute;transform:translate(-50%,-50%);pointer-events:none}
+.place-focus-marker canvas {display:block;width:30px;height:30px}
 .place-kind {display:block;color:#695a48;font:600 11px/1.3 system-ui,sans-serif}
-#place-card h3 {margin:3px 0;color:#163e31;font:700 21px/1.25 "Songti TC","Noto Serif TC",serif;overflow-wrap:anywhere}
+#place-card h3 {margin:3px 0;padding-right:32px;color:#163e31;font:700 21px/1.25 "Songti TC","Noto Serif TC",serif;overflow-wrap:anywhere}
 #place-card p {margin:4px 0;color:#4e5c51;font-size:13px}
-#place-card a:not(.place-photo) {display:block;width:fit-content;margin-top:6px;color:#41634e;font-size:11px;line-height:1.4;text-underline-offset:2px}
+#place-card a:not(.place-photo) {display:block;width:fit-content;margin-top:6px;color:#41634e;font-size:11px;line-height:1.5;text-underline-offset:2px}
 .place-links {display:flex;align-items:baseline;gap:5px 12px;flex-wrap:wrap}
 #place-card .place-links a {text-decoration:none}
 #place-card .place-links a:hover,#place-card .place-links a:focus-visible {text-decoration:underline}
 #place-card .photo-credit {color:#576252}
-#place-card .savvy-posts {list-style:none;padding:6px 0 0;margin:8px 0 0;border-top:1px solid #9eaa9466;max-height:110px;overflow:auto}
-#place-card .savvy-posts a {font-size:12px}
+#place-card .savvy-posts {list-style:none;padding:6px 0 0;margin:8px 0 0;border-top:1px solid #9eaa9466;}
+#place-in-explore,#place-in-friends {margin-top:4px;min-height:44px;background:transparent;border:0;color:var(--green);text-decoration:underline}
+#place-card .savvy-posts a {font-size:14px;padding:6px 0}
+#place-card a.place-directions {font-size:15px;font-weight:650;padding:8px 0}
 #place-card .savvy-posts small {display:block;color:#576252}
 
 .place-photo {width:100%;padding:0;border:0;cursor:zoom-in;position:relative;display:block;border-radius:8px;overflow:hidden;background:var(--paper)}
@@ -158,18 +153,12 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
   position:absolute;width:100%;height:100%;object-fit:cover;border-radius:50%;
 }
 .photo-pin {z-index:1;min-width:44px;min-height:44px;justify-content:center;padding:0 0 3px}
-.photo-pin.photo-open .photo-badge,.photo-pin.photo-open .photo-title {visibility:hidden}
-.place-morph {display:none;position:absolute;inset:0;z-index:2;pointer-events:none;
-  border:3px solid #fffdf7;border-radius:inherit;background:var(--paper) center/cover no-repeat}
-#place-card.morphing .place-morph {display:block}
-#place-card.morphing {overflow:hidden}
 #street-motion {
   position:absolute;z-index:4;bottom:62px;right:12px;padding:5px 9px;font-size:11px;
   min-height:32px;background:var(--pane);border-color:var(--line);border-radius:6px;
 }
 @media (max-width:650px) {
   #street-motion {right:12px;bottom:72px;min-height:35px}
-  #place-card:not(.anchored) {bottom:121px;left:10px}
 }
 
 #metro-panel {
@@ -252,7 +241,7 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 
 
 
-#stage { --map-footer-bottom:max(44px,calc(var(--map-attribution-height, 0px) + 8px)); }
+#stage { --map-footer-bottom:44px; }
 .mobile { display:block; left:12px; bottom:var(--map-footer-bottom); border:1px solid var(--line); border-radius:7px; background:var(--pane); }
 .mobile summary { cursor:pointer; padding:10px 12px; font-size:.8rem; }
 .mobile[open] { z-index:3; width:min(260px,80%); }
@@ -268,6 +257,14 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 .ios-map header, .ios-map .hint { display:none; }
 .ios-map main { padding:0; height:100%; }
 .ios-map #stage { height:100%; min-height:0; border:0; border-radius:0; }
+.ios-app-map :is(.geography,.toolbar,.mobile,#progress,#fuxing-controls,#shuqi-view,#dihua-views,#street-motion) { display:none; }
+#map-credits { width:min(22rem,85vw); max-height:52dvh; overflow:auto; box-sizing:border-box; color:var(--ink); background:var(--pane); border:1px solid var(--line); border-radius:14px; padding:18px; }
+#map-credits::backdrop { background:#16181666; }
+#map-credits h3 { margin:0 0 12px; }
+#map-credits .maplibregl-ctrl-attrib { float:none; margin:0; padding:0; background:transparent; color:inherit; font:inherit; line-height:1.7; }
+#map-credits .maplibregl-ctrl-attrib-button { display:none; }
+#map-credits form { margin-top:14px; }
+.ios-app-map #metro-panel { top:max(125px,calc(env(safe-area-inset-top) + 64px)); }
 .ios-place-pin {
   min-height:44px; min-width:44px; padding:0 8px 12px; border:0; background:transparent;
   color:#24201e; font-weight:700; text-shadow:0 0 3px white,1px 1px 2px white,-1px -1px 2px white;
@@ -282,3 +279,50 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 .ios-place-pin[data-kind="shared"]::after { content:"↗"; }
 .ios-place-pin.selected::after { outline:3px solid #1e1d1b; outline-offset:2px; }
 .ios-user-dot { width:16px; height:16px; border-radius:50%; border:2px solid white; background:#1874ce; box-shadow:0 0 0 4px #1578d137; pointer-events:none; }
+
+.ios-place-pin.ios-art-pin { display:flex; align-items:center; flex-direction:column-reverse; gap:2px; padding:4px; }
+.ios-place-pin.ios-art-pin::after { display:none; }
+.ios-art-pin .ios-pin-art { display:block; position:relative; width:24px; height:24px; transform-origin:50% 100%; }
+.ios-pin-art canvas { display:block; width:100%; height:100%; }
+.ios-pin-art img { position:absolute; inset:-2px; width:28px; height:28px; border:2px solid #fffcf3; border-radius:50%; box-sizing:border-box; object-fit:cover; box-shadow:0 1px 4px #30282164; }
+.ios-pin-bookmark { position:absolute; right:-5px; bottom:-2px; width:12px; height:15px; background:#fff9eb; clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%); }
+.ios-pin-bookmark::before { content:""; position:absolute; inset:2px; background:#f26b4a; clip-path:inherit; }
+.ios-art-pin.selected .ios-pin-art { outline:2px solid #24201e; outline-offset:3px; border-radius:50%; }
+.ios-pin-friend { position:absolute; left:-6px; bottom:-3px; width:14px; height:14px; box-sizing:border-box; border-radius:50%; border:1.5px solid #fff9eb; background:#0e4a33; }
+.ios-pin-friend::before,.ios-pin-friend::after { content:""; position:absolute; left:50%; transform:translateX(-50%); background:#fff9eb; }
+.ios-pin-friend::before { top:1.5px; width:4px; height:4px; border-radius:50%; }
+.ios-pin-friend::after { bottom:1.5px; width:7px; height:4px; border-radius:6px 6px 2px 2px; }
+
+.ios-art-pin .ios-pin-art { scale:1; transition:scale 180ms ease-out; }
+.ios-art-pin.ios-pin-open .ios-pin-art { scale:1.28; transition:scale 340ms cubic-bezier(.22,1.5,.42,1); }
+@media (prefers-reduced-motion:reduce) {
+  .ios-art-pin .ios-pin-art,.ios-art-pin.ios-pin-open .ios-pin-art { transition:none; }
+}
+
+/* Embedded HTML controls use system colors if a native surface is unavailable. */
+.ios-map :is(#map-credits,#metro-panel,#place-card,#place-original) {
+  color-scheme: light dark;
+  color: CanvasText;
+  background: color-mix(in srgb, Canvas 83%, transparent);
+  border: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+  border-radius: 24px;
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+  box-shadow: 0 4px 18px #0002;
+}
+.ios-map #place-card {width:min(calc(100% - 24px),480px)}
+.ios-map #place-card h3 {font:700 21px/1.25 system-ui,sans-serif;color:inherit}
+.ios-map #place-card :is(p,.place-kind,small,a:not(.place-photo),button),
+.ios-map :is(#place-original,#map-credits,#metro-panel) :is(a,button,small) {color:inherit}
+.ios-map :is(#map-credits,#metro-panel) button {
+  border:0;border-radius:22px;min-height:44px;padding-inline:16px;
+  background:color-mix(in srgb, CanvasText 9%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .ios-map :is(#map-credits,#metro-panel,#place-card,#place-original) {
+    background:Canvas; -webkit-backdrop-filter:none; backdrop-filter:none;
+  }
+}
+
+/* The iOS host presents the shared Savvy glass drawer over the map. */
+#place-card.uses-native-drawer { display: none !important; }

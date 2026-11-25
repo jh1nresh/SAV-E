@@ -6,12 +6,15 @@ const landmarkBuilders=new Map([['palace-museum',buildPalaceModel],[sunYatSenHal
 const vertexSource=`#version 300 es
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_building;
+layout(location=2) in vec2 a_wallDirection;
 uniform mat4 u_transform;
 out vec3 v_position;
 flat out vec3 v_building;
+flat out vec2 v_wallDirection;
 void main() {
   v_position=a_position;
   v_building=a_building;
+  v_wallDirection=a_building.z>=2.0?vec2(0.0):a_wallDirection;
   gl_Position=u_transform*vec4(a_position,1.0);
 }
 `;
@@ -19,8 +22,13 @@ const fragmentSource=`#version 300 es
 precision highp float;
 in vec3 v_position;
 flat in vec3 v_building;
+flat in vec2 v_wallDirection;
 uniform float u_zoom;
 uniform vec2 u_focusOffset;
+uniform int u_mallCorners;
+uniform vec3 u_mallTile;
+uniform vec4 u_mallBounds;
+uniform vec2 u_mallRing[48];
 uniform vec4 u_streetOffsets;
 uniform vec2 u_linkOffset;
 uniform vec4 u_linkRuns[6];
@@ -53,6 +61,13 @@ float strip(float meshCoord,float interval,float width) {
   float f=abs(fract(meshCoord/interval)-.5);
   float a=max(fwidth(meshCoord)/interval,.012);
   return 1.0-smoothstep(width-a,width+a,f);
+}
+
+float facadeCoordinate(vec2 position,vec3 normal) {
+  // Survey triangles carry a constant tangent. Differentiating a tangent reconstructed
+  // with dFdx/dFdy inside strip's fwidth produces undefined second derivatives.
+  if(dot(v_wallDirection,v_wallDirection)>.5)return dot(position,v_wallDirection);
+  return dot(position,normalize(vec2(normal.y,-normal.x))); // Legacy authored mesh.
 }
 
 // Local illustrations use a few steady material families with separate roof colors.
@@ -94,7 +109,7 @@ vec3 anatomyTone(vec3 material, vec3 normal) {
 vec3 anatomyFinish(vec3 material, vec3 normal, vec2 site, float level, float height, float tone, bool authored, bool retail) {
   vec3 finish=anatomyTone(material,normal);
   if(authored || normal.z>.66 || height<5.1) return finish;
-  float x=dot(site,normalize(vec2(normal.y,-normal.x)));
+  float x=facadeCoordinate(site,normal);
   float rhythm=height>45.0?2.23:2.85;
   float detail=smoothstep(16.6,18.65,u_zoom);
   float windowArea=smoothstep(3.75,5.5,level)*(1.0-smoothstep(height-.8,height-.15,level));
@@ -158,6 +173,17 @@ void main() {
   if(u_replaceMemorialShell && abs(base-8.23)<.006 && abs(height-9.77)<.006 && abs(tone-.495)<.0002)discard;
   float level=v_position.z-base;
   vec2 site=v_position.xy+u_focusOffset;
+  vec2 mallSite=v_position.xy*u_mallTile.z+u_mallTile.xy;
+  if(u_mallCorners>0&&all(greaterThanEqual(mallSite,u_mallBounds.xy))&&all(lessThanEqual(mallSite,u_mallBounds.zw))){
+    bool inMall=false;
+    vec2 a=u_mallRing[u_mallCorners-1];
+    for(int i=0;i<u_mallCorners;i++){
+      vec2 b=u_mallRing[i];
+      if((a.y>mallSite.y)!=(b.y>mallSite.y)&&mallSite.x<(b.x-a.x)*(mallSite.y-a.y)/(b.y-a.y)+a.x)inMall=!inMall;
+      a=b;
+    }
+    if(inMall)discard;
+  }
   // Taipei 101's four survey strips are separate 129.06 m features within 32 m of its center.
   // The tower mesh already draws its own trim. Hide both the survey core and these strips.
   bool towerTrim=tone<1.0&&abs(height-129.06038)<.02&&abs(base-4.94)<.02&&dot(site,site)<1024.0;
@@ -226,7 +252,7 @@ void main() {
     float shade=light>.40?0.04:light>.14?.14:.25;
     surface=mix(surface,paperShadow,neighborhood*shade*.78);
     if(!authored&&height>5.1 && level>1.35 && level<height-.75){
-      float u=dot(v_position.xy,normalize(vec2(n.y,-n.x)));
+      float u=facadeCoordinate(v_position.xy,n);
       float rhythm=height>45.0?2.23:2.85;
       float windows=strip(u+tone*2.85,rhythm,.253)*strip(level-1.1,3.2,.203);
       vec3 glass=mix(surface*vec3(.62,.72,.77),vec3(.428,.610,.639),height>38.0?.48:.25);
@@ -237,7 +263,7 @@ void main() {
       }
     }
     if(!authored&&(mall||east)&&height>12.0&&level>0.1&&level<8.0){
-      float u=dot(site,normalize(vec2(n.y,-n.x)));
+      float u=facadeCoordinate(site,n);
       float bay=floor((u+1.0)/8.4);
       float selection=mod(bay,4.0);
       vec3 frame=selection<1.0?vec3(.785,.364,.265):selection<2.0?vec3(.228,.524,.481)
@@ -380,6 +406,41 @@ async function unpack(url,signal){
 }
 
 export const buildingZoom=14.4;
+const MiB=1024*1024;
+
+// Both Taipei survey levels contain the same vertices. Small tiles allow the
+// phone to fill the nearest streets progressively without decoding a 25 MiB block.
+function phoneNeighborhood(tiles){
+  const chosen=[];
+  let bytes=0;
+  for(const tile of tiles){
+    bytes+=tile.verts*24;
+    if(bytes>16*MiB||chosen.length>=48)break;
+    chosen.push(tile);
+  }
+  return chosen;
+}
+
+// The survey format is an unindexed triangle list with six floats per vertex.
+// Give both halves of a planar wall the same direction even if their winding differs.
+export function surveyWallDirections(vertices) {
+  const directions=new Int16Array(vertices.length/3);
+  for(let i=0;i<vertices.length;i+=18){
+    const ux=vertices[i+6]-vertices[i], uy=vertices[i+7]-vertices[i+1], uz=vertices[i+8]-vertices[i+2];
+    const vx=vertices[i+12]-vertices[i], vy=vertices[i+13]-vertices[i+1], vz=vertices[i+14]-vertices[i+2];
+    const tx=uz*vx-ux*vz, ty=uz*vy-uy*vz;
+    const length=Math.hypot(tx,ty);
+    if(length===0)continue;
+    const orientation=Math.abs(tx)>length*1e-6?Math.sign(tx):Math.sign(ty);
+    const scale=orientation*32767/length;
+    const x=Math.round(tx*scale), y=Math.round(ty*scale);
+    for(let j=i/3;j<i/3+6;j+=2){
+      directions[j]=x;
+      directions[j+1]=y;
+    }
+  }
+  return directions;
+}
 
 export class SurveyLayer {
   id='survey';
@@ -399,8 +460,11 @@ export class SurveyLayer {
   #matrix=new Float32Array(16);
   visibleWallTiles=new Set();
   #disposed=false;
+  #phoneTiles;
+  #resetPhoneTiles=()=>{this.#phoneTiles=undefined;};
 
-  constructor(index,status,landmark,anatomy,streetCenters,linkScene,districtMaterial,hybrid=false,cityLandmarks=[]) {
+  constructor(index,status,landmark,anatomy,streetCenters,linkScene,districtMaterial,hybrid=false,cityLandmarks=[],phone=false) {
+    this.phone=phone;
     this.districtMaterial=districtMaterial;
     this.linkScene=linkScene;
     this.streetCenters=streetCenters;
@@ -413,10 +477,18 @@ export class SurveyLayer {
   }
   onAdd(map,gl) {
     this.map=map;this.gl=gl;
+    if(this.phone){
+      map.on('moveend',this.#resetPhoneTiles);
+      map.on('resize',this.#resetPhoneTiles);
+    }
     this.program=program(gl);
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
     this.zoomLocation=gl.getUniformLocation(this.program,'u_zoom');
     this.focusLocation=gl.getUniformLocation(this.program,'u_focusOffset');
+    this.mallCornersLocation=gl.getUniformLocation(this.program,'u_mallCorners');
+    this.mallTileLocation=gl.getUniformLocation(this.program,'u_mallTile');
+    this.mallBoundsLocation=gl.getUniformLocation(this.program,'u_mallBounds');
+    this.mallRingLocation=gl.getUniformLocation(this.program,'u_mallRing[0]');
     this.streetLocation=gl.getUniformLocation(this.program,'u_streetOffsets');
     this.linkOffsetLocation=gl.getUniformLocation(this.program,'u_linkOffset');
     this.linkRunsLocation=gl.getUniformLocation(this.program,'u_linkRuns[0]');
@@ -457,6 +529,10 @@ export class SurveyLayer {
   }
   onRemove(){
     this.#disposed=true;
+    if(this.phone){
+      this.map.off('moveend',this.#resetPhoneTiles);
+      this.map.off('resize',this.#resetPhoneTiles);
+    }
     for(const ctl of this.#pending.values())ctl.abort();
     for(const b of this.#fetched.values())this.#delete(b);
     this.gl.deleteProgram(this.program);
@@ -464,6 +540,17 @@ export class SurveyLayer {
   }
   setEnabled(value) {
     this.#enabled=value;
+    this.map?.triggerRepaint();
+  }
+  setMallCutaway(ring){
+    this.mallMask=null;
+    if(ring){
+      const {x:mx,y:my}=ring[0],m=ring[0].meterInMercatorCoordinateUnits();
+      const points=ring.slice(0,-1).map(p=>[(p.x-mx)/m,(my-p.y)/m]);
+      if(points.length<3||points.length>48)throw Error('Unsupported mall footprint');
+      const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
+      this.mallMask={mx,my,m,ring:new Float32Array(points.flat()),bounds:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};
+    }
     this.map?.triggerRepaint();
   }
   setSongyan(asset){
@@ -488,6 +575,7 @@ export class SurveyLayer {
       .sort((a,b)=>a.distance-b.distance).map(({tile})=>tile);
   }
   #delete(entry){
+    if(entry.directionBuffer)this.gl.deleteBuffer(entry.directionBuffer);
     this.gl.deleteBuffer(entry.buffer);this.gl.deleteVertexArray(entry.vao);
   }
   #start(k,tile,level){
@@ -506,8 +594,17 @@ export class SurveyLayer {
       gl.bufferData(gl.ARRAY_BUFFER,new Uint8Array(data),gl.STATIC_DRAW);
       gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
       gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
+      let directionBuffer=null, directionBytes=0;
+      if(level===200||level===1000){
+        const directions=surveyWallDirections(new Float32Array(data));
+        directionBuffer=gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER,directionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER,directions,gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,2,gl.SHORT,true,0,0);
+        directionBytes=directions.byteLength;
+      }
       gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
-      this.#fetched.set(k,{vao,buffer,verts,bytes:data.byteLength,seen:performance.now()});
+      this.#fetched.set(k,{vao,buffer,directionBuffer,verts,bytes:data.byteLength+directionBytes,seen:performance.now()});
       this.#failures.delete(k);
     }).catch(error=>{
       if(!ctl.signal.aborted){
@@ -521,13 +618,15 @@ export class SurveyLayer {
   }
   #update(zoom){
     const eligible=zoom>=buildingZoom&&this.#enabled;
-    const mid=eligible?this.#select(1000):[];
+    const mid=eligible&&!this.phone?this.#select(1000):[];
     const use=eligible&&mid.length<=60;
-    const closeCandidates=zoom>=16.4&&use?this.#select(200):[];
+    const closeCandidates=this.phone
+      ?(eligible?(this.#phoneTiles??=phoneNeighborhood(this.#select(200))):[])
+      :(zoom>=16.4&&use?this.#select(200):[]);
     const near=closeCandidates.length<=170?closeCandidates:[];
     const queue=(level,tiles)=>tiles.map(tile=>({key:level+'/'+tile.id,tile,level}));
     const close=queue(200,near), distant=queue(1000,use?mid:[]);
-    const completeClose=close.length>0&&close.every(t=>this.#fetched.has(t.key));
+    const drawClose=close.length>0&&(this.phone||close.every(t=>this.#fetched.has(t.key)));
     this.#wanted=close.length?close:distant;
     // The upper tower can still be in frame when its footprint is outside the ground view.
     // Submit the separate mesh at both detail levels and let the GPU clip it to the camera.
@@ -545,16 +644,16 @@ export class SurveyLayer {
     for(const [key,ctl] of this.#pending)if(!keys.has(key))ctl.abort();
     const now=performance.now();
     for(const {key,tile,level} of wanted){
-      if(this.#pending.size>=9)break;
+      if(this.#pending.size>=(this.phone?2:9))break;
       if(!this.#fetched.has(key)&&!this.#pending.has(key)&&!(this.#failures.get(key)>now)) this.#start(key,tile,level);
     }
     // Switch at one instant. A building is never drawn from both tile levels.
-    this.#mode=use?(completeClose?200:1000):null;
-    const current=completeClose?close:distant;
+    this.#mode=use?(drawClose?200:1000):null;
+    const current=drawClose?close:distant;
     this.#displayed=current.filter(t=>this.#fetched.has(t.key)).map(t=>({...t.tile,key:t.key}));
-    const wallRows=completeClose?close:[];
-    if(this.visibleWallTiles.size!==wallRows.length || wallRows.some(t=>!this.visibleWallTiles.has(t.tile.id))){
-      this.visibleWallTiles=new Set(wallRows.map(t=>t.tile.id));
+    const wallRows=drawClose?this.#displayed:[];
+    if(this.visibleWallTiles.size!==wallRows.length || wallRows.some(t=>!this.visibleWallTiles.has(t.id))){
+      this.visibleWallTiles=new Set(wallRows.map(t=>t.id));
     }
     this.#landmarkDrawn=!!art&&this.#fetched.has(art.key);
     if(this.#landmarkDrawn)this.#displayed.push({...art.tile,key:art.key});
@@ -577,11 +676,11 @@ export class SurveyLayer {
     }
     let bytes=0;
     for(const b of this.#fetched.values())bytes+=b.bytes;
-    if(bytes>95*1024*1024||this.#fetched.size>235){
+    if(bytes>(this.phone?24:95)*MiB||this.#fetched.size>(this.phone?72:235)){
       const stale=[...this.#fetched].filter(([k])=>!keys.has(k)).sort((a,b)=>a[1].seen-b[1].seen);
       for(const [key,item] of stale){
         this.#delete(item);this.#fetched.delete(key);bytes-=item.bytes;
-        if(bytes<80*1024*1024&&this.#fetched.size<190) break;
+        if(bytes<(this.phone?20:80)*MiB&&this.#fetched.size<(this.phone?60:190))break;
       }
     }
     const landmarkFailed=art&&this.#failures.has(art.key)&&intersects(art.tile,this.map.getBounds().toArray().flat());
@@ -608,12 +707,19 @@ export class SurveyLayer {
   }
   render(gl,options) {
     const zoom=this.map.getZoom();
-    this.#update(zoom);
-    if(!this.#displayed.length)return;
+    // Reuse already uploaded geometry while a pinch or camera flight is in progress.
+    // The settled view starts its own bounded requests on the next render.
+    if(!this.phone||!this.map.isMoving())this.#update(zoom);
+    if(!this.#enabled||zoom<buildingZoom||!this.#displayed.length)return;
     gl.useProgram(this.program);
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
     gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);
     gl.uniform1f(this.zoomLocation,zoom);
+    gl.uniform1i(this.mallCornersLocation,this.mallMask?this.mallMask.ring.length/2:0);
+    if(this.mallMask){
+      gl.uniform2fv(this.mallRingLocation,this.mallMask.ring);
+      gl.uniform4fv(this.mallBoundsLocation,this.mallMask.bounds);
+    }
     gl.uniform4fv(this.linkRunsLocation,this.linkRuns);
     const activeTexture=gl.getParameter(gl.ACTIVE_TEXTURE);
     gl.activeTexture(gl.TEXTURE0);
@@ -631,6 +737,10 @@ export class SurveyLayer {
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
+      if(this.mallMask){
+        const {mx,my,m}=this.mallMask;
+        gl.uniform3f(this.mallTileLocation,(tile.mx-mx)/m,(my-tile.my)/m,tile.m/m);
+      }
       gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'?1:0);
       gl.uniform3f(this.dihuaLocation,this.dihua?(tile.mx-this.dihua.mx)/tile.m:0,
         this.dihua?(this.dihua.my-tile.my)/tile.m:0,this.dihuaDrawn?1:0);

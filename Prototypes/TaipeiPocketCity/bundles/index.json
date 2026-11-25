@@ -183,5 +183,10 @@
     "file": "taipei-place-index.tar.xz",
     "sha256": "cda82a4598f8f0780ceb80947431beee9090e04d52cf831a3b201d95fd0370d2",
     "entries": 1
+  },
+  {
+    "file": "taipei-hydrology-habitats.tar.xz",
+    "sha256": "56db565347fe4127c84edde8f963c5baf63d0cd6381512d1ed1a153e7d92ca3a",
+    "entries": 4
   }
 ]

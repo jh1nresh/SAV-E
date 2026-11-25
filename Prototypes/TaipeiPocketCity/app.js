@@ -1,35 +1,42 @@
-import {connectIOSMap} from './ios-map.js';
+import {connectIOSMap} from './ios-map.js?v=mall-1';
+import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=shop-floor-1';
+import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
+import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-4';
 import {addTaiwanScenery,yushanView} from './taiwan-scenery.js?v=alpine-1';
 import {addTaiwanCells} from './taiwan-cells.js?v=city-colour-3';
 import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
 import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
-import {cityPlaceLayers} from './city-place-index.js';
-import {inFuxing,frontageCamera,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js';
+import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
+import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-1';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
-import {addStreetDetail} from './street-detail.js?v=category-badges-1';
+import {addStreetDetail} from './street-detail.js?v=shop-floor-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=alpine-1';
-import {addCity170,dihuaSearch} from './city170.js?v=category-badges-1';
-import {addCityShopfronts} from './city-shopfronts.js?v=named-pins-1';
-import {CityNature} from './city-nature.js?v=alpine-1';
+import {addShopSearch} from './city-shop-search.js?v=shop-floor-1';
+import {addCity170,dihuaSearch} from './city170.js?v=point-icons-5';
+import {addCityShopfronts} from './city-shopfronts.js?v=retail-displays-1';
+import {CityNature} from './city-nature.js?v=canopies-1';
 
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
 const iosChannel=window.webkit?.messageHandlers?.pocketMap;
 if(iosChannel) document.documentElement.classList.add('ios-map');
 const preview=new URLSearchParams(location.search);
+const bundledTiles=preview.get('tiles')==='bundled';
+const appChrome=Boolean(iosChannel&&bundledTiles);
+if(appChrome)document.documentElement.classList.add('ios-app-map');
 const lanternCamera={center:[121.84363,25.10852],zoom:20.25,mobileZoom:19.8,pitch:58,mobilePitch:56,bearing:138};
 let lanternView=preview.get('street')==='amei-lanterns';
 const terrainRevision=new URL(import.meta.url).search;
@@ -55,7 +62,7 @@ const illustratedGridMinZoom=11.4;
 const cityGridMinZoom=9.55;
 const streetDataKeys=[...Object.values(illustratedDistricts),'xinyi-link',...Object.keys(landmarks)];
 const nativeStatus=$('#progress');
-let map, layer, streetDetail, metroState, weather;
+let map, layer, streetDetail, metroState, weather, indoor101;
 let streetDistricts=new Map();
 let cityDistricts=[], cityGrids, cityGridLoad;
 let atlas170,shopfronts,cityNature,worldAtlas,taiwanCoverage,taiwanCells,taiwanScenery;
@@ -388,7 +395,7 @@ $('#world').addEventListener('click',worldOverview);
 
 message('載入地圖…');
 try{
-  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,liveTiles,...loadedStreets]=await Promise.all([
+  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,regionalTiles,liveTiles,...loadedStreets]=await Promise.all([
     get('./assets/base-style.json'),get('./data/districts.geojson'),get('./data/survey-index.json'),
     get('./data/landmark-101.json').catch(()=>null),
     loadImage(hybrid?'./data/street-hybrid-material-mask.png':'./data/street-atlas-material-mask.png').catch(()=>null),
@@ -400,7 +407,8 @@ try{
       .then(data=>data?.summary&&data?.districts?data:null).catch(()=>null):null,
     rerun?get(`./data/city-streets/index.json${terrainRevision}`).catch(()=>null):null,
     get('./cities/map-tiles/index.json?rev=shuqi-1').catch(()=>null),
-    fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
+    bundledTiles?get('./cities/map-tiles/taipei-preview/index.json').catch(()=>null):null,
+    bundledTiles?null:fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
       .then(res=>res.ok?res.json():null).catch(()=>null),
     ...streetDataKeys.filter(key=>!rerun||!key.endsWith('-district')).map(key=>get(`./data/street-${key}.json`)
       .then(data=>({key,data})).catch(error=>{console.warn(error.message);return null;})),
@@ -444,17 +452,25 @@ try{
         localTerrain.set(key,new URL('./cities/map-tiles/'+x+'-'+y+'.'+ext,import.meta.url).href);
       }
     }
+    for(const [z,x,y] of regionalTiles?.tiles??[]){
+      const url=vectorTemplate.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+      localTerrain.set(url,new URL(`./cities/map-tiles/taipei-preview/${z}-${x}-${y}.pbf`,import.meta.url).href);
+    }
   }
   map=new ml.Map({
     container:'map',style:mapStyle(base,districts),...globeCamera(stage.clientWidth,stage.clientHeight),
     minZoom:-2,maxZoom:21.6,maxPitch:65,
     transformRequest:url=>({url:localTerrain.get(url)??taiwanLocalDEM(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
-    canvasContextAttributes:{antialias:true},
+    canvasContextAttributes:{antialias:!appChrome},
+    ...(appChrome?{pixelRatio:Math.min(window.devicePixelRatio,1.5),maxTileCacheSize:16}:{}),
   });
-  map.addControl(new ml.NavigationControl({visualizePitch:true}),'top-right');
-  map.addControl(new ml.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
-  map.addControl(new ml.AttributionControl({compact:true,customAttribution:[
+  if(!appChrome){
+    map.addControl(new ml.NavigationControl({visualizePitch:true}),'top-right');
+    map.addControl(new ml.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
+  }
+  const credits=new ml.AttributionControl({compact:false,customAttribution:[
+    ...(appChrome?['天氣預報 <a href="https://www.met.no/en">MET Norway</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>']:[]),
     '<a href="https://data.gov.tw/dataset/7441">國土測繪中心鄉鎮界線</a>',
     '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">地形 Mapzen · USGS / NOAA</a>',
     '<a href="https://data.taipei/dataset/detail?id=1601ef3a-c253-4988-b047-943d9e786143" target="_blank" rel="noopener">臺北市區界</a>',
@@ -463,14 +479,17 @@ try{
     '<a href="https://data.gov.tw/dataset/128274" target="_blank" rel="noopener">臺北市公園處樹籍</a>',
     '<a href="https://april-zhu.com/pocketnature" target="_blank" rel="noopener">Pocket Nature</a>',
     '<a href="https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer/layers/0?f=pjson" target="_blank" rel="noopener">臺北市都發局 2025</a>',
-  ]}),'bottom-right');
-  const attributionCorner=map.getContainer().querySelector('.maplibregl-ctrl-bottom-right');
-  if(attributionCorner){
-    // Keep the search controls above the credits when they wrap or expand.
-    new ResizeObserver(([entry])=>{
-      stage.style.setProperty('--map-attribution-height',Math.ceil(entry.contentRect.height)+'px');
-    }).observe(attributionCorner);
-  }
+  ]});
+  const creditsDialog=$('#map-credits');
+  creditsDialog.querySelector('.credit-list').append(credits.onAdd(map));
+  const showCredits=()=>{if(!creditsDialog.open)creditsDialog.showModal();};
+  $('#show-map-credits').addEventListener('click',showCredits);
+  if(appChrome)window.savvyShowMapCredits=showCredits;
+  map.once('remove',()=>{
+    credits.onRemove();
+    $('#show-map-credits').removeEventListener('click',showCredits);
+    if(window.savvyShowMapCredits===showCredits)delete window.savvyShowMapCredits;
+  });
   map.on('error',event=>{
     if(!map.isStyleLoaded())message('底圖暫時無法載入，請重新整理。');
     console.warn(event.error?.message??'Map data error');
@@ -506,7 +525,7 @@ try{
   const districtMaterial=cityMask?{image:cityMask,bounds:cityIndex.materialBounds}
     :atlas&&sharedMask?{image:sharedMask,bounds:atlas.materialBounds}:null;
   const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall];
-  layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks);
+  layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks,appChrome);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
   map.addSource('taiwan-grid',{type:'geojson',data:empty});
   map.addLayer({id:'taiwan-grid',source:'taiwan-grid',type:'line',minzoom:15,
@@ -530,6 +549,7 @@ try{
   map.on('moveend',updateAlpineColors);
   updateAlpineColors();
   installTaiwanRelief(map,'water');
+  if (preview.get('river') !== 'before') addTaipeiRiverArt(map,firstLabel);
   map.addLayer(layer,firstLabel);
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);
@@ -545,17 +565,17 @@ try{
       if(!place.placeId || !shopfronts?.openNamedPlace(place.placeId))streetDetail.openMappedPlace(place);
     };
     atlas170=addCity170(map,firstLabel,openMapLabel,setPreparedGround,streetDetail.setMappedStores,localLife,streetDetail.authoredRoads,streetDetail.hasFocalPin,preview.get('dihua')!=='before'?layer:null,cityNature,ids=>shopfronts?.setPacks(ids));
-    const focusFront=(card,x,y,angle)=>{
-      if(previousFronts||!inFuxing(x,y))return false;
-      locate(frontageCamera(x,y,angle));
-      streetDetail.openMappedPlace({...card,...(card.id===bookstoreId?bookshopEvidence:{}),point:[x,y]});
+    const focusBookshop=(card,x,y)=>{
+      if(previousFronts||card.id!==bookstoreId)return false;
+      locate(bookshopView);
+      streetDetail.openMappedPlace({...card,...bookshopEvidence,point:[x,y]});
       return true;
     };
-    addShopSearch(map,locate,dihuaSearch,streetDetail.openMappedPlace,row=>{
-      const [name,district,street,x,y,angle,id]=row;
-      const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
-      return focusFront({id,name,kind:'shopfront',categoryLabel:'臨街店面',detail:[district,street].filter(Boolean).join(' · '),
-        source:osm?'OpenStreetMap':undefined,url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:undefined},x,y,angle);
+    addShopSearch(map,locate,dihuaSearch,place=>{
+      if(indoor101)indoor101.openSearchPlace(place);else streetDetail.openMappedPlace(place);
+    },row=>{
+      const [name,,,x,y,,id,place]=row;
+      return focusBookshop({...place,id,name},x,y);
     },async (query,center)=>{
       const entries=await searchTaiwanEntries(query,center);
       const street=worldAtlas?.rows.find(row=>row.id==='jiufen-shuqi');
@@ -564,7 +584,7 @@ try{
       return entries;
     });
     shopfronts=addCityShopfronts(map,(card,row)=>{
-      if(!focusFront(card,...row.center,row.angle))streetDetail.openMappedPlace({...card,point:row.center});
+      if(!focusBookshop(card,...row.center))streetDetail.openMappedPlace({...card,point:row.center});
     },firstLabel,ids=>{
       const ready=ids.includes(bookstoreId);
       if(ready!==bookWallReady){bookWallReady=ready;requestAnimationFrame(updateFrontageView);}
@@ -602,16 +622,17 @@ try{
   setModels($('#models'));
   if(metro)metroState=addMetroPreview(map,ml.Marker,metro,preview.get('metro')==='1');
   const nameInputs=[...document.querySelectorAll('[data-place-names]')];
-  let globalNames=preview.get('names')!=='off',localNames=globalNames,appliedNames;
+  let globalNames=preview.get('names')!=='off',localNames=globalNames,appliedNames,showsPublicPins=true;
   applyLocalNames=inside=>{
-    const visible=inside?localNames:globalNames;
+    const visible=showsPublicPins&&(inside?localNames:globalNames);
     if(visible===appliedNames)return;
     appliedNames=visible;
     for(const id of [...cityPlaceLayers,'tw-ordinary-streets-names','city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places','tw-public-places','city-atlas-locators','world-cities','world-city-dots','poi_r1']){
-      if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
+      if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible&&(id!=='taipei-savvy-place-names'||showsPublicPins)?'visible':'none');
     }
     taiwanScenery?.setLabels(visible);
     shopfronts?.setNames(visible);
+    indoor101?.setNames(visible);
     $('#fuxing-names').setAttribute('aria-pressed',String(visible));
     document.body.classList.toggle('without-place-names',!visible);
     nameInputs.forEach(input=>input.checked=visible);
@@ -680,6 +701,7 @@ try{
   }else if(preview.get('nature')==='yushan')locate(yushanView,false);
   else if(lanternView)locate(lanternCamera,false);
   else if(startCity)locate(atlasCamera(startCity),false);
+  else if(street==='101-mall')locate({center:[121.56446,25.034],zoom:18.7,mobileZoom:17.65,pitch:0,mobilePitch:0,bearing:0},false);
   else if(street==='fuxing')locate(bookshopView,false);
   else if(street==='fuxing-row')locate(shopRowView,false);
   else if(dihuaViews.has(street))locate(dihuaViews.get(street),false);
@@ -703,8 +725,25 @@ try{
     updateGrid();updateUI();
   });
   map.on('idle',updateUI);
+  if(streetDetail){
+    addOfficialFloorGuide(stage,{allowRemoteImages:!bundledTiles});
+    indoor101=addTaipei101Indoor(map,{stage,Marker:ml.Marker,startFloor:preview.get('floor'),namesVisible:appliedNames,
+      load:async()=>{
+        const [{taipei101Indoor},{officialFloorDirectory}]=await Promise.all([
+          import(new URL('./taipei101-indoor-data.js',import.meta.url).href),
+          import(new URL('./taipei101-directory.js',import.meta.url).href),
+        ]);
+        return {...taipei101Indoor,directory:officialFloorDirectory};
+      },
+      setCutaway:(active,ring)=>layer.setMallCutaway(active?ring.map(p=>ml.MercatorCoordinate.fromLngLat(p)):null),
+      openPlace:streetDetail.openMappedPlace,
+      closePlace:streetDetail.closeMappedPlace,
+    });
+    streetDetail.setVisiblePlaceFilter(indoor101.isPinVisible);
+    stage.addEventListener('mall101-floor',()=>streetDetail.setVisiblePlaceFilter(indoor101.isPinVisible));
+  }
   function adjustPitch(){
-    if(!manualPitch&&!map.isMoving()){
+    if(!manualPitch&&!indoor101?.state().active&&!map.isMoving()){
       const z=map.getZoom();
       const center=map.getCenter();
       const highland=z>=12&&center.lng>=120&&center.lng<=122&&center.lat>=21.8&&center.lat<=25.4
@@ -725,7 +764,7 @@ try{
       center:map.getCenter().toArray(),zoom:map.getZoom(),bearing:map.getBearing(),
       pitch:map.getPitch(),district:regionAt(),base:map.isSourceLoaded('openmaptiles'),
       rendered:map.queryRenderedFeatures().filter(f=>['transportation','water','building'].includes(f.sourceLayer)).length,
-      detail:layer.diagnostics,street:streetDetail?.state(),metro:metroState?.(),weather:weather?.state(),
+      indoor101:indoor101?.state(),detail:layer.diagnostics,street:streetDetail?.state(),metro:metroState?.(),weather:weather?.state(),
       pocketCity:skillAtlas?.summary??null,
       atlas170:atlas170?.state(),shopfronts:shopfronts?.state(),inventoryTreesDrawn:cityNature?.drawn,
       landmarkAtlas:worldAtlas?.state(),taiwan:{townships:taiwanCoverage?.towns,landCells:taiwanCoverage?.count,visible:taiwanCells?.state()},
@@ -733,8 +772,31 @@ try{
     }),
   };
   if(iosChannel){
-    window.savvyPocketHost=connectIOSMap(map,ml.Marker,iosChannel);
+    map.on('pocketcamerarestore',()=>{manualPitch=true;});
+    const explore=appChrome&&atlas170?{
+      button:$('#place-in-explore'),
+      friendButton:$('#place-in-friends'),
+      venues:await loadNativeExploreVenues(),
+      open:(place,trigger)=>streetDetail.openMappedPlace(place,trigger),
+    }:undefined;
+    window.savvyPocketHost=connectIOSMap(map,ml.Marker,iosChannel,appChrome?settings=>{
+      weather?.setMode(settings.weather);
+      if(metroState&&metroState().visible!==settings.metro)metroState.setVisible(settings.metro);
+      if(showsPublicPins===settings.showsPublicPins)return;
+      showsPublicPins=settings.showsPublicPins;
+      map.savvySavedOnly=!showsPublicPins;
+      indoor101?.refreshVisibility();
+      if(!showsPublicPins)window.savvyDismissPlaceSheet?.();
+      applyLocalNames(!$('#fuxing-controls').hidden);
+      if(map.getLayer('taipei-savvy-place-neighbors'))
+        map.setLayoutProperty('taipei-savvy-place-neighbors','visibility',showsPublicPins?'visible':'none');
+
+    }:undefined,explore,{floorEvents:stage,visiblePin:indoor101?.isPinVisible});
     iosChannel.postMessage({event:'ready'});
+    if(!$('#place-card').hidden){
+      iosChannel.postMessage({event:'placeSheet',open:true});
+      window.savvySyncPlaceSheet?.();
+    }
   }
 }catch(error){
   iosChannel?.postMessage({event:'failure'});

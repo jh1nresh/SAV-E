@@ -580,4 +580,149 @@ private enum LivePublicDiscoveryPolicy {
         return (url, postID)
     }
 }
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && SAVVY_TAIPEI_SOURCE_SNAPSHOT
+import CryptoKit
+import Foundation
+
+/// Public source snapshot for an opt-in Debug build. The normal Saved/Explore
+/// model still validates each page and checks the current account session.
+struct LivePublicDiscoveryLocalSnapshot {
+    private struct Entry: Decodable {
+        let post: LivePublicDiscoveryPost
+        let visibleUntil: String?
+
+        private enum CodingKeys: String, CodingKey { case visibleUntil }
+
+        init(from decoder: Decoder) throws {
+            post = try LivePublicDiscoveryPost(from: decoder)
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            visibleUntil = try container.decodeIfPresent(String.self, forKey: .visibleUntil)
+        }
+    }
+
+    private struct Platform: Decodable {
+        let platform: String
+        let status: String
+    }
+
+    private struct AppleAlias: Decodable {
+        let applePlaceID: String
+        let providerPlaceID: String
+    }
+
+    private struct Manifest: Decodable {
+        let schemaVersion: Int
+        let generatedAt: String
+        let expiresAt: String
+        let coverage: [Platform]
+        let posts: [Entry]
+        let applePlaceAliases: [AppleAlias]?
+        let googlePlaceAliases: [LivePublicDiscoveryGoogleMatch]?
+    }
+
+    private let manifest: Manifest
+    private let deadline: Date
+    private let sha: String
+    private let rows: [(post: LivePublicDiscoveryPost, expiresAt: Date)]
+
+    init(data: Data) throws {
+        let manifest = try JSONDecoder().decode(Manifest.self, from: data)
+        guard manifest.schemaVersion == 1, manifest.posts.count <= 5_000,
+              let generated = LivePublicDiscoveryPolicy.date(manifest.generatedAt),
+              let expires = LivePublicDiscoveryPolicy.date(manifest.expiresAt),
+              expires > generated, expires.timeIntervalSince(generated) <= 86_400 else {
+            throw LivePublicDiscoveryValidationError.invalidPage
+        }
+        self.manifest = manifest
+        deadline = expires
+        sha = Self.digest(data).map { String(format: "%02x", $0) }.joined()
+        rows = try manifest.posts.map { entry in
+            guard let key = LivePublicDiscoveryVenueKey(provider: entry.post.place.provider, id: entry.post.place.providerPlaceID),
+                  key.provider != "taipei_catalog",
+                  let verified = LivePublicDiscoveryPolicy.date(entry.post.verifiedAt), verified <= generated else {
+                throw LivePublicDiscoveryValidationError.invalidPost
+            }
+            let verifiedExpiry = verified.addingTimeInterval(86_400)
+            var cutoff = min(expires, verifiedExpiry)
+            if let rawLimit = entry.visibleUntil {
+                guard let limit = LivePublicDiscoveryPolicy.date(rawLimit) else {
+                    throw LivePublicDiscoveryValidationError.invalidPost
+                }
+                cutoff = min(cutoff, limit)
+            }
+            return (entry.post, cutoff)
+        }
+    }
+
+    func page(viewport: LivePublicDiscoveryViewport, cursor: String?,
+              venue: LivePublicDiscoveryVenueKey?, at now: Date) throws -> LivePublicDiscoveryPage {
+        guard deadline > now,
+              let generated = LivePublicDiscoveryPolicy.date(manifest.generatedAt), generated <= now else {
+            throw LivePublicDiscoveryValidationError.invalidPage
+        }
+        let active = rows.filter { $0.expiresAt > now }
+        let revision = Self.digest(Data("\(sha):\(active.count)".utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        let google = venue?.provider == "google_places"
+            ? manifest.googlePlaceAliases?.first { $0.googlePlaceID == venue?.id } : nil
+        let apple = venue?.provider == "apple_maps"
+            ? manifest.applePlaceAliases?.first { $0.applePlaceID == venue?.id } : nil
+        let inferred = LivePublicDiscoveryVenueKey(provider: google?.provider ?? venue?.provider,
+                                                  id: google?.providerPlaceID ?? apple?.providerPlaceID ?? venue?.id)
+        let matched = active.filter { row in
+            viewport.contains(latitude: row.post.place.latitude, longitude: row.post.place.longitude)
+                && (inferred?.matches(row.post.place) ?? (venue == nil))
+        }
+        let coverage = manifest.coverage.map { platform in
+            LivePublicDiscoveryCoverage(platform: platform.platform, status: platform.status,
+                indexedPostCount: active.filter { $0.post.platform == platform.platform }.count)
+        }
+        let limit = 30
+        func token(at offset: Int) -> String {
+            let seed = [revision, viewport.queryValue, venue?.provider ?? "", venue?.id ?? "", String(offset)]
+            return Data(Self.digest(Data(seed.joined(separator: "\n").utf8))).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        let offset: Int
+        if let cursor {
+            guard let start = stride(from: limit, to: matched.count, by: limit).first(where: { token(at: $0) == cursor }) else {
+                throw LivePublicDiscoveryValidationError.invalidContinuation
+            }
+            offset = start
+        } else {
+            offset = 0
+        }
+        let end = min(offset + limit, matched.count)
+        var posts = matched[offset..<end].map(\.post)
+        if let venue, apple != nil || google?.provider == "google_places" {
+            posts = posts.map { Self.withRequestedID($0, venue.id) }
+        }
+
+        // Use the earliest active cutoff so a mixed page cannot keep one expired source visible.
+        let cutoff = min(now.addingTimeInterval(299), deadline, active.map(\.expiresAt).min() ?? deadline)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return LivePublicDiscoveryPage(schemaVersion: 1, indexRevision: revision, generatedAt: manifest.generatedAt,
+            expiresAt: formatter.string(from: cutoff), coverage: coverage, posts: posts,
+            nextCursor: end < matched.count ? token(at: end) : nil,
+            googlePlaceMatch: google?.provider == "google_places" ? nil : google)
+    }
+
+    private static func digest(_ data: Data) -> [UInt8] { Array(SHA256.hash(data: data)) }
+
+    private static func withRequestedID(_ post: LivePublicDiscoveryPost, _ id: String) -> LivePublicDiscoveryPost {
+        let place = post.place
+        let rewritten = LivePublicDiscoveryPlace(provider: place.provider, providerPlaceID: id,
+            name: place.name, address: place.address, latitude: place.latitude, longitude: place.longitude,
+            coordinateSystem: place.coordinateSystem, category: place.category)
+        return LivePublicDiscoveryPost(id: post.id, platform: post.platform, sourceURL: post.sourceURL,
+            authorName: post.authorName, authorHandle: post.authorHandle, title: post.title,
+            publishedAt: post.publishedAt, verifiedAt: post.verifiedAt, visibility: post.visibility,
+            locationEvidence: post.locationEvidence, cover: post.cover, place: rewritten, highlightRank: post.highlightRank,
+            multiVenue: post.multiVenue, publishedOn: post.publishedOn)
+    }
+}
+#endif
 #endif

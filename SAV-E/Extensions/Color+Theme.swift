@@ -218,6 +218,7 @@ enum SaveBrandUI {
     static let accent = Color(light: "B33F2B", dark: "F0A084")
     static let action = Color(light: "BC462F", dark: "ED9478")
     static let actionInk = Color(light: "FFFCF7", dark: "241B17")
+    static let darkTabFill = Color(hex: "383A40")
 }
 
 enum SaveAtlasPalette {

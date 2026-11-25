@@ -30,15 +30,18 @@ const styles = {
   school: badge('#ffd16d','#503709','#7e5409',
     'M3.5 9.5 12 5l8.5 4.5L12 14z M7 12.8l5 2.6 5-2.6v3.1q-5 4.4-10 0z'),
   health: badge('#ff9f9d','#662a36','#983649','M10 5h4v5h5v4h-5v5h-4v-5H5v-4h5z'),
+  stay: badge('#9ec5ff','#223e76','#345792','M5 9h3v3H5z M9 10h8q2 0 2 2v2H9z',
+    'M4 6v12 M4 14h16v4'),
   other: badge('#c0cbd3','#344650','#485c68',
     'M12 5.3a5 5 0 0 1 5 5c0 3.5-5 8.5-5 8.5s-5-5-5-8.5a5 5 0 0 1 5-5z M14 10.3a2 2 0 1 0-4 0 2 2 0 1 0 4 0z'),
 };
 
 const groups = {
-  shop:['shop','mall','department_store','supermarket','convenience','electronics','gift','hardware','optician','florist','greengrocer','商場','超商','超市','商店','店家','特色店家','deli','bakery_shop','mobile_phone','houseware','furniture','cosmetics','pet','bicycle','computer','toys','stationery','alcohol','confectionery','variety_store','hifi','camera','boutique_store'],
+  stay:['stay'],
+  shop:['shopping','shop','mall','department_store','supermarket','convenience','electronics','gift','hardware','optician','florist','greengrocer','商場','超商','超市','商店','店家','特色店家','deli','bakery_shop','mobile_phone','houseware','furniture','cosmetics','pet','bicycle','computer','toys','stationery','alcohol','confectionery','variety_store','hifi','camera','boutique_store'],
   fashion:['clothes','shoes','jewelry','boutique','服飾'],
   market:['market-area','marketplace','市場','夜市'],
-  food:['restaurant','fast_food','food_court','street_food','bakery','inspection_store','餐廳','餐飲店家','麵包','小吃店','夜市小吃','早餐店'],
+  food:['food','restaurant','fast_food','food_court','street_food','bakery','inspection_store','餐廳','餐飲店家','麵包','小吃店','夜市小吃','早餐店'],
   cafe:['cafe','coffee','tea','bar','beverages','咖啡','咖啡廳','茶飲'],
   books:['books','library','書店'],
   sports:['sports_centre','pitch','stadium','sports_hall','recreation_ground'],
@@ -54,9 +57,9 @@ const byCategory = new Map(Object.entries(groups).flatMap(([type,values])=>value
 export function placePinType(category){return byCategory.get(category) ?? 'other';}
 export function pinLabelColor(type){return styles[type].label;}
 
-function pinCanvas(type){
+function pinCanvas(type,style=styles[type]){
   const canvas=document.createElement('canvas');
-  const {disc,ink,solid,lines}=styles[type];
+  const {disc,ink,solid,lines}=style;
   canvas.width=canvas.height=72;
   const ctx=canvas.getContext('2d');
   ctx.scale(3,3);
@@ -79,12 +82,13 @@ export function placeButtonIcon(category){
   canvas.setAttribute('aria-hidden','true');
   return {canvas,color:pinLabelColor(type)};
 }
+export function registerPlaceBadge(map,id,style,type){
+  if(map.hasImage?.(id))return;
+  const canvas=pinCanvas(type,style);
+  map.addImage(id,canvas.getContext('2d').getImageData(0,0,72,72),{pixelRatio:3});
+}
 export function placePinStyle(map){
-  for(const type of Object.keys(styles)){
-    if(map.hasImage?.('place-pin-'+type))continue;
-    const canvas=pinCanvas(type);
-    map.addImage('place-pin-'+type,canvas.getContext('2d').getImageData(0,0,72,72),{pixelRatio:3});
-  }
+  for(const [type,style] of Object.entries(styles))registerPlaceBadge(map,'place-pin-'+type,style,type);
   const category=['case',['==',['get','category'],'commerce_store'],['coalesce',['get','categoryLabel'],''],['coalesce',['get','category'],'']];
   const byType=fn=>['case',['==',['get','placeId'],'poi/way/1159328965'],fn('tower'),
     ['match',category,...Object.entries(groups).flatMap(([type,values])=>[values,fn(type)]),fn('other')]];
