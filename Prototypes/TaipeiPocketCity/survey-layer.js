@@ -461,7 +461,20 @@ export class SurveyLayer {
   visibleWallTiles=new Set();
   #disposed=false;
   #phoneTiles;
-  #resetPhoneTiles=()=>{this.#phoneTiles=undefined;};
+  #phoneSettleTimer;
+  #phoneSettled=true;
+  #pausePhoneTiles=()=>{
+    clearTimeout(this.#phoneSettleTimer);
+    this.#phoneSettled=false;
+  };
+  #settlePhoneTiles=()=>{
+    this.#pausePhoneTiles();
+    this.#phoneSettleTimer=setTimeout(()=>{
+      this.#phoneTiles=undefined;
+      this.#phoneSettled=true;
+      this.map.triggerRepaint();
+    },150);
+  };
 
   constructor(index,status,landmark,anatomy,streetCenters,linkScene,districtMaterial,hybrid=false,cityLandmarks=[],phone=false) {
     this.phone=phone;
@@ -478,8 +491,9 @@ export class SurveyLayer {
   onAdd(map,gl) {
     this.map=map;this.gl=gl;
     if(this.phone){
-      map.on('moveend',this.#resetPhoneTiles);
-      map.on('resize',this.#resetPhoneTiles);
+      map.on('movestart',this.#pausePhoneTiles);
+      map.on('moveend',this.#settlePhoneTiles);
+      map.on('resize',this.#settlePhoneTiles);
     }
     this.program=program(gl);
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
@@ -530,8 +544,10 @@ export class SurveyLayer {
   onRemove(){
     this.#disposed=true;
     if(this.phone){
-      this.map.off('moveend',this.#resetPhoneTiles);
-      this.map.off('resize',this.#resetPhoneTiles);
+      clearTimeout(this.#phoneSettleTimer);
+      this.map.off('movestart',this.#pausePhoneTiles);
+      this.map.off('moveend',this.#settlePhoneTiles);
+      this.map.off('resize',this.#settlePhoneTiles);
     }
     for(const ctl of this.#pending.values())ctl.abort();
     for(const b of this.#fetched.values())this.#delete(b);
@@ -709,7 +725,7 @@ export class SurveyLayer {
     const zoom=this.map.getZoom();
     // Reuse already uploaded geometry while a pinch or camera flight is in progress.
     // The settled view starts its own bounded requests on the next render.
-    if(!this.phone||!this.map.isMoving())this.#update(zoom);
+    if(!this.phone||(this.#phoneSettled&&!this.map.isMoving()))this.#update(zoom);
     if(!this.#enabled||zoom<buildingZoom||!this.#displayed.length)return;
     gl.useProgram(this.program);
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);
