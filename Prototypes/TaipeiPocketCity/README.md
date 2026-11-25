@@ -15,6 +15,8 @@
 
 ## Savvy App 地點與貼文接入
 
+台北 101 塔樓沿用同一張地圖的市府測量座標和地面高程。插畫版按單景重建八節塔身、斜面細窗格與基座，實際高度 508 公尺。窗格和銅飾以插畫表現。[台北 101 設計](https://www.taipei-101.com.tw/tw/concept) · [結構工程顧問](https://www.thorntontomasetti.com/project/taipei-101)
+
 [101 周邊的分類 pin 預覽](http://127.0.0.1:42418/index.html?view=121.5657,25.0348,17.65&bearing=-8)。城市、街區和街口依縮放層級顯示地點。下圖為同一鏡位，左為前版、右為本版。
 
 ![101 周邊同一鏡位的 pin 對照](examples/xinyi-place-pins.jpg)
