@@ -15,6 +15,8 @@ import fountainWater from './city170-fountain-water-data.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
+import {addXinyiStreetGround,xinyiStreetMarkings} from './xinyi-street-ground.js';
+import {frontagePackIds} from './xinyi-shop-frontages.js';
 import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-nets-1';
@@ -131,6 +133,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   addCityAirfield(map,firstLabel);
   addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
+  addXinyiStreetGround(map);
   addArcadeFloors(map,'survey');
   addCityHydrants(map,firstLabel);
   addParkWater(map,firstLabel);
@@ -375,7 +378,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       const view = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
       const visible = index.packs.filter(item => overlaps(item.bounds, view));
       const packIds=visible.map(item=>item.id);
-      setShopPacks(map.getZoom()>=17.55?packIds:[]);
+      setShopPacks(frontagePackIds(visible,map.getZoom()));
       if(!boundary)boundary=await remember('boundary',async()=>{
         const response=await fetch(new URL('./data/city170-boundary.json',import.meta.url));
         if(!response.ok)throw Error('City boundary '+response.status);
@@ -520,7 +523,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       for (let i = 0; i < packs.length; i++) {
         for (const cell of packs[i].cells) {
           if(!overlaps(cell.bounds,view))continue;
-          const items=paintPacks[i][cell.id]??[];
+          const items=xinyiStreetMarkings(paintPacks[i][cell.id]??[],cell);
           const blocked=openGround[cell.id];
           if(!blocked){pieces.push(...items);continue;}
           const roots=new Set(blocked.map(pt=>pt.join(',')));

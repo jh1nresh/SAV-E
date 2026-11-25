@@ -46,7 +46,8 @@ export function loadSongyanNear(map,onReady){
       const asset=await readPocketCityAsset(`city-streets/${assetVersion}`);
       if(!validSongyan(asset))throw Error('Invalid Songyan scene');
       order=addSongyanSurface(map,asset.ground);
-      onReady(asset);
+      const mesh=asset.verts===91908?new URL('./assets/taipei-songyan-waterfront.bin.gz',import.meta.url):undefined;
+      onReady({...asset,mesh});
       map.off('moveend',near);
     }catch(error){
       retryAfter=Date.now()+3000;

@@ -18,8 +18,9 @@ import {metroExitDataset} from './taipei-metro-exits.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei101-original-ink-2';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=xinyi-connected-1';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
+import {songyanFactory} from './taipei-songyan-factory.js';
 import {esliteSongyan} from './taipei-eslite-songyan.js';
 import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
 import {addMetroPreview} from './metro-preview.js?v=metro-label-2';
@@ -28,11 +29,11 @@ import {add101Ground,planting101,walks101} from './taipei101-single-ground.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
-import {loadSongyanNear} from './songyan-detail.js?v=5';
+import {loadSongyanNear} from './songyan-detail.js?v=campus-1';
 
 import {addShopSearch} from './city-shop-search.js?v=friendly-frontages-1';
-import {addCity170,dihuaSearch} from './city170.js?v=taipei-post-boxes-1';
-import {addCityShopfronts} from './city-shopfronts.js?v=friendly-frontages-1';
+import {addCity170,dihuaSearch} from './city170.js?v=xinyi-streets-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=xinyi-streets-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
 
@@ -478,6 +479,10 @@ try{
       }
     }
   }
+  if(cityIndex?.terrainTiles?.includes('13724/7014')){
+    localTerrain.set(terrainSource+'14/13724/7014.png',
+      new URL('./assets/taipei-songyan-factory-terrain.png',import.meta.url).href);
+  }
   map=new ml.Map({
     container:'map',style:mapStyle(base,districts),...globeCamera(stage.clientWidth,stage.clientHeight),
     minZoom:-2,maxZoom:21.6,maxPitch:65,
@@ -579,7 +584,7 @@ try{
   const linkScene=linked?{anchor:ml.MercatorCoordinate.fromLngLat(linked.origin),runs:linked.runs}:null;
   const districtMaterial=cityMask?{image:cityMask,bounds:cityIndex.materialBounds}
     :atlas&&sharedMask?{image:sharedMask,bounds:atlas.materialBounds}:null;
-  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall,taipeiDome,esliteSongyan];
+  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall,taipeiDome,esliteSongyan,songyanFactory];
   layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks,appChrome);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
   map.addSource('taiwan-grid',{type:'geojson',data:empty});
@@ -645,7 +650,7 @@ try{
     },firstLabel,ids=>{
       const ready=ids.includes(bookstoreId);
       if(ready!==bookWallReady){bookWallReady=ready;requestAnimationFrame(updateFrontageView);}
-    },()=>layer.visibleWallTiles,atlas170.openNearbyPlace);
+    },()=>layer.visibleWallTiles,atlas170.openNearbyPlace,districtAt);
     $('#fuxing-frame').addEventListener('click',()=>{
       if(!$('#place-card').hidden)$('#place-close').click();
       locate(map.getZoom()>=21?shopRowView:bookshopView);

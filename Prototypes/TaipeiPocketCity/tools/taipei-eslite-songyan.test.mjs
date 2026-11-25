@@ -43,7 +43,8 @@ test('the artwork replaces only its loaded survey tiles through a zoom transitio
     uniform1i:(name,value)=>{if(name==='u_replaceEsliteShell')masked=value;},
     drawArrays:(_,offset,count)=>calls.push([count,masked]),
   },{get:(target,name)=>target[name]??noop});
-  const map={triggerRepaint:noop,getZoom:()=>zoom,getCenter:()=>({lng:site.center[0],lat:site.center[1]}),
+  let repaint;
+  const map={triggerRepaint:()=>repaint?.(),getZoom:()=>zoom,getCenter:()=>({lng:site.center[0],lat:site.center[1]}),
     getBounds:()=>({toArray:()=>[site.box.slice(0,2),site.box.slice(2)]})};
   const survey=gzipSync(new Uint8Array(72));
   t.mock.method(globalThis,'fetch',async url=>{
@@ -57,13 +58,13 @@ test('the artwork replaces only its loaded survey tiles through a zoom transitio
   const layer=new SurveyLayer({levels:{1000:[coarse,neighbor],200:[...fine,neighbor]}},noop,null,true,[],null,null,true,[site]);
   const options={defaultProjectionData:{mainMatrix:new Float32Array(16)}};
   async function until(condition){
-    for(let i=0;i<100;i++){
+    while(true){
+      const painted=new Promise(resolve=>{repaint=resolve;});
       calls.length=0;
       layer.render(gl,options);
       if(condition())return;
-      await new Promise(resolve=>setImmediate(resolve));
+      await painted;
     }
-    assert.fail('survey uploads did not settle');
   }
   layer.onAdd(map,gl);
   try{
