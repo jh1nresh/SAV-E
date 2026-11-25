@@ -4,7 +4,7 @@ import {originalPlacePhoto,photoPlaces} from './place-photos.js';
 import {cityPlaceID} from './savvy-place-sources.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
 import {StreetPeople} from './street-people.js';
-import {StreetScenery} from './street-scenery.js?v=playgrounds-1';
+import {StreetScenery} from './street-scenery.js?v=park-fitness-1';
 
 const isDistrict=key=>key.endsWith('-district');
 const limitsStreetLabels=key=>isDistrict(key)||key==='xinyi-link';
