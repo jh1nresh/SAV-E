@@ -77,6 +77,8 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 
 臺北地面店家的樓層核對使用經濟部商業發展署的開放資料。[台北市商業登記資料-F零售、批發及餐飲業](https://data.gov.tw/dataset/53661) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
+路燈位置、桿高與燈數來自臺北市政府工務局公園路燈工程管理處，資料快照為 2025 年 10 月 25 日。燈頭外觀為插畫。[臺北市路燈位置分布圖](https://data.taipei/dataset/detail?id=262e80cf-579c-4bfb-ba73-31621bc84616) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
+
 - 道路、建物輪廓與地點採 © OpenStreetMap contributors。OSM 衍生資料以 ODbL 1.0 提供，原始出處與擷取版本隨資料附於 `data/city170/index.json`。地圖署名見圖面。[OpenStreetMap 授權](https://www.openstreetmap.org/copyright)
 - 臺北市政府都市發展局提供 2025 年 LOD1 模型。市府商業處、衛生局、市場處、公園處與捷運工程局提供其他圖層，各來源列於圖面及資料摘要。[LOD1 服務](https://historygis.udd.gov.taipei/arcgis/rest/services/Hosted/LOD1_2025/SceneServer) · [都發局資料開放宣告](https://udd.gov.taipei/QA/article/ngork7d) · [公共樹籍](https://data.gov.tw/dataset/128274)
 - 3D 街景使用 OpenFreeMap、OpenMapTiles、Mapzen 地形及 MapLibre GL JS。插畫參考 April Zhu 的 Pocket City 與 Pocket Nature。[Pocket City](https://april-zhu.com/pocketcity) · [Pocket Nature](https://april-zhu.com/pocketnature) · [Pocket City 授權](assets/Pocket-City-LICENSE.txt) · [MapLibre 授權](assets/MapLibre-LICENSE.txt)
