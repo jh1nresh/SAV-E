@@ -1,5 +1,5 @@
 import {bouncePhotoPin} from './photo-pin-motion.js';
-import {createPlaceCallout} from './place-callout.js?v=survey-store-3';
+import {createPlaceCallout} from './place-callout.js?v=shop-floor-1';
 import {originalPlacePhoto,photoPlaces} from './place-photos.js';
 import {cityPlaceID} from './savvy-place-sources.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';

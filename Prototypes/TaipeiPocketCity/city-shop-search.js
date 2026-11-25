@@ -1,3 +1,4 @@
+import {additionalShopFloor,shopFloorLabel} from './shop-floor-labels.js';
 import {frontageCamera} from './fuxing-block.js?v=frontage-views-1';
 import {streetShopProperties} from './shop-trades.js?v=point-icons-5';
 import {loadCityPlaces} from './city-place-index.js?v=shop-address-1';
@@ -36,7 +37,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
   let pending,frontages,verifiedPending,verifiedEntries,cameras,cameraRequest,cameraAttempts=0;
   const forms=document.querySelectorAll('.shop-search');
   function entry(row){
-    return {row,key:fold(row[0]),area:fold([row[1],row[2],row[7]?.categoryLabel].filter(Boolean).join(' '))};
+    return {row,key:fold(row[0]),area:fold([row[1],row[2],row[7]?.categoryLabel,shopFloorLabel(row[6],row[7]?.source)].filter(Boolean).join(' '))};
   }
   function indexedRow(feature){
     const place=streetShopProperties(feature.properties);
@@ -99,7 +100,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
         button.type='button';
         const title=document.createElement('strong'),detail=document.createElement('small');
         title.textContent=name;
-        detail.textContent=[district,street,heritagePlace?.source==='Savvy'?'Savvy 貼文':angle!==null?'店面':district||street?'':'地點']
+        detail.textContent=[district,street,additionalShopFloor(id,heritagePlace?.source,street),heritagePlace?.source==='Savvy'?'Savvy 貼文':angle!==null?'店面':district||street?'':'地點']
           .filter(Boolean).join(' · ');
         button.append(title,detail);
         button.addEventListener('click',()=>{

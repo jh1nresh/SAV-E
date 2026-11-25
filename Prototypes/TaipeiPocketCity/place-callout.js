@@ -1,3 +1,4 @@
+import {additionalShopFloor} from './shop-floor-labels.js';
 import {setPlacePinEmphasis} from './photo-pin-motion.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
 import {originalPlacePhoto} from './place-photos.js';
@@ -222,15 +223,18 @@ export function createPlaceCallout(map){
     button?.setAttribute('aria-expanded','true');
     name.textContent=place.name||place.categoryLabel||'地點';
     kind.textContent=place.kind==='school-label'?'學校':place.categoryLabel??place.kind??'地點';
-    const street=place.detail??'';
-    detail.textContent=street;
-    detail.hidden=!street||street===kind.textContent;
+    const street=place.detail===kind.textContent?'':place.detail;
+    const floor=place.indoorFloor?undefined:additionalShopFloor(cityPlaceID(place),place.source,street,kind.textContent);
+    detail.textContent=[street,floor].filter(Boolean).join(' · ');
+    detail.hidden=!detail.textContent;
     choices.replaceChildren();
     choices.hidden=!place.choices?.length;
     for(const candidate of place.choices??[]){
       const option=document.createElement('button');
       option.type='button';option.textContent=(candidate.name||candidate.categoryLabel||'地點')
         +(candidate.source==='Savvy'?' · Savvy 貼文':'');
+      const candidateFloor=additionalShopFloor(cityPlaceID(candidate),candidate.source,option.textContent);
+      if(candidateFloor)option.textContent+=' · '+candidateFloor;
       option.addEventListener('click',()=>open(candidate));
       choices.append(option);
     }
