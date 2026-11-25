@@ -18,8 +18,9 @@ import {metroExitDataset} from './taipei-metro-exits.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei-dome-1';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=eslite-songyan-1';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
+import {esliteSongyan} from './taipei-eslite-songyan.js';
 import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
@@ -561,7 +562,7 @@ try{
   const linkScene=linked?{anchor:ml.MercatorCoordinate.fromLngLat(linked.origin),runs:linked.runs}:null;
   const districtMaterial=cityMask?{image:cityMask,bounds:cityIndex.materialBounds}
     :atlas&&sharedMask?{image:sharedMask,bounds:atlas.materialBounds}:null;
-  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall,taipeiDome];
+  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall,taipeiDome,esliteSongyan];
   layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks,appChrome);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
   map.addSource('taiwan-grid',{type:'geojson',data:empty});
