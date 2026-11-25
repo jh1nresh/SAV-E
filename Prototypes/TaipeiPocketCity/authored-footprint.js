@@ -11,6 +11,7 @@ export function plotOverlaps(row,box,building){
     (inside(rings[0],w,s)&&!rings.slice(1).some(hole=>inside(hole,w,s))));
 }
 
+export {inside as insideRing};
 function inside(ring,x,y){
   let hit=false;
   for(let i=1;i<ring.length;i++){

@@ -1,3 +1,4 @@
+import {onSongshanAthleticsField} from './songshan-athletics.js';
 import {inside101Ground,planting101} from './taipei101-single-ground.js';
 import {metroExitCard,metroExitLayer} from './taipei-metro-exits.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=friendly-frontages-1';
@@ -18,12 +19,14 @@ import {addCityAirfield} from './city170-airfield.js';
 import {parkWalksForPack} from './songshan-park-walks.js';
 import {addDistrictStreetGround,districtStreetMarkings} from './xinyi-street-ground.js';
 import {frontagePackIds} from './xinyi-shop-frontages.js';
+import {campusBounds,showSchool} from './school-camera.js';
+import {runningTrack} from './city170-running-tracks.js';
 import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
 import {courtDetails} from './city170-courts.js?v=court-nets-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=friendly-frontages-1';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=fountain-water-1';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=running-tracks-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
@@ -309,11 +312,12 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     schoolData = value;
     map.getSource(schools).setData(value);
     const options = document.createDocumentFragment();
+    const bounds = campusBounds(value.features);
     for (const f of value.features) {
       if (f.properties.kind !== 'school-label' || !f.properties.name) continue;
       let key = f.properties.name;
       if (schoolPositions.has(key)) key += '（' + f.geometry.coordinates.map(n => n.toFixed(4)).join(', ') + '）';
-      schoolPositions.set(key, f.geometry.coordinates);
+      schoolPositions.set(key, {center:f.geometry.coordinates,bounds:bounds.get(f.id)});
       const option = document.createElement('option');
       option.value = key;
       options.append(option);
@@ -323,11 +327,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   for (const input of schoolInputs) {
     input.addEventListener('focus', () => loadSchools().catch(error => console.warn(error.message)));
     input.addEventListener('change', () => {
-      const center = schoolPositions.get(input.value.trim());
-      if (!center) return;
+      const school = schoolPositions.get(input.value.trim());
+      if (!school) return;
       for (const other of schoolInputs) other.value = input.value;
       document.querySelector('.mobile').open = false;
-      map.jumpTo({center,zoom:17.35,pitch:38});
+      showSchool(map,school);
     });
   }
   async function refresh() {
@@ -499,6 +503,12 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           if(map.getZoom()>=18.5 && feature.properties.category==='bicycle_rental')equipment.push(...bikeDockParts(feature));
           continue;
         }
+        const track=runningTrack(feature);
+        if(track){
+          detailedPitchIds.add(feature.id);
+          playingAreas.push(...track);
+          continue;
+        }
         const [painted,...parts]=courtDetails(feature,map.getZoom()>=18.5);
         if(painted){
           detailedPitchIds.add(feature.id);
@@ -534,7 +544,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           }
         }
       }
-      map.getSource(paint).setData(collection(pieces.filter(f=>f.properties.kind!=='grove-tree'||!nature.activeTrees.near(...f.geometry.coordinates,9))));
+      map.getSource(paint).setData(collection(pieces.filter(f=>f.properties.kind!=='grove-tree'||
+        (!onSongshanAthleticsField(...f.geometry.coordinates)&&!nature.activeTrees.near(...f.geometry.coordinates,9)))));
       setPrepared(packs.length > 0);
       status.prepared = pieces.length;
       failures = 0;
