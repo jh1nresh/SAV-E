@@ -1,4 +1,5 @@
 import {program,transform} from './survey-layer.js';
+import {drawMarketStall} from './taipei-market-stalls.js';
 
 const vertex=`#version 300 es
 layout(location=0) in vec3 point;
@@ -49,10 +50,20 @@ function buildObject(kind,size,angle,index,origin,vertices,anatomy,hybrid){
     }
   }
   const box=(x,y,z,w,d,h,color)=>prism([x,y,z],[w/Math.SQRT2,d/Math.SQRT2],[[0,1],[h,1]],4,color,Math.PI/4);
+  function face(points,hex,shade){
+    const ink=[1,3,5].map(i=>Math.min(parseInt(hex.slice(i,i+2),16)*shade/255,1));
+    for(const i of [0,1,2,0,2,3]){
+      const [u,v,h]=points[i];
+      vertices.push(x+(u*a-v*b)*size,y+(u*b+v*a)*size,z+h*size,...ink);
+    }
+  }
   const accent=anatomy
     ? (kind==='entrance'?'#c67a3d':'#927a62')
     : (hybrid?hybridAccents:accents)[index%3];
   switch(kind){
+    case 'market-canopy': case 'market-grill': case 'market-counter':
+      drawMarketStall(kind,index,{box,prism,face});
+      break;
     case 'tree':{
       prism([0,0,0],[.28,.25],[[0,1],[3.6,.58]],7,trunk);
       const round=[[-1.5,.28],[-.9,.77],[.13,1],[1.22,.66],[1.7,.18]];
