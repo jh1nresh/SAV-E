@@ -23,8 +23,8 @@ import {addPocketCityWeather} from './pocket-city-weather.js';
 import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
-import {addShopSearch} from './city-shop-search.js?v=survey-store-3';
-import {addCity170,dihuaSearch} from './city170.js?v=bus-shelters-1';
+import {addShopSearch} from './city-shop-search.js?v=point-icons-5';
+import {addCity170,dihuaSearch} from './city170.js?v=point-icons-5';
 import {addCityShopfronts} from './city-shopfronts.js?v=survey-store-1';
 import {CityNature} from './city-nature.js?v=canopies-1';
 

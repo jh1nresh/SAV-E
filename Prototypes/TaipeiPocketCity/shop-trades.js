@@ -1,8 +1,9 @@
 // Street-scale glyphs refine existing POIs using declared trades only.
 import {serviceWindowLabels} from './shop-service-labels.js';
 import {shopCategories} from './shop-categories.js';
+import {foodBadges,foodPinExpression,neighborhoodBadges,preciseShopLabels} from './shop-pin-badges.js';
 import {bikeStationPlace} from './city170-bike-docks.js';
-import {registerPlaceBadge} from './place-pins.js?v=street-trades-1';
+import {pinLabelColor,registerPlaceBadge} from './place-pins.js?v=street-trades-1';
 
 const food = {disc:'#ffb469',ink:'#542805',label:'#954107'};
 const craft = {disc:'#84d8c9',ink:'#124b48',label:'#096963'};
@@ -11,6 +12,7 @@ const garden = {disc:'#a4d983',ink:'#2c5229',label:'#386b34'};
 const tech = {disc:'#9acbf0',ink:'#264669',label:'#335f87'};
 const trade=(categories,name,palette,lines,solid='')=>({categories,name,...palette,lines,solid});
 const trades={
+  ...neighborhoodBadges,
   bakery:trade(['bakery','bakery_shop','pastry'],'烘焙店',food,
     'M6 11c-1-3 2-5 6-5s7 2 6 5l-1 5.5H7z M9 8.5l1.5 2 M13 8l1.5 2'),
   drinks:trade(['beverages','bubble_tea'],'飲料店',food,
@@ -53,7 +55,8 @@ const byCategory=new Map(Object.values(trades).flatMap(item=>item.categories.map
 export function streetShopProperties(properties){
   if(properties.category==='bicycle_rental')return bikeStationPlace(properties);
   const key=properties.category;
-  const label=serviceWindowLabels.get(key) ?? byCategory.get(key)?.name ?? (Object.hasOwn(shopCategories,key) ? shopCategories[key][0] : null);
+  const label=serviceWindowLabels.get(key) ?? preciseShopLabels.get(key) ?? byCategory.get(key)?.name
+    ?? (Object.hasOwn(shopCategories,key) ? shopCategories[key][0] : null);
   if(!label || (properties.categoryLabel && properties.categoryLabel!==key))return properties;
   const localized={...properties,categoryLabel:label};
   if(localized.detail===key)localized.detail=label;
@@ -68,6 +71,14 @@ export function streetShopPinStyle(map,pin){
     icons.push(item.categories,id);
     colors.push(item.categories,item.label);
   }
+  for(const [key,item] of Object.entries(foodBadges))registerPlaceBadge(map,'place-dish-'+key,item);
+  for(const [type,categories] of [['shop',['yes','trade','religion','second_hand']],['health',['medical_supply']]]){
+    icons.push(categories,'place-pin-'+type);
+    colors.push(categories,pinLabelColor(type));
+  }
+  const diningCategories=['restaurant','fast_food','cafe'];
+  icons.push(diningCategories,foodPinExpression(key=>'place-dish-'+key,pin.layout['icon-image']));
+  colors.push(diningCategories,foodPinExpression(key=>foodBadges[key].label,pin.paint['text-color']));
   const atStreet=(mapping,fallback)=>['step',['zoom'],fallback,19,
     ['match',['coalesce',['get','category'],''],...mapping,fallback]];
   return {
