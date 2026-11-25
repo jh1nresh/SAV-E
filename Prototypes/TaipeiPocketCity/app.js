@@ -15,7 +15,8 @@ import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
 import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=mall-cutaway-1';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
+import {sunYatSenHall} from './sun-yat-sen-hall.js';
 import {addStreetDetail} from './street-detail.js?v=shop-floor-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
@@ -526,7 +527,7 @@ try{
   const linkScene=linked?{anchor:ml.MercatorCoordinate.fromLngLat(linked.origin),runs:linked.runs}:null;
   const districtMaterial=cityMask?{image:cityMask,bounds:cityIndex.materialBounds}
     :atlas&&sharedMask?{image:sharedMask,bounds:atlas.materialBounds}:null;
-  const cityLandmarks=cityMask?cityLandmarkModels:[];
+  const cityLandmarks=[...(cityMask?cityLandmarkModels:[]),sunYatSenHall];
   layer=new SurveyLayer(index,message,landmark,look==='anatomy'||hybrid,streetCenters,linkScene,districtMaterial,hybrid,cityLandmarks,appChrome);
   const firstLabel=map.getStyle().layers.find(l=>l.type==='symbol')?.id;
   map.addSource('taiwan-grid',{type:'geojson',data:empty});
@@ -708,7 +709,7 @@ try{
   else if(street==='fuxing-row')locate(shopRowView,false);
   else if(dihuaViews.has(street))locate(dihuaViews.get(street),false);
   else if(campusView==='ntu')locate({center:[121.53555,25.01657],zoom:16.75,pitch:38,bearing:-18},false);
-  else if(cityLandmark)locate({...cityLandmark,zoom:17.15},false);
+  else if(cityLandmark)locate({...cityLandmark,zoom:cityLandmark.zoom??17.15},false);
   else if(streetDistricts.has(street)||Object.values(illustratedDistricts).includes(street)||cityDistricts.some(district=>district.key===street)){
     const district=Object.keys(illustratedDistricts).find(name=>illustratedDistricts[name]===street);
     if(district)focusDistrict(district);
