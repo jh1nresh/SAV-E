@@ -1,5 +1,6 @@
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=ground-shops-2';
+import {metroExitFeatures,metroExitLayer} from './taipei-metro-exits.js';
 import {photoPlaces} from './place-photos.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
 
@@ -11,7 +12,7 @@ const savvySource='taipei-savvy-places';
 const savvyNames='taipei-savvy-place-names';
 const savvyNearby='taipei-savvy-place-neighbors';
 const savvyZoom=16;
-export const cityPlaceLayers=[savvyNames,names,outdoorNames,nearby];
+export const cityPlaceLayers=[savvyNames,names,outdoorNames,metroExitLayer,nearby];
 
 // Stable IDs distinguish the landmark itself from rentals and shops bearing the same name.
 const cityLandmarks=[
@@ -39,13 +40,16 @@ const revealZoom=['case',
 
 let pending;
 export function loadCityPlaces(){
-  return pending??=readPocketCityAsset('city-place-index').then(data=>({...data,features:data.features.map(withShopFacts)})).catch(error=>{pending=null;throw error;});
+  return pending??=readPocketCityAsset('city-place-index').then(data=>({
+    ...data,features:data.features.map(withShopFacts).concat(metroExitFeatures),
+  })).catch(error=>{pending=null;throw error;});
 }
 
 export function addCityPlaceIndex(map,pin){
-  map.addSource(source,{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19});
+  map.addSource(source,{type:'geojson',data:{type:'FeatureCollection',features:metroExitFeatures},maxzoom:19});
   const before='city170-school-names';
   const named=['has','name'];
+  const notExit=['!',['has','exitLabel']];
   const photoIds=matches(['get','placeId'],photoPlaces.map(p=>p.placeId));
   // Symbols and text compete for the same screen space as the base map labels.
   // Increasing the padding at city scales leaves room to read roads and geography.
@@ -56,22 +60,28 @@ export function addCityPlaceIndex(map,pin){
   };
   map.addSource(savvySource,{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19});
   map.addLayer({id:names,source,type:'symbol',minzoom:11,maxzoom:17.8,
-    filter:['all',named,['>=',['zoom'],revealZoom],['any',['<',['zoom'],16],['!',photoIds]]],
+    filter:['all',named,notExit,['>=',['zoom'],revealZoom],['any',['<',['zoom'],16],['!',photoIds]]],
     layout,paint:pin.paint},before);
   // Detailed street layers take over individual POIs. The index continues to name
   // outdoor areas represented by polygons in the detailed street packs.
   map.addLayer({id:outdoorNames,source,type:'symbol',minzoom:17.8,
     filter:['all',named,matches(category,outdoor)],layout,paint:pin.paint},before);
+  map.addLayer({id:metroExitLayer,source,type:'symbol',minzoom:17.55,
+    filter:['has','exitLabel'],
+    layout:{...pin.layout,'icon-image':'place-pin-transit','icon-size':.92,
+      'text-field':['get','exitLabel'],'text-size':13,'text-offset':[.98,0],
+      'text-padding':4,'text-optional':true,'symbol-sort-key':0},
+    paint:{...pin.paint,'text-color':'#24599b'}},before);
   map.addLayer({id:savvyNames,source:savvySource,type:'symbol',minzoom:savvyZoom,
     layout:{...layout,'text-optional':true},paint:pin.paint},before);
   // Query only after a visible street pin was selected, to disambiguate adjoining shops.
-  map.addLayer({id:nearby,source,type:'circle',minzoom:16,filter:['!',photoIds],
+  map.addLayer({id:nearby,source,type:'circle',minzoom:16,filter:['all',notExit,['!',photoIds]],
     paint:{'circle-radius':6,'circle-opacity':0}},before);
   map.addLayer({id:savvyNearby,source:savvySource,type:'circle',minzoom:savvyZoom,
     paint:{'circle-radius':6,'circle-opacity':0}},before);
 
   // Native account markers replace only atlas features with a reviewed identity.
-  const accountLayers = [names,outdoorNames,nearby,savvyNames,savvyNearby,
+  const accountLayers = [names,outdoorNames,metroExitLayer,nearby,savvyNames,savvyNearby,
     'city170-shop-names','city170-poi-labels','city170-poi-dots','city170-vendor-awnings'];
   const previousFilters = new Map(accountLayers.filter(id=>map.getLayer(id)).map(id=>[id,map.getFilter(id)??null]));
   function refreshFilters(placeIds){

@@ -1,3 +1,4 @@
+import {mallStreetExit4,metroExitLayer} from './taipei-metro-exits.js';
 import {mallAdjacentTenants} from './taipei101-mall-tenants.js';
 import {addMallWayfinding,mallMetroExit4} from './taipei101-wayfinding.js?v=metro-exit-1';
 
@@ -10,7 +11,7 @@ const pointKinds=['shop','facility','entrance'];
 const adjacentPoints=[...mallAdjacentTenants,mallMetroExit4];
 const transitExit=['==',['get','category'],'subway_entrance'];
 const outdoorPlaces=['taipei-outdoor-names','taipei-place-names','taipei-place-neighbors','taipei-savvy-place-names','taipei-savvy-place-neighbors',
-  'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places',
+  metroExitLayer,'city170-shop-names','city170-poi-labels','city170-poi-dots','city-atlas-pins','city-atlas-places','city-atlas-context-places',
   'tw-public-places','poi_r1','city170-vendor-awnings'];
 const zone=[121.5636,25.0332,121.5653,25.0348]; // Early loading envelope only; selection uses the supplied outline.
 
@@ -102,7 +103,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   const entryZoom=()=>stage.clientWidth && stage.clientWidth<600 ? 17.6 : 18.35;
   const exitZoom=()=>entryZoom()-.5;
   const mappedFeatures=new Map();
-  const adjacentPlaceIds=adjacentPoints.map(f=>'poi/'+f.id);
+  const adjacentPlaceIds=[...adjacentPoints.map(f=>'poi/'+f.id),mallStreetExit4];
   const mappedId=id=>String(id??'').replace(/^poi\//,'').replace(/^osm-(node|way|relation)-/,'$1/');
   let coveredIds=new Set((map.savvyAccountPlaceIds??[]).map(mappedId));
   function updateFloorPoints(){
@@ -128,6 +129,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   }
   function isPinVisible(point,id){
     if(!active)return true;
+    if(id===mallStreetExit4)return false;
     const known=mappedFeatures.get(mappedId(id));
     if(known?.properties.adjacent||insideMall(point,ring))return known?.properties.level===current;
     return true;
