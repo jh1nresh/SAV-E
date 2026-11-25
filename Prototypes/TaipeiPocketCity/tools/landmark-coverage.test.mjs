@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
-import {approved,report} from './landmark-coverage.mjs';
+import {approved,inventory,report} from './landmark-coverage.mjs';
 
 test('a promoted POI and a new museum enter the queue even when both lack a model',()=>{
   const runtime=mkdtempSync(path.join(tmpdir(),'landmark-audit-')),data=path.join(runtime,'data');
@@ -52,4 +52,60 @@ test('both distinct views must match the actual camera and reviewed renderer rev
   writeFileSync(path.join(folder,'near.webp'),'changed');
   receipt.views.near.sha256=createHash('sha256').update('changed').digest('hex');
   assert.equal(approved(receipt,'revision-1',cameras,folder),false);
+});
+
+test('a renderer dependency or material change makes the previous Songyan receipt stale',()=>{
+  const root=mkdtempSync(path.join(tmpdir(),'landmark-renderer-'));
+  const data=path.join(root,'data'),evidence=path.join(root,'evidence');
+  function file(name,contents){
+    const target=path.join(root,name);
+    mkdirSync(path.dirname(target),{recursive:true});
+    writeFileSync(target,contents);
+  }
+  const id='poi/way/229061328';
+  file('data/city-place-index.json.gz',gzipSync(JSON.stringify({features:[{
+    id,geometry:{type:'Point',coordinates:[121.56149,25.04350]},
+    properties:{name:'松菸',category:'arts_centre',district:'信義區'},
+  }]})));
+  for(const name of ['index.html','style.css','assets/base-style.json','assets/maplibre-gl.css',
+    'assets/maplibre-gl-worker.mjs','data/survey-index.json',
+    'data/city-streets/landmark/songyan-v5.bin.gz','data/city-streets/songyan-v5.json.gz',
+    'data/city-streets/landmarks.json','data/city170-material.png'])file(name,'initial');
+  file('data/city-streets/index.json','{"materialBounds":[1,2,3,4]}');
+  file('app.js',"import './songyan-detail.js?v=5';\nimport './survey-layer.js';");
+  file('survey-layer.js','');
+  file('songyan-detail.js',"import './waterfront.js';");
+  file('waterfront.js','export const color="blue";');
+  const model=()=>inventory(data,{},evidence).rows[0];
+  const baseline=model();
+  const views={};
+  for(const [key,encoded] of Object.entries({
+    far:'UklGRh4AAABXRUJQVlA4TBEAAAAvH8AFAAfQu9LVrP+BiOh/AAA=',
+    near:'UklGRh4AAABXRUJQVlA4TBEAAAAvH8AFAAdQz3L2rv+BiOh/AAA=',
+  })){
+    const image=Buffer.from(encoded,'base64');
+    file('evidence/'+key+'.webp',image);
+    views[key]={file:key+'.webp',camera:baseline.cameras[key],sha256:createHash('sha256').update(image).digest('hex')};
+  }
+  file('evidence/reviews.json',JSON.stringify({[id]:{digest:baseline.digest,reference:'https://example.org/songyan',views}}));
+  const audit=()=>report(data,path.join(root,'report'),undefined,evidence);
+  assert.deepEqual(audit().staleReviews,[]);
+  file('waterfront.js','export const color="green";');
+  assert.notEqual(model().digest,baseline.digest);
+  assert.deepEqual(audit().staleReviews,[id]);
+  file('waterfront.js','export const color="blue";');
+  assert.equal(model().digest,baseline.digest);
+  file('data/city170-material.png','revised');
+  assert.notEqual(model().digest,baseline.digest);
+  assert.deepEqual(audit().staleReviews,[id]);
+  file('data/city170-material.png','initial');
+  assert.equal(model().digest,baseline.digest);
+  file('assets/maplibre-gl-worker.mjs','revised');
+  assert.notEqual(model().digest,baseline.digest);
+  assert.deepEqual(audit().staleReviews,[id]);
+  file('assets/maplibre-gl-worker.mjs','initial');
+  assert.equal(model().digest,baseline.digest);
+  file('data/city-streets/index.json','{"materialBounds":[1,2,3,5]}');
+  assert.notEqual(model().digest,baseline.digest);
+  assert.deepEqual(audit().staleReviews,[id]);
 });

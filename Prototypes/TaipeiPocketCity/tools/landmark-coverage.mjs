@@ -25,12 +25,40 @@ const focalViews={
 };
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 
-function fingerprint(root,asset){
-  const files=[asset,'app.js','survey-layer.js','assets/base-style.json'];
-  if(asset.includes('/city-streets/landmark/'))files.push(asset.includes('songyan')?'data/city-streets/songyan-v5.json.gz':'data/city-streets/landmarks.json');
-  if(asset==='palace-museum.js')files.push('data/city-streets/landmarks.json');
-  if(asset==='data/landmark/101.bin.gz')files.push('data/landmark-101.json');
+// Match local ESM and worker references that are also followed by the iOS packager.
+// The audit runs against the packaged directory, where the packager itself is absent.
+const localModule=/(?:\bfrom\s*|\bimport\s*\(?\s*|\bnew URL\(\s*)['"](\.{1,2}\/[^'"?\s]+?\.m?js)(?:\?[^'"]*)?['"]/g;
+
+function rendererFingerprint(root){
+  const pending=['app.js','assets/maplibre-gl-worker.mjs','index.html','style.css','assets/maplibre-gl.css',
+    'assets/base-style.json','data/survey-index.json','data/city-streets/index.json','data/city170-material.png'];
+  const hashes=new Map();
+  while(pending.length){
+    const name=pending.pop();
+    if(hashes.has(name))continue;
+    const file=path.join(root,name);
+    if(!existsSync(file))return null;
+    const bytes=readFileSync(file);
+    hashes.set(name,sha(bytes));
+    if(!/\.m?js$/.test(name))continue;
+    for(const [,ref] of bytes.toString('utf8').matchAll(localModule)){
+      const dependency=path.join(path.dirname(name),ref);
+      if(dependency.startsWith('../'))return null;
+      pending.push(dependency);
+    }
+  }
   const h=createHash('sha256');
+  for(const name of [...hashes.keys()].sort())h.update(name+'\0'+hashes.get(name)+'\n');
+  return h.digest('hex');
+}
+
+function fingerprint(root,asset,renderer){
+  if(!renderer)return null;
+  const files=[asset];
+  if(asset.includes('/city-streets/landmark/')||asset==='palace-museum.js')files.push('data/city-streets/landmarks.json');
+  if(asset.includes('songyan'))files.push('data/city-streets/songyan-v5.json.gz');
+  if(asset==='data/landmark/101.bin.gz')files.push('data/landmark-101.json');
+  const h=createHash('sha256').update(renderer+'\n');
   for(const name of files){const f=path.join(root,name);if(!existsSync(f))return null;h.update(name+'\0'+sha(readFileSync(f))+'\n');}
   return h.digest('hex');
 }
@@ -59,14 +87,16 @@ export function inventory(data,receipts={},evidence=path.join(tools,'landmark-ev
   const promoted=new Set([...cityLandmarks,...districtLandmarks]);
   const places=JSON.parse(gunzipSync(readFileSync(path.join(data,'city-place-index.json.gz'))));
   const candidates=places.features.filter(f=>f.properties.name&&(promoted.has(f.id)||models[f.id]||categories.has(f.properties.category)));
-  const hasHallRenderer=readFileSync(path.join(path.dirname(data),'survey-layer.js'),'utf8').includes("from './sun-yat-sen-hall.js'");
+  const root=path.dirname(data);
+  const renderer=rendererFingerprint(root);
+  const hasHallRenderer=readFileSync(path.join(root,'survey-layer.js'),'utf8').includes("from './sun-yat-sen-hall.js'");
   const rows=candidates.map(f=>{
     const id=f.id,{name,district,category}=f.properties;
     const registered=models[id];
     // The memorial module is a separate PR. Treat the main branch's ordinary survey
     // building as pending until that renderer actually imports the authored asset.
     const model=registered?.[0]==='sun-yat-sen-hall'&&!hasHallRenderer ? null : registered;
-    const digest=model&&fingerprint(path.dirname(data),model[1]);
+    const digest=model&&fingerprint(root,model[1],renderer);
     const pose=focalViews[id]??{},center=pose.center??f.geometry.coordinates;
     const camera=z=>'?view='+[...center,z].join(',')+'&bearing='+(pose.bearing??0)+'&pitch='+(pose.pitch??45);
     const cameras={far:camera(16.9),near:camera(pose.near??18.15)};
