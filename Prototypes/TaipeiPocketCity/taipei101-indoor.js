@@ -11,6 +11,36 @@ const outdoorPlaces=['taipei-outdoor-names','taipei-place-names','taipei-place-n
   'tw-public-places','poi_r1','city170-vendor-awnings'];
 const zone=[121.5636,25.0332,121.5653,25.0348]; // Early loading envelope only; selection uses the supplied outline.
 
+function contextPins(map){
+  const original=[];
+  return function setMuted(muted){
+    if(!muted){
+      for(const [id,property,value] of original.splice(0)){
+        if(map.getLayer(id))map.setPaintProperty(id,property,value);
+      }
+      return;
+    }
+    for(const id of outdoorPlaces){
+      const type=map.getLayer(id)?.type;
+      const opacity=type==='symbol'?['icon-opacity']:type==='circle'&&!id.endsWith('-neighbors')
+        ?['circle-opacity','circle-stroke-opacity']:[];
+      const paints=type==='symbol'?[['text-color','#645d50']]:[];
+      for(const property of opacity){
+        const value=map.getPaintProperty(id,property)??1;
+        // Keep the atlas's zoom fades at the top of the expression.
+        const scaled=Array.isArray(value)&&value[0]==='interpolate'
+          ?value.map((part,i)=>i>=4&&i%2===0?['*',part,.36]:part)
+          :['*',value,.36];
+        paints.push([property,scaled]);
+      }
+      for(const [property,value] of paints){
+        original.push([id,property,map.getPaintProperty(id,property)]);
+        map.setPaintProperty(id,property,value);
+      }
+    }
+  };
+}
+
 export function insideMall([x,y],ring){
   let inside=false;
   for(let i=0,j=ring.length-1;i<ring.length;j=i++){
@@ -65,6 +95,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   const directory=control.querySelector('details'),summary=control.querySelector('[data-directory-summary]'),shops=control.querySelector('[data-directory]');
   let venue,ring,center,current,active=false,loading=false,removed=false,suppressed=false,lastPitch=0;
   let guide,outline,badge,marker,wayfinding,pendingSearch,entranceMarks=[],returnFloor=startFloor;
+  const muteContextPins=contextPins(map);
   const entryZoom=()=>stage.clientWidth && stage.clientWidth<600 ? 17.6 : 18.35;
   const exitZoom=()=>entryZoom()-.5;
   const mappedFeatures=new Map();
@@ -95,6 +126,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(!active||!insideMall(point,ring))return true;
     return mappedFeatures.get(mappedId(id))?.properties.level===current;
   }
+  const isContextPin=point=>active&&!insideMall(point,ring);
   function openSearchPlace(place){
     const [x,y]=place.point;
     pendingSearch=x>=zone[0]&&x<=zone[2]&&y>=zone[1]&&y<=zone[3]?place:null;
@@ -162,7 +194,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     suppressed=false;
     if(!active){
       active=true;lastPitch=map.getPitch();
-      setCutaway(true,ring);stage.classList.add('mall101-inside');
+      setCutaway(true,ring);stage.classList.add('mall101-inside');muteContextPins(true);
       control.hidden=false;
       map.getSource(prefix+'-plan').setData({type:'Feature',geometry:venue.footprint,properties:{}});
       const first=venue.levels.find(f=>f.label===label)??venue.levels.find(f=>f.label==='1F')??venue.levels[0];
@@ -176,7 +208,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     active=false;suppressed=explicit;returnFloor=null;closeMenu();directory.open=false;control.hidden=true;closePlace();
     map.getSource(prefix+'-places').setData(empty());map.getSource(prefix+'-plan').setData(empty());
     wayfinding.show(null);
-    stage.classList.remove('mall101-inside');setCutaway(false);
+    stage.classList.remove('mall101-inside');setCutaway(false);muteContextPins(false);
     stage.dispatchEvent(new CustomEvent('mall101-floor',{detail:{floor:null}}));
     if(explicit)map.jumpTo({pitch:lastPitch,zoom:Math.min(map.getZoom(),exitZoom()-.2)});
     else if(map.getPitch()===0&&lastPitch&&map.getZoom()>16.5)map.jumpTo({pitch:lastPitch});
@@ -306,5 +338,5 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   map.on('remove',()=>{removed=true;map.off('pocketaccountpins',onAccountPins);map.off('moveend',onMove);map.off('render',drawGuide);
     map.getCanvasContainer().removeEventListener('click',handleHit,true);marker?.remove();guide?.remove();});
   void prepare();
-  return {setNames,isPinVisible,openSearchPlace,refreshVisibility,state:()=>({ready:!!venue,active,floor:active?current:null}),exit};
+  return {setNames,isPinVisible,isContextPin,openSearchPlace,refreshVisibility,state:()=>({ready:!!venue,active,floor:active?current:null}),exit};
 }

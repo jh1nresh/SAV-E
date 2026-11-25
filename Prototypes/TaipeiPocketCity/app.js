@@ -1,6 +1,6 @@
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
-import {addTaipei101Indoor} from './taipei101-indoor.js?v=directory-map-1';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=floor-focus-1';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
@@ -18,7 +18,7 @@ import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
-import {addStreetDetail} from './street-detail.js?v=playgrounds-1';
+import {addStreetDetail} from './street-detail.js?v=floor-focus-1';
 import {addMetroPreview} from './metro-preview.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
 import {addPocketCityWeather} from './pocket-city-weather.js';
@@ -744,8 +744,9 @@ try{
       openPlace:streetDetail.openMappedPlace,
       closePlace:streetDetail.closeMappedPlace,
     });
-    streetDetail.setVisiblePlaceFilter(indoor101.isPinVisible);
-    stage.addEventListener('mall101-floor',()=>streetDetail.setVisiblePlaceFilter(indoor101.isPinVisible));
+    const updateMallPins=()=>streetDetail.setVisiblePlaceFilter(indoor101.isPinVisible,indoor101.isContextPin);
+    updateMallPins();
+    stage.addEventListener('mall101-floor',updateMallPins);
   }
   function adjustPitch(){
     if(!manualPitch&&!indoor101?.state().active&&!map.isMoving()){
