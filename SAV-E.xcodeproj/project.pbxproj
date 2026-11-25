@@ -21,6 +21,7 @@
 		FDF1E99BAB9415B78406B352 /* LivePlaceInformation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 606E2188D8F78350322570FB /* LivePlaceInformation.swift */; };
 		6DC74CD8C3CE68E5307B0C10 /* LivePlanningLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */; };
 		D9DBE44C2CB540905F4E1261 /* LivePlanningMapRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */; };
+		B91AD4603C38421F9C451B23 /* PocketCityForecast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91AD4603C38421F9C451B23 /* PocketCityForecast.swift */; };
 		1780E07F02EBA441F158DF60 /* LivePlanningReviewFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D7D48775E88FA44A02C0377 /* LivePlanningReviewFixture.swift */; };
 		EECDF0885DAB4A0A441DE560 /* LivePublicDiscoveryData.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */; };
 		84EB06F6384ACBC4092DCD6A /* LivePublicDiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */; };
@@ -416,6 +417,7 @@
 		606E2188D8F78350322570FB /* LivePlaceInformation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlaceInformation.swift; path = "Prototypes/DatePlanDemo/Main/LivePlaceInformation.swift"; sourceTree = SOURCE_ROOT; };
 		7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningLibrary.swift; path = "Prototypes/DatePlanDemo/Main/LivePlanningLibrary.swift"; sourceTree = SOURCE_ROOT; };
 		3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningMapRoot.swift; path = "Prototypes/DatePlanDemo/Main/LivePlanningMapRoot.swift"; sourceTree = SOURCE_ROOT; };
+		A91AD4603C38421F9C451B23 /* PocketCityForecast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PocketCityForecast.swift; path = "Prototypes/DatePlanDemo/Main/PocketCityForecast.swift"; sourceTree = SOURCE_ROOT; };
 		5D7D48775E88FA44A02C0377 /* LivePlanningReviewFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePlanningReviewFixture.swift; path = "Prototypes/DatePlanDemo/Main/LivePlanningReviewFixture.swift"; sourceTree = SOURCE_ROOT; };
 		BBD4285C523AAF94F17173BC /* LivePublicDiscoveryData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryData.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryData.swift"; sourceTree = SOURCE_ROOT; };
 		A830D4642E85E6055D3D73B3 /* LivePublicDiscoveryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePublicDiscoveryModel.swift; path = "Prototypes/DatePlanDemo/Main/LivePublicDiscoveryModel.swift"; sourceTree = SOURCE_ROOT; };
@@ -748,6 +750,7 @@
 				7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */,
 				86F10F2B74AA32C794F3415C /* LivePlanningLibraryTests.swift */,
 				3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */,
+				A91AD4603C38421F9C451B23 /* PocketCityForecast.swift */,
 				5D7D48775E88FA44A02C0377 /* LivePlanningReviewFixture.swift */,
 				20F33DDDA27A5FCFB4F188B0 /* LivePlanningReviewFixtureTests.swift */,
 				7FF60A1EBAA449E8D1037E46 /* LivePlanningReviewUITests.swift */,
@@ -1984,6 +1987,7 @@
 				FDF1E99BAB9415B78406B352 /* LivePlaceInformation.swift in Sources */,
 				6DC74CD8C3CE68E5307B0C10 /* LivePlanningLibrary.swift in Sources */,
 				D9DBE44C2CB540905F4E1261 /* LivePlanningMapRoot.swift in Sources */,
+				B91AD4603C38421F9C451B23 /* PocketCityForecast.swift in Sources */,
 				1780E07F02EBA441F158DF60 /* LivePlanningReviewFixture.swift in Sources */,
 				EECDF0885DAB4A0A441DE560 /* LivePublicDiscoveryData.swift in Sources */,
 				84EB06F6384ACBC4092DCD6A /* LivePublicDiscoveryModel.swift in Sources */,

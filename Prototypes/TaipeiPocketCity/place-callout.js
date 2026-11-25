@@ -1,8 +1,16 @@
-import {morphPlaceCard} from './photo-pin-motion.js';
+import {setPlacePinEmphasis} from './photo-pin-motion.js';
+import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
 import {originalPlacePhoto} from './place-photos.js';
-import {reviewedSavvyPosts} from './savvy-place-sources.js';
+import {cityPlaceID,reviewedSavvyPosts} from './savvy-place-sources.js';
 
-export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
+export function appleDirections(point){
+  if(!Array.isArray(point)||point.length!==2)return null;
+  const [lng,lat]=point;
+  if(!Number.isFinite(lng)||!Number.isFinite(lat)||Math.abs(lng)>180||Math.abs(lat)>90)return null;
+  return 'https://maps.apple.com/?daddr='+lat+','+lng;
+}
+
+export function createPlaceCallout(map){
   const card=document.querySelector('#place-card');
   const closeButton=card.querySelector('#place-close');
   const photoButton=card.querySelector('.place-photo');
@@ -26,75 +34,127 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
   original.addEventListener('click',event=>{if(event.target===original)original.close();});
   const kind=card.querySelector('.place-kind');
   const detail=card.querySelector('.place-detail');
-  const source=card.querySelector('.place-source');
+  const directions=card.querySelector('.place-directions');
+  const official=card.querySelector('.place-official');
   const postsList=card.querySelector('.savvy-posts');
   const credit=card.querySelector('.photo-credit');
   for(const link of [credit,fullCredit])link.addEventListener('click',event=>{if(!photoIsCurrent())event.preventDefault();});
   const name=card.querySelector('h3');
-  const scene=map.getContainer();
-  let anchor=null,trigger=null,currentPhoto=null,entering=false;
-  let pop,origin,expiryTimer,openSerial=0;
-  function animateCard(reverse=false){
-    pop?.cancel();
-    const motion=morphPlaceCard(card,currentPhoto,origin,reverse);
-    pop=motion;
-    motion.shape.onfinish=()=>{
-      if(pop!==motion)return;
-      if(reverse){close(true);return;}
-      motion.cancel();
-      pop=null;
+  const handle=card.querySelector('.sheet-handle');
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  const host=window.webkit?.messageHandlers?.pocketMap;
+  const nativeSheet=Boolean(host&&window.savvyNativePlaceSheet===true);
+  const savedButton=card.querySelector('#place-in-explore');
+  const friendButton=card.querySelector('#place-in-friends');
+  const choices=card.querySelector('.place-choices');
+  let branchPhoto=null,reviewed=[],lastPayload;
+  if(nativeSheet)card.classList.add('uses-native-drawer');
+  function publish(force=false){
+    if(!nativeSheet||card.hidden)return;
+    const payload={serial:openSerial,name:name.textContent,kind:kind.textContent,
+      address:detail.hidden?'':detail.textContent,directions:directions.hidden?null:directions.href,
+      website:official.hidden?null:official.href,websiteLabel:official.hidden?'':official.textContent.replace(/ ↗$/,''),
+      photo:branchPhoto&&{file:branchPhoto.file,alt:branchPhoto.alt,credit:branchPhoto.credit,url:branchPhoto.url},
+      posts:reviewed.filter(post=>post.expiresAt>Date.now()).map(post=>({platform:post.platform,
+        title:post.title||'',author:post.authorHandle||'',url:post.url,expiresAt:post.expiresAt,
+        cover:post.cover&&{url:post.cover,expiresAt:Math.min(post.expiresAt,post.coverExpiry),permission:post.coverPermission}})),
+      choices:Array.from(choices.children,option=>option.textContent),
+      savedActionLabel:savedButton.hidden?null:savedButton.textContent,friendAction:!friendButton.hidden};
+    const encoded=JSON.stringify(payload);
+    if(force||encoded!==lastPayload){lastPayload=encoded;host.postMessage({event:'placeDetail',detail:payload});}
+  }
+  const actionsObserver=nativeSheet?new MutationObserver(()=>publish()):null;
+  for(const button of [savedButton,friendButton])actionsObserver?.observe(button,
+    {attributes:true,attributeFilter:['hidden'],childList:true,characterData:true,subtree:true});
+  if(nativeSheet){
+    window.savvySyncPlaceSheet=()=>publish(true);
+    window.savvyPlaceSheetAction=(serial,action,index)=>{
+      if(card.hidden||serial!==openSerial)return;
+      if(action==='close')dismiss();
+      else if(action==='saved'&&!savedButton.hidden)savedButton.click();
+      else if(action==='friend'&&!friendButton.hidden)friendButton.click();
+      else if(action==='choice'&&Number.isInteger(index)&&index>=0&&index<choices.children.length)
+        choices.children[index].click();
     };
   }
-  function reveal(){
-    if(!entering)return;
-    entering=false;
-    if(!matchMedia('(prefers-reduced-motion: reduce)').matches)animateCard();
-    closeButton.focus({preventScroll:true});
-  }
-  function dismiss(){
-    if(!origin||matchMedia('(prefers-reduced-motion: reduce)').matches){close(true);return;}
-    // Dismiss immediately if the user interrupts the opening or closing motion.
-    if(pop){close(true);return;}
-    animateCard(true);
-  }
-  function position(){
-    if(!anchor)return;
+  let anchor=null,trigger=null,currentPhoto=null,activeArt=null,focusMarker=null;
+  let slide,expiryTimer,openSerial=0,dragStart;
+  function moveFocusMarker(){
+    if(!focusMarker||!anchor)return;
     const {x,y}=map.project(anchor);
-    const width=scene.clientWidth,height=scene.clientHeight;
-    const visible=x>=0&&x<=width&&y>=0&&y<=height;
-    card.style.visibility=visible?'':'hidden';
-    if(!visible)return;
-    const w=card.offsetWidth,h=card.offsetHeight;
-    const gap=currentPhoto?8:17;
-    const above=y-h-gap>=8;
-    const top=above?y-h-gap:y+gap;
-    const left=Math.max(8,Math.min(width-w-8,x-w/2));
-    card.style.left=left+'px';
-    const cardTop=Math.max(8,Math.min(height-h-8,top));
-    card.style.top=cardTop+'px';
-    const diameter=currentPhoto?38:20;
-    origin={diameter,x:x-left,y:y-cardTop-(currentPhoto?diameter/2+3:0)};
-    card.style.setProperty('--tip',Math.max(15,Math.min(w-15,x-left))+'px');
-    card.classList.toggle('below',!above);
-    reveal();
+    focusMarker.style.left=x+'px';focusMarker.style.top=y+'px';
+  }
+  function reset(){
+    openSerial++;branchPhoto=null;reviewed=[];lastPayload=undefined;
+    clearTimeout(expiryTimer);
+    slide?.cancel();
+    slide=null;
+    dragStart=undefined;
+    if(original.open)original.close();
+    trigger?.setAttribute('aria-expanded','false');
+    setPlacePinEmphasis(activeArt,false);
+    map.off('move',moveFocusMarker);
+    focusMarker?.remove();
+    focusMarker=null;activeArt=null;anchor=null;currentPhoto=null;trigger=null;
   }
   function close(restoreFocus=false){
-    openSerial++;
-    clearTimeout(expiryTimer);
-    pop?.cancel();
-    pop=null;
+    if(card.hidden)return;
     const previous=trigger;
-    if(original.open)original.close();
-    entering=false;
-    origin=null;
-    anchor=null;
-    currentPhoto=null;
-    trigger=null;
+    reset();
     card.hidden=true;
-    setExpandedPhoto(null,restoreFocus);
-    previous?.setAttribute('aria-expanded','false');
+    map.fire('pocketplacechange',{placeId:null});
+    host?.postMessage({event:'placeSheet',open:false});
     if(restoreFocus)(previous?.isConnected?previous:map.getCanvas()).focus({preventScroll:true});
   }
+  function dismiss(){
+    if(card.hidden)return;
+    if(nativeSheet){
+      // Keep the temporary canvas marker attached while its artwork settles.
+      if(focusMarker&&activeArt&&!reduced.matches){
+        const marker=focusMarker,point=anchor;
+        setPlacePinEmphasis(activeArt,false);
+        activeArt=null;focusMarker=null;
+        const follow=()=>{const {x,y}=map.project(point);marker.style.left=x+'px';marker.style.top=y+'px';};
+        map.on('move',follow);
+        const remove=()=>{map.off('move',follow);marker.remove();};
+        Promise.allSettled(marker.firstChild.getAnimations().map(animation=>animation.finished)).then(remove);
+      }
+      close(true);return;
+    }
+    if(reduced.matches){close(true);return;}
+    const from=getComputedStyle(card).transform;
+    slide?.cancel();
+    setPlacePinEmphasis(activeArt,false);
+    activeArt=null;
+    slide=card.animate([{transform:from},{transform:'translateY(105%)'}],
+      {duration:200,easing:'cubic-bezier(.4,0,.8,.3)',fill:'forwards'});
+    slide.onfinish=()=>close(true);
+  }
+  function emphasize(place){
+    // Native marker artwork owns its selection spring. For tile symbols, place
+    // a temporary highlight at the selected coordinate without moving the camera.
+    if(trigger?.classList.contains('ios-place-pin'))return;
+    activeArt=trigger?.querySelector('.photo-badge,canvas');
+    if(!activeArt&&anchor){
+      focusMarker=document.createElement('span');
+      focusMarker.className='place-focus-marker';
+      activeArt=placeButtonIcon(place.category??place.kind).canvas;
+      focusMarker.append(activeArt);
+      map.getCanvasContainer().append(focusMarker);
+      moveFocusMarker();
+      map.on('move',moveFocusMarker);
+    }
+    setPlacePinEmphasis(activeArt,true);
+  }
+  handle.addEventListener('pointerdown',event=>{
+    dragStart=event.clientY;handle.setPointerCapture(event.pointerId);
+  });
+  handle.addEventListener('pointerup',event=>{
+    if(dragStart!==undefined&&event.clientY-dragStart>32)dismiss();
+    dragStart=undefined;
+  });
+  handle.addEventListener('pointercancel',()=>{dragStart=undefined;});
+  if(host)window.savvyDismissPlaceSheet=()=>close();
   function showPhoto(photo,fallback=null){
     currentPhoto=photo;
     photoImage.onerror=null;
@@ -106,7 +166,7 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
     photoImage.referrerPolicy='no-referrer';
     if(photo.remote)photoImage.crossOrigin='anonymous';
     else photoImage.removeAttribute('crossorigin');
-    photoImage.onerror=()=>{showPhoto(fallback);position();};
+    photoImage.onerror=()=>{showPhoto(fallback);};
     photoImage.src=photo.src;
     credit.textContent=(photo.remote?photo.credit:'攝影 '+photo.credit.split(' · ')[0])+' ↗';
     credit.title=photo.credit;
@@ -115,6 +175,7 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
   async function showPosts(place,serial,localPhoto){
     const posts=await reviewedSavvyPosts(place);
     if(serial!==openSerial)return;
+    reviewed=posts;publish();
     const hadFocus=postsList.contains(document.activeElement);
     postsList.replaceChildren();
     const platformName={instagram:'Instagram',threads:'Threads'};
@@ -142,29 +203,28 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
       fullImage.removeAttribute('src');
       if(!featured)showPhoto(localPhoto);
     }
-    if(featured&&!sameOriginal){
+    if(!nativeSheet&&featured&&!sameOriginal){
       showPhoto({src:featured.cover,alt:featured.title||name.textContent,remote:true,url:featured.url,
         expiresAt:coverExpiresAt,
         credit:platformName[featured.platform]+(featured.authorHandle?' · @'+featured.authorHandle:'')},localPhoto);
     }
-    position();
     if(posts.length){
       const expiry=Math.min(...posts.map(post=>post.expiresAt),featured?.coverExpiry??Infinity);
       expiryTimer=setTimeout(()=>showPosts(place,serial,localPhoto),Math.min(2**31-1,Math.max(0,expiry-Date.now())));
     }
   }
   function open(place,button=null){
-    close();
+    const wasOpen=!card.hidden;
+    if(map.savvySavedOnly&&!button?.classList.contains('is-saved'))return;
+    reset();
     anchor=place.point??null;
     trigger=button;
     button?.setAttribute('aria-expanded','true');
     name.textContent=place.name||place.categoryLabel||'地點';
     kind.textContent=place.kind==='school-label'?'學校':place.categoryLabel??place.kind??'地點';
-    const street=place.source==='Savvy'?place.detail??''
-      :(place.detail??'').replace(/[０-９0-9]+(?:[之－-][０-９0-9]+)?\s*號.*$/u,'').trim();
+    const street=place.detail??'';
     detail.textContent=street;
     detail.hidden=!street||street===kind.textContent;
-    const choices=card.querySelector('.place-choices');
     choices.replaceChildren();
     choices.hidden=!place.choices?.length;
     for(const candidate of place.choices??[]){
@@ -175,33 +235,53 @@ export function createPlaceCallout(map,setExpandedPhoto=()=>{}){
       choices.append(option);
     }
     const photo=originalPlacePhoto(place);
-    setExpandedPhoto(photo?.src??null);
-    showPhoto(photo);
+    branchPhoto=photo;
+    if(!nativeSheet)showPhoto(photo);
     postsList.hidden=true;
     postsList.replaceChildren();
     void showPosts(place,openSerial,photo);
-    const url=place.url;
-    source.hidden=!url;
-    if(url){
-      source.href=url;
-      source.textContent=(place.source??(url.startsWith('https://www.openstreetmap.org/')?'OpenStreetMap':'官方資訊'))+' ↗';
-    }
+    const destination=appleDirections(anchor);
+    directions.hidden=!destination;
+    if(destination)directions.href=destination;
+    else directions.removeAttribute('href');
+    const site=URL.canParse(place.url)?new URL(place.url):null;
+    const hasSite=site?.protocol==='https:'&&!/(^|\.)openstreetmap\.org$/i.test(site.hostname)&&place.source!=='Savvy';
+    official.hidden=!hasSite;
+    if(hasSite){
+      official.href=site.href;
+      official.textContent=(place.source||'官方資訊')+' ↗';
+    }else official.removeAttribute('href');
+    map.fire('pocketplacechange',{placeId:cityPlaceID(place)});
     card.hidden=false;
-    card.style.visibility='';
-    card.classList.toggle('anchored',Boolean(anchor));
-    entering=true;
-    position();
-    if(!anchor){origin={x:card.offsetWidth/2,y:card.offsetHeight,diameter:38};reveal();}
+    card.scrollTop=0;
+    emphasize(place);
+    // Reserve the sheet’s possible expanded height on entry so late-arriving
+    // posts or a photo never cover the selected pin or trigger another pan.
+    if(anchor&&map.panBy){
+      const viewport=map.getContainer();
+      const point=map.project(anchor);
+      const top=viewport.clientHeight-Math.min(viewport.clientHeight*.58,560);
+      if((nativeSheet||(point.x>=card.offsetLeft&&point.x<=card.offsetLeft+card.offsetWidth))&&point.y>top-20){
+        map.panBy([0,point.y-(top-20)],{duration:reduced.matches?0:260},{pocketPlaceReveal:true});
+      }
+    }
+    if(!wasOpen){
+      host?.postMessage({event:'placeSheet',open:true});
+      if(!nativeSheet&&!reduced.matches)slide=card.animate([{transform:'translateY(105%)'},{transform:'translateY(0)'}],
+        {duration:300,easing:'cubic-bezier(.2,.85,.22,1)'});
+    }
+    if(nativeSheet)publish();
+    else closeButton.focus({preventScroll:true});
   }
   closeButton.addEventListener('click',dismiss);
   card.addEventListener('keydown',event=>{
     if(event.key==='Escape'){event.stopPropagation();dismiss();}
   });
-  map.on('move',position);
-  map.on('moveend',()=>{
-    position();
-    if(anchor&&card.style.visibility==='hidden')close(card.contains(document.activeElement));
+  map.on('remove',()=>{
+    close();
+    actionsObserver?.disconnect();
+    if(nativeSheet){delete window.savvySyncPlaceSheet;delete window.savvyPlaceSheetAction;}
+    if(host)delete window.savvyDismissPlaceSheet;
   });
-  new ResizeObserver(position).observe(card);
   return {open,close,dismiss,get trigger(){return trigger;}};
 }

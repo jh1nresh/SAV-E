@@ -72,7 +72,11 @@ export function addCityContext(map,rows,before,inTaipei,open,inTaiwan=()=>false)
     if(signature!==previous){map.getSource(id).setData(data(features));previous=signature;}
     active=true;
   }
-  function schedule(){clearTimeout(timer);timer=setTimeout(refresh,100);}
+  function schedule(){
+    clearTimeout(timer);
+    if(!map.isMoving?.())timer=setTimeout(refresh,100);
+  }
+  map.on('movestart',()=>clearTimeout(timer));
   map.on('moveend',schedule);
   map.on('sourcedata',e=>{if(e.sourceId==='openmaptiles'&&e.sourceDataType==='content')schedule();});
   map.on('remove',()=>clearTimeout(timer));schedule();

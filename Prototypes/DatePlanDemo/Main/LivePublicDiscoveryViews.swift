@@ -146,7 +146,7 @@ struct LivePublicDiscoveryDetail: View {
                         .accessibilityIdentifier("live.discovery.allPosts")
                     }
                 }.padding(20)
-            }.background(DateTheme.canvas).foregroundStyle(DateTheme.ink)
+            }.background(Color.clear).foregroundStyle(DateTheme.ink)
                 .navigationTitle(copy("\(venue.posts.count) posts", "\(venue.posts.count) 篇貼文"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -366,18 +366,24 @@ struct LivePublicPostCover: View {
                   let url = cover.previewURL(at: Date(), platform: post.platform),
                   let expires = Self.date(cover.expiresAt), expires > Date() else { return }
             do {
-                let data = try await PublicPostImageRead.data(url)
-                guard !Task.isCancelled, scenePhase == .active, currentSession, expires > Date(),
-                      let source = CGImageSourceCreateWithData(data as CFData, nil),
-                      let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                        kCGImageSourceCreateThumbnailFromImageAlways: true,
-                        kCGImageSourceThumbnailMaxPixelSize: 800,
-                        kCGImageSourceCreateThumbnailWithTransform: true
-                      ] as CFDictionary) else { return }
-                image = UIImage(cgImage: thumbnail)
+                let thumbnail = try await Self.thumbnail(url)
+                guard !Task.isCancelled, scenePhase == .active, currentSession, expires > Date() else { return }
+                image = thumbnail
             } catch { image = nil }
         }
         .onDisappear { image = nil }
+    }
+    /// Caller validates the platform URL, account context, and permission
+    /// deadline and drops the decoded thumbnail at the end of its selection.
+    static func thumbnail(_ url: URL) async throws -> UIImage {
+        let data = try await PublicPostImageRead.data(url)
+        guard !Task.isCancelled, let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 800,
+                kCGImageSourceCreateThumbnailWithTransform: true
+              ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
+        return UIImage(cgImage: thumbnail)
     }
     private var currentSession: Bool {
         let auth = PrivyAuthService.shared

@@ -2,10 +2,6 @@
 import SwiftUI
 import MapKit
 
-enum LiveMapMode: String, CaseIterable {
-    case explore = "探索", outing = "朋友", personal = "我的"
-}
-
 /// A navigation request carries IDs only; MapViewModel remains the source of truth.
 struct LiveReviewInboxRequest: Equatable {
     let id = UUID()
@@ -35,20 +31,30 @@ struct LivePlanningMapRoot: View {
     let onOpenReview: (UUID) -> Void
     let onClearReviewBatch: () -> Void
     private let currentSession: @MainActor () -> Bool
+    private let usesFixtureMap: Bool
     @StateObject private var outing: LiveOutingModel
     @StateObject private var plan: LiveRoutePlan
     @StateObject private var discovery: LivePublicDiscoveryModel
-    @State private var destination = DemoDestination.map
-    @State private var mode: LiveMapMode = .explore
+    @State private var destination = DemoDestination.saved
+    @State private var previousRootDestination = DemoDestination.saved
+    @State private var savedQuery = ""
+    @FocusState private var savedSearchFocused: Bool
+    @State private var hasOpenedMap = false
+    @State private var mapPresentation = PocketCityPresentation()
+    @State private var appliedWeatherArea: PocketCityForecast.Area?
+    @State private var pocketMapFailed = false
+    @State private var showsFriends = false
+    @State private var savedOnly = false
+    @State private var creditsRequest = 0
+    @State private var atlasSheetOpen = false
+    @StateObject private var atlasDrawer = PocketCityPlaceDrawer()
     @State private var discoveryReload = 0
     @State private var camera = MapCameraPosition.region(MKCoordinateRegion(
         center: .init(latitude: 25.04, longitude: 121.54), span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07)))
     @State private var cameraRequestID = 0
     @State private var searchRegion = MKCoordinateRegion(center: .init(latitude: 25.04, longitude: 121.54),
                                                        span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07))
-    @State private var didFitFriends = false
     @State private var friendsVisitedOnly = false
-    @State private var didFitSaved = false
     @State private var searchPresented = false
     @State private var selected: LiveMapPlace?
     @State private var pendingSavedDetail: UUID?
@@ -67,6 +73,8 @@ struct LivePlanningMapRoot: View {
     @State private var teamPresented = false
     @State private var newListTitle = ""
     @State private var joinCode = ""
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.appLanguageSettings) private var language
     @Environment(\.scenePhase) private var scenePhase
@@ -80,6 +88,7 @@ struct LivePlanningMapRoot: View {
          dependencies: LivePlanningDependencies? = nil) {
         self.mapVM = mapVM; self.ownerSubject = ownerSubject; self.sessionGeneration = sessionGeneration
         self.onOpenSaved = onOpenSaved; self.onOpenAccount = onOpenAccount; self.onCapture = onCapture
+        usesFixtureMap = dependencies != nil
         self.reviewInboxRequest = reviewInboxRequest
         self.onOpenReview = onOpenReview
         self.onClearReviewBatch = onClearReviewBatch
@@ -107,24 +116,62 @@ struct LivePlanningMapRoot: View {
     }
     private var friendEntries: [LiveFriendMapPlace] {
         LiveFriendMapPlace.projections(posts: outing.posts)
-            .filter { !friendsVisitedOnly || $0.hasVisited }
+            .filter { outing.selectedListID != nil || !friendsVisitedOnly || $0.hasVisited }
     }
     private var friendPlaces: [LiveMapPlace] { LiveFriendMapPlace.groupedByVenue(friendEntries).compactMap { $0.first?.pin } }
+    // Membership comes only from the active account. Use exact provider IDs to
+    // carry its bookmark onto another representation of the same branch.
+    private var savedVenueKeys: Set<LivePublicDiscoveryVenueKey> {
+        Set(mapVM.places.compactMap { LivePublicDiscoveryVenueKey(savedPlace: $0) })
+    }
     private var pins: [LiveMapPlace] {
-        let values: [LiveMapPlace]
-        switch mode {
-        case .personal: values = saved
-        case .explore: values = discovery.page?.venues.compactMap(LiveMapPlace.discovery) ?? []
-        case .outing: values = friendPlaces + groupPlaces.filter { groupPin in
-                !friendPlaces.contains { $0.place.matches(groupPin.place) }
+        var values = saved
+        if !savedOnly {
+            values += discovery.page?.venues.compactMap(LiveMapPlace.discovery) ?? []
+        }
+        if showsFriends {
+            let friends = friendPlaces
+            let shared = friends + groupPlaces.filter { groupPin in
+                !friends.contains { $0.place.matches(groupPin.place) }
+            }
+            let keys = savedVenueKeys
+            values += shared.filter { pin in
+                !savedOnly || LivePublicDiscoveryVenueKey(savedPlace: pin.place).map(keys.contains) == true
             }
         }
-        return values + [searchPin].compactMap { $0 }.filter { pin in !values.contains(where: { $0.id == pin.id }) }
+        if let searchPin, !savedOnly, !values.contains(where: { $0.id == searchPin.id }) {
+            values.append(searchPin)
+        }
+        return values
     }
     private var sessionIsCurrent: Bool {
         currentSession()
     }
-    private var shouldRefreshOuting: Bool { isMounted && scenePhase == .active && mode == .outing }
+    private var shouldRefreshOuting: Bool { isMounted && scenePhase == .active && showsFriends }
+    private var weatherArea: PocketCityForecast.Area? {
+        guard isMounted, destination == .map, scenePhase == .active,
+              !usesFixtureMap, !pocketMapFailed,
+              searchRegion.span.latitudeDelta < 4, searchRegion.span.longitudeDelta < 4 else { return nil }
+        return .init(latitude: searchRegion.center.latitude, longitude: searchRegion.center.longitude)
+    }
+
+    private func followWeather(in area: PocketCityForecast.Area?) async {
+        if appliedWeatherArea != area {
+            mapPresentation.weather = .day
+            appliedWeatherArea = area
+        }
+        guard let area else { return }
+        do {
+            try await Task.sleep(for: .milliseconds(700))
+            while !Task.isCancelled {
+                let forecast = try await PocketCityForecast.shared.forecast(for: area)
+                guard !Task.isCancelled, area == weatherArea else { return }
+                mapPresentation.weather = forecast.weather ?? .day
+                try await Task.sleep(for: .seconds(max(60, forecast.refreshAfter.timeIntervalSinceNow)))
+            }
+        } catch { /* Map moved or left the foreground. */ }
+    }
+
     private var discoveryViewport: LivePublicDiscoveryViewport? {
         let span = searchRegion.span
         let center = searchRegion.center
@@ -136,7 +183,7 @@ struct LivePlanningMapRoot: View {
             north: min(90, center.latitude + span.latitudeDelta / 2))
     }
     private var discoveryQuery: String {
-        guard isMounted, scenePhase == .active, destination == .map, mode == .explore,
+        guard isMounted, scenePhase == .active, destination == .map, !savedOnly,
               let viewport = discoveryViewport else { return "inactive" }
         return "\(viewport.queryValue):\(discoveryReload)"
     }
@@ -147,52 +194,39 @@ struct LivePlanningMapRoot: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if !showsPocketCity {
-                    realMap.opacity(destination == .map ? 1 : 0)
-                        .allowsHitTesting(destination == .map).accessibilityHidden(destination != .map)
+                DateTheme.canvas.ignoresSafeArea()
+                if hasOpenedMap || destination == .map {
+                    mapPage(height: geometry.size.height)
+                        .transition(reduceMotion ? .identity : .move(edge: .trailing))
+                        .offset(x: destination == .saved ? geometry.size.width : 0)
+                        .opacity(destination == .passport ? 0 : 1)
+                        .allowsHitTesting(destination == .map)
+                        .accessibilityHidden(destination != .map)
                 }
-                if destination != .map { DateTheme.canvas.ignoresSafeArea() }
-                VStack(spacing: 12) {
-                    if destination != .map { header }
-                    if destination == .map {
-                        modeControl
-                        if showsPocketCity { pocketMap } else { Spacer(minLength: 0) }
-                        HStack {
-                            if mode == .explore {
-                                Button(showsPocketCity ? copy("Apple Maps", "Apple 地圖") : copy("Pocket City", "Pocket City 立體地圖")) {
-                                    camera = .region(searchRegion)
-                                    usesPocketCity.toggle()
-                                }
-                                .buttonStyle(.bordered).frame(minHeight: 44)
-                            }
-                            Spacer()
-                            LiveMapLocationControl(position: Binding(
-                                get: { camera },
-                                set: { position in
-                                    camera = position
-                                    cameraRequestID &+= 1
-                                }
-                            ), ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
-                        }
-                        if mode == .outing {
-                            outingPanel.frame(maxHeight: (groupPlaces.isEmpty && !canShowPlan)
-                                              ? min(240, geometry.size.height * 0.35)
-                                              : (canShowPlan
-                                                 ? min(geometry.size.height * 0.64, max(0, geometry.size.height - 260))
-                                                 : geometry.size.height * 0.51)).demoCard()
-                        } else if mode == .explore {
-                            LivePublicDiscoverySummary(model: discovery,
-                                onRetry: { discoveryReload &+= 1 }, onMore: { Task { await discovery.loadMore() } }).demoCard()
-                        } else {
-                            personalSummary.demoCard()
-                        }
-                    } else if destination == .saved {
-                        savedPage
-                    } else {
-                        passport
+                savedPage
+                    .padding(.horizontal, 24).padding(.top, 62).padding(.bottom, 82)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(DateTheme.canvas.ignoresSafeArea())
+                    .offset(x: destination == .map ? -geometry.size.width : 0)
+                    .opacity(destination == .passport ? 0 : 1)
+                    .allowsHitTesting(destination == .saved)
+                    .accessibilityHidden(destination != .saved)
+                    .simultaneousGesture(pageSwipe)
+                if destination == .passport {
+                    passport
+                        .padding(.horizontal, 24).padding(.top, 62)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(DateTheme.canvas.ignoresSafeArea())
+                }
+                VStack(spacing: 0) {
+                    rootHeader.simultaneousGesture(pageSwipe)
+                    Spacer(minLength: 0)
+                    if destination != .passport && !(destination == .map && atlasSheetOpen) {
+                        dock.simultaneousGesture(pageSwipe)
+                            .transaction(value: destination) { $0.animation = nil }
                     }
-                    dock
-                }.padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 8)
+                }
+                .padding(.horizontal, 24).padding(.vertical, 8)
             }.foregroundStyle(DateTheme.ink)
         }
         .onAppear {
@@ -200,9 +234,8 @@ struct LivePlanningMapRoot: View {
             if ProcessInfo.processInfo.arguments.contains("--preview-tab-saved") { destination = .saved }
             if ProcessInfo.processInfo.arguments.contains("--preview-tab-passport")
                 || ProcessInfo.processInfo.arguments.contains("--preview-account") { destination = .passport }
-            fitSavedIfNeeded()
-            if ProcessInfo.processInfo.arguments.contains("--map-mode-group") { mode = .outing }
-            if ProcessInfo.processInfo.arguments.contains("--map-mode-personal") { mode = .personal }
+            if ProcessInfo.processInfo.arguments.contains("--map-mode-group") { showsFriends = true }
+            if ProcessInfo.processInfo.arguments.contains("--map-mode-personal") { savedOnly = true }
         }
         .task {
             if ProcessInfo.processInfo.arguments.contains("--preview-account") {
@@ -211,50 +244,50 @@ struct LivePlanningMapRoot: View {
                 onOpenAccount()
             }
         }
-        .onChange(of: saved.map(\.id)) { _, _ in fitSavedIfNeeded() }
         .onChange(of: reviewInboxRequest?.id, initial: true) { _, requestID in
             guard requestID != nil else { return }
             selected = nil
             searchPresented = false
             destination = .saved
         }
-        .onChange(of: destination) { previous, _ in
-            if previous == .map && showsPocketCity { camera = .region(searchRegion) }
+        .onChange(of: destination) { old, next in
+            if next == .map { hasOpenedMap = true }
+            else { atlasSheetOpen = false; atlasDrawer.dismiss() }
+            if next == .passport, old != .passport { previousRootDestination = old }
+            if next != .saved { savedSearchFocused = false }
         }
-        .onChange(of: mode) { _, next in
-            lifecycleRevision &+= 1
-            guideAccess.invalidate()
-            selected = nil; pendingSavedDetail = nil; searchPin = nil; selectedStops = []; stopSelectionListID = nil
-            planOperation?.cancel(); plan.cancel(); outing.deactivate()
-            discovery.clear()
-            if next == .outing { didFitFriends = false }
-            else { guideListToOpen = nil }
-            if next == .personal { fitSavedIfNeeded() }
+        .onChange(of: showsFriends) { _, enabled in
+            if !enabled {
+                lifecycleRevision &+= 1
+                guideAccess.invalidate()
+                planOperation?.cancel(); plan.cancel(); outing.deactivate()
+                if selected?.origin == .shared { selected = nil }
+                selectedStops = []; stopSelectionListID = nil; guideListToOpen = nil
+            }
+        }
+        .onChange(of: savedOnly) { _, enabled in
+            if enabled { searchPin = nil }
         }
         .onChange(of: outing.snapshotRevision) { _, _ in
             reconcilePlan()
             if selected?.origin == .shared { selected = nil }
-            if !groupPlaces.isEmpty { fit(groupPlaces) }
         }
         .onChange(of: outing.error) { _, value in
             if value != nil, shouldRefreshOuting, outing.selectedListID == nil { plan.cancel() }
         }
         .onChange(of: outing.posts) { _, _ in
             if selected?.origin == .shared { selected = nil }
-            if mode == .outing, !didFitFriends, !friendPlaces.isEmpty {
-                didFitFriends = true
-                if outing.selectedListID == nil { fit(friendPlaces) }
-            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { suspendPlanning() }
         }
-        .onDisappear { isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .onDisappear { atlasSheetOpen = false; atlasDrawer.dismiss(); isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .task(id: weatherArea) { await followWeather(in: weatherArea) }
         .task(id: discoveryQuery) {
             guard discoveryQuery != "inactive", let viewport = discoveryViewport, sessionIsCurrent else {
                 discovery.clear(); return
             }
-            await discovery.refresh(viewport)
+            await discovery.refreshMap(viewport)
         }
         .onChange(of: discovery.page?.indexRevision) { _, _ in
             if selected?.origin == .publicPost { selected = nil }
@@ -277,17 +310,79 @@ struct LivePlanningMapRoot: View {
             LiveMapSearch(region: searchRegion) { pin in
                 guard sessionIsCurrent else { return }
                 destination = .map
+                savedOnly = false
                 searchPin = pin
                 camera = .region(.init(center: pin.coordinate, span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012)))
                 // Selecting the same result after a pan is a fresh camera request.
                 cameraRequestID &+= 1
-            }.presentationDetents([.large]).presentationBackground(DateTheme.canvas)
+            }.presentationDetents([.large]).modifier(LivePlaceSheetMaterial())
         }
         .sheet(item: $selected, onDismiss: finishPlaceDismissal) { pin in
-            placeCard(pin).presentationDetents([.fraction(0.58), .large]).presentationDragIndicator(.visible).presentationBackground(DateTheme.canvas)
+            placeCard(pin)
+                .presentationDetents([.fraction(0.58), .large])
+                .presentationDragIndicator(.visible)
+                .modifier(LivePlaceSheetMaterial())
         }
         .onChange(of: selected?.id) { _, _ in saveError = nil }
-        .sheet(isPresented: $teamPresented) { teamSheet.presentationDetents([.large]).presentationBackground(DateTheme.canvas) }
+        .sheet(isPresented: $teamPresented) { teamSheet.presentationDetents([.large]).modifier(LivePlaceSheetMaterial()) }
+    }
+
+    private func mapPage(height: CGFloat) -> some View {
+        ZStack {
+            if usesFixtureMap {
+                realMap
+            } else if pocketMapFailed {
+                VStack(spacing: 12) {
+                    Text(copy("Couldn't load Pocket City", "Pocket City 載入失敗"))
+                    Button(copy("Try again", "重試")) { pocketMapFailed = false }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("live.map.retry")
+                }
+                .padding(24)
+                .background(DateTheme.canvas)
+            } else {
+                pocketMap.ignoresSafeArea()
+            }
+            VStack(spacing: 12) {
+                Spacer(minLength: 0)
+                if destination == .map && !atlasSheetOpen {
+                    HStack {
+                        Spacer()
+                        mapControls
+                    }
+                }
+                if showsFriends && !atlasSheetOpen {
+                    outingPanel.frame(maxHeight: (groupPlaces.isEmpty && !canShowPlan)
+                                      ? min(240, height * 0.35)
+                                      : (canShowPlan ? min(height * 0.64, max(0, height - 260))
+                                                     : height * 0.51))
+                        .padding(18)
+                        .background { LiveMapPanelGlass() }
+
+                }
+            }
+            .padding(.horizontal, 24).padding(.top, 64).padding(.bottom, 82)
+            if destination == .map, let detail = atlasDrawer.detail {
+                LiveAtlasPlaceDrawer(detail: detail, drawer: atlasDrawer, currentSession: currentSession, maxHeight: min(height * 0.56, 530))
+                    .padding(.horizontal, 12).padding(.bottom, 6)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
+            }
+        }.animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: atlasDrawer.detail != nil)
+    }
+
+    private var pageSwipe: some Gesture {
+        DragGesture(minimumDistance: 28).onEnded { value in
+            let horizontal = value.translation.width
+            guard abs(horizontal) > abs(value.translation.height) * 1.5, abs(horizontal) > 55 else { return }
+            let next: DemoDestination
+            switch destination {
+            case .saved where horizontal < 0: next = .map
+            case .map where horizontal > 0: next = .saved
+            default: return
+            }
+            navigate(to: next)
+        }
     }
 
     private var mapCanSelect: Bool {
@@ -324,34 +419,51 @@ struct LivePlanningMapRoot: View {
         guideAccess.reconcile(plan: plan, outing: outing, places: groupPlaces)
     }
 
-    @State private var usesPocketCity = true
-    private var showsPocketCity: Bool { mode == .explore && usesPocketCity }
-
     private var pocketMap: some View {
-        PocketCitySurface(pins: pins.map { pin in
+        let keys = savedVenueKeys
+        var presentation = mapPresentation
+        presentation.showsPublicPins = !savedOnly
+        return PocketCitySurface(pins: pins.map { pin in
             let kind: PocketCityPin.Kind
             switch pin.origin {
             case .publicPost: kind = .post
-            case .saved: kind = .saved
+            case .saved: kind = pin.place.status == .visited ? .visited : .saved
             case .search: kind = .search
             case .shared: kind = .shared
             }
+            let key = LivePublicDiscoveryVenueKey(savedPlace: pin.place)
+            let owned = pin.origin == .saved || key.map(keys.contains) == true
+            let label = pin.origin == .shared && owned
+                ? "\(pin.sourceLabel) · \(copy("Saved", "已收藏"))"
+                : (owned ? copy("Saved", "已收藏") : pin.sourceLabel)
             return PocketCityPin(id: pin.id, name: pin.place.name,
-                                 label: "\(pin.place.name) · \(pin.sourceLabel) · \(pin.place.address)",
+                                 label: "\(pin.place.name) · \(label) · \(pin.place.address)",
                                  latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude,
-                                 kind: kind, selected: selected?.id == pin.id)
-        }, viewport: PocketCityViewport(camera.region, requestID: cameraRequestID), onSelect: { id in
+                                 kind: kind, selected: selected?.id == pin.id, isSaved: owned,
+                                 publicVenueID: pin.origin == .publicPost ? pin.id : key.map { "public:\($0.provider):\($0.id)" },
+                                 category: pin.place.category.rawValue, address: pin.place.address)
+        }, viewport: PocketCityViewport(camera.region, requestID: cameraRequestID),
+           routes: canShowPlan ? plan.routes.compactMap { PocketCityRoute($0.polyline) } : [],
+           presentation: presentation, creditsRequest: creditsRequest, pageVisible: destination == .map,
+           onPlaceSheet: { open in
+               if destination == .map && sessionIsCurrent { atlasSheetOpen = open }
+           }, placeDrawer: atlasDrawer, allowsRemoteTiles: false, onSelect: { id in
             if let pin = pins.first(where: { $0.id == id }) { selectMapPin(pin) }
         }, onMove: { region in
             if sessionIsCurrent && destination == .map { searchRegion = region }
-        }, onFailure: { usesPocketCity = false })
+        }, onFailure: {
+            camera = .region(searchRegion)
+            pocketMapFailed = true
+        })
         .id([ownerSubject, String(sessionGeneration)])
         .accessibilityIdentifier("live.map")
     }
 
     private func selectMapPin(_ pin: LiveMapPlace) {
         guard sessionIsCurrent, mapCanSelect else { return }
-        let resolved = pin.origin == .publicPost ? pin : (pin.existingSavedProjection(in: mapVM.places) ?? pin)
+        // Preserve the public post or the friend's sharing context when its
+        // branch is also in the owner's collection.
+        let resolved = pin.origin == .search ? (pin.existingSavedProjection(in: mapVM.places) ?? pin) : pin
         if resolved.origin == .search { searchPin = resolved }
         selected = resolved
     }
@@ -359,69 +471,141 @@ struct LivePlanningMapRoot: View {
     private var realMap: some View {
         LiveInteractiveMapSurface(
             position: $camera, pins: pins, routes: canShowPlan ? plan.routes : [], isInteractive: mapCanSelect,
-            activePinID: selected?.id, friends: mode == .outing ? friendEntries : [],
-            publicVenues: mode == .explore ? (discovery.page?.venues ?? []) : [],
+            activePinID: selected?.id, friends: showsFriends ? friendEntries : [],
+            publicVenues: !savedOnly ? (discovery.page?.venues ?? []) : [],
             ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
             onSelect: selectMapPin,
             onCameraSettled: { _, region in searchRegion = region }
         ).ignoresSafeArea().accessibilityIdentifier("live.map")
     }
 
-    private var header: some View {
-        HStack(alignment: .center) {
-            Text(destinationTitle).font(.title2.weight(.bold))
-            Spacer()
-            if destination == .saved {
-                Text("\(mapVM.places.count)").font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DateTheme.muted)
-            }
-        }.padding(.horizontal, 4).frame(minHeight: 44)
-    }
-
-    private var modeControl: some View {
-        HStack(spacing: 0) {
-            ForEach(LiveMapMode.allCases, id: \.self) { value in
-                Button {
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85)) { mode = value }
-                } label: {
-                    Label(modeTitle(value), systemImage: value == .explore ? "globe.asia.australia" : (value == .personal ? "bookmark.fill" : "person.2.fill"))
-                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
-                        .foregroundStyle(mode == value ? DateTheme.ink : DateTheme.muted)
-                        .background {
-                            if mode == value {
-                                Capsule().fill(DateTheme.surface)
-                                    .shadow(color: DateTheme.blue.opacity(0.12), radius: 6, y: 2)
-                            }
-                        }
-                }.buttonStyle(.plain).accessibilityIdentifier(value == .explore ? "live.mode.explore" : (value == .personal ? "live.mode.personal" : "live.mode.group"))
-                    .accessibilityAddTraits(mode == value ? .isSelected : [])
-            }
-        }.padding(4).background(DateTheme.canvas.opacity(0.96), in: Capsule())
-            .overlay(Capsule().stroke(DateTheme.ink.opacity(0.06)))
-            .frame(maxWidth: 300).frame(maxWidth: .infinity)
-    }
-
-    private var personalSummary: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button { destination = .saved } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "bookmark.fill").foregroundStyle(DateTheme.blue)
-                        .frame(width: 38, height: 38).background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 12))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(copy("My places", "我的收藏")).font(.subheadline.weight(.semibold))
-                        Text(copy("\(mapVM.places.count) places", "\(mapVM.places.count) 個地方")).font(.caption).foregroundStyle(DateTheme.muted)
+    private var rootHeader: some View {
+        LiveFloatingGlassGroup {
+            HStack(alignment: .center, spacing: 12) {
+                if destination == .passport {
+                    Button { navigate(to: previousRootDestination) } label: {
+                        Image(systemName: "chevron.left").frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                            .liveFloatingGlass(in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel(copy("Back", "返回"))
+                        .accessibilityIdentifier("live.passport.back")
+                    Spacer(minLength: 8)
+                    Text("Passport").font(.headline)
+                    Spacer(minLength: 8)
+                    Button(action: onOpenAccount) {
+                        Image(systemName: "gearshape").frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                            .liveFloatingGlass(in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel(copy("Account settings", "帳號設定"))
+                } else {
+                    Button { navigate(to: .passport) } label: {
+                        Image(systemName: "person.crop.circle").font(.title3)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                            .liveFloatingGlass(in: Circle())
+                    }.buttonStyle(.plain).accessibilityLabel("Passport")
+                        .accessibilityIdentifier("demo.tab.passport")
+                    HStack(spacing: 8) {
+                        rootButton(.saved, title: copy("Saved", "收藏"))
+                        rootButton(.map, title: copy("Map", "地圖"))
                     }
-                    Spacer()
-                    if mapVM.isLoading { ProgressView() }
-                    else { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(DateTheme.muted) }
-                }.frame(minHeight: 44).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            if !mapVM.isLoading, mapVM.places.isEmpty {
-                Text(copy("Search for a place, or save one from a post.", "搜尋想去的地方，或從貼文加入收藏。")).font(.caption).foregroundStyle(DateTheme.muted)
+                    Spacer(minLength: 0)
+                }
+            }.padding(.horizontal, 4).frame(minHeight: 44)
+                .padding(.vertical, 4)
+        }
+    }
+
+    private func navigate(to value: DemoDestination) {
+        guard destination != value else { return }
+        let switchesTabs = destination != .passport && value != .passport
+        let pageAnimation: Animation? = switchesTabs && !reduceMotion ? .easeInOut(duration: 0.24) : nil
+        withAnimation(pageAnimation) { destination = value }
+    }
+
+    private func rootButton(_ value: DemoDestination, title: String) -> some View {
+        let selected = destination == value
+        let isDark = colorScheme == .dark
+        let fill = isDark ? SaveBrandUI.darkTabFill : DateTheme.action
+        let ink = isDark ? DateTheme.ink : DateTheme.actionInk
+        return Button { navigate(to: value) } label: {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 10 : 16)
+                .frame(minWidth: 44, minHeight: 45)
+                .foregroundStyle(selected ? ink : DateTheme.muted)
+                .background(selected ? fill : DateTheme.surface, in: Capsule())
+                .overlay {
+                    Capsule().strokeBorder(DateTheme.ink.opacity(selected ? 0.12 : 0.07))
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("demo.tab.\(value.key)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: selected)
+    }
+
+    private var layerControl: some View {
+        Menu {
+            Toggle(isOn: $showsFriends) {
+                Label(copy("Friends", "朋友"), systemImage: "person.2.fill")
+            }.accessibilityIdentifier("live.mode.group")
+            Toggle(isOn: $savedOnly) {
+                Label(copy("Saved only", "只看收藏"), systemImage: "bookmark.fill")
+            }.accessibilityIdentifier("live.mode.personal")
+            if !usesFixtureMap {
+                Divider()
+                Toggle(isOn: $mapPresentation.metro) {
+                    Label(copy("Taipei Metro", "台北捷運"), systemImage: "tram.fill")
+                }
+                .accessibilityIdentifier("live.map.metro")
+                .disabled(pocketMapFailed)
+                Button {
+                    creditsRequest &+= 1
+                } label: {
+                    Label(copy("Map credits", "圖資來源"), systemImage: "info.circle")
+                }
+                .accessibilityIdentifier("live.map.credits")
+                .disabled(pocketMapFailed)
             }
-            if mapVM.places.count > saved.count {
-                Text(copy("\(mapVM.places.count - saved.count) unlocated places remain in your collection", "\(mapVM.places.count - saved.count) 筆未定位，保留於收藏清單"))
-                    .font(.caption).foregroundStyle(DateTheme.muted)
+            if !savedOnly {
+                if discovery.unavailable || discovery.paginationFailed {
+                    Button(copy("Reload posts", "重新載入貼文")) { discoveryReload &+= 1 }
+                } else if discovery.page?.nextCursor != nil {
+                    Button(copy("More posts", "更多貼文")) { Task { await discovery.loadMore() } }
+                }
+            }
+        } label: {
+            Image(systemName: "square.3.layers.3d")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(DateTheme.ink)
+                .frame(width: 48, height: 48)
+                .contentShape(Circle())
+                .liveFloatingGlass(in: Circle())
+        }
+        .accessibilityLabel(copy("Map layers", "地圖圖層"))
+        .accessibilityValue([savedOnly ? copy("Saved only", "只看收藏") : copy("Explore", "探索"),
+                             showsFriends ? copy("Friends", "朋友") : nil,
+                             mapPresentation.metro ? copy("Taipei Metro", "台北捷運") : nil]
+            .compactMap { $0 }.joined(separator: ", "))
+        .accessibilityIdentifier("live.map.layers")
+        .menuOrder(.fixed)
+    }
+
+    private var mapControls: some View {
+        LiveFloatingGlassGroup {
+            VStack(spacing: 6) {
+                layerControl
+                LiveMapLocationControl(position: Binding(
+                    get: { camera },
+                    set: { position in
+                        camera = position
+                        cameraRequestID &+= 1
+                    }
+                ), ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
             }
         }
     }
@@ -435,7 +619,7 @@ struct LivePlanningMapRoot: View {
             onOpenReview: { id in
                 guard sessionIsCurrent else { return }
                 onOpenReview(id)
-            }, onClearReviewBatch: onClearReviewBatch)
+            }, onClearReviewBatch: onClearReviewBatch, sharedQuery: $savedQuery)
     }
 
     private var passport: some View {
@@ -460,18 +644,20 @@ struct LivePlanningMapRoot: View {
                     Button { teamPresented = true } label: { Image(systemName: "person.badge.plus").frame(width: 44, height: 44) }
                         .accessibilityLabel(copy("Shared lists and members", "共同清單與成員")).accessibilityIdentifier("live.team")
                 }
-                HStack(spacing: 8) {
-                    ForEach([false, true], id: \.self) { visitedOnly in
-                        Button { friendsVisitedOnly = visitedOnly } label: {
-                            Label(visitedOnly ? copy("Visited", "朋友去過") : copy("Shared", "朋友分享"),
-                                  systemImage: visitedOnly ? "checkmark.seal" : "person.2")
-                                .font(.caption.weight(.semibold))
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .foregroundStyle(friendsVisitedOnly == visitedOnly ? DateTheme.actionInk : DateTheme.ink)
-                                .background(friendsVisitedOnly == visitedOnly ? DateTheme.action : DateTheme.soft,
-                                            in: RoundedRectangle(cornerRadius: 12))
-                        }.buttonStyle(.plain)
-                            .accessibilityAddTraits(friendsVisitedOnly == visitedOnly ? .isSelected : [])
+                if outing.selectedListID == nil {
+                    HStack(spacing: 8) {
+                        ForEach([false, true], id: \.self) { visitedOnly in
+                            Button { friendsVisitedOnly = visitedOnly } label: {
+                                Label(visitedOnly ? copy("Visited", "朋友去過") : copy("Shared", "朋友分享"),
+                                      systemImage: visitedOnly ? "checkmark.seal" : "person.2")
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .foregroundStyle(friendsVisitedOnly == visitedOnly ? DateTheme.actionInk : DateTheme.ink)
+                                    .background(friendsVisitedOnly == visitedOnly ? DateTheme.action : DateTheme.soft,
+                                                in: RoundedRectangle(cornerRadius: 12))
+                            }.buttonStyle(.plain)
+                                .accessibilityAddTraits(friendsVisitedOnly == visitedOnly ? .isSelected : [])
+                        }
                     }
                 }
                 if outing.isLoading || outing.isWorking { ProgressView(copy("Loading shared lists…", "連線共同清單…")) }
@@ -488,7 +674,7 @@ struct LivePlanningMapRoot: View {
                     Text(copy("Couldn’t load friends’ shared places. Try again later.", error)).font(.caption).foregroundStyle(DateTheme.muted)
                 }
                 if outing.unmappedItemCount + outing.items.count - groupPlaces.count > 0 {
-                    Text(copy("\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) places have no supported map coordinates and remain in the list.", "\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) 筆地點尚無可顯示的 Apple Maps 座標，仍保留於共同清單。"))
+                    Text(copy("\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) places have no supported map coordinates and remain in the list.", "\(outing.unmappedItemCount + outing.items.count - groupPlaces.count) 筆地點尚無可顯示的座標，仍保留於共同清單。"))
                         .font(.caption).foregroundStyle(DateTheme.muted)
                 }
                 if let error = plan.error { Text(copy("Apple Maps couldn’t find walking routes. Try again or open directions.", error)).font(.caption).foregroundStyle(DateTheme.coral) }
@@ -545,20 +731,59 @@ struct LivePlanningMapRoot: View {
     }
 
     private var dock: some View {
-        HStack(spacing: 12) {
-            Button { searchPresented = true } label: {
-                Image(systemName: "magnifyingglass").font(.system(size: 21, weight: .medium)).frame(width: 54, height: 54)
-                    .background(DateTheme.surface, in: Circle()).shadow(color: .black.opacity(0.09), radius: 10, y: 4)
-            }.buttonStyle(.plain).accessibilityLabel(copy("Search Apple Maps", "搜尋 Apple Maps")).accessibilityIdentifier("live.search")
-            DemoDock(selection: $destination)
-        }.padding(.horizontal, 12)
+        let searchTitle = destination == .saved ? copy("Search Saved", "搜尋收藏") : copy("Search map", "搜尋地圖")
+        return LiveFloatingGlassGroup {
+            HStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    if destination == .saved {
+                        Button { savedSearchFocused = true } label: {
+                            Image(systemName: "magnifyingglass").font(.system(size: 20))
+                        }.buttonStyle(.plain).accessibilityHidden(true)
+                        TextField(searchTitle, text: $savedQuery)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .focused($savedSearchFocused).submitLabel(.search)
+                            .accessibilityIdentifier("live.library.search")
+                        if !savedQuery.isEmpty {
+                            Button {
+                                savedQuery = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
+                            }.buttonStyle(.plain).accessibilityLabel(copy("Clear search", "清除搜尋"))
+                        }
+                    } else {
+                        Button { searchPresented = true } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "magnifyingglass").font(.system(size: 20)).accessibilityHidden(true)
+                                Text(searchTitle).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("live.search")
+                    }
+                }
+                .font(.subheadline).foregroundStyle(DateTheme.muted)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .padding(.horizontal, 18).contentShape(Capsule()).liveFloatingGlass(in: Capsule())
+                Button(action: onCapture) {
+                    Image(systemName: "plus").font(.title2.weight(.medium))
+                        .frame(width: 62, height: 62)
+                        .foregroundStyle(DateTheme.actionInk).contentShape(Circle())
+                        .liveFloatingGlass(in: Circle(), prominent: true)
+                }.buttonStyle(.plain).accessibilityLabel(copy("Add clue", "新增線索"))
+                    .accessibilityIdentifier("live.library.add")
+            }
+        }
     }
 
     @ViewBuilder private func placeCard(_ pin: LiveMapPlace) -> some View {
+        let key = LivePublicDiscoveryVenueKey(savedPlace: pin.place)
+        let owned = pin.origin == .saved ? pin.place : key.flatMap { key in
+            mapVM.places.first { LivePublicDiscoveryVenueKey(savedPlace: $0) == key }
+        }
         if pin.origin == .publicPost,
            let venue = discovery.page?.venues.first(where: { "public:\($0.id)" == pin.id }) {
             LivePublicDiscoveryDetail(venue: venue, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
-                alreadySaved: pin.existingSavedProjection(in: mapVM.places) != nil,
+                alreadySaved: owned != nil,
                 isSaving: savingPinID != nil, saveError: saveError,
                 onSave: { save(pin) }, onDirections: {
                     let item = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
@@ -579,17 +804,27 @@ struct LivePlanningMapRoot: View {
           LivePlaceDetail(
             pin: pin, isSaving: savingPinID != nil, saveError: saveError,
             ownerSubject: ownerSubject, sessionGeneration: sessionGeneration,
-            onSave: pin.confirmationCandidate == nil ? nil : { save(pin) },
-            onOpenSaved: pin.origin == .saved ? {
-                pendingSavedDetail = pin.place.id
+            onSave: owned != nil || pin.confirmationCandidate == nil ? nil : { save(pin) },
+            onOpenSaved: owned.map { savedPlace in
+                {
+                    pendingSavedDetail = savedPlace.id
+                    selected = nil
+                }
+            },
+            onShowPocketCity: {
+                guard sessionIsCurrent else { return }
                 selected = nil
-            } : nil,
+                if pin.origin == .search { searchPin = pin }
+                destination = .map
+                camera = .region(.init(center: pin.coordinate, span: .init(latitudeDelta: 0.008, longitudeDelta: 0.010)))
+                cameraRequestID &+= 1
+            },
             onDirections: {
                 let item = MKMapItem(placemark: MKPlacemark(coordinate: pin.coordinate))
                 item.name = pin.place.name
                 item.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
             },
-            onAddToOuting: mode == .outing && outing.selectedListID != nil ? {
+            onAddToOuting: showsFriends && outing.selectedListID != nil ? {
                 performOutingAction({ await outing.add(pin.listPayload) }, after: { selected = nil })
             } : nil,
             canAddToOuting: outing.canEditSelected && !outing.isWorking,
@@ -636,7 +871,12 @@ struct LivePlanningMapRoot: View {
             case .list(let id): guideListToOpen = id
             case .manageLists: teamPresented = true
             }
-            mode = .outing
+            savedOnly = false
+            if showsFriends, let id = guideListToOpen {
+                guideListToOpen = nil
+                performOutingAction { await outing.selectList(id) }
+            }
+            showsFriends = true
             return
         }
         guard let id = pendingSavedDetail else { return }
@@ -663,7 +903,7 @@ struct LivePlanningMapRoot: View {
                         Button(copy("Reload shared list", "重新讀取共同清單")) { performOutingAction { await outing.refresh() } }
                             .disabled(outing.isLoading || outing.isWorking)
                     }
-                }.listRowBackground(DateTheme.surface)
+                }.listRowBackground(DateTheme.ink.opacity(0.04))
                 if outing.selectedListID != nil {
                     Section(copy("Members", "已加入成員")) {
                         ForEach(outing.members) { member in
@@ -673,23 +913,22 @@ struct LivePlanningMapRoot: View {
                             Button(copy("Create an invite", "產生共同加店邀請")) { performOutingAction { await outing.makeInvite() } }.disabled(outing.isWorking)
                         }
                         if let url = outing.shareURL { ShareLink(copy("Share invite link", "分享邀請連結"), item: url) }
-                    }.listRowBackground(DateTheme.surface)
+                    }.listRowBackground(DateTheme.ink.opacity(0.04))
                 }
                 Section(copy("Create a shared list", "建立新的出遊清單")) {
                     TextField(copy("For example: Saturday afternoon", "例如：週六下午"), text: $newListTitle)
                     Button(copy("Create list", "建立清單")) { performOutingAction { await outing.createList(title: newListTitle) } }
                         .disabled(newListTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || outing.isWorking)
-                }.listRowBackground(DateTheme.surface)
+                }.listRowBackground(DateTheme.ink.opacity(0.04))
                 Section(copy("Join with an invite code", "用朋友給的邀請碼加入")) {
                     TextField(copy("Invite code", "邀請碼"), text: $joinCode).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button(copy("Join list", "加入清單")) { performOutingAction { await outing.join(code: joinCode) } }
                         .disabled(joinCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || outing.isWorking)
-                }.listRowBackground(DateTheme.surface)
+                }.listRowBackground(DateTheme.ink.opacity(0.04))
                 Text(copy("Places sync to the shared list. You arrange this route; it does not cast votes for friends.", "共同清單會同步地點；此版本由你安排路線，不會代替朋友投票。"))
                     .font(.caption).foregroundStyle(.secondary)
-            }.scrollContentBackground(.hidden).background(DateTheme.canvas)
-                .toolbarBackground(DateTheme.canvas, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
+            }.scrollContentBackground(.hidden)
+                .toolbarBackground(.hidden, for: .navigationBar)
                 .navigationTitle(copy("Plan together", "一起出遊")).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Done", "完成")) { teamPresented = false } } }
         }.tint(DateTheme.blue).foregroundStyle(DateTheme.ink)
@@ -712,20 +951,6 @@ struct LivePlanningMapRoot: View {
     private func copy(_ english: String, _ chinese: String) -> String {
         language.localized(english: english, traditionalChinese: chinese)
     }
-    private var destinationTitle: String {
-        switch destination {
-        case .saved: copy("Saved", "收藏")
-        case .map: copy("Map", "地圖")
-        case .passport: "Passport"
-        }
-    }
-    private func modeTitle(_ value: LiveMapMode) -> String {
-        switch value {
-        case .explore: copy("Explore", "探索")
-        case .personal: copy("Mine", "我的")
-        case .outing: copy("Friends", "朋友")
-        }
-    }
     private func sourceTitle(_ pin: LiveMapPlace) -> String {
         switch pin.origin {
         case .saved: copy("Saved", "已收藏")
@@ -740,14 +965,7 @@ struct LivePlanningMapRoot: View {
         if selectedStops.contains(id) { selectedStops.removeAll { $0 == id } }
         else if selectedStops.count < 6 { selectedStops.append(id) }
     }
-    private func fitSavedIfNeeded() {
-        guard mode == .personal, !didFitSaved, !saved.isEmpty else { return }
-        didFitSaved = true
-        if mode == .personal { fit(saved) }
-    }
-    private func fit(_ values: [LiveMapPlace]) {
-        if let region = SaveInkMapCamera.region(around: values.map(\.coordinate), user: nil, focused: nil) { camera = .region(region) }
-    }
+
 }
 
 @MainActor
@@ -872,8 +1090,8 @@ private struct LiveMapSearch: View {
     var body: some View {
         NavigationStack {
             List {
-                if searching { ProgressView(copy("Searching Apple Maps…", "搜尋 Apple Maps…")).listRowBackground(DateTheme.surface) }
-                if let error { Text(error).foregroundStyle(DateTheme.muted).listRowBackground(DateTheme.surface) }
+                if searching { ProgressView(copy("Searching…", "搜尋中…")).listRowBackground(DateTheme.ink.opacity(0.04)) }
+                if let error { Text(error).foregroundStyle(DateTheme.muted).listRowBackground(DateTheme.ink.opacity(0.04)) }
                 ForEach(values) { pin in
                     Button { onPick(pin); dismiss() } label: {
                         VStack(alignment: .leading, spacing: 5) {
@@ -881,14 +1099,13 @@ private struct LiveMapSearch: View {
                             Text(pin.place.address).font(.caption).foregroundStyle(.secondary)
                             Text(copy("View on map · not saved", "在地圖查看 · 尚未收藏")).font(.caption2)
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 7).contentShape(Rectangle())
-                    }.buttonStyle(.plain).listRowBackground(DateTheme.surface)
+                    }.buttonStyle(.plain).listRowBackground(DateTheme.ink.opacity(0.04))
                 }
-            }.scrollContentBackground(.hidden).background(DateTheme.canvas)
-                .toolbarBackground(DateTheme.canvas, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
+            }.scrollContentBackground(.hidden)
+                .toolbarBackground(.hidden, for: .navigationBar)
                 .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: copy("Search places, restaurants or addresses", "搜尋地點、餐廳或地址"))
                 .onSubmit(of: .search, search)
-                .navigationTitle(copy("Search Apple Maps", "搜尋 Apple Maps")).navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(copy("Search map", "搜尋地圖")).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Done", "完成")) { dismiss() } } }
         }.tint(DateTheme.blue).foregroundStyle(DateTheme.ink)
             .onDisappear { operation?.cancel(); request?.cancel() }
@@ -916,4 +1133,295 @@ private struct LiveMapSearch: View {
         }
     }
 }
+/// One material entry for floating chrome; reading content keeps its opaque surfaces.
+/// Leave system sheets on their native Liquid Glass on iOS 26; older
+/// systems use an adaptive native material with an opaque accessible fallback.
+private struct LivePlaceSheetMaterial: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if reduceTransparency { content.presentationBackground(DateTheme.surface) }
+        else if #available(iOS 26.0, *) { content }
+        else { content.presentationBackground(.regularMaterial) }
+    }
+}
+
+private struct LiveMapPanelGlass: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+        if reduceTransparency { shape.fill(DateTheme.surface) }
+        else if #available(iOS 26.0, *) { Color.clear.glassEffect(.regular, in: shape) }
+        else { shape.fill(.regularMaterial) }
+    }
+}
+
+@MainActor
+private struct LiveAtlasPlaceDrawer: View {
+    let detail: PocketCityPlaceDetail
+    let drawer: PocketCityPlaceDrawer
+    let currentSession: @MainActor () -> Bool
+    let maxHeight: CGFloat
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    @GestureState private var drag: CGFloat = 0
+    @AccessibilityFocusState private var headingFocused: Bool
+    @State private var now = Date()
+    @State private var enlargedPhoto = false
+    @State private var headerHeight: CGFloat = 76
+    @State private var bodyHeight: CGFloat = 0
+
+    private struct CoverRequest: Equatable {
+        let serial: Int
+        let post: PocketCityPlaceDetail.Post
+    }
+    private struct PhotoDisplay {
+        let image: UIImage
+        let alternative: String
+        let credit: String
+        let original: URL
+        let source: CoverRequest?
+    }
+    @State private var loadedCover: (request: CoverRequest, image: UIImage)?
+    private var coverRequest: CoverRequest? {
+        guard scenePhase == .active, currentSession(),
+              let post = detail.posts.first(where: {
+                  guard let cover = $0.cover, cover.expiresAt > now, $0.expiresAt > now else { return false }
+                  return LivePublicDiscoveryCover.validatedURL(cover.url.absoluteString, platform: $0.platform.lowercased()) != nil
+              }) else { return nil }
+        return CoverRequest(serial: detail.serial, post: post)
+    }
+    private var photoDisplay: PhotoDisplay? {
+        if let expected = coverRequest, let loadedCover, loadedCover.request == expected,
+           expected.post.cover.map({ $0.expiresAt > Date() }) == true {
+            let post = expected.post
+            return PhotoDisplay(image: loadedCover.image, alternative: post.title.isEmpty ? detail.name : post.title,
+                                credit: [post.platform, post.author].filter { !$0.isEmpty }.joined(separator: " · "),
+                                original: post.url, source: expected)
+        }
+        guard let photo = detail.photo, let image = UIImage(contentsOfFile: photo.file.path) else { return nil }
+        return PhotoDisplay(image: image, alternative: photo.alternative, credit: photo.credit,
+                            original: photo.original, source: nil)
+    }
+    private func openOriginal(_ photo: PhotoDisplay) {
+        guard scenePhase == .active, currentSession(), drawer.detail?.serial == detail.serial else { return }
+        if let expected = photo.source {
+            guard let current = drawer.detail?.posts.first(where: { $0 == expected.post }),
+                  current.expiresAt > Date(), current.cover.map({ $0.expiresAt > Date() }) == true else { return }
+        } else if drawer.detail?.photo?.original != photo.original { return }
+        openURL(photo.original)
+    }
+
+    private func copy(_ en: String, _ zh: String) -> String {
+        language.localized(english: en, traditionalChinese: zh)
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(spacing: 4) {
+                Capsule().fill(.secondary.opacity(0.45)).frame(width: 34, height: 5)
+                    .accessibilityHidden(true)
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !detail.kind.isEmpty { Text(detail.kind).font(.caption.weight(.medium)).foregroundStyle(.secondary) }
+                        Text(detail.name).font(.title3.bold()).accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($headingFocused)
+                    }
+                    Spacer(minLength: 4)
+                    Button { drawer.action("close", serial: detail.serial) } label: {
+                        Image(systemName: "xmark").font(.subheadline.weight(.semibold))
+                            .frame(width: 44, height: 44).contentShape(Circle())
+                    }
+                    .buttonStyle(.plain).accessibilityLabel(copy("Close place", "關閉地點"))
+                    .accessibilityIdentifier("pocket.detail.close")
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 9)
+            .onGeometryChange(for: CGFloat.self) { ceil($0.size.height) } action: { headerHeight = $0 }
+            .contentShape(Rectangle()).simultaneousGesture(
+                DragGesture(minimumDistance: 12)
+                    .updating($drag) { value, state, _ in state = max(0, value.translation.height) }
+                    .onEnded { value in
+                        if value.translation.height > 45 || value.predictedEndTranslation.height > 95 {
+                            drawer.action("close", serial: detail.serial)
+                        }
+                    })
+            ScrollView {
+                bodyContents
+                    .onGeometryChange(for: CGFloat.self) { ceil($0.size.height) } action: { bodyHeight = $0 }
+            }
+            .id(detail.serial)
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: min(max(44, maxHeight - headerHeight), bodyHeight > 0 ? bodyHeight : 100))
+        }
+        .frame(maxWidth: 620, alignment: .leading)
+        .foregroundStyle(DateTheme.ink).tint(DateTheme.blue)
+        .background { LiveMapPanelGlass() }
+        .clipShape(shape)
+        .offset(y: min(80, drag))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pocket.detail.drawer")
+        .accessibilityAction(.escape) { drawer.action("close", serial: detail.serial) }
+        .task(id: detail.serial) {
+            enlargedPhoto = false
+            await Task.yield()
+            headingFocused = true
+        }
+        .task(id: coverRequest) {
+            loadedCover = nil
+            guard let expected = coverRequest, let cover = expected.post.cover, cover.expiresAt > Date() else { return }
+            do {
+                let image = try await LivePublicPostCover.thumbnail(cover.url)
+                guard !Task.isCancelled, scenePhase == .active, currentSession(), drawer.detail?.serial == expected.serial,
+                      drawer.detail?.posts.contains(expected.post) == true, cover.expiresAt > Date() else { return }
+                loadedCover = (expected, image)
+            } catch { /* The branch photo remains visible when the permitted post image cannot load. */ }
+        }
+        .onChange(of: coverRequest) { _, _ in enlargedPhoto = false }
+        .task(id: detail.posts) {
+            now = Date()
+            let deadlines = detail.posts.map(\.expiresAt) + detail.posts.compactMap { $0.cover?.expiresAt }
+            for expiry in Set(deadlines).sorted() where expiry > now {
+                do { try await Task.sleep(for: .seconds(max(0, expiry.timeIntervalSinceNow))) }
+                catch { return }
+                now = Date()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { now = Date() } }
+        .sheet(isPresented: $enlargedPhoto) {
+            if let photo = photoDisplay {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(detail.name).font(.headline)
+                        Spacer()
+                        Button(copy("Done", "完成")) { enlargedPhoto = false }.frame(minHeight: 44)
+                    }
+                    Image(uiImage: photo.image).resizable().scaledToFit().accessibilityLabel(photo.alternative)
+                    Button(photo.credit) { openOriginal(photo) }.font(.caption)
+                }
+                .padding().presentationDetents([.medium, .large]).modifier(LivePlaceSheetMaterial())
+            }
+        }
+    }
+
+    private var bodyContents: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !detail.address.isEmpty && detail.address != detail.kind {
+                Text(detail.address).font(.subheadline).foregroundStyle(.secondary)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { actions }
+                VStack(alignment: .leading, spacing: 0) { actions }
+            }
+            if let photo = photoDisplay {
+                VStack(alignment: .leading, spacing: 4) {
+                    Button { enlargedPhoto = true } label: {
+                        Color.clear
+                            .frame(height: min(140, maxHeight * 0.34))
+                            .overlay { Image(uiImage: photo.image).resizable().scaledToFill() }
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain).accessibilityLabel(photo.alternative)
+                    .accessibilityHint(copy("Enlarge photo", "查看大圖"))
+                    Button(photo.credit) { openOriginal(photo) }
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            ForEach(Array(detail.choices.enumerated()), id: \.offset) { index, title in
+                Button { drawer.action("choice", serial: detail.serial, index: index) } label: {
+                    Label(title, systemImage: "mappin").frame(minHeight: 44, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+            ForEach(detail.posts.filter { $0.expiresAt > now }) { post in
+                Button {
+                    guard scenePhase == .active, let current = drawer.detail, current.serial == detail.serial,
+                          current.posts.contains(where: { $0.url == post.url && $0.expiresAt > Date() }) else { return }
+                    openURL(post.url)
+                } label: {
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            if !post.title.isEmpty { Text(post.title).font(.subheadline.weight(.medium)) }
+                            Text([post.platform, post.author].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "arrow.up.right").font(.caption)
+                    }.frame(minHeight: 44)
+                }.buttonStyle(.plain)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.bottom, 14)
+    }
+
+    @ViewBuilder private var actions: some View {
+        if let directions = detail.directions {
+            Link(destination: directions) { Label(copy("Directions", "導航"), systemImage: "arrow.turn.up.right") }
+                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+                .accessibilityLabel(copy("Directions in Apple Maps", "用 Apple 地圖導航"))
+        }
+        if let label = detail.savedActionLabel {
+            Button { drawer.action("saved", serial: detail.serial) } label: { Label(label, systemImage: "bookmark") }
+                .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        }
+        if detail.friendAction {
+            Button { drawer.action("friend", serial: detail.serial) } label: {
+                Label(copy("Friends", "朋友"), systemImage: "person.2")
+            }.buttonStyle(.bordered).buttonBorderShape(.capsule)
+        }
+        if let url = detail.website {
+            Link(destination: url) {
+                Label(detail.websiteLabel.isEmpty ? copy("Website", "網站") : detail.websiteLabel,
+                      systemImage: "arrow.up.right")
+            }.font(.subheadline).frame(minHeight: 44)
+        }
+    }
+}
+
+private struct LiveFloatingGlass<GlassShape: Shape>: ViewModifier {
+    let shape: GlassShape
+    let tint: Color?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *), !reduceTransparency {
+            content.glassEffect(
+                .regular.tint(tint).interactive(!reduceMotion),
+                in: shape)
+        } else {
+            content
+                .background(tint ?? DateTheme.soft, in: shape)
+                .overlay(shape.stroke(DateTheme.ink.opacity(0.08), lineWidth: 1))
+        }
+    }
+}
+
+extension View {
+    func liveFloatingGlass<GlassShape: Shape>(in shape: GlassShape, prominent: Bool = false) -> some View {
+        modifier(LiveFloatingGlass(shape: shape, tint: prominent ? DateTheme.action : nil))
+    }
+}
+
+/// Local clusters stay separate at rest: the merge threshold is below their 12pt gap.
+struct LiveFloatingGlassGroup<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    @ViewBuilder
+    var body: some View {
+        if #available(iOS 26.0, *), !reduceTransparency, !reduceMotion {
+            GlassEffectContainer(spacing: 6) { content }
+        } else {
+            content
+        }
+    }
+}
+
 #endif

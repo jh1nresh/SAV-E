@@ -39,7 +39,7 @@ def runtime_paths():
     def document(name):
         return json.loads(include(name).read_text())
 
-    for path in ('index.html', 'style.css', 'assets/icon.png', 'assets/maplibre-gl.css',
+    for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
                  'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz'):
         include(path)
@@ -67,6 +67,9 @@ def runtime_paths():
         for x in range(2**z):
             for y in range(2**z):
                 include(f'cities/map-tiles/overview/{z}-{x}-{y}.pbf')
+    region = 'cities/map-tiles/taipei-bundled/'
+    for name in regional_tile_names(document(region + 'index.json')):
+        include(region + name)
     for filename in ('cells.json', 'town-index.json', 'townships.geojson.gz', 'places/names.json.gz',
                      'scenery/places.geojson.gz', 'scenery/river-search.json.gz',
                      'scenery/rivers.geojson.gz', 'scenery/waters.geojson.gz'):
@@ -118,10 +121,22 @@ def package(output):
     cache.mkdir(exist_ok=True)
     with (cache / 'package.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        build(output, cache)
+        preview = os.environ.get('CONFIGURATION') == 'Debug'
+        build(output, cache, preview)
+        # Keep the native-only snapshot outside the directory served by WebKit.
+        if output.parent.suffix != '.app':
+            return
+        native = output.parent / 'TaipeiPublicSourceSnapshot.json'
+        source = os.environ.get('SAVVY_LOCAL_NATIVE_SOURCES') if preview else None
+        if source:
+            staged = cache / 'native-snapshot.next'
+            shutil.copyfile(source, staged)
+            os.replace(staged, native)
+        else:
+            native.unlink(missing_ok=True)
 
 
-def build(output, cache):
+def build(output, cache, preview):
     staging, previous, stamp = (cache / name for name in ('staging', 'previous', 'receipt.json'))
     if previous.exists() and not output.exists():
         os.rename(previous, output)
@@ -130,7 +145,13 @@ def build(output, cache):
             shutil.rmtree(abandoned)
     parts = prepare_data.verified_bundles()
     data_version = [digest(WEB / 'prepare_data.py'), parts]
-    runtime = {name: digest(WEB / name) for name in runtime_paths()}
+    inputs = {name: WEB / name for name in runtime_paths()}
+    if preview:
+        if source := os.environ.get('SAVVY_LOCAL_POCKET_CITY_SOURCES'):
+            inputs['savvy-place-sources.json'] = Path(source)
+        if tiles := os.environ.get('SAVVY_LOCAL_TAIPEI_TILES'):
+            inputs.update(preview_tile_inputs(Path(tiles)))
+    runtime = {name: digest(path) for name, path in inputs.items()}
     try:
         receipt = json.loads(stamp.read_text())
     except (FileNotFoundError, ValueError):
@@ -156,7 +177,7 @@ def build(output, cache):
         for name in runtime:
             dest = staging / name
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(WEB / name, dest)
+            shutil.copyfile(inputs[name], dest)
             if digest(dest) != runtime[name]:
                 raise ValueError(f'Asset changed during packaging: {name}')
         files = inventory(staging)
@@ -177,6 +198,21 @@ def build(output, cache):
     if previous.exists():
         shutil.rmtree(previous)
     print(f'Packaged Pocket City ({len(files)} files, {sum(s[1] for s in files.values()):,} bytes).')
+
+
+def regional_tile_names(manifest):
+    for zoom, x, y in manifest['tiles']:
+        if (not all(type(n) is int for n in (zoom, x, y)) or not 3 <= zoom <= 14
+                or not 0 <= x < 2**zoom or not 0 <= y < 2**zoom):
+            raise ValueError(f'Invalid regional tile: {zoom}/{x}/{y}')
+        yield f'{zoom}-{x}-{y}.pbf'
+
+
+def preview_tile_inputs(source):
+    manifest = source / 'index.json'
+    prefix = 'cities/map-tiles/taipei-preview/'
+    names = ('index.json', *regional_tile_names(json.loads(manifest.read_text())))
+    return {prefix + name: source / name for name in names}
 
 
 if __name__ == '__main__':

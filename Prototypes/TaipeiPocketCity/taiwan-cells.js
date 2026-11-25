@@ -52,7 +52,7 @@ export function addTaiwanCells(map,before,{contains,exclude,overlapsAuthored},co
     map.getSource(sourceId).setData(collection(built.details));crowns?.setRows(built.trees);
     counts={cells:built.cells,details:built.details.length,trees:built.trees.length};
   }
-  function schedule(){if(timer===undefined)timer=setTimeout(refresh,120);}
+  function schedule(){if(!map.isMoving?.()&&timer===undefined)timer=setTimeout(refresh,120);}
   map.on('movestart',()=>{revision++;clearTimeout(timer);timer=undefined;});
   map.on('moveend',schedule);
   map.on('sourcedata',e=>{if(e.sourceId==='openmaptiles'&&e.sourceDataType==='content')schedule();});

@@ -59,6 +59,22 @@ export function addCityPlaceIndex(map,pin){
   map.addLayer({id:savvyNearby,source:savvySource,type:'circle',minzoom:savvyZoom,
     paint:{'circle-radius':6,'circle-opacity':0}},before);
 
+  // Native account markers replace only atlas features with a reviewed identity.
+  const accountLayers = [names,outdoorNames,nearby,savvyNames,savvyNearby,
+    'city170-shop-names','city170-poi-labels','city170-poi-dots','city170-vendor-awnings'];
+  const previousFilters = new Map(accountLayers.filter(id=>map.getLayer(id)).map(id=>[id,map.getFilter(id)??null]));
+  map.on('pocketaccountpins', ({placeIds}) => {
+    for (const id of accountLayers) {
+      if (!map.getLayer(id)) continue;
+      if (!previousFilters.has(id)) previousFilters.set(id,map.getFilter(id) ?? null);
+      const previous = previousFilters.get(id);
+      const allow = ['!',matches(['coalesce',['get','placeId'],['id'],''],placeIds)];
+      const accountFilter=placeIds.length ? ['all',previous ?? true,allow] : previous;
+      const wing=map.savvyMallFootprint;
+      map.setFilter(id,wing?['all',accountFilter??true,['!',['within',wing]]]:accountFilter);
+    }
+  });
+
   let loading=false;
   function load(){
     if(loading||map.getZoom()<11)return;

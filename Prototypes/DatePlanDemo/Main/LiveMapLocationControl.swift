@@ -49,8 +49,8 @@ struct LiveMapLocationControl: View {
             ? language.localized(english: "Finding your location", traditionalChinese: "正在定位")
             : language.localized(english: "Show my location", traditionalChinese: "顯示我的位置"))
         .accessibilityHint(language.localized(
-            english: "Gets your current location when tapped to center the map. Your location is not shared.",
-            traditionalChinese: "點擊後取得目前位置，僅移動地圖，不會分享位置。"))
+            english: "Centers the map on you. For weather, MET Norway receives the approximate map area.",
+            traditionalChinese: "將地圖移到你的位置。天氣預報會使用目前地圖的大致區域，由 MET Norway 提供。"))
         .accessibilityIdentifier("live.map.locate")
         .alert(failure?.title(language: language)
             ?? language.localized(english: "Location", traditionalChinese: "定位"), isPresented: Binding(

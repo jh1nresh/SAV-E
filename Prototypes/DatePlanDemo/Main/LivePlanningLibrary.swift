@@ -11,6 +11,7 @@ struct LivePlanningLibraryView: View {
     let reviewBatchIDs: [UUID]?
     let onOpenReview: (UUID) -> Void
     let onClearReviewBatch: () -> Void
+    let sharedQuery: Binding<String>?
     @Environment(\.appLanguageSettings) private var language
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
@@ -19,7 +20,7 @@ struct LivePlanningLibraryView: View {
     init(places: [Place], isLoading: Bool, onOpen: @escaping (Place) -> Void,
          onCapture: @escaping () -> Void, reviewCandidates: [PlaceReviewCandidate] = [],
          reviewBatchIDs: [UUID]? = nil, onOpenReview: @escaping (UUID) -> Void = { _ in },
-         onClearReviewBatch: @escaping () -> Void = {}) {
+         onClearReviewBatch: @escaping () -> Void = {}, sharedQuery: Binding<String>? = nil) {
         self.places = places
         self.isLoading = isLoading
         self.onOpen = onOpen
@@ -28,14 +29,22 @@ struct LivePlanningLibraryView: View {
         self.reviewBatchIDs = reviewBatchIDs
         self.onOpenReview = onOpenReview
         self.onClearReviewBatch = onClearReviewBatch
+        self.sharedQuery = sharedQuery
+    }
+
+    private var searchText: String { sharedQuery?.wrappedValue ?? query }
+
+    private func clearSearch() {
+        if let sharedQuery { sharedQuery.wrappedValue = "" }
+        else { query = "" }
     }
 
     private var review: LiveLibraryReviewProjection {
-        LiveLibraryReviewProjection(candidates: reviewCandidates, batchIDs: reviewBatchIDs, query: query)
+        LiveLibraryReviewProjection(candidates: reviewCandidates, batchIDs: reviewBatchIDs, query: searchText)
     }
 
     private var matches: [Place] {
-        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return places.filter { place in
             let statusMatches = filter == .all
                 || (filter == .wantToGo && place.status == .wantToGo)
@@ -48,24 +57,26 @@ struct LivePlanningLibraryView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(DateTheme.muted)
-                TextField(copy("Search name or address", "搜尋名稱或地址"), text: $query,
-                          prompt: Text(copy("Search name or address", "搜尋名稱或地址"))
-                    .foregroundColor(DateTheme.muted))
-                    .font(.system(.body, design: .rounded))
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .submitLabel(.search).accessibilityIdentifier("live.library.search")
-                if !query.isEmpty {
-                    Button { query = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(DateTheme.muted)
-                            .frame(minWidth: 44, minHeight: 44)
+            if sharedQuery == nil {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(DateTheme.muted)
+                    TextField(copy("Search name or address", "搜尋名稱或地址"), text: $query,
+                              prompt: Text(copy("Search name or address", "搜尋名稱或地址"))
+                        .foregroundColor(DateTheme.muted))
+                        .font(.system(.body, design: .rounded))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .submitLabel(.search).accessibilityIdentifier("live.library.search")
+                    if !query.isEmpty {
+                        Button(action: clearSearch) {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(DateTheme.muted)
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.plain).accessibilityLabel(copy("Clear search", "清除搜尋"))
                     }
-                    .buttonStyle(.plain).accessibilityLabel(copy("Clear search", "清除搜尋"))
                 }
+                .padding(.leading, 16).padding(.trailing, 4).frame(minHeight: 52)
+                .modifier(LiveLibraryCard())
             }
-            .padding(.leading, 16).padding(.trailing, 4).frame(minHeight: 52)
-            .modifier(LiveLibraryCard())
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
@@ -94,17 +105,19 @@ struct LivePlanningLibraryView: View {
             }
             .scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
 
-            Button(action: onCapture) {
-                Label(dynamicTypeSize.isAccessibilitySize ? copy("Add", "新增") : copy("Add from a post or screenshot", "從貼文或截圖新增"),
-                      systemImage: "plus")
-                    .font(.system(.body, design: .rounded, weight: .semibold))
-                    .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 52)
-                    .padding(.horizontal, 16).padding(.vertical, 4)
-                    .foregroundStyle(DateTheme.actionInk).background(DateTheme.action, in: Capsule())
+            if sharedQuery == nil {
+                Button(action: onCapture) {
+                    Label(dynamicTypeSize.isAccessibilitySize ? copy("Add", "新增") : copy("Add from a post or screenshot", "從貼文或截圖新增"),
+                          systemImage: "plus")
+                        .font(.system(.body, design: .rounded, weight: .semibold))
+                        .multilineTextAlignment(.center).frame(maxWidth: .infinity, minHeight: 52)
+                        .padding(.horizontal, 16).padding(.vertical, 4)
+                        .foregroundStyle(DateTheme.actionInk).background(DateTheme.action, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy("Add from a post or screenshot", "從貼文或截圖新增"))
+                .accessibilityIdentifier("live.library.add")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(copy("Add from a post or screenshot", "從貼文或截圖新增"))
-            .accessibilityIdentifier("live.library.add")
         }
         .foregroundStyle(DateTheme.ink)
         .accessibilityElement(children: .contain)
@@ -153,7 +166,7 @@ struct LivePlanningLibraryView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("live.library.review.empty")
                 if projection.emptyState == .noSearchMatches {
-                    Button(copy("Clear search", "清除搜尋")) { query = "" }
+                    Button(copy("Clear search", "清除搜尋"), action: clearSearch)
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                         .frame(minHeight: 44).foregroundStyle(DateTheme.blue)
                         .accessibilityIdentifier("live.library.review.clearSearch")

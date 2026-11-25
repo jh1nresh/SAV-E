@@ -65,14 +65,18 @@ export function addPocketCityWeather(map,stage,setStreetRain,initialWeather){
   }
 
   selector.hidden=false;
-  selector.addEventListener('change',()=>{
-    mode=selector.value;
+  function setMode(next){
+    if(!Object.hasOwn(weatherProfiles,next)||mode===next)return;
+    mode=next;
     refresh();
+  }
+  selector.addEventListener('change',()=>{
+    setMode(selector.value);
     const url=new URL(location.href);
     if(mode==='day')url.searchParams.delete('weather');
     else url.searchParams.set('weather',mode);
     history.replaceState(null,'',url);
   });
   refresh();
-  return {refresh,state:()=>mode};
+  return {refresh,setMode,state:()=>mode};
 }
