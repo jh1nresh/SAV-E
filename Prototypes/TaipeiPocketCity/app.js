@@ -395,7 +395,7 @@ $('#world').addEventListener('click',worldOverview);
 
 message('載入地圖…');
 try{
-  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,regionalTiles,liveTiles,...loadedStreets]=await Promise.all([
+  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,bundledTaipeiTiles,previewTaipeiTiles,liveTiles,...loadedStreets]=await Promise.all([
     get('./assets/base-style.json'),get('./data/districts.geojson'),get('./data/survey-index.json'),
     get('./data/landmark-101.json').catch(()=>null),
     loadImage(hybrid?'./data/street-hybrid-material-mask.png':'./data/street-atlas-material-mask.png').catch(()=>null),
@@ -407,6 +407,7 @@ try{
       .then(data=>data?.summary&&data?.districts?data:null).catch(()=>null):null,
     rerun?get(`./data/city-streets/index.json${terrainRevision}`).catch(()=>null):null,
     get('./cities/map-tiles/index.json?rev=shuqi-1').catch(()=>null),
+    bundledTiles?get('./cities/map-tiles/taipei-bundled/index.json'):null,
     bundledTiles?get('./cities/map-tiles/taipei-preview/index.json').catch(()=>null):null,
     bundledTiles?null:fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
       .then(res=>res.ok?res.json():null).catch(()=>null),
@@ -452,9 +453,11 @@ try{
         localTerrain.set(key,new URL('./cities/map-tiles/'+x+'-'+y+'.'+ext,import.meta.url).href);
       }
     }
-    for(const [z,x,y] of regionalTiles?.tiles??[]){
-      const url=vectorTemplate.replace('{z}',z).replace('{x}',x).replace('{y}',y);
-      localTerrain.set(url,new URL(`./cities/map-tiles/taipei-preview/${z}-${x}-${y}.pbf`,import.meta.url).href);
+    for(const [folder,region] of [['taipei-bundled',bundledTaipeiTiles],['taipei-preview',previewTaipeiTiles]]){
+      for(const [z,x,y] of region?.tiles??[]){
+        const url=vectorTemplate.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+        localTerrain.set(url,new URL(`./cities/map-tiles/${folder}/${z}-${x}-${y}.pbf`,import.meta.url).href);
+      }
     }
   }
   map=new ml.Map({
