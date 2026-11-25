@@ -63,17 +63,23 @@ export function addCityPlaceIndex(map,pin){
   const accountLayers = [names,outdoorNames,nearby,savvyNames,savvyNearby,
     'city170-shop-names','city170-poi-labels','city170-poi-dots','city170-vendor-awnings'];
   const previousFilters = new Map(accountLayers.filter(id=>map.getLayer(id)).map(id=>[id,map.getFilter(id)??null]));
-  map.on('pocketaccountpins', ({placeIds}) => {
+  function refreshFilters(placeIds){
+    const wing=map.savvyMallFootprint;
+    const hiddenIds=[...new Set([...placeIds,...(map.savvyMallAdjacentPlaceIds??[])])];
+    const identity=['coalesce',['get','placeId'],['id'],''];
     for (const id of accountLayers) {
       if (!map.getLayer(id)) continue;
       if (!previousFilters.has(id)) previousFilters.set(id,map.getFilter(id) ?? null);
       const previous = previousFilters.get(id);
-      const allow = ['!',matches(['coalesce',['get','placeId'],['id'],''],placeIds)];
-      const accountFilter=placeIds.length ? ['all',previous ?? true,allow] : previous;
-      const wing=map.savvyMallFootprint;
-      map.setFilter(id,wing?['all',accountFilter??true,['!',['within',wing]]]:accountFilter);
+      const filters=[];
+      if(previous)filters.push(previous);
+      if(wing)filters.push(['!',['within',wing]]);
+      if(hiddenIds.length)filters.push(['!',matches(identity,hiddenIds)]);
+      map.setFilter(id,filters.length>1?['all',...filters]:filters[0]??null);
     }
-  });
+  }
+  map.on('pocketaccountpins',({placeIds})=>refreshFilters(placeIds));
+  map.on('pocketmallplaces',()=>refreshFilters(map.savvyAccountPlaceIds??[]));
 
   let loading=false;
   function load(){

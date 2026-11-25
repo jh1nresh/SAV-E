@@ -1,3 +1,4 @@
+import {mallAdjacentTenants} from './taipei101-mall-tenants.js';
 import {addMallWayfinding} from './taipei101-wayfinding.js';
 
 // All plans, marks and camera changes share the outdoor map's geographic coordinates.
@@ -99,6 +100,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   const entryZoom=()=>stage.clientWidth && stage.clientWidth<600 ? 17.6 : 18.35;
   const exitZoom=()=>entryZoom()-.5;
   const mappedFeatures=new Map();
+  const adjacentPlaceIds=mallAdjacentTenants.map(f=>'poi/'+f.id);
   const mappedId=id=>String(id??'').replace(/^poi\//,'').replace(/^osm-(node|way|relation)-/,'$1/');
   let coveredIds=new Set((map.savvyAccountPlaceIds??[]).map(mappedId));
   function updateFloorPoints(){
@@ -123,8 +125,15 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     wayfinding?.setNames(visible);
   }
   function isPinVisible(point,id){
-    if(!active||!insideMall(point,ring))return true;
-    return mappedFeatures.get(mappedId(id))?.properties.level===current;
+    if(!active)return true;
+    const known=mappedFeatures.get(mappedId(id));
+    if(known?.properties.adjacent||insideMall(point,ring))return known?.properties.level===current;
+    return true;
+  }
+  function isStreetPinVisible(point,id){
+    // The legacy 101 street scene already carries the same Din Tai Fung branch.
+    return !(active&&mallAdjacentTenants.some(tenant=>tenant.id===mappedId(id)||(id&&tenant.properties.streetPinId===id)))
+      &&isPinVisible(point,id);
   }
   const isContextPin=point=>active&&!insideMall(point,ring);
   function openSearchPlace(place){
@@ -133,6 +142,22 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(!pendingSearch||map.savvySavedOnly){pendingSearch=null;openPlace(place);return;}
     // Opening a #414 drawer can pan the camera. Let the search camera reach the venue first.
     if(!map.isMoving())onMove();
+  }
+  function focusMappedPlace(feature){
+    const point=feature.geometry.coordinates;
+    let zoom=Math.max(map.getZoom(),entryZoom()+.05);
+    let focus=point;
+    if(feature.properties.adjacent){
+      // Keep the wing and adjoining tenant in view while remaining in floor mode.
+      const towardTenant=center.map((value,i)=>value+(point[i]-value)*.3);
+      focus=insideMall(towardTenant,ring)?towardTenant:center;
+      zoom=Math.min(zoom,entryZoom()+.2);
+    }
+    map.jumpTo(indoorCamera(focus,map.getBearing(),zoom),{pocketPlaceReveal:true});
+  }
+  function showAdjacentTenants(visible){
+    map.savvyMallAdjacentPlaceIds=visible?adjacentPlaceIds:[];
+    map.fire('pocketmallplaces');
   }
   const closeMenu=()=>{
     menu.hidden=true;toggle.setAttribute('aria-expanded','false');
@@ -153,7 +178,8 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       return link;
     };
     const located=floorData(venue,label).features.filter(f=>f.geometry.type==='Point'
-      &&f.properties.kind==='shop'&&f.properties.level===label&&insideMall(f.geometry.coordinates,ring));
+      &&f.properties.kind==='shop'&&f.properties.level===label
+      &&(f.properties.adjacent||insideMall(f.geometry.coordinates,ring)));
     for(const entry of entries){
       if(!entry.url?.startsWith('https://'))continue;
       const li=document.createElement('li');
@@ -167,8 +193,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
         button.addEventListener('click',()=>{
           directory.open=false;
           summary.focus({preventScroll:true});
-          const zoom=Math.max(map.getZoom(),entryZoom()+.05);
-          map.jumpTo(indoorCamera(place.point,map.getBearing(),zoom),{pocketPlaceReveal:true});
+          focusMappedPlace(matches[0]);
           openPlace(place);
         });
         li.className='mall101-located-shop';
@@ -194,7 +219,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     suppressed=false;
     if(!active){
       active=true;lastPitch=map.getPitch();
-      setCutaway(true,ring);stage.classList.add('mall101-inside');muteContextPins(true);
+      setCutaway(true,ring);stage.classList.add('mall101-inside');muteContextPins(true);showAdjacentTenants(true);
       control.hidden=false;
       map.getSource(prefix+'-plan').setData({type:'Feature',geometry:venue.footprint,properties:{}});
       const first=venue.levels.find(f=>f.label===label)??venue.levels.find(f=>f.label==='1F')??venue.levels[0];
@@ -208,7 +233,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     active=false;suppressed=explicit;returnFloor=null;closeMenu();directory.open=false;control.hidden=true;closePlace();
     map.getSource(prefix+'-places').setData(empty());map.getSource(prefix+'-plan').setData(empty());
     wayfinding.show(null);
-    stage.classList.remove('mall101-inside');setCutaway(false);muteContextPins(false);
+    stage.classList.remove('mall101-inside');setCutaway(false);muteContextPins(false);showAdjacentTenants(false);
     stage.dispatchEvent(new CustomEvent('mall101-floor',{detail:{floor:null}}));
     if(explicit)map.jumpTo({pitch:lastPitch,zoom:Math.min(map.getZoom(),exitZoom()-.2)});
     else if(map.getPitch()===0&&lastPitch&&map.getZoom()>16.5)map.jumpTo({pitch:lastPitch});
@@ -229,11 +254,13 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(pendingSearch&&!map.isMoving()){
       const selected=pendingSearch;
       pendingSearch=null;
-      if(inVenue&&insideMall(selected.point,ring)&&map.getZoom()>=exitZoom()){
-        const known=mappedFeatures.get(mappedId(selected.placeId))??mappedFeatures.get(mappedId(selected.id));
+      const known=mappedFeatures.get(mappedId(selected.placeId))??mappedFeatures.get(mappedId(selected.id));
+      const adjacent=known?.properties.adjacent;
+      if((adjacent||(inVenue&&insideMall(selected.point,ring)))&&map.getZoom()>=exitZoom()){
         if(known){
           if(active)selectFloor(known.properties.level);
-          else enter(known.properties.level);
+          else enter(known.properties.level,adjacent);
+          if(adjacent)focusMappedPlace(known);
           openPlace({...selected,...mappedPlace(known)});
         }else{
           // An unassigned saved/search result still owns its outdoor card.
@@ -269,14 +296,24 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     if(!venue||map.savvySavedOnly||event.target!==map.getCanvas()||map.getZoom()<14.7)return;
     const box=map.getCanvas().getBoundingClientRect(),point=[event.clientX-box.left,event.clientY-box.top];
     const coords=map.unproject(point).toArray();
-    if(!insideMall(coords,ring))return;
-    event.stopImmediatePropagation();
-    if(!active){enter(null,true);return;}
+    const inVenue=insideMall(coords,ring);
+    if(!active){
+      if(!inVenue)return;
+      event.stopImmediatePropagation();
+      enter(null,true);return;
+    }
     const features=map.queryRenderedFeatures([[point[0]-9,point[1]-9],[point[0]+9,point[1]+9]],
       {layers:['names','dots','rooms','corridor'].map(k=>prefix+'-'+k)});
-    const hit=features.find(f=>f.properties.name);
+    const hit=features.find(f=>f.properties.name&&(inVenue||f.properties.adjacent));
+    if(!inVenue&&!hit)return;
+    event.stopImmediatePropagation();
     if(!hit){closePlace();return;}
     const p=hit.properties;
+    if(p.adjacent){
+      const tenant=mappedFeatures.get(mappedId(p.id??hit.id));
+      if(tenant?.properties.level===current)openPlace(mappedPlace(tenant));
+      return;
+    }
     openPlace({id:p.id??hit.id,placeId:'poi/'+(p.id??hit.id),name:p.name,
       point:hit.geometry.type==='Point'?hit.geometry.coordinates:coords,
       indoorFloor:current,categoryLabel:[venue.name,current].join(' · '),detail:p.detail??p.categoryLabel??'',
@@ -291,7 +328,11 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       const loaded=await load();
       const labels=[...new Set([...loaded.levels.map(l=>l.label),...Object.keys(loaded.directory??{})])];
       const rank=label=>label.startsWith('B')?-parseInt(label.slice(1),10):parseInt(label,10);
-      const data={...loaded,levels:labels.sort((a,b)=>rank(a)-rank(b)).map(label=>({label,features:floorData(loaded,label)}))};
+      const data={...loaded,levels:labels.sort((a,b)=>rank(a)-rank(b)).map(label=>{
+        const floor=floorData(loaded,label);
+        const adjacent=mallAdjacentTenants.filter(f=>f.properties.level===label);
+        return {label,features:{...floor,features:floor.features.concat(adjacent)}};
+      })};
       if(removed)return;
       ring=data.footprint.coordinates[0];
       const xs=ring.map(c=>c[0]),ys=ring.map(c=>c[1]);
@@ -338,5 +379,5 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   map.on('remove',()=>{removed=true;map.off('pocketaccountpins',onAccountPins);map.off('moveend',onMove);map.off('render',drawGuide);
     map.getCanvasContainer().removeEventListener('click',handleHit,true);marker?.remove();guide?.remove();});
   void prepare();
-  return {setNames,isPinVisible,isContextPin,openSearchPlace,refreshVisibility,state:()=>({ready:!!venue,active,floor:active?current:null}),exit};
+  return {setNames,isPinVisible,isStreetPinVisible,isContextPin,openSearchPlace,refreshVisibility,state:()=>({ready:!!venue,active,floor:active?current:null}),exit};
 }

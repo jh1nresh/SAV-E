@@ -1,6 +1,6 @@
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
-import {addTaipei101Indoor} from './taipei101-indoor.js?v=floor-focus-1';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=mall-tenants-1';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
@@ -13,7 +13,7 @@ import {globeCamera,returnToGlobe} from './world-camera.js?v=globe-1';
 import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
-import {cityPlaceLayers} from './city-place-index.js?v=ground-shops-2';
+import {cityPlaceLayers} from './city-place-index.js?v=mall-tenants-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
 import {SurveyLayer,buildingZoom} from './survey-layer.js?v=memorial-hall-2';
@@ -26,7 +26,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=5';
 
 import {addShopSearch} from './city-shop-search.js?v=neighborhood-services-1';
-import {addCity170,dihuaSearch} from './city170.js?v=neighborhood-services-1';
+import {addCity170,dihuaSearch} from './city170.js?v=mall-tenants-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=neighborhood-services-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
@@ -747,7 +747,7 @@ try{
       openPlace:streetDetail.openMappedPlace,
       closePlace:streetDetail.closeMappedPlace,
     });
-    const updateMallPins=()=>streetDetail.setVisiblePlaceFilter(indoor101.isPinVisible,indoor101.isContextPin);
+    const updateMallPins=()=>streetDetail.setVisiblePlaceFilter(indoor101.isStreetPinVisible,indoor101.isContextPin);
     updateMallPins();
     stage.addEventListener('mall101-floor',updateMallPins);
   }

@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {gunzipSync} from 'node:zlib';
 import {addTaipei101Indoor,floorData,indoorCamera,insideMall} from '../taipei101-indoor.js';
 import {addOfficialFloorGuide} from '../taipei101-floor-guide.js';
 import {taipei101Indoor as venue} from '../taipei101-indoor-data.js';
+import {mallAdjacentTenants} from '../taipei101-mall-tenants.js';
 import {officialFloorDirectory as directory} from '../taipei101-directory.js';
 import {Style,MercatorCoordinate} from '../assets/maplibre-gl.mjs';
 import {SurveyLayer} from '../survey-layer.js';
@@ -76,6 +79,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
     setLngLat(){return this;} addTo(){markers.add(this);return this;} remove(){markers.delete(this);} getElement(){return this.el;}
   }
   const tenant=floorData(venue,'B1').features.find(f=>f.id==='node/5492157852');
+  const [dinTaiFung,apple]=mallAdjacentTenants;
   const canonical='poi/'+tenant.id,venueKey='public:apple_maps:tenant-fixture';
   const shared={id:'friend/shared-tenant',name:tenant.properties.name,label:'好友分享',kind:'shared',point:tenant.geometry.coordinates,publicVenueID:venueKey};
   let panel;
@@ -131,26 +135,51 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   const pointIds=()=>source.data.features.map(f=>f.id);
   assert(!pointIds().includes(tenant.id));
   assert(pointIds().includes('node/7004289008')); // Sawadee shares the floor, not this pin.
-  choose('1F');assert(!sharedIsVisible());assert.equal(source.data.features.length,1);
+  assert(pointIds().includes(dinTaiFung.id));
+  assert.deepEqual(map.savvyMallAdjacentPlaceIds,mallAdjacentTenants.map(f=>'poi/'+f.id));
+  choose('1F');assert(!sharedIsVisible());
+  assert(pointIds().includes(apple.id));assert(!pointIds().includes(dinTaiFung.id));
+  assert(panel.isPinVisible(apple.geometry.coordinates,'poi/'+apple.id));
+  assert(!panel.isStreetPinVisible(apple.geometry.coordinates,'poi/'+apple.id));
+  assert(!panel.isStreetPinVisible(dinTaiFung.geometry.coordinates,'din-tai-fung'));
+  assert(panel.isStreetPinVisible(outside,undefined));
+  assert(!panel.isPinVisible(dinTaiFung.geometry.coordinates,'poi/'+dinTaiFung.id));
   assert.equal(paint.get('city170-poi-labels:text-color'),'#645d50');
   assert(planLabels().includes('松智路入口'));assert(planLabels().includes('信義南'));
   assert(!planLabels().includes('美食廣場'));
   choose('B1');assert(sharedIsVisible());assert(!pointIds().includes(tenant.id));
   bridge.update({pins:[]});assert(!sharedIsVisible());assert(pointIds().includes(tenant.id));
-  assert.equal(source.data.features.length,floorData(venue,'B1').features.length);
+  assert.equal(source.data.features.length,floorData(venue,'B1').features.length+1);
   hit=source.data.features.find(f=>f.properties.kind==='shop');
   container.handlers.get('click')({target:canvas,clientX:8,clientY:9,stopImmediatePropagation(){}});
   assert.equal(cards[0].placeId,'poi/'+hit.id);assert.equal(cards[0].name,hit.properties.name);assert.match(cards[0].categoryLabel,/B1/);
   const shopList=els['[data-directory]'];
-  const [mapButton,officialLink]=shopList.children[0].children;
+  const locatedRow=shopList.children.find(row=>row.children[0].textContent===tenant.properties.name);
+  const [mapButton,officialLink]=locatedRow.children;
   assert.equal(mapButton.tag,'button');assert.equal(mapButton.textContent,tenant.properties.name);
   assert.equal(officialLink.href,tenant.properties.floorSourceUrl);
-  assert.equal(shopList.children.filter(row=>row.children.some(el=>el.tag==='button')).length,1);
-  const directoryOnly=shopList.children.find(row=>row.children[0].textContent==='鼎泰豐');
-  assert.deepEqual(directoryOnly.children.map(el=>el.tag),['a']);
+  assert.equal(shopList.children.filter(row=>row.children.some(el=>el.tag==='button')).length,2);
+  const dinTaiFungRow=shopList.children.find(row=>row.children[0].textContent==='鼎泰豐');
+  assert.deepEqual(dinTaiFungRow.children.map(el=>el.tag),['button','a']);
+  dinTaiFungRow.children[0].click();
+  assert(insideMall(lastJump.c.center,venue.footprint.coordinates[0]));
+  assert.deepEqual(cards.at(-1).point,dinTaiFung.geometry.coordinates);
+  assert.equal(cards.at(-1).placeId,'poi/'+dinTaiFung.id);
+  [loc.lng,loc.lat]=dinTaiFung.geometry.coordinates;
+  let stopped=false;
+  const original=dinTaiFung.geometry.coordinates;
+  hit={...dinTaiFung,geometry:{type:'Point',coordinates:[original[0]+.0000005,original[1]]}};
+  const tap=()=>container.handlers.get('click')({target:canvas,clientX:8,clientY:9,stopImmediatePropagation(){stopped=true;}});
+  tap();assert(stopped);assert.equal(cards.at(-1).placeId,'poi/'+dinTaiFung.id);
+  assert.deepEqual(cards.at(-1).point,original);
+  assert.equal(cards.at(-1).category,'restaurant');
+  hit=tenant;stopped=false;tap();assert(!stopped);
+  hit=tenant;
+  [loc.lng,loc.lat]=mall;
+  const startingZoom=z;
   els.details.open=true;mapButton.click();
   assert.equal(els.details.open,false);assert.equal(els['[data-directory-summary]'].focused,true);
-  assert.deepEqual(lastJump,{c:indoorCamera(tenant.geometry.coordinates,76,19),eventData:{pocketPlaceReveal:true}});
+  assert.deepEqual(lastJump,{c:indoorCamera(tenant.geometry.coordinates,76,startingZoom),eventData:{pocketPlaceReveal:true}});
   assert.deepEqual(cards.at(-1).point,tenant.geometry.coordinates);
   assert.equal(cards.at(-1).placeId,canonical);assert.equal(cards.at(-1).category,'restaurant');
   assert.equal(cards.at(-1).indoorFloor,'B1');assert.equal(panel.state().floor,'B1');
@@ -161,6 +190,9 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(els['[data-directory]'].children.every(row=>row.children.every(el=>el.tag==='a')));
   assert.equal(plan.data.features.length,0);assert.equal(els['[data-floor-note]'].hidden,true);
   els['[data-floor-exit]'].click();assert.equal(panel.state().active,false);assert.equal(pitch,47);
+  assert.deepEqual(map.savvyMallAdjacentPlaceIds,[]);
+  assert(panel.isPinVisible(dinTaiFung.geometry.coordinates,'poi/'+dinTaiFung.id));
+  assert(panel.isStreetPinVisible(dinTaiFung.geometry.coordinates,'din-tai-fung'));
   assert.deepEqual(paint,outdoorPaint);assert(!panel.isContextPin(outside));
   assert.equal(plan.data.features.length,0);
   assert.equal(nav.hidden,true);assert.deepEqual(cut,[true,false]);assert.deepEqual(selected,['B1','B1','1F','B1','2F',null]);
@@ -179,6 +211,29 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(panel.isPinVisible(searched.point,'account-id'));
   loc.lng=121.57;events.moveend();loc.lng=mall[0];events.moveend();assert(panel.state().active);
   loc.lng=121.57;events.moveend();assert.equal(panel.state().active,false);assert.equal(pitch,47);
+  [loc.lng,loc.lat]=apple.geometry.coordinates;
+  panel.openSearchPlace({name:apple.properties.name,id:'poi/'+apple.id,point:apple.geometry.coordinates});
+  assert.equal(panel.state().floor,'1F');assert.equal(cards.at(-1).placeId,'poi/'+apple.id);
+  assert(insideMall(lastJump.c.center,venue.footprint.coordinates[0]));
+});
+
+test('adjacent tenant identities retain the public map coordinates and match a unique floor directory row',()=>{
+  const root=process.env.POCKET_TAIPEI_DATA;
+  const publicPlaces=root?JSON.parse(gunzipSync(readFileSync(root+'/city-place-index.json.gz'))).features:null;
+  const ring=venue.footprint.coordinates[0];
+  for(const tenant of mallAdjacentTenants){
+    const {level,floorSourceUrl,branchUrl}=tenant.properties;
+    assert(!insideMall(tenant.geometry.coordinates,ring));
+    assert.equal(directory[level].filter(row=>row.url===floorSourceUrl).length,1);
+    assert(branchUrl.startsWith('https://'));
+    if(publicPlaces){
+      const original=publicPlaces.find(f=>f.id==='poi/'+tenant.id);
+      assert.deepEqual(tenant.geometry,original.geometry);
+      assert.equal(tenant.properties.name,original.properties.name);
+      assert.equal(tenant.properties.category,original.properties.category);
+      assert.equal(tenant.properties.url,original.properties.url);
+    }
+  }
 });
 
 test('cutaway uses the real shopping wing in world metres without requiring the ornament asset',()=>{
