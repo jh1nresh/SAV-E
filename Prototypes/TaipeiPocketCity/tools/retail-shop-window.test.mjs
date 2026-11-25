@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {buildShop} from '../city-shopfronts.js';
+import {retailWindowTypes} from '../shop-retail-windows.js';
 
 const retail=['convenience','supermarket','clothes','bakery','pastry','beverages','chemist'];
 function draw(category,width=4,angle=0,extra={}){
@@ -12,18 +13,23 @@ function draw(category,width=4,angle=0,extra={}){
 }
 test('retail merchandise has distinct silhouettes even without color, name or texture',()=>{
   const silhouettes=new Set();
-  for(const category of retail){
+  const firstByType=new Map();
+  for(const category of [...retail,...retailWindowTypes.keys()]){
     const vertices=draw(category);
     const positions=vertices.filter((_,i)=>i%13<3);
-    silhouettes.add(JSON.stringify(positions));
+    const silhouette=JSON.stringify(positions);
+    const type=retailWindowTypes.get(category)??category;
+    if(firstByType.has(type))assert.equal(firstByType.get(type),silhouette);
+    firstByType.set(type,silhouette);
+    silhouettes.add(silhouette);
     assert.deepEqual(draw(category,4,0,{name:'另一個名字',categoryLabel:'店家'}),vertices);
   }
-  assert.equal(silhouettes.size,retail.length);
+  assert.equal(silhouettes.size,retail.length+new Set(retailWindowTypes.values()).size);
   assert.deepEqual(draw('unknown',4,0,{name:'藥妝麵包烘焙精品服飾'}),draw('unknown'));
 });
 
 test('retail fittings stay within the measured bay at any representative width and bearing',()=>{
-  for(const category of retail)for(const width of [1.5,2.45,4,6,9]){
+  for(const category of [...retail,...retailWindowTypes.keys()])for(const width of [1.5,2.45,4,6,9]){
     const a=draw(category,width), b=draw(category,width,90);
     assert.equal(a.length,b.length);
     assert.ok(a.length/(13*3)<=180,category);
