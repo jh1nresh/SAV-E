@@ -152,9 +152,19 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert.equal(treads.geometry.type,'MultiLineString');
   assert.equal(plazaWays().length,4);
   const facade=layers.find(l=>l.id==='taipei101-indoor-storefront');
-  assert.deepEqual(facade.filter,['==',['get','id'],dinTaiFung.properties.id]);
+  const style={stylesheet:{layers:[facade]},dispatcher:{broadcast(){}},_globalState:{},tileManagers:{}};
+  Style.prototype._createLayers.call(style);
+  const matchFacade=feature=>style._layers[facade.id]._featureFilter.filter(
+    {zoom:19},{type:1,id:NaN,properties:feature.properties},
+  );
+  assert(matchFacade(dinTaiFung));
+  assert(matchFacade(apple));
+  assert(!matchFacade(tenant));
   assert.equal(facade.minzoom,17.6);
-  assert.equal(images.get(facade.layout['icon-image']).options.pixelRatio,2);
+  assert.equal(images.get('taipei101-din-tai-fung-facade').options.pixelRatio,2);
+  assert.equal(images.get('taipei101-apple-facade').options.pixelRatio,2);
+  const entryRoofs=()=>plan.data.features.filter(f=>f.properties.role==='entry-roof');
+  assert.equal(entryRoofs().length,0);
   assert.equal(els['[data-floor-note]'].hidden,false);
   assert(sharedIsVisible());assert(!source.data.features.some(f=>f.id===tenant.id));assert.equal(pitch,0);assert.equal(nav.hidden,false);
   assert.equal(els['[data-floor-list]'].hidden,true);
@@ -183,6 +193,14 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(planLabels().includes('松智路入口'));assert(planLabels().includes('信義南'));
   assert(!planLabels().includes('美食廣場'));
   assert.equal(plazaWays().length,0);
+  assert.deepEqual(entryRoofs().map(f=>f.properties.osm),['way/1339487736','way/1339487737','way/1339487738']);
+  for(const [i,roof] of entryRoofs().entries()){
+    assert.equal(roof.geometry.type,'Polygon');
+    const ring=roof.geometry.coordinates[0];
+    assert.deepEqual(ring[0],ring.at(-1));
+    assert(ring.some(([lng,lat])=>lng===venue.entrances.features[i].geometry.coordinates[0]
+      &&lat===venue.entrances.features[i].geometry.coordinates[1]));
+  }
   choose('B1');assert(sharedIsVisible());assert(!pointIds().includes(tenant.id));
   bridge.update({pins:[streetExit]});assert(!sharedIsVisible());assert(pointIds().includes(tenant.id));
   assert.equal(source.data.features.length,floorData(venue,'B1').features.length+2);
@@ -268,6 +286,11 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   panel.openSearchPlace({name:apple.properties.name,id:'poi/'+apple.id,point:apple.geometry.coordinates});
   assert.equal(panel.state().floor,'1F');assert.equal(cards.at(-1).placeId,'poi/'+apple.id);
   assert(insideMall(lastJump.c.center,venue.footprint.coordinates[0]));
+  const appleCard=cards.at(-1);
+  hit={...apple,id:NaN};
+  tap();
+  assert.deepEqual(cards.at(-1),appleCard);
+  assert.deepEqual(appleCard.point,apple.geometry.coordinates);
 });
 
 test('adjacent tenant identities retain the public map coordinates and match a unique floor directory row',()=>{

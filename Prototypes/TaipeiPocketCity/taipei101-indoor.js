@@ -1,6 +1,6 @@
 import {mallStreetExit4,metroExitLayer} from './taipei-metro-exits.js';
 import {mallAdjacentTenants} from './taipei101-mall-tenants.js';
-import {addMallWayfinding,mallMetroExit4} from './taipei101-wayfinding.js?v=b1-arrival-1';
+import {addMallWayfinding,mallMetroExit4} from './taipei101-wayfinding.js?v=1f-entrances-1';
 
 // All plans, marks and camera changes share the outdoor map's geographic coordinates.
 const prefix='taipei101-indoor';
@@ -66,32 +66,42 @@ function pointColor(){
   return ['case',transitExit,'#a33c36',['match',['get','kind'],'facility','#58847d','entrance','#8b7848','#ad7d27']];
 }
 
-const b1StorefrontImage='taipei101-din-tai-fung-facade';
-const b1StorefrontId='node/2718780533';
+// Source photos inform the elevations. Both symbols use their original shop
+// points and stay screen-sized so the art does not imply surveyed unit bounds.
+const storefrontArt={
+  'node/2718780533':{
+    image:'taipei101-din-tai-fung-facade',
+    panels:[
+      ['#695648',1,4,36,18],['#e6d6bd',2,5,34,16],['#ccc0a7',2,5,34,2],
+      ['#557570',22,9,12,12],['#8cae9f',23,10,10,3],['#ddcba8',27,10,1,11],
+      ['#b34840',5,11,14,4],['#d76d5c',6,11,12,1],['#8d7462',2,21,34,1],
+    ],
+  },
+  'node/4943315872':{
+    image:'taipei101-apple-facade',
+    panels:[
+      ['#5b625e',1,4,36,18],['#ebe8df',2,5,34,16],['#849e9a',4,8,26,13],
+      ['#aec2b6',5,9,24,4],['#d1cbb4',5,15,24,6],['#607a75',12,8,1,13],
+      ['#607a75',21,8,1,13],['#c09567',7,16,6,2],['#c09567',23,16,5,2],
+      ['#f9f7ef',31,8,4,13],['#bfb9aa',2,21,34,1],
+    ],
+  },
+};
 
-function addB1StorefrontImage(map){
-  if(map.hasImage(b1StorefrontImage))return;
-  const canvas=document.createElement('canvas');
-  canvas.width=76;
-  canvas.height=50;
-  const ctx=canvas.getContext('2d');
-  ctx.scale(2,2);
-  function paint(color,x,y,width,height){
-    ctx.fillStyle=color;
-    ctx.fillRect(x,y,width,height);
+function addStorefrontImages(map){
+  for(const {image,panels} of Object.values(storefrontArt)){
+    if(map.hasImage(image))continue;
+    const canvas=document.createElement('canvas');
+    canvas.width=76;
+    canvas.height=50;
+    const ctx=canvas.getContext('2d');
+    ctx.scale(2,2);
+    for(const [color,x,y,width,height] of panels){
+      ctx.fillStyle=color;
+      ctx.fillRect(x,y,width,height);
+    }
+    map.addImage(image,ctx.getImageData(0,0,canvas.width,canvas.height),{pixelRatio:2});
   }
-  // Draw the photographed entrance as a screen-sized elevation. The mapped
-  // branch position remains the anchor and the illustration shows no footprint.
-  paint('#695648',1,4,36,18);
-  paint('#e6d6bd',2,5,34,16);
-  paint('#ccc0a7',2,5,34,2);
-  paint('#557570',22,9,12,12);
-  paint('#8cae9f',23,10,10,3);
-  paint('#ddcba8',27,10,1,11);
-  paint('#b34840',5,11,14,4);
-  paint('#d76d5c',6,11,12,1);
-  paint('#8d7462',2,21,34,1);
-  map.addImage(b1StorefrontImage,ctx.getImageData(0,0,canvas.width,canvas.height),{pixelRatio:2});
 }
 
 function addPlanLayers(map,venue,namesVisible){
@@ -106,11 +116,12 @@ function addPlanLayers(map,venue,namesVisible){
   add('dots','circle','-places',{filter:['all',['==',['geometry-type'],'Point'],['in',['get','kind'],['literal',pointKinds]]],
     paint:{'circle-radius':['interpolate',['linear'],['zoom'],18,['case',transitExit,6,4],21,['case',transitExit,8,6]],'circle-color':pointColor(),
       'circle-stroke-color':'#fffaf0','circle-stroke-width':1.8}});
-  addB1StorefrontImage(map);
+  addStorefrontImages(map);
+  const artImages=Object.entries(storefrontArt).flatMap(([id,art])=>[id,art.image]);
   add('storefront','symbol','-places',{minzoom:17.6,
     // GeoJSON tile feature IDs may be numeric. The place ID property is stable.
-    filter:['==',['get','id'],b1StorefrontId],
-    layout:{'icon-image':b1StorefrontImage,'icon-anchor':'bottom','icon-offset':[0,-2],
+    filter:['in',['get','id'],['literal',Object.keys(storefrontArt)]],
+    layout:{'icon-image':['match',['get','id'],...artImages,''],'icon-anchor':'bottom','icon-offset':[0,-2],
       'icon-size':['interpolate',['linear'],['zoom'],17.6,.76,19,1],
       'icon-allow-overlap':true,'icon-ignore-placement':true}});
   add('names','symbol','-places',{minzoom:17.45,filter:['all',['==',['geometry-type'],'Point'],['has','name']],

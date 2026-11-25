@@ -1,4 +1,4 @@
-import {mallWayfinding} from './taipei101-wayfinding-data.js?v=b1-arrival-1';
+import {mallWayfinding} from './taipei101-wayfinding-data.js?v=1f-entrances-1';
 
 // Use the B1 passage endpoint mapped by OSM node 2718780534. Taipei Metro's
 // R03 station diagram distinguishes the concourse exit from the mall passage.
@@ -47,6 +47,11 @@ export function addMallWayfinding(map,namesVisible){
       'line-width':apronWidth}});
   add('plaza-treads','line',{minzoom:18.5,filter:['==',['get','role'],'plaza-tread'],
     paint:{'line-color':'#9e8063','line-width':1}});
+  // Real canopy outlines remain legible where the three entries meet the street.
+  const canopies=['==',['get','role'],'entry-roof'];
+  add('entry-roof','fill',{filter:canopies,paint:{'fill-color':'#c2cbc3'}});
+  add('entry-roof-edge','line',{filter:canopies,
+    layout:{'line-join':'round'},paint:{'line-color':'#65776a','line-width':1.5}});
   add('markers','circle',{filter:['in',['get','role'],['literal',['entrance','lift','escalator']]],
     minzoom:17.45,paint:{'circle-color':iconColor,'circle-stroke-color':'#fffaf0','circle-stroke-width':1.4,
       'circle-radius':['match',['get','role'],'entrance',4.5,3]}});
