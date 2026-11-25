@@ -1,6 +1,7 @@
 import {withShopFacts} from './taipei-frontage-pack.js?v=survey-store-1';
 import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
 import {addCityHydrants} from './city170-hydrants.js?v=street-furniture-1';
+import {addParkWater} from './city170-park-water.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
@@ -120,6 +121,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const pin=addCity170Style(map, data, firstLabel);
   addArcadeFloors(map,'survey');
   addCityHydrants(map,firstLabel);
+  addParkWater(map,firstLabel);
   addBusShelters(map,firstLabel);
   addCityPlaceIndex(map,pin);
   const baseRoads=map.getStyle().layers.filter(l=>l['source-layer']==='transportation_name');
