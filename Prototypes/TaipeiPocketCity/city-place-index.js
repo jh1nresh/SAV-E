@@ -1,5 +1,6 @@
 import {cityLandmarks,districtLandmarks} from './taipei-priority-places.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
+import {withShopFacts} from './taipei-frontage-pack.js?v=ground-shops-2';
 import {photoPlaces} from './place-photos.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
 
@@ -27,7 +28,7 @@ const revealZoom=['case',
 
 let pending;
 export function loadCityPlaces(){
-  return pending??=readPocketCityAsset('city-place-index').catch(error=>{pending=null;throw error;});
+  return pending??=readPocketCityAsset('city-place-index').then(data=>({...data,features:data.features.map(withShopFacts)})).catch(error=>{pending=null;throw error;});
 }
 
 export function addCityPlaceIndex(map,pin){

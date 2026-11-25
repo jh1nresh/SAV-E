@@ -28,7 +28,7 @@ const forms=['broad','round','column','palm'];
 const tau=Math.PI*2;
 const bark=[.45,.35,.26], barkLight=[.61,.47,.34];
 const palette=[[.28,.43,.31],[.36,.53,.35],[.49,.64,.38],[.63,.73,.45]];
-function plant(form){
+function plant(form,detail){
   const vertices=[];
   const vertex=(p,offset,color)=>vertices.push(...p,...offset,...color);
   function branch(start,end,r1,r2){
@@ -55,11 +55,12 @@ function plant(form){
     }
   }else if(form==='palm'){
     branch([0,0,0],[.025,0,.79],.027,.016);
-    for(let j=0;j<13;j++){
+    const fronds=detail==='overview'?8:13,segments=detail==='overview'?4:8;
+    for(let j=0;j<fronds;j++){
       const a=j*2.4,c=Math.cos(a),s=Math.sin(a),radius=.32+.04*Math.cos(j*2);
       const tip=(t,offset)=>[.025+c*radius*t-s*offset,s*radius*t+c*offset,.78+.66*t*(1-t)-.14*t*t];
-      for(let k=0;k<8;k++){
-        const t=k/8,u=(k+1)/8,w=.017*Math.sin(Math.PI*(t+.05))+.004;
+      for(let k=0;k<segments;k++){
+        const t=k/segments,u=(k+1)/segments,w=.017*Math.sin(Math.PI*(t+.05))+.004;
         for(const p of [tip(t,-w),tip(t,w),tip(u,0)])vertex(p,[0,0],palette[j%4]);
         for(const sign of [-1,1]){
           const end=tip(u+.031,sign*(.064*Math.sin(Math.PI*u)+.009));
@@ -68,6 +69,8 @@ function plant(form){
         }
       }
     }
+  }else if(detail){
+    inventoryCrown(form,detail,vertex,branch);
   }else{
     const width=form==='broad'?.42:form==='column'?.18:.31;
     const depth=form==='column'?.30:.21;
@@ -112,6 +115,67 @@ function plant(form){
     }
   }
   return new Float32Array(vertices);
+}
+
+// Each tier describes a circle of leaf sprays: height, radius, spray width,
+// spray height, count. These are illustrative crown habits, never measured spreads.
+const crownTiers={
+  broad:[[.64,.26,.115,.065,6],[.73,.32,.145,.078,10],[.80,.24,.16,.092,8],[.89,.095,.16,.09,4]],
+  round:[[.48,.14,.12,.09,6],[.62,.23,.13,.11,9],[.75,.225,.13,.12,8],[.86,.115,.13,.115,5]],
+  column:[[.40,.105,.08,.15,6],[.54,.125,.09,.16,7],[.68,.101,.08,.14,7],
+    [.80,.066,.062,.12,5],[.91,.026,.035,.085,3]],
+};
+const crownTints={
+  broad:[[.24,.41,.31],[.34,.52,.34],[.49,.64,.36],[.65,.74,.44]],
+  round:[[.28,.44,.34],[.35,.54,.38],[.48,.66,.42],[.66,.76,.49]],
+  column:[[.23,.39,.32],[.31,.47,.36],[.40,.56,.39],[.53,.66,.43]],
+};
+
+function inventoryCrown(form,detail,vertex,branch){
+  const broad=form==='broad', column=form==='column', close=detail==='street';
+  const fork=broad?.21:column?.51:.32, breadth=broad?.34:column?.11:.23;
+  branch([0,0,0],[.009,0,column?.95:fork+.16],broad?.039:.03,column?.006:.016);
+  const limbs=column?3:5;
+  for(let i=0;i<limbs;i++){
+    const a=i*tau/limbs+.22,c=Math.cos(a),s=Math.sin(a);
+    const joint=[breadth*.5*c,breadth*.5*s,fork+.14+(i%2)*.035];
+    branch([.005,0,fork+i*.014],joint,.020,.013);
+    branch(joint,[breadth*c,breadth*s,broad?.64:.65],.013,.005);
+    if(close&&!column){
+      const side=a+(i%2?-.54:.54);
+      branch(joint,[breadth*.82*Math.cos(side),breadth*.82*Math.sin(side),broad?.72:.72],.011,.004);
+    }
+  }
+
+  const shades=crownTints[form];
+  // Both levels use the same tier envelopes. The street silhouette adds smaller
+  // overlapping sprays and ink touches; the overview keeps readable colour masses.
+  for(const [tier,[height,radius,width,depth,count]] of crownTiers[form].entries()){
+    const sprays=close?count:Math.max(4,Math.round(count*.60));
+    for(let j=0;j<sprays;j++){
+      const a=tau*j/sprays+tier*2.39996, cx=Math.cos(a),cy=Math.sin(a);
+      const reach=radius*(.95+.05*Math.cos(j+tier*1.6));
+      const center=[reach*cx,reach*cy,height+.012*Math.sin(j*1.7+tier)];
+      const light=-.34*cx+.22*cy+(height-.66)*1.85+.13*Math.sin(j*2.2+tier);
+      const color=shades[light>.46?3:light>.04?2:light>-.34?1:0];
+      const lobes=close?11:6,rx=width*(close?1:1.24),ry=depth*(close?1:1.18);
+      const offsets=[];
+      for(let k=0;k<lobes*2;k++){
+        const t=tau*k/(lobes*2);
+        const r=(k%2?.92:1)+.027*Math.sin(k*2.2+j);
+        offsets.push([rx*r*Math.cos(t),ry*r*Math.sin(t)]);
+      }
+      for(let k=0;k<offsets.length;k++){
+        vertex(center,[0,0],color);vertex(center,offsets[k],color);vertex(center,offsets[(k+1)%offsets.length],color);
+      }
+      if(close&&(j+tier)%3!==0){
+        const leafInk=color.map((v,i)=>v*.79+[.92,.87,.58][i]*.21);
+        for(const sign of [-1,1]){
+          for(const [x,y] of [[-.05,-.05],[sign*.35,.22],[sign*.17,.19]])vertex(center,[rx*x,ry*y],leafInk);
+        }
+      }
+    }
+  }
 }
 
 const bin=(x,y)=>x+','+y;
@@ -162,7 +226,12 @@ export class CityNature {
     this.uniforms=Object.fromEntries(['matrix','rightAxis','upAxis'].map(k=>[k,gl.getUniformLocation(this.program,k)]));
     this.forms=this.id==='taiwan-cell-forest'?[...forms,'fir']:forms;
     this.meshes=this.forms.map(form=>{
-      const model=plant(form),vao=gl.createVertexArray(),shape=gl.createBuffer(),instances=gl.createBuffer();
+      const local=this.id==='city170-inventory-trees';
+      const street=plant(form,local?'street':undefined);
+      const overview=local?plant(form,'overview'):null;
+      const model=overview?new Float32Array(street.length+overview.length):street;
+      if(overview){model.set(street);model.set(overview,street.length);}
+      const vao=gl.createVertexArray(),shape=gl.createBuffer(),instances=gl.createBuffer();
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER,shape);
       gl.bufferData(gl.ARRAY_BUFFER,model,gl.STATIC_DRAW);
@@ -177,7 +246,7 @@ export class CityNature {
         gl.vertexAttribDivisor(slot,1);
       }
       gl.bindVertexArray(null);
-      return {vao,shape,instances,vertices:model.length/8,count:0};
+      return {vao,shape,instances,street:street.length/8,overview:overview?overview.length/8:0,count:0};
     });
     this.terrainChanged=e=>{if(e.sourceId==='dem' && e.sourceDataType==='content')this.dirty=true;};
     map.on('sourcedata',this.terrainChanged);
@@ -225,10 +294,12 @@ export class CityNature {
     transform(opts.defaultProjectionData.mainMatrix,this.tile,this.matrix);
     gl.uniformMatrix4fv(this.uniforms.matrix,false,this.matrix);
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(true);gl.disable(gl.CULL_FACE);gl.disable(gl.BLEND);
+    const overview=this.map.getZoom()<18.15;
     for(const mesh of this.meshes){
       if(!mesh.count)continue;
       gl.bindVertexArray(mesh.vao);
-      gl.drawArraysInstanced(gl.TRIANGLES,0,mesh.vertices,mesh.count);
+      const simpler=overview&&mesh.overview>0;
+      gl.drawArraysInstanced(gl.TRIANGLES,simpler?mesh.street:0,simpler?mesh.overview:mesh.street,mesh.count);
       this.drawn+=mesh.count;
     }
     gl.bindVertexArray(null);

@@ -1,6 +1,15 @@
+import {storefrontCategory} from './shop-categories.js';
+import {drawServiceWindow} from './shop-service-windows.js';
+import {serviceWindowLabels} from './shop-service-labels.js';
+import {categoryFoodWindow,cuisineWindow,drawFoodWindow} from './shop-food-windows.js';
+import {mappedFoodWindow} from './taipei-food-window-evidence.js';
+export {storefrontCategory};
 import {MercatorCoordinate} from './assets/maplibre-gl.mjs';
 import {program,transform} from './survey-layer.js';
-import {buildFuxingFront} from './fuxing-fronts.js';
+import {drawDihuaShop} from './dihua-shop-art.js?v=dihua-shops-1';
+import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
+import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
+import {completeFrontagePack} from './taipei-frontage-pack.js?v=shop-address-1';
 
 const minZoom=17.55;
 const layerId='city-shopfronts';
@@ -31,6 +40,13 @@ uniform sampler2D signTexture;
 uniform bool showNames;
 out vec4 outColor;
 void main(){
+  // Painted plaques carry the ink and field on one surface, without a second depth-tested text decal.
+  if(lit.r<0.0){
+    vec3 field=vec3(-lit.r-1.0,lit.gb);
+    float coverage=showNames?texture(signTexture,uv).a:0.0;
+    outColor=vec4(mix(field,vec3(1.0,0.89,0.67),coverage),1.0);
+    return;
+  }
   if(uv.x>=0.0 && (!showNames || texture(signTexture,uv).a<0.62)) discard;
   outColor=vec4(lit,1.0);
 }`;
@@ -42,21 +58,11 @@ const drawing={
   apparel: ['#a17080','#654e63','#ab897e','#92a29f','clothes'],
   health: ['#597e82','#426166','#a9a396','#85a49e','cross'],
   craft: ['#6c7796','#4f596f','#8c7964','#7e9298','books'],
+  salon: ['#948180','#665a58','#b09883','#95aca9','plain'],
+  botanical: ['#65846b','#526b59','#ab967d','#91a79b','plain'],
+  cycle: ['#567c87','#4b6367','#a3927c','#859d9b','plain'],
+  optical: ['#65848a','#506467','#ad9e86','#92aba9','plain'],
   retail: ['#786c58','#5c5a52','#a28d7c','#829991','plain'],
-};
-const categories={
-  inspection_store:['餐飲店家','meal'],restaurant:['餐廳','meal'],fast_food:['速食','meal'],food_court:['美食廣場','meal'],
-  cafe:['咖啡店','cafe'],ice_cream:['冰品店','cafe'],bakery:['烘焙店','cafe'],
-  bar:['酒吧','meal'],pub:['酒館','meal'],tea:['茶店','cafe'],
-  convenience:['便利商店','grocery'],supermarket:['超級市場','grocery'],grocery:['雜貨店','grocery'],
-  greengrocer:['蔬果店','grocery'],butcher:['肉品店','grocery'],seafood:['海產店','grocery'],
-  confectionery:['糖果甜點店','grocery'],general:['商店','grocery'],mall:['商場','grocery'],
-  clothes:['服飾店','apparel'],shoes:['鞋店','apparel'],boutique:['精品店','apparel'],
-  cosmetics:['美妝店','apparel'],hairdresser:['髮廊','apparel'],beauty:['美容店','apparel'],
-  pharmacy:['藥局','health'],chemist:['藥妝店','health'],optician:['眼鏡店','health'],
-  books:['書店','craft'],stationery:['文具店','craft'],gift:['禮品店','craft'],
-  department_store:['百貨公司','grocery'],florist:['花店','grocery'],bicycle:['自行車店','craft'],
-  hardware:['五金行','craft'],electronics:['電子用品店','craft'],jewelry:['珠寶店','apparel'],
 };
 const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const colored=Object.fromEntries(Object.entries(drawing).map(([key,values])=>{
@@ -66,7 +72,7 @@ const colored=Object.fromEntries(Object.entries(drawing).map(([key,values])=>{
 const cream=rgb('#f3dfb6'), stone=rgb('#b5a597'), highlights=rgb('#a6bbb1');
 const stock=['#c58866','#d7b475','#659185','#9c7890','#8099ad'].map(rgb);
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
-const placeGroup=category=>Object.hasOwn(categories,category)?categories[category]:['店家','retail'];
+
 
 function shopRow(row){
   return row && typeof row.id==='string' && row.id && typeof row.name==='string' && row.name.trim() &&
@@ -81,7 +87,8 @@ function cardFor(row){
     :match?`https://www.openstreetmap.org/${match[1]}/${match[2]}`:undefined;
   const source=row.source?.label??row.source?.name??(typeof row.source==='string'?row.source:undefined)
     ??(match?'OpenStreetMap':undefined);
-  const categoryLabel=typeof row.categoryLabel==='string'&&row.categoryLabel.trim()||placeGroup(row.category)[0];
+  const label=typeof row.categoryLabel==='string'&&row.categoryLabel.trim();
+  const categoryLabel=label&&label!==row.category?label:serviceWindowLabels.get(row.category)??storefrontCategory(row)[0];
   return {id:row.id,name:row.name,categoryLabel,
     kind:'shopfront',detail:'店面位置與外觀為示意',source,url};
 }
@@ -98,11 +105,11 @@ function nameAtlas(map, count, maxTexture){
   ctx.textAlign='center';
   ctx.textBaseline='middle';
   let index=0;
-  return {canvas,write(text,fitSign=false){
+  return {canvas,write(text,fitSign=false,heavy=false){
     const left=(index%cols)*width,top=Math.floor(index++/cols)*height;
     if(top+height>canvas.height)return null;
     const name=text.trim().slice(0,40);
-    ctx.font=fitSign?'600 26px "Songti TC", serif':'bold 23px system-ui, sans-serif';
+    ctx.font=heavy?'bold 28px system-ui, sans-serif':fitSign?'600 26px "Songti TC", serif':'bold 23px system-ui, sans-serif';
     ctx.fillText(name,left+width/2,top+height/2,width-16);
     const inset=fitSign?Math.max(1,(width-Math.min(ctx.measureText(name).width,width-16))/2-8):1;
     return [(left+inset)/canvas.width,(top+1)/canvas.height,
@@ -110,14 +117,224 @@ function nameAtlas(map, count, maxTexture){
   }};
 }
 
-function buildShop(vertices,row,center,scale,atlas,fuxing=false){
+// Stock and furniture are illustrative. The trade, surveyed facade and available width
+// come from the matched shop. Draw one display per bay so shelves cannot mask its shape.
+const tradeWindows = new Map([
+  ['hairdresser','salon'], ['florist','flowers'], ['bicycle','cycle'],
+  ['coffee','coffee-stock'],
+  ['optician','glasses'], ['convenience','cooler'], ['supermarket','checkout'],
+  ['clothes','garments'], ['bakery','bread'], ['pastry','pastries'],
+  ['beverages','bottles'], ['chemist','drugstore'],
+]);
+const tradePaint={salon:'salon',flowers:'botanical',cycle:'cycle',glasses:'optical','coffee-stock':'cafe'};
+const fixtureInk=rgb('#494845'), timber=rgb('#a87554'), porcelain=rgb('#f2dfb5'),
+  teal=rgb('#47877e'), leather=rgb('#ac6856'), petal=rgb('#d47774'), leaf=rgb('#688c5e');
+const enamel=rgb('#abccc1'), grape=rgb('#937796'), ochre=rgb('#d79e55'),
+  crust=rgb('#bd8346'), sage=rgb('#5c927e'), berry=rgb('#b86d82');
+const servicePaint={ink:fixtureInk,wood:timber,cream:porcelain,glass:highlights,teal,leather,berry,ochre,sage,grape};
+// Polyfork's glass-door drinks fridge (0.8 × 1.9 m), dressing mirror (0.75 × 1.6 m)
+// and 0.18 × 0.14 m loaf inform the proportions. The mesh is drawn locally.
+function tradeWindow(trade, left, right, point, quad){
+  const middle=(left+right)/2;
+  // Real-world proportions survive narrow storefronts. The display sits above its sill.
+  const scale=Math.min((right-left-.06)/1.65,1);
+  if(scale<=0)return;
+  const at=(x,y,z)=>point(middle+x*scale,.56+y*scale,z);
+  const face=(a,b,lo,hi,d,color)=>quad([at(a,lo,d),at(b,lo,d),at(b,hi,d),at(a,hi,d)],color);
+  function slab(a,b,lo,hi,d,color){
+    face(a,b,lo,hi,d,color);
+    quad([at(a,hi,.052),at(b,hi,.052),at(b,hi,d),at(a,hi,d)],porcelain);
+    quad([at(b,lo,.052),at(b,lo,d),at(b,hi,d),at(b,hi,.052)],fixtureInk);
+  }
+  function shape(coords,d,color){quad(coords.map(([x,y])=>at(x,y,d)),color);}
+  function rod(x,y,xx,yy,width,d,color){
+    const len=Math.hypot(xx-x,yy-y),dx=-(yy-y)*width/(2*len),dy=(xx-x)*width/(2*len);
+    shape([[x+dx,y+dy],[xx+dx,yy+dy],[xx-dx,yy-dy],[x-dx,y-dy]],d,color);
+  }
+  function rim(x,y,r,d,color,segments=10){
+    for(let i=0;i<segments;i++){
+      const a=2*Math.PI*i/segments,b=2*Math.PI*(i+1)/segments;
+      rod(x+r*Math.cos(a),y+r*Math.sin(a),x+r*Math.cos(b),y+r*Math.sin(b),r*.19,d,color);
+    }
+  }
+  function bottle(x,bottom,height,d,color){
+    const shoulder=bottom+height*.69, neck=bottom+height*.83;
+    const w=height*.20;
+    face(x-w,x+w,bottom,shoulder,d,color);
+    shape([[x-w,shoulder],[x+w,shoulder],[x+w*.45,neck],[x-w*.45,neck]],d,color);
+    face(x-w*.45,x+w*.45,neck,bottom+height,d,porcelain);
+  }
+  switch(trade){
+    case 'cooler':
+      slab(-.34,.34,.015,1.63,.19,fixtureInk);
+      face(-.29,.29,.11,1.44,.194,enamel);
+      face(-.27,.27,1.48,1.57,.201,porcelain);
+      for(const shelf of [.29,.78]){
+        face(-.27,.27,shelf-.04,shelf,.207,porcelain);
+        for(const [x,color] of [[-.17,ochre],[0,teal],[.17,berry]])bottle(x,shelf,.32,.212,color);
+      }
+      face(.26,.30,.67,.99,.232,fixtureInk);
+      break;
+    case 'checkout':
+      // A basket with an open handle sits on the belt next to the tilted terminal.
+      slab(-.74,.73,.04,.56,.21,sage);
+      slab(-.77,.76,.56,.64,.26,fixtureInk);
+      shape([[-.65,.88],[-.13,.88],[-.19,.65],[-.59,.65]],.19,ochre);
+      rod(-.58,.88,-.48,1.04,.034,.20,fixtureInk);
+      rod(-.48,1.04,-.28,1.04,.034,.20,fixtureInk);
+      rod(-.28,1.04,-.20,.88,.034,.20,fixtureInk);
+      for(const x of [-.51,-.39,-.27])face(x-.022,x+.022,.71,.82,.20,porcelain);
+      face(.34,.43,.64,.85,.14,fixtureInk);
+      shape([[.18,.84],[.53,.80],[.55,1.03],[.20,1.07]],.18,enamel);
+      break;
+    case 'garments':
+      // A dressed tailor's form on a foot, with a tall mirror behind it.
+      slab(-.69,-.08,.09,1.48,.10,timber);
+      face(-.64,-.13,.17,1.42,.105,highlights);
+      rod(-.58,.76,-.21,1.23,.045,.112,porcelain);
+      slab(.02,.58,.015,.08,.19,fixtureInk);
+      face(.27,.33,.08,.93,.13,timber);
+      face(.24,.36,1.29,1.52,.12,timber);
+      shape([[-.01,1.28],[.13,1.40],[.47,1.40],[.61,1.28]],.18,grape);
+      shape([[.09,1.28],[.51,1.28],[.44,1.03],[.16,1.03]],.18,grape);
+      shape([[.16,1.03],[.44,1.03],[.57,.56],[.03,.56]],.19,grape);
+      rod(.20,1.385,.30,1.32,.031,.195,porcelain);
+      rod(.30,1.32,.40,1.385,.031,.195,porcelain);
+      break;
+    case 'bread':
+    case 'pastries':{
+      const isBread=trade==='bread';
+      // Two timber trays or a chilled pastry counter, with stock above the tray lip.
+      slab(-.73,.73,.08,.37,.21,isBread?timber:sage);
+      for(const shelf of [.43,.91]){
+        slab(-.69,.69,shelf-.055,shelf,.23,isBread?crust:porcelain);
+        for(const x of [-.43,0,.43]){
+          if(isBread){
+            face(x-.12,x+.12,shelf,shelf+.08,.16,crust);
+            shape([[x-.12,shelf+.08],[x+.12,shelf+.08],
+              [x+.075,shelf+.15],[x-.075,shelf+.15]],.16,ochre);
+            rod(x-.045,shelf+.085,x+.003,shelf+.136,.022,.17,porcelain);
+          }else{
+            face(x-.13,x+.13,shelf,shelf+.10,.16,crust);
+            shape([[x-.13,shelf+.10],[x+.13,shelf+.10],
+              [x+.13,shelf+.18],[x-.13,shelf+.15]],.17,porcelain);
+            face(x-.026,x+.026,shelf+.15,shelf+.22,.18,berry);
+          }
+        }
+      }
+      if(!isBread){
+        rod(-.70,.38,-.70,1.26,.031,.25,enamel);
+        rod(.70,.38,.70,1.26,.031,.25,enamel);
+        face(-.70,.70,1.24,1.28,.25,enamel);
+      }
+      break;
+    }
+    case 'bottles':
+      for(const shelf of [.24,.86]){
+        slab(-.69,.69,shelf-.07,shelf,.20,timber);
+        for(const [x,h,color] of [[-.43,.35,sage],[-.14,.42,ochre],[.16,.32,berry],[.44,.39,teal]]){
+          bottle(x,shelf,h,.15,color);
+        }
+      }
+      break;
+    case 'drugstore':
+      for(const shelf of [.35,.83]){
+        slab(-.67,.67,shelf-.045,shelf,.17,enamel);
+        for(const [x,color] of [[-.47,sage],[-.15,berry],[.18,ochre],[.47,teal]]){
+          face(x-.08,x+.08,shelf,shelf+.30,.15,porcelain);
+          face(x-.08,x+.08,shelf+.17,shelf+.23,.158,color);
+        }
+      }
+      bottle(-.27,1.13,.29,.15,berry);
+      bottle(.22,1.13,.36,.15,sage);
+      break;
+    case 'salon':
+      face(-.52,.52,.65,1.59,.063,timber);
+      face(-.45,.45,.72,1.52,.071,highlights);
+      rod(-.38,1.05,-.06,1.41,.04,.074,porcelain);
+      slab(-.27,.27,.03,.11,.24,fixtureInk);
+      face(-.065,.065,.105,.40,.16,fixtureInk);
+      slab(-.36,.36,.38,.52,.26,leather);
+      slab(-.29,.29,.53,.85,.19,leather);
+      for(const side of [-.36,.27])slab(side,side+.09,.52,.65,.27,fixtureInk);
+      break;
+    case 'flowers':
+      for(const [x,y] of [[-.54,1.13],[-.10,1.36],[.29,1.18],[.53,1.32]]){
+        const foot=x<0?-.25:.30;
+        rod(foot,.42,x,y,.045,.12,leaf);
+        shape([[x*.7,.68],[x*.7-.14,.84],[x*.7-.16,.88],[x*.7+.025,.80]],.133,leaf);
+        const r=.105;
+        shape([[x-r,y],[x-.04,y+r],[x+.06,y+r],[x+r,y]],.14,x>0?porcelain:petal);
+        shape([[x-r,y],[x+r,y],[x+.04,y-r],[x-.06,y-r]],.14,x>0?porcelain:petal);
+      }
+      for(const x of [-.26,.30]){
+        shape([[x-.14,.02],[x+.14,.02],[x+.23,.49],[x-.23,.49]],.19,timber);
+        slab(x-.235,x+.235,.45,.52,.22,leather);
+      }
+      break;
+    case 'cycle':
+      for(const x of [-.49,.49])rim(x,.31,.28,.10,fixtureInk);
+      for(const [x,y,xx,yy] of [[-.49,.31,-.07,.32],[-.07,.32,-.20,.69],[-.20,.69,-.49,.31],
+        [-.20,.69,.28,.7],[.28,.7,-.07,.32],[.49,.31,.29,.78]]){
+        rod(x,y,xx,yy,.052,.14,teal);
+      }
+      rod(-.20,.69,-.25,.82,.05,.15,fixtureInk);
+      face(-.38,-.12,.80,.88,.17,leather);
+      rod(.29,.78,.25,.92,.05,.16,fixtureInk);
+      face(.22,.42,.90,.96,.17,fixtureInk);
+      break;
+    case 'espresso':
+      slab(-.76,.76,.27,.38,.22,timber);
+      slab(-.55,.42,.38,.47,.18,fixtureInk);
+      slab(-.52,-.37,.47,.90,.15,teal);
+      slab(-.55,.46,.76,1.05,.21,teal);
+      face(-.27,.36,.73,.78,.205,fixtureInk);
+      for(const x of [-.12,.21]){
+        face(x-.035,x+.035,.64,.74,.16,fixtureInk);
+        shape([[x-.07,.47],[x+.07,.47],[x+.10,.60],[x-.10,.60]],.18,porcelain);
+      }
+      break;
+    case 'coffee-stock':
+      slab(-.75,.75,.26,.35,.22,timber);
+      for(const [x,h] of [[-.45,.98],[0,1.06],[.45,.89]]){
+        shape([[x-.14,.36],[x+.14,.36],[x+.12,h],[x-.12,h]],.13,timber);
+        face(x-.12,x+.12,h-.055,h,.145,fixtureInk);
+        face(x-.085,x+.085,.48,.64,.15,porcelain);
+      }
+      break;
+    case 'dining':
+      for(const side of [-.55,.49])face(side,side+.065,.02,.58,.12,fixtureInk);
+      slab(-.75,.75,.54,.65,.24,timber);
+      for(const x of [-.32,.32]){
+        shape([[x-.09,.65],[x+.09,.65],[x+.22,.84],[x-.22,.84]],.15,porcelain);
+        face(x-.23,x+.23,.819,.855,.17,teal);
+      }
+      break;
+    case 'glasses':
+      slab(-.70,.70,.27,.37,.20,timber);
+      for(const x of [-.29,.29])rim(x,.85,.24,.12,fixtureInk,8);
+      rod(-.068,.89,.068,.89,.055,.13,timber);
+      for(const side of [-1,1])rod(side*.51,.89,side*.64,.94,.049,.13,timber);
+      break;
+    default:{
+      const tools={face,slab,shape,rod,rim,bottle};
+      if(serviceWindowLabels.has(trade))drawServiceWindow(trade,tools,servicePaint);
+      else drawFoodWindow(trade,tools,servicePaint);
+    }
+  }
+}
+
+export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   const [x,y,z]=center;
   const angle=row.angle*Math.PI/180, nx=Math.cos(angle),ny=Math.sin(angle);
   const tx=-ny,ty=nx;
   const half=clamp(row.width,1.5,9)*.5, top=3.25, offset=.14;
-  const type=placeGroup(row.category)[1];
-  const paint=colored[type];
+  const type=storefrontCategory(row)[1];
   const seed=Array.from(row.id).reduce((value,c)=>(value*31+c.charCodeAt(0))>>>0,0);
+  const knownCuisine=typeof row.cuisine==='string'?cuisineWindow(row.category,row.cuisine):mappedFoodWindow(row);
+  const trade=knownCuisine??categoryFoodWindow(row.category,seed)??tradeWindows.get(row.category)
+    ??(serviceWindowLabels.has(row.category)?row.category:null);
+  const paint=colored[tradePaint[trade]??type];
   const timbers=[rgb('#846b4d'),rgb('#996d4d'),rgb('#74624e')];
   const trim=timbers[seed%timbers.length];
   const first=vertices.length/13;
@@ -139,8 +356,15 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
     const nameUV=atlas.write(row.name,true);
     if(nameUV)panel(a,b,low,high,depth,color,nameUV);
   }
-  if(fuxing && buildFuxingFront(row,{half,top,point,quad,panel,rgb,sign})){
-    return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055)};
+  function plaque(a,b,low,high,depth,fill){
+    const field=rgb(fill), uv=atlas.write(row.name,true,true);
+    const color=uv?[-1-field[0],field[1],field[2]]:field;
+    panel(a,b,low,high,depth,color,uv);
+  }
+  const geometry={half,top,point,quad,panel,rgb,sign,plaque};
+  if(drawDihuaShop(row,geometry) || (fuxing && buildFuxingFront(row,geometry))){
+    return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055),
+      lip:row.arcadeDepth?corners(-half,half,.08,top,row.arcadeDepth+.14):null};
   }
   panel(-half,half,.08,top,0,paint.wall);
   panel(-half,half,.08,.35,.018,stone);
@@ -153,16 +377,25 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   quad([point(-half,top,.04),point(half,top,.04),point(half,top,.24),point(-half,top,.24)],cream);
   panel(-half,half,top-.07,top,.24,paint.frame);
   const door=Math.min(.61,half*.36);
-  panel(-door-.085,door+.085,.12,2.67,.025,paint.frame);
-  panel(-door,door,.22,2.56,.041,paint.glass);
-  panel(-door+.06,door-.06,1.45,2.44,.049,highlights);
-  panel(door-.18,door-.11,1.07,1.40,.053,cream);
-  for(const [start,end] of [[-half+.10,-door-.13],[door+.13,half-.10]]){
+  // A narrow shop needs one continuous display beside the entrance.
+  const doorCenter=trade&&half<2.85?half-.14-door:0;
+  const dl=doorCenter-door,dr=doorCenter+door;
+  panel(dl-.085,dr+.085,.12,2.67,.025,paint.frame);
+  panel(dl,dr,.22,2.56,.041,paint.glass);
+  panel(dl+.06,dr-.06,1.45,2.44,.049,highlights);
+  panel(dr-.18,dr-.11,1.07,1.40,.053,cream);
+  for(const [start,end] of [[-half+.10,dl-.13],[dr+.13,half-.10]]){
     if(end-start<.25)continue;
     panel(start,end,.44,2.60,.02,paint.frame);
     panel(start+.073,end-.073,.53,2.51,.038,paint.glass);
     panel(start+.10,end-.10,2.23,2.40,.042,highlights);
-    if(['books','shelves','awning'].includes(paint.detail)){
+    if(trade){
+      if(start<dl){
+        panel(start+.073,end-.073,.53,2.20,.043,paint.glass.map(c=>c*.81));
+        panel(start+.06,end-.06,.46,.53,.14,trim);
+        tradeWindow(trade,start+.07,end-.07,point,quad);
+      }
+    }else if(['books','shelves','awning'].includes(paint.detail)){
       const items=paint.detail==='awning'?2:4;
       const step=(end-start-.18)/items;
       for(const shelf of (paint.detail==='awning'?[.7]:[.7,1.26])){
@@ -210,8 +443,8 @@ function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055)};
 }
 
-function projectedFace(shop,matrix,width,height){
-  const corners=shop.hit.map(([x,y,z])=>{
+function projectedFace(shop,matrix,width,height,points=shop.hit){
+  const corners=points.map(([x,y,z])=>{
     const component=i=>matrix[i]*x+matrix[i+4]*y+matrix[i+8]*z+matrix[i+12];
     const w=component(3);
     return w>0?[(1+component(0)/w)*width/2,(1-component(1)/w)*height/2]:null;
@@ -222,19 +455,21 @@ function projectedFace(shop,matrix,width,height){
 }
 
 function hitShop(shop,matrix,point,width,height){
-  const corners=projectedFace(shop,matrix,width,height);
-  if(!corners)return false;
-  return corners.every(([x,y],index)=>{
-    const [nx,ny]=corners[(index+1)%4];
-    return (nx-x)*(point.y-y)-(ny-y)*(point.x-x)<0;
+  const faces=shop.lip?[shop.hit,shop.lip]:[shop.hit];
+  return faces.some(points=>{
+    const corners=projectedFace(shop,matrix,width,height,points);
+    return corners && corners.every(([x,y],index)=>{
+      const [nx,ny]=corners[(index+1)%4];
+      return (nx-x)*(point.y-y)-(ny-y)*(point.x-x)<0;
+    });
   });
 }
 
-async function readPack(id, signal){
+export async function readShopfrontPack(id, signal){
   const url=new URL(`./data/city170-frontages/${id}.json.gz?v=survey-health`,import.meta.url);
   const response=await fetch(url,{signal});
   if(!response.ok||!response.body)throw Error(`Shopfront pack returned ${response.status}`);
-  return new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+  return completeFrontagePack(id,await decodeMapJSON(response));
 }
 
 export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},surveyTiles,onPickMiss=()=>{}){
@@ -260,9 +495,8 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       if(cache.has(id)||loading.has(id)||(failures.get(id)??0)>Date.now())continue;
       const controller=new AbortController();
       loading.set(id,controller);
-      readPack(id,controller.signal).then(payload=>{
+      readShopfrontPack(id,controller.signal).then(payload=>{
         if(removed||controller.signal.aborted)return;
-        if(!Array.isArray(payload))throw Error('Invalid city shopfront pack');
         cache.set(id,payload.filter(shopRow));
         failures.delete(id);
         for(const key of cache.keys()){

@@ -7,10 +7,11 @@ export function inFuxing(lon,lat){
   return lon>=bounds[0]&&lon<=bounds[2]&&lat>=bounds[1]&&lat<=bounds[3];
 }
 export const bookstoreId='poi/node/3403899627';
-export function frontageCamera(x,y,angle){
+export function frontageCamera(x,y,angle,preset=[-5,58,21.4,21.38]){
+  const [offset,pitch,zoom,mobileZoom]=preset;
   const normal=angle*Math.PI/180;
   const center=[x+Math.cos(normal)*1.1/100780,y+Math.sin(normal)*1.1/110800];
-  return {center,bearing:270-angle-5,pitch:58,mobilePitch:58,zoom:21.40,mobileZoom:21.38};
+  return {center,bearing:270-angle+offset,pitch,mobilePitch:pitch,zoom,mobileZoom};
 }
 export const bookshopView=frontageCamera(121.54367371,25.02748876,179.8);
 

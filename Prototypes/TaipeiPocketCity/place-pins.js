@@ -54,9 +54,9 @@ const byCategory = new Map(Object.entries(groups).flatMap(([type,values])=>value
 export function placePinType(category){return byCategory.get(category) ?? 'other';}
 export function pinLabelColor(type){return styles[type].label;}
 
-function pinCanvas(type){
+function pinCanvas(type,style=styles[type]){
   const canvas=document.createElement('canvas');
-  const {disc,ink,solid,lines}=styles[type];
+  const {disc,ink,solid,lines}=style;
   canvas.width=canvas.height=72;
   const ctx=canvas.getContext('2d');
   ctx.scale(3,3);
@@ -79,12 +79,13 @@ export function placeButtonIcon(category){
   canvas.setAttribute('aria-hidden','true');
   return {canvas,color:pinLabelColor(type)};
 }
+export function registerPlaceBadge(map,id,style,type){
+  if(map.hasImage?.(id))return;
+  const canvas=pinCanvas(type,style);
+  map.addImage(id,canvas.getContext('2d').getImageData(0,0,72,72),{pixelRatio:3});
+}
 export function placePinStyle(map){
-  for(const type of Object.keys(styles)){
-    if(map.hasImage?.('place-pin-'+type))continue;
-    const canvas=pinCanvas(type);
-    map.addImage('place-pin-'+type,canvas.getContext('2d').getImageData(0,0,72,72),{pixelRatio:3});
-  }
+  for(const [type,style] of Object.entries(styles))registerPlaceBadge(map,'place-pin-'+type,style,type);
   const category=['case',['==',['get','category'],'commerce_store'],['coalesce',['get','categoryLabel'],''],['coalesce',['get','category'],'']];
   const byType=fn=>['case',['==',['get','placeId'],'poi/way/1159328965'],fn('tower'),
     ['match',category,...Object.entries(groups).flatMap(([type,values])=>[values,fn(type)]),fn('other')]];

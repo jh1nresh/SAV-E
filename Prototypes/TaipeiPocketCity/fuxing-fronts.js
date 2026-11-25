@@ -20,7 +20,7 @@ const fixtureIds={
 const ink='#51433a', paper='#f8e3bc', stone='#c6b6a0';
 const covers=['#edbd71','#b96956','#85a28a','#a5bac1','#eee0b7','#7e8fa6','#d68677'];
 
-function parts({point,quad,panel,rgb,sign}){
+export function frontageParts({point,quad,panel,rgb,sign}){
   function surface(vertices,fill){
     quad(vertices.map(p=>point(...p)),rgb(fill));
   }
@@ -285,7 +285,7 @@ function illustratedShop(p,half,top,theme){
 export function buildFuxingFront(row,geometry){
   if(!inFuxing(...row.center))return false;
   const {half,top}=geometry;
-  const p=parts(geometry);
+  const p=frontageParts(geometry);
   if(row.id===bookstoreId){
     bookshop(p,half,top);
     return true;

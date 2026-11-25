@@ -40,7 +40,8 @@ def runtime_paths():
         return json.loads(include(name).read_text())
 
     for path in ('index.html', 'style.css', 'assets/icon.png', 'assets/maplibre-gl.css',
-                 'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json'):
+                 'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
+                 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz'):
         include(path)
     # Start from the iOS entry point and follow static ESM and module-worker references.
     modules = ['app.js', 'assets/maplibre-gl-worker.mjs']
