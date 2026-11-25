@@ -1,7 +1,7 @@
 import {taipeiDome,addDomeApron} from './taipei-dome.js';
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
-import {addTaipei101Indoor} from './taipei101-indoor.js?v=1f-entrances-1';
+import {addTaipei101Indoor} from './taipei101-indoor.js?v=original-ink-2';
 import {loadNativeExploreVenues} from './savvy-place-sources.js';
 import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=alpine-1';
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
@@ -18,11 +18,11 @@ import {metroExitDataset} from './taipei-metro-exits.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
-import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei101-source-2';
+import {SurveyLayer,buildingZoom} from './survey-layer.js?v=taipei101-original-ink-2';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
 import {esliteSongyan} from './taipei-eslite-songyan.js';
 import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
-import {addMetroPreview} from './metro-preview.js';
+import {addMetroPreview} from './metro-preview.js?v=metro-label-2';
 import {streetObjects101} from './taipei101-single-furniture.js';
 import {add101Ground,planting101,walks101} from './taipei101-single-ground.js';
 import {addPocketCityPaint,readPocketCityAsset} from './pocket-city-atlas.js';
@@ -239,12 +239,21 @@ function locate(record,animate=true){
 function focus101Street(animate=true){
   if(!map)return;
   manualPitch=true;
-  // Fit the 508 m spire and the 200 m plaza to the visible map, including short landscape windows.
-  const scale=Math.min(stage.clientHeight/810,stage.clientWidth/325);
-  const zoom=Math.max(buildingZoom,Math.min(16.35,16.12+Math.log2(Math.max(.1,scale))));
-  const camera={center:[121.56425,25.03492],bearing:-28,zoom,pitch:40};
+  // Match the original oblique view: the camera looks northwest at the east and south facades.
+  const scale=Math.min(stage.clientHeight/810,stage.clientWidth/430);
+  const zoom=Math.max(buildingZoom,Math.min(16.65,16.36+Math.log2(Math.max(.1,scale))));
+  const camera={center:[121.56263,25.03525],bearing:-54,zoom,pitch:54};
+  const originalFov=map.getVerticalFieldOfView();
+  map.setVerticalFieldOfView(18);
+  const restoreLens=()=>{
+    const p=map.getCenter();
+    if(map.getZoom()>14.4&&Math.abs(p.lng-121.56481)<.009&&Math.abs(p.lat-25.03367)<.008)return;
+    map.off('moveend',restoreLens);
+    map.setVerticalFieldOfView(originalFov);
+  };
   if(animate)jump(camera);
   else map.jumpTo(camera);
+  map.on('moveend',restoreLens);
 }
 function focusCorridor(){
   manualPitch=true;
@@ -687,6 +696,7 @@ try{
     taiwanScenery?.setLabels(visible);
     shopfronts?.setNames(visible);
     indoor101?.setNames(visible);
+    metroState?.setNames(visible);
     $('#fuxing-names').setAttribute('aria-pressed',String(visible));
     document.body.classList.toggle('without-place-names',!visible);
     nameInputs.forEach(input=>input.checked=visible);

@@ -2,7 +2,7 @@
 // Positions are metres east/north of the surveyed tower. RGB already contains
 // the original artist's per-face lighting and facade, trim and glazing colors.
 export const taipei101Exterior={
-  verts:22482,mesh:new URL('./assets/taipei101-pocket-city.bin.gz',import.meta.url),
+  verts:22482,mesh:new URL('./assets/taipei101-pocket-city.bin.gz?v=ink-order-1',import.meta.url),
   box:[121.56385,25.03327,121.56587,25.03465],
 };
 export const taipei101SurveyTiles=new Set([
@@ -27,3 +27,8 @@ export const taipei101ShellMatch=`bool isTaipei101Shell(vec3 building,vec2 site)
   return all(lessThan(abs(building-vec3(8.28989,21.97048,.175)),vec3(.0015)))||
     all(lessThan(abs(building-vec3(8.28989,56.74049,.105)),vec3(.0015)));
 }`;
+
+export const taipei101Ink={
+  mesh:new URL('./assets/taipei101-pocket-city-ink.bin.gz',import.meta.url),
+  segments:2221,mallFirst:1989,mallCount:166,solidVerts:14706,
+};

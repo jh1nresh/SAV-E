@@ -1,4 +1,5 @@
-import {taipei101Exterior,taipei101SurveyTiles,taipei101ShellMatch} from './taipei101-exterior.js';
+import {Taipei101Ink} from './taipei101-ink.js';
+import {taipei101Ink,taipei101Exterior,taipei101SurveyTiles,taipei101ShellMatch} from './taipei101-exterior.js?v=original-ink-2';
 import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
 import {esliteSongyan,esliteSurveyTiles,esliteSurveyMatch} from './taipei-eslite-songyan.js';
@@ -512,6 +513,8 @@ export class SurveyLayer {
       map.on('resize',this.#settlePhoneTiles);
     }
     this.program=program(gl);
+    this.ink=new Taipei101Ink(gl,taipei101Ink,program,unpack,()=>map.triggerRepaint());
+    this.inkMatrix=new Float32Array(16);
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
     this.zoomLocation=gl.getUniformLocation(this.program,'u_zoom');
     this.focusLocation=gl.getUniformLocation(this.program,'u_focusOffset');
@@ -562,6 +565,7 @@ export class SurveyLayer {
   }
   onRemove(){
     this.#disposed=true;
+    this.ink?.dispose();
     if(this.phone){
       clearTimeout(this.#phoneSettleTimer);
       this.map.off('movestart',this.#pausePhoneTiles);
@@ -776,9 +780,12 @@ export class SurveyLayer {
       gl.uniform4fv(this.songyanLimitLocation,this.songyan.limit);
       gl.uniform3fv(this.songyanMatchesLocation,this.songyan.matchValues);
     }
+    const exact101=this.#landmarkDrawn&&this.landmark?.mesh===taipei101Exterior.mesh;
+    if(exact101)transform(options.defaultProjectionData.mainMatrix,this.landmark,this.inkMatrix);
+    const inkReady=exact101&&this.ink.prepare(this.inkMatrix);
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
-      const exact101=this.#landmarkDrawn&&this.landmark?.mesh===taipei101Exterior.mesh;
+
       const mode101=exact101?(tile.key==='landmark/101'?2:taipei101SurveyTiles.has(tile.key)?1:0):0;
       gl.uniform1i(this.taipei101ModeLocation,mode101);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
@@ -820,9 +827,10 @@ export class SurveyLayer {
       }
       gl.uniformMatrix4fv(this.matrixLocation,false,this.#matrix);
       gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLES,0,tile.verts);
+      gl.drawArrays(gl.TRIANGLES,0,inkReady&&mode101===2?taipei101Ink.solidVerts:tile.verts);
     }
     gl.bindVertexArray(null);
+    if(inkReady)this.ink.draw(this.inkMatrix,!!this.mallMask,this.program);
     gl.bindTexture(gl.TEXTURE_2D,previousTexture);
     gl.activeTexture(activeTexture);
   }
