@@ -52,3 +52,15 @@ test('documented specialty categories show merchandise without guessing from sho
   }
   assert.deepEqual(draw('yes',4,0,{name:'寢具音響戶外用品'}),generic);
 });
+
+test('neighborhood displays preserve unknown shops and use exact source categories',()=>{
+  for(const category of ['religion','antiques','art','frame','garden_centre','locksmith','tailor',
+    'variety_store','food','butcher','music','perfumery']){
+    assert.ok(retailWindowTypes.has(category),category);
+  }
+  for(const category of ['grocery','general','nuts','oil','health_food']){
+    assert.equal(retailWindowTypes.get(category),retailWindowTypes.get('food'));
+  }
+  assert.deepEqual(draw('commerce_store',4,0,{categoryLabel:'特色店家',name:'佛具古董鎖印行'}),
+    draw('commerce_store',4,0,{categoryLabel:'特色店家'}));
+});
