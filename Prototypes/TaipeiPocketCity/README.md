@@ -105,4 +105,8 @@ python tools/audit-taipei-cells.py --data /path/to/PocketCity/data --osm /path/t
 
 開啟時地球朝向東亞。拖曳可轉到另一個半球，持續放大會在同一張地圖看見街道。城市名稱、地標和店家依比例尺顯示，移到有手繪內容的位置就會自動載入建築、街道、樹木與行人。「回到地球」可隨時拉回球體全景。從網址開啟時也可指定街區，例如 [淡水紅毛城](http://127.0.0.1:42418/index.html?city=tamsui)。每個手繪街區的範圍和來源可查閱 [城市索引](cities/catalog.json)。[街區製作與驗收流程](CITY-WORKFLOW.md)
 
+誠品生活松菸在同一張 3D 地圖上呈現向古蹟退縮的弧形立面、窗格與商場入口。插畫以市府 LOD1 建物對齊 13 段高度，入口與低層雨棚採插畫比例。原始建模採 OpenStreetMap 的建物分件。可從舊菸廠拖曳到誠品或以 [誠品生活松菸](http://127.0.0.1:42418/index.html?landmark=taipei-eslite-songyan) 開啟同一張地圖。[臺北文創大樓建築說明](https://www.taipeinewhorizon.com.tw/explore-venue) · [誠品生活松菸](https://meet.eslite.com/tw/tc/store/20180220034)
+
+從原版松菸街景以 `tools/export-pocket-mesh.mjs` 匯出模型後，執行 `python3 tools/register-eslite-map-mesh.py <匯出資料夾> <原版 scene-authored.json> <輸出資料夾>` 對齊 Savvy 地圖座標。
+
 台北以外的 21 縣市共收錄 521,303 個建物輪廓。圖資有記載時，以各棟的外牆色、屋頂色和材質繪製。其餘街屋沿用台北的窗框、玻璃與線腳，搭配 Pocket City 的暖色牆面、綠色窗框和靛藍遮棚。拉近會看到對應的店面。18 個地標街區也重建了周邊街屋的配色。各縣市的公開欄位及涵蓋數可查閱[建物材質索引](taiwan/materials/index.json)。

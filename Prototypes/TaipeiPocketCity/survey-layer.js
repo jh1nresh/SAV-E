@@ -1,4 +1,5 @@
 import {buildPalaceModel} from './palace-museum.js';
+import {esliteSongyan,esliteSurveyTiles,esliteSurveyMatch} from './taipei-eslite-songyan.js';
 import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
 
 const landmarkBuilders=new Map([['palace-museum',buildPalaceModel],[sunYatSenHall.id,buildSunYatSenHall]]);
@@ -37,6 +38,7 @@ uniform bool u_districtMaterialDetail;
 uniform vec4 u_districtMaterialTransform;
 uniform vec3 u_cityLandmarks;
 uniform bool u_replaceMemorialShell;
+uniform bool u_replaceEsliteShell;
 uniform vec3 u_songyanOffset;
 uniform vec3 u_dihuaOffset;
 uniform vec4 u_songyanLimit;
@@ -166,7 +168,10 @@ vec3 heritageFinish(float code,vec3 normal,float level,float height){
   return anatomyTone(material,normal);
 }
 
+${esliteSurveyMatch}
+
 void main() {
+  if(u_replaceEsliteShell&&isEsliteSurveyPart(v_building))discard;
   vec3 n=normalize(cross(dFdx(v_position),dFdy(v_position)));
   if(n.z<-.5)n=-n;
   float base=v_building.x, height=v_building.y, tone=v_building.z;
@@ -497,6 +502,7 @@ export class SurveyLayer {
     this.districtMaterialMaskLocation=gl.getUniformLocation(this.program,'u_districtMaterialMask');
     this.cityLandmarkLocation=gl.getUniformLocation(this.program,'u_cityLandmarks');
     this.memorialShellLocation=gl.getUniformLocation(this.program,'u_replaceMemorialShell');
+    this.esliteShellLocation=gl.getUniformLocation(this.program,'u_replaceEsliteShell');
     this.dihuaLocation=gl.getUniformLocation(this.program,'u_dihuaOffset');
     this.songyanOffsetLocation=gl.getUniformLocation(this.program,'u_songyanOffset');
     this.songyanTileLocation=gl.getUniformLocation(this.program,'u_songyanTile');
@@ -581,7 +587,7 @@ export class SurveyLayer {
   #start(k,tile,level){
     const ctl=new AbortController();
     this.#pending.set(k,ctl);
-    const url=new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
+    const url=tile.mesh??new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
     const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
     const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
@@ -663,11 +669,13 @@ export class SurveyLayer {
     if(this.dihuaDrawn)this.#displayed.push({...dihua.tile,key:dihua.key});
     this.#cityLandmarksVisible.fill(0);
     this.memorialDrawn=false;
+    this.esliteDrawn=false;
     for(const {key,tile} of heritage){
       const asset=this.#fetched.get(key);
       if(!asset)continue;
       this.#displayed.push({...tile,key,verts:asset.verts});
       if(tile.id===sunYatSenHall.id)this.memorialDrawn=true;
+      else if(tile.id===esliteSongyan.id)this.esliteDrawn=true;
       else this.#cityLandmarksVisible[tile.style]=1;
     }
     for(const t of wanted){
@@ -737,11 +745,12 @@ export class SurveyLayer {
     for(const tile of this.#displayed){
       const {vao}=this.#fetched.get(tile.key);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
+      gl.uniform1i(this.esliteShellLocation,this.esliteDrawn&&esliteSurveyTiles.has(tile.key)?1:0);
       if(this.mallMask){
         const {mx,my,m}=this.mallMask;
         gl.uniform3f(this.mallTileLocation,(tile.mx-mx)/m,(my-tile.my)/m,tile.m/m);
       }
-      gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'?1:0);
+      gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'||tile.id===esliteSongyan.id?1:0);
       gl.uniform3f(this.dihuaLocation,this.dihua?(tile.mx-this.dihua.mx)/tile.m:0,
         this.dihua?(this.dihua.my-tile.my)/tile.m:0,this.dihuaDrawn?1:0);
       gl.uniform3f(this.songyanOffsetLocation,
