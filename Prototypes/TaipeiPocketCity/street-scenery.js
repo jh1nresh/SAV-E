@@ -4,6 +4,7 @@ import {drawPlaygroundObject} from './taipei-playground-mesh.js';
 import {drawParkFitness} from './taipei-park-fitness-mesh.js';
 import {drawRiversidePavilion} from './taipei-riverside-pavilion-mesh.js';
 import {drawBicycleRack} from './taipei-bike-rack-mesh.js';
+import {drawTrailGuidepost} from './taipei-trail-sign-mesh.js';
 
 const vertex=`#version 300 es
 layout(location=0) in vec3 point;
@@ -65,6 +66,9 @@ function buildObject(kind,size,angle,index,origin,vertices,anatomy,hybrid){
     ? (kind==='entrance'?'#c67a3d':'#927a62')
     : (hybrid?hybridAccents:accents)[index%3];
   switch(kind){
+    case 'trail-guidepost':
+      drawTrailGuidepost({box});
+      break;
     case 'bike-wheel-rack': case 'bike-frame-stand':
       drawBicycleRack(kind,{box,face});
       break;

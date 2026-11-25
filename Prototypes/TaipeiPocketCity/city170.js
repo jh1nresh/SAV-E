@@ -7,6 +7,7 @@ import parkPlaygrounds from './city170-playground-points.js';
 import parkFitness from './city170-park-fitness-points.js';
 import riverPavilions from './city170-riverside-pavilion-points.js';
 import bikeRacks from './city170-bike-rack-points.js';
+import trailSigns from './city170-trail-sign-points.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
@@ -379,8 +380,9 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           const fitness=parkFitness[packIds[i]];
           const pavilions=riverPavilions[packIds[i]];
           const racks=bikeRacks[packIds[i]];
-          return playground||fitness||pavilions||racks
-            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions,...racks}}:record;
+          const signs=trailSigns[packIds[i]];
+          return playground||fitness||pavilions||racks||signs
+            ?{...record,objects:{...record.objects,...playground,...fitness,...pavilions,...racks,...signs}}:record;
         });
         lifeRevision=-1;
         lifeKey=inventories.every(Boolean)?key:'retry-trees';
