@@ -92,9 +92,10 @@ function polygonRings(geometry) {
 function prepareFeatures({features}) {
   if (!Array.isArray(features?.features)) throw Error('Invalid Pocket City feature pack');
   const art = [];
-  for (const row of features.features) {
+  for (const original of features.features) {
+    const row = original.properties.kind === 'pitch' ? surfaceFeature(original) : original;
     const {kind} = row.properties;
-    if (!paintKinds.has(kind) || (kind==='pitch' && surfaceFeature(row).properties.offGround)) continue;
+    if (!paintKinds.has(kind) || (kind === 'pitch' && row.properties.offGround)) continue;
     if (kind === 'tree' && row.geometry.type === 'Point') {
       const point = mercator(row.geometry.coordinates);
       art.push({id: row.id, kind, point, bounds: [...point, ...point]});

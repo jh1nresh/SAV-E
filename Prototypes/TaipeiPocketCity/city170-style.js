@@ -1,3 +1,4 @@
+import {asphalt} from './taipei-asphalt.js';
 import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
 import {streetShopPinStyle} from './shop-trades.js?v=neighborhood-services-1';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
@@ -383,11 +384,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     filter: gradeFilter('road'),
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: {
-      'line-color': ['match', category,
-        ['trunk', 'primary', 'secondary'], '#8994a4',
-        ['living_street', 'service'], '#a19fa1',
-        '#969dab',
-      ],
+      'line-color': asphalt,
       'line-width': groundWidth(5.4, 24),
       'line-opacity': fade(16.35, 17.35, 0.98),
     },
@@ -477,8 +474,23 @@ export function addCity170Style(map, sourceId, firstLabel) {
   // Keep a court's pigment and lines in the same terrain paint pass.
   add({
     id:'city170-playing-area-fill',source:'city170-playing-areas',type:'fill',minzoom:17,filter:kinds('pitch'),
-    paint:{'fill-color':['match',['get','sport'],['basketball','volleyball'],'#bc836c','#7d9e93'],
+    paint:{'fill-color':['match',['get','sport'],['basketball','volleyball'],'#bc836c','soccer','#a1bd74','#7d9e93'],
       'fill-outline-color':'#f6edcf'},
+  },underBuildings);
+  add({
+    id:'city170-running-track',source:'city170-playing-areas',type:'fill',minzoom:17,filter:kinds('running-track'),
+    paint:{'fill-color':'#bc775d'},
+  },underBuildings);
+  add({
+    id:'city170-track-edges',source:'city170-playing-areas',type:'line',minzoom:17,filter:kinds('running-track'),
+    layout:{'line-join':'round'},paint:{'line-color':'#f5d5ab',
+      'line-width':['interpolate',['linear'],['zoom'],17,.65,20,1.4]},
+  },underBuildings);
+  add({
+    id:'city170-running-lanes',source:'city170-playing-areas',type:'line',minzoom:17.8,filter:kinds('track-lanes'),
+    layout:{'line-join':'round'},paint:{'line-color':'#fff0d8',
+      'line-width':['interpolate',['linear'],['zoom'],17.8,.45,20,1.15],
+      'line-opacity':fade(17.8,18.7,.91)},
   },underBuildings);
   add({
     id:'city170-court-markings',source:'city170-playing-areas',type:'line',minzoom:17,filter:kinds('court-markings'),

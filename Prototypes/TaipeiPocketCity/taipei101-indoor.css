@@ -2,6 +2,9 @@
 .mall101-guide polygon{fill:#dca64a;fill-opacity:.13;stroke:#bd882b;stroke-width:2.5;stroke-dasharray:6 4;stroke-linejoin:round;paint-order:stroke fill}
 .mall101-guide circle{fill:#fffaf0;stroke:#9f721f;stroke-width:2}
 .mall101-badge{display:flex;align-items:center;gap:5px;padding:5px 8px 5px 5px;border:1px solid #d5b570;border-radius:18px;background:#fff8e5;color:#795721;font:700 13px/1.1 system-ui,sans-serif;white-space:nowrap;cursor:pointer;box-shadow:0 2px 6px #4835162c}
+.mall101-badge.mall101-overview{width:24px;height:24px;justify-content:center;padding:0}
+.mall101-overview>span:last-child{position:absolute;left:100%;padding:2px 5px;color:#664b27;text-shadow:0 1px 2px #fffaf1,1px 0 #fffaf1,-1px 0 #fffaf1}
+.mall101-overview.mall101-label-west>span:last-child{left:auto;right:100%}
 .mall101-badge[hidden],#mall101-control[hidden],#mall101-control [hidden]{display:none!important}
 .mall101-bag{position:relative;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#b18127}
 .mall101-bag:before{content:"";width:9px;height:8px;border-radius:1px;background:#fffae8;transform:translateY(2px)}

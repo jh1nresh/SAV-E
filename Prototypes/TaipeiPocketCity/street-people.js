@@ -1,3 +1,4 @@
+import {inside101Ground,touches101Ground} from './taipei101-single-ground.js';
 import {program,transform} from './survey-layer.js';
 
 const vertex=`#version 300 es
@@ -40,6 +41,12 @@ const tau=2*Math.PI;
 const cosine=latitude=>Math.cos(latitude*Math.PI/180);
 const mercator=(lng,lat)=>[(lng+180)/360,(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)/2];
 
+function routeSeed(key){
+  let hash=2166136261;
+  for(const char of key)hash=Math.imul(hash^char.charCodeAt(0),16777619);
+  return (hash>>>0)%1024;
+}
+
 function toRoute(path,projection){
   const points=path.points.map(point=>{
     const [mx,my]=mercator(...point);
@@ -54,7 +61,7 @@ function toRoute(path,projection){
   }).filter(segment=>segment.size>.01);
   const longitude=path.points.map(point=>point[0]),latitude=path.points.map(point=>point[1]);
   const bounds=[Math.min(...longitude),Math.min(...latitude),Math.max(...longitude),Math.max(...latitude)];
-  return {segments,length,count:path.people,bounds};
+  return {segments,length,seed:path.key==null?null:routeSeed(path.key),count:path.people,bounds,near101:touches101Ground(bounds),single101:!!path.single101};
 }
 
 function routeTouchesBounds(route,[[west,south],[east,north]]){
@@ -155,6 +162,7 @@ export class StreetPeople {
     this.minZoom=minZoom;
     this.wardrobe=hybrid?hybridWardrobe:wardrobe;
     this.id=`${id}-people`;
+    this.origin=origin;
     const [mx,my]=mercator(...origin);
     this.projection={mx,my,m:1/(40030228.9*cosine(origin[1]))};
     this.routes=paths.map(path=>toRoute(path,this.projection)).filter(route=>route.length>.01);
@@ -170,6 +178,13 @@ export class StreetPeople {
     this.vertexData=new Float32Array(this.figureLimit*componentsPerFigure);
     this.motion=matchMedia('(prefers-reduced-motion: reduce)');
     this.refresh=()=>this.map.triggerRepaint();
+  }
+  static forStreetPacks(origin,records,hybrid,previous){
+    const entries=Object.entries(Object.assign({},...records.map(record=>record.paths)));
+    const paths=entries.map(([key,path])=>({...path,key}));
+    const model=new StreetPeople('city170',previous?.origin??origin,paths,16.65,hybrid);
+    model.elapsed=previous?.elapsed??0;
+    return model;
   }
   onAdd(map,gl){
     this.map=map;
@@ -228,18 +243,20 @@ export class StreetPeople {
       if(!routeTouchesBounds(route,extent)){index+=route.count;continue;}
       for(let i=0;i<route.count&&this.count<this.figureLimit;i++,index++){
         const fraction=(i+.32)/route.count*.5+(i%2)*.5;
-        const speed=.83+(index%4)*.18;
+        const personIndex=route.seed==null?index:route.seed+i;
+        const speed=.83+(personIndex%4)*.18;
         const current=position(route,fraction,this.elapsed,speed);
         if(!bounds.contains(current.point))continue;
+        if(route.near101 && inside101Ground(...current.point)!==route.single101)continue;
         const terrain=map.queryTerrainElevation(current.point);
         if(terrain==null)continue;
-        const size=(.9+(index%4)*.08)*visibilityScale;
+        const size=(.9+(personIndex%4)*.08)*visibilityScale;
         mesh.at(current.x,current.y,terrain/size,current.angle);
         // Scale each completed figure around its contact point on the sidewalk.
         const first=mesh.length;
-        const outfit=this.wardrobe[index%this.wardrobe.length];
-        mesh.person(outfit,index,this.elapsed*speed*6.7+index*.81);
-        if(index%4<this.umbrellaShare){mesh.umbrella(outfit[3]);this.umbrellas++;}
+        const outfit=this.wardrobe[personIndex%this.wardrobe.length];
+        mesh.person(outfit,personIndex,this.elapsed*speed*6.7+personIndex*.81);
+        if(personIndex%4<this.umbrellaShare){mesh.umbrella(outfit[3]);this.umbrellas++;}
         for(let j=first;j<mesh.length;j+=6){
           vertexData[j]=current.x+(vertexData[j]-current.x)*size;
           vertexData[j+1]=current.y+(vertexData[j+1]-current.y)*size;

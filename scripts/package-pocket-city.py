@@ -24,6 +24,17 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def taipei200_pack_names(index):
+    rows = index['packs']
+    ids = [row['id'] for row in rows]
+    if (index.get('size') != 200 or index.get('crs') != 'EPSG:3826' or not ids
+            or not all(isinstance(i, str) and re.fullmatch(r'[0-9]+_[0-9]+', i) for i in ids)
+            or len(set(ids)) != len(ids) or not all(type(r['cells']) is int and r['cells'] > 0 for r in rows)
+            or sum(r['cells'] for r in rows) != index.get('cells')):
+        raise ValueError('Invalid Taipei 200m pack index')
+    return [i + '.json.gz' for i in ids]
+
+
 def runtime_paths():
     """Positive list; authoring inputs, local credentials and shared-post exports never enter the bundle."""
     paths = set()
@@ -39,12 +50,35 @@ def runtime_paths():
     def document(name):
         return json.loads(include(name).read_text())
 
-    for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
+    for path in ('index.html', 'style.css', 'free-camera.css', 'assets/pocket-survey/facades.png', 'assets/pocket-survey/facades.json', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
-                 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
+                 'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
+                 'assets/taipei-road-bridges.json.gz', 'assets/songshan-river-meadow.json.gz', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
                  'assets/taipei-tree-canopies.json.gz', 'assets/taipei-streetlights.json.gz',
-                 'assets/taipei-eslite-songyan.bin.gz'):
+                 'assets/taipei101-single-ground.png', 'assets/taipei101-pocket-city-ink.bin.gz', 'assets/taipei101-pocket-city.bin.gz',
+                 'assets/taipei-songyan-factory.bin.gz', 'assets/taipei-songyan-factory-terrain.png',
+                 'assets/taipei-songyan-waterfront.bin.gz', 'assets/taipei-eslite-songyan.bin.gz'):
         include(path)
+    for key in document('assets/taipei-street-grade/index.json'):
+        if not re.fullmatch(r'[0-9]{5}/[0-9]{4}', key):
+            raise ValueError(f'Invalid Taipei street terrain tile: {key}')
+        include(f"assets/taipei-street-grade/14-{key.replace('/', '-')}.png")
+    for mode in ('cloudy', 'drizzle', 'rain'):
+        include(f'assets/taipei101-ground-{mode}.png')
+    for district in ('xinyi', 'songshan', 'daan', 'zhongshan', 'datong', 'wanhua',
+                     'zhongzheng', 'shilin', 'beitou', 'neihu', 'nangang', 'wenshan'):
+        include(f'assets/{district}-street-ground.json.gz')
+    street_scenes = 'assets/taipei200/'
+    for name in taipei200_pack_names(document(street_scenes + 'index.json')):
+        include(street_scenes + name)
+    include(street_scenes + 'grid.json.gz')
+    facade_classes='assets/pocket-survey/classes/'
+    class_ids=document(facade_classes+'index.json')['tiles']
+    if (len(class_ids)!=len(set(class_ids)) or not class_ids or
+            not all(isinstance(i,str) and re.fullmatch(r'[0-9]+_[0-9]+',i) for i in class_ids)):
+        raise ValueError('Invalid Pocket City facade class index')
+    for key in class_ids:
+        include(facade_classes+key+'.bin.gz')
     # Start from the iOS entry point and follow static ESM and module-worker references.
     modules = ['app.js', 'assets/maplibre-gl-worker.mjs']
     while modules:
@@ -79,11 +113,11 @@ def runtime_paths():
     for directory in ('places', 'streets', 'materials'):
         for key in document(f'taiwan/{directory}/index.json')['tiles']:
             include(f'taiwan/{directory}/{key}.json.gz')
-    for directory in ('relief', 'mountains'):
+    for directory in ('relief', 'mountains', 'taipei-relief'):
         root = f'taiwan/{directory}'
         js = include(f'{root}/index.js').read_text()
         relief = json.loads(js.split('export default', 1)[1].strip().rstrip(';'))
-        for sheet in relief['sheets']:
+        for sheet in relief.get('sheets', []):
             include(f'{root}/{sheet["name"]}.webp')
         for tile in relief['dem']:
             include(f'{root}/dem/{tile}.png')

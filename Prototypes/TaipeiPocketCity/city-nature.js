@@ -266,8 +266,25 @@ export class CityNature {
       gl.bindVertexArray(null);
       return {vao,shape,instances,street:street.length/8,overview:overview?overview.length/8:0,count:0};
     });
-    this.terrainChanged=e=>{if(e.sourceId==='dem' && e.sourceDataType==='content')this.dirty=true;};
+    // DEM content and camera changes can precede the renderer's drawn coverage.
+    // Coalesce them into one post-render refresh instead of keeping an old root
+    // height until the camera leaves the buffered region (or uploading each frame).
+    this.refreshGround=()=>{
+      if(this.groundRefreshPending)return;
+      this.groundRefreshPending=true;
+      map.on('render',this.groundRendered);
+      map.triggerRepaint();
+    };
+    this.groundRendered=()=>{
+      map.off('render',this.groundRendered);
+      this.groundRefreshPending=false;
+      this.dirty=true;
+      map.triggerRepaint();
+    };
+    this.terrainChanged=e=>{if(e.sourceId==='dem' && e.sourceDataType==='content')this.refreshGround();};
     map.on('sourcedata',this.terrainChanged);
+    map.on('moveend',this.refreshGround);
+    map.on('terrain',this.refreshGround);
   }
   sample(gl,bounds){
     const [[w,s],[e,n]]=bounds.toArray(),dx=(e-w)*.18,dy=(n-s)*.18;
@@ -325,6 +342,10 @@ export class CityNature {
   }
   onRemove(map,gl){
     map.off('sourcedata',this.terrainChanged);
+    map.off('moveend',this.refreshGround);
+    map.off('terrain',this.refreshGround);
+    map.off('render',this.groundRendered);
+    this.groundRefreshPending=false;
     this.map=null;
     for(const {vao,shape,instances} of this.meshes){
       gl.deleteVertexArray(vao);gl.deleteBuffer(shape);gl.deleteBuffer(instances);

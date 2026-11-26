@@ -177,6 +177,7 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
   font:700 11px/1.1 system-ui,sans-serif;white-space:nowrap;box-shadow:0 1px 6px #243a3830;
 }
 .metro-station span {color:#fffdf4;background:color-mix(in srgb,var(--station-line) 78%,#102a22);border-radius:3px;padding:3px 4px;font-size:9px}
+.metro-at-edge:after {content:"";position:absolute;left:calc(50% - var(--metro-shift));bottom:-3px;width:5px;height:5px;border:1px solid #fffaf0;background:#34483d;border-radius:50%;transform:translateX(-50%);pointer-events:none}
 .metro-station b {padding:0 1px}
 .metro-station[aria-pressed="true"] {border-color:#26473c;background:#26473c;color:#fffdf4;z-index:3}
 .metro-train {

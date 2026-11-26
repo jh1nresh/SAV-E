@@ -58,6 +58,12 @@ function sampleLegs(legs){
   return {samples,length};
 }
 
+// Keep the geographic point visible while a long station name opens toward the map interior.
+export function stationLabelX(x,r,width){
+  if(x<0||x>width||2*r+10>width)return null;
+  return Math.max(5+r,Math.min(width-5-r,x));
+}
+
 export function addMetroPreview(map,Marker,data,openByDefault){
   const {lines,stations,edges}=data;
   const control=document.querySelector('#metro-toggle');
@@ -67,6 +73,7 @@ export function addMetroPreview(map,Marker,data,openByDefault){
   const reset=document.querySelector('#metro-reset');
   const play=document.querySelector('#metro-play');
   const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
+  let publicNames=true;
   let visible=false,start=null,end=null,legs=[],animation=0;
   let train;
   map.addSource('metro-network',{type:'geojson',data:collection(edges.map(edge=>lineFeature(edge,lines))),
@@ -105,6 +112,7 @@ export function addMetroPreview(map,Marker,data,openByDefault){
     const marker=new Marker({element:button,anchor:'center'}).setLngLat(station.point);
     button.addEventListener('click',event=>{
       event.stopPropagation();
+      if(!visible)setVisible(true);
       if(end||!start){start=id;end=null;}
       else if(start===id)start=null;
       else end=id;
@@ -122,13 +130,24 @@ export function addMetroPreview(map,Marker,data,openByDefault){
     const selected=({id})=>id===start||id===end;
     for(const entry of [...markers].sort((a,b)=>Number(selected(b))-Number(selected(a)))){
       const {id,station,marker,button}=entry;
-      let active=visible&&map.getZoom()>=12.4&&extent.contains(station.point);
+      const showStations=visible?map.getZoom()>=12.4:publicNames&&map.getZoom()>=14.9;
+      let active=showStations&&extent.contains(station.point);
       if(active){
         const {x,y}=map.project(station.point);
         const r=station.name.length*5.5+Object.keys(station.codes).length*12.5+9;
-        active=x-r>5&&x+r<width-5&&y>14&&y<height-14&&
-          (selected(entry)||!occupied.some(q=>Math.abs(q.x-x)<q.r+r&&Math.abs(q.y-y)<27));
-        if(active)occupied.push({x,y,r});
+        const labelX=stationLabelX(x,r,width);
+        active=labelX!==null&&y>14&&y<height-14&&
+          (selected(entry)||!occupied.some(q=>Math.abs(q.x-labelX)<q.r+r&&Math.abs(q.y-y)<27));
+        if(active){
+          occupied.push({x:labelX,y,r});
+          const shift=Math.round(labelX-x);
+          if(shift!==entry.shift){
+            marker.setOffset([shift,0]);
+            button.style.setProperty('--metro-shift',shift+'px');
+            button.classList.toggle('metro-at-edge',shift!==0);
+            entry.shift=shift;
+          }
+        }
       }
       button.setAttribute('aria-pressed',String(selected(entry)));
       if(active!==entry.active){
@@ -210,5 +229,5 @@ export function addMetroPreview(map,Marker,data,openByDefault){
   control.hidden=false;
   setVisible(openByDefault);
   return Object.assign(()=>({visible,start,end,legs:legs.map(({a,b,line})=>[a,b,line]),playing:!!animation}),
-    {setVisible});
+    {setVisible,setNames(on){publicNames=on;updateMarkers();}});
 }

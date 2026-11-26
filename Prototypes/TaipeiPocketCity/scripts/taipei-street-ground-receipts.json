@@ -1,0 +1,199 @@
+{
+  "shapely": "2.2.0",
+  "geos": "3.14.1",
+  "zlib": "1.2.12",
+  "districts": {
+    "xinyi": {
+      "district": "信義區",
+      "districtCells": 441,
+      "segments": {
+        "road": 1801,
+        "walk": 2253,
+        "path": 283
+      },
+      "excludedGrade": {
+        "road": 76,
+        "walk": 170
+      },
+      "gisSHA256": "0bf1ca133cf2c580f4ff988359d7bfb37368b787dbfa5c8d102f05e54f339aa8",
+      "geometrySHA256": "c65afc783df710082d1dede260eaa4d58c866879c8f504d6e572edcdc3ba0646",
+      "gzipSHA256": "4098e7c8dadfde99d6a9aa3bed471dd9166aa3af2b68d713c35add373453efe8"
+    },
+    "songshan": {
+      "district": "松山區",
+      "districtCells": 349,
+      "segments": {
+        "road": 1547,
+        "walk": 2108,
+        "path": 30
+      },
+      "excludedGrade": {
+        "road": 52,
+        "walk": 248
+      },
+      "gisSHA256": "43308120ab2f2f07f502ef04d6eb3f7afa467623049b6ed5cba4630e22e6d28d",
+      "geometrySHA256": "2d20995b69cbe3f0c1b23ec6e54db49de292eef246749052b2cea3d54c0b9089",
+      "gzipSHA256": "ddf5c4c02beb1675755a52a4c4bf0d58babd71ba41c0c2e386b51e852a29cde9"
+    },
+    "daan": {
+      "district": "大安區",
+      "districtCells": 455,
+      "segments": {
+        "road": 2881,
+        "walk": 3484,
+        "path": 322
+      },
+      "excludedGrade": {
+        "walk": 1195,
+        "road": 112
+      },
+      "gisSHA256": "455ac48b391e9f565c0c10267a7f6ba714816cd0bf4c2415c453d7494794d0a9",
+      "geometrySHA256": "2c0bf70633f87db6ec234d6f23f540d6b873695352a3c0763882d13d13ca17fe",
+      "gzipSHA256": "13edf075f68a508f0fd50b82763e09b0b2dc70b93f103773445469697b6e625d"
+    },
+    "zhongshan": {
+      "district": "中山區",
+      "districtCells": 549,
+      "segments": {
+        "road": 2447,
+        "walk": 2762,
+        "path": 164
+      },
+      "excludedGrade": {
+        "road": 157,
+        "walk": 272
+      },
+      "gisSHA256": "2181851b640d2c19e797b432bb61fa940adea59d9d76101a4573781af215f330",
+      "geometrySHA256": "d403dc627ee3fc3834a4d4acd175929b768e90e9b2b58492d1a30a6bb8b30ab6",
+      "gzipSHA256": "7ddcf256502e6cab24a58ab3278aca808bc78e73a5f4d158f7b1869824098cb4"
+    },
+    "datong": {
+      "district": "大同區",
+      "districtCells": 201,
+      "segments": {
+        "road": 1101,
+        "walk": 891,
+        "path": 66
+      },
+      "excludedGrade": {
+        "road": 105,
+        "walk": 193
+      },
+      "gisSHA256": "1c7c6cbc9a15bed7efb8469525d8fd9e14ea54546e0b1a53b7b79f4301fbb9a9",
+      "geometrySHA256": "be8438a20513d06968ce55c903e76afb6b5425ceb74638e59ce28955cdfa23d9",
+      "gzipSHA256": "fad0001e7e06e3bd51e34057ee2f594d13cc6c055458f3a6eb608eb28ef25e4e"
+    },
+    "wanhua": {
+      "district": "萬華區",
+      "districtCells": 310,
+      "segments": {
+        "road": 1358,
+        "walk": 1132,
+        "path": 84
+      },
+      "excludedGrade": {
+        "road": 123,
+        "walk": 149
+      },
+      "gisSHA256": "c9ad7f62fd85f4281d69dbeace0ed20edf275f196e89f3cb260a3cbc409b05eb",
+      "geometrySHA256": "97b7249150a88cebc79123e09ba334a540a11cd9df92fdeac8b0dbc0098653b6",
+      "gzipSHA256": "da73eb327ff377440e136928fa282dd70d0f7c5d501db90ed441fd28036e9287"
+    },
+    "zhongzheng": {
+      "district": "中正區",
+      "districtCells": 314,
+      "segments": {
+        "road": 2097,
+        "walk": 2566,
+        "path": 131
+      },
+      "excludedGrade": {
+        "road": 120,
+        "walk": 543
+      },
+      "gisSHA256": "25d66da1b7804928a4f568a78c47a46a17f4285595d12093b9de197743612adc",
+      "geometrySHA256": "425ae881fd8db86669061247b2a8c6825fc0a3e58ac756abd546014fbbeabcb7",
+      "gzipSHA256": "af99b11ed94e89a81ad53b9135f467072ff319895067acf0b8d2793a2df31c85"
+    },
+    "shilin": {
+      "district": "士林區",
+      "districtCells": 2320,
+      "segments": {
+        "road": 3706,
+        "walk": 3155,
+        "path": 712
+      },
+      "excludedGrade": {
+        "walk": 471,
+        "road": 198
+      },
+      "gisSHA256": "d71535b91a24b4ff77ca0c514f72e1de8d285c15fe831e7e29c133607bc70210",
+      "geometrySHA256": "62acc224e598510c489de7feb6810837171baa9bcf77a12c67df1605f2fe64ff",
+      "gzipSHA256": "cb2ff3356fa60371f57ea73f4da5fb54cdb699e225d25b7665b6173088a6eb7e"
+    },
+    "beitou": {
+      "district": "北投區",
+      "districtCells": 2144,
+      "segments": {
+        "road": 3694,
+        "walk": 3576,
+        "path": 882
+      },
+      "excludedGrade": {
+        "walk": 452,
+        "road": 239
+      },
+      "gisSHA256": "7e65f47f941026abbb3787cb28be5a7ed4d4e033cc1a879347f29c625cf379d0",
+      "geometrySHA256": "dffc628dee3a55c1fc7ce082837104fb331f1c0775ab75eb0b82ca32ddd49708",
+      "gzipSHA256": "3e5f0027a46925e5caf1c22bce281748379f44adf863a81bc98299c15ed827f3"
+    },
+    "neihu": {
+      "district": "內湖區",
+      "districtCells": 1202,
+      "segments": {
+        "road": 2620,
+        "walk": 2286,
+        "path": 332
+      },
+      "excludedGrade": {
+        "walk": 319,
+        "road": 174
+      },
+      "gisSHA256": "5c4f6bb142843f89937274600ce752fa567a75f0bde8a362de0af173db2013cf",
+      "geometrySHA256": "608eed9abf20a81b0ac6113ae4e26fa40949f45f458cfb97ccf430b5c6fd473f",
+      "gzipSHA256": "d9a38b5c4ec512294c6d7d426ef4f54cc1f92b550a457667dc5472ca4ee0a4ca"
+    },
+    "nangang": {
+      "district": "南港區",
+      "districtCells": 876,
+      "segments": {
+        "road": 1591,
+        "walk": 1589,
+        "path": 258
+      },
+      "excludedGrade": {
+        "road": 157,
+        "walk": 281
+      },
+      "gisSHA256": "7cbb71ebd9ce7c6e8d9d1d09a05cd85eb4357f84558cbdba4220dd009e769888",
+      "geometrySHA256": "1ada317bb614ee42824e1ad66d5108c9604c2626c3170d16190f66ca4ab97187",
+      "gzipSHA256": "becfa862d0d42c695afe9fbfa527ed532c3cafaffaf0786b54259591077e161a"
+    },
+    "wenshan": {
+      "district": "文山區",
+      "districtCells": 1199,
+      "segments": {
+        "road": 3347,
+        "walk": 3337,
+        "path": 774
+      },
+      "excludedGrade": {
+        "road": 192,
+        "walk": 399
+      },
+      "gisSHA256": "bdf214e8a8940ff02fff876119ab47985f6f6e35c3f0f4f598727061859295c3",
+      "geometrySHA256": "85137d2d5603acad5232e4d94855eb288a5c90d3edb0bd09070f7cb2a3e07bd5",
+      "gzipSHA256": "3510822d11e3b1310f336dafd0acb02916b468acc9cff2ba1981864a815a0ca6"
+    }
+  }
+}

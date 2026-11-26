@@ -1,6 +1,8 @@
-import {buildTaipei101Tower} from './taipei101-tower.js';
+import {Taipei101Ink} from './taipei101-ink.js';
+import {taipei101Ink,taipei101Exterior,taipei101SurveyTiles,taipei101ShellMatch} from './taipei101-exterior.js?v=original-ink-2';
 import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
+import {songyanFactory,factoryTiles,factorySurveyMatch,legacyFactoryVertices} from './taipei-songyan-factory.js';
 import {esliteSongyan,esliteSurveyTiles,esliteSurveyMatch} from './taipei-eslite-songyan.js';
 import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
 
@@ -10,12 +12,16 @@ const vertexSource=`#version 300 es
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec3 a_building;
 layout(location=2) in vec2 a_wallDirection;
+layout(location=3) in float a_facadeFamily;
 uniform mat4 u_transform;
+uniform bool u_hasFacadeFamily;
 out vec3 v_position;
 flat out vec3 v_building;
 flat out vec2 v_wallDirection;
+flat out float v_facadeFamily;
 void main() {
   v_position=a_position;
+  v_facadeFamily=u_hasFacadeFamily?a_facadeFamily:0.0;
   v_building=a_building;
   v_wallDirection=a_building.z>=2.0?vec2(0.0):a_wallDirection;
   gl_Position=u_transform*vec4(a_position,1.0);
@@ -26,6 +32,7 @@ precision highp float;
 in vec3 v_position;
 flat in vec3 v_building;
 flat in vec2 v_wallDirection;
+flat in float v_facadeFamily;
 uniform float u_zoom;
 uniform vec2 u_focusOffset;
 uniform int u_mallCorners;
@@ -39,9 +46,11 @@ uniform sampler2D u_districtMaterialMask;
 uniform bool u_districtMaterialDetail;
 uniform vec4 u_districtMaterialTransform;
 uniform vec3 u_cityLandmarks;
+uniform int u_taipei101Mode; // 1 = matched survey tile, 2 = the authored exterior
 uniform bool u_replaceMemorialShell;
 uniform bool u_replaceDomeShell;
 uniform bool u_replaceEsliteShell;
+uniform vec3 u_factoryTile;
 uniform vec3 u_songyanOffset;
 uniform vec3 u_dihuaOffset;
 uniform vec4 u_songyanLimit;
@@ -49,6 +58,8 @@ uniform vec3 u_songyanMatches[4];
 uniform bool u_songyanTile;
 uniform bool u_anatomy;
 uniform bool u_hybrid;
+uniform sampler2D u_pocketFacades;
+uniform bool u_pocketReady;
 out vec4 outColor;
 
 vec3 wall(float tint, float height) {
@@ -172,8 +183,11 @@ vec3 heritageFinish(float code,vec3 normal,float level,float height){
 }
 
 ${esliteSurveyMatch}
+${taipei101ShellMatch}
+${factorySurveyMatch}
 
 void main() {
+  if(u_factoryTile.z>0.&&isFactoryShell(v_building,v_position.xy*u_factoryTile.z+u_factoryTile.xy))discard;
   if(u_replaceEsliteShell&&isEsliteSurveyPart(v_building))discard;
   vec3 n=normalize(cross(dFdx(v_position),dFdy(v_position)));
   if(n.z<-.5)n=-n;
@@ -186,7 +200,7 @@ void main() {
   float level=v_position.z-base;
   vec2 site=v_position.xy+u_focusOffset;
   vec2 mallSite=v_position.xy*u_mallTile.z+u_mallTile.xy;
-  if(u_mallCorners>0&&all(greaterThanEqual(mallSite,u_mallBounds.xy))&&all(lessThanEqual(mallSite,u_mallBounds.zw))){
+  if(u_taipei101Mode!=2&&u_mallCorners>0&&all(greaterThanEqual(mallSite,u_mallBounds.xy))&&all(lessThanEqual(mallSite,u_mallBounds.zw))){
     bool inMall=false;
     vec2 a=u_mallRing[u_mallCorners-1];
     for(int i=0;i<u_mallCorners;i++){
@@ -196,13 +210,14 @@ void main() {
     }
     if(inMall)discard;
   }
-  // Taipei 101's four survey strips are separate 129.06 m features within 32 m of its center.
-  // The tower mesh already draws its own trim. Hide both the survey core and these strips.
-  bool towerTrim=tone<1.0&&abs(height-129.06038)<.02&&abs(base-4.94)<.02&&dot(site,site)<1024.0;
-  if(tone<0.0||towerTrim)discard;
+  if(u_taipei101Mode==1&&isTaipei101Shell(v_building,site))discard;
+  // The mall wall paint projects slightly beyond its OSM ring. Remove the
+  // entire exported mall group during cutaway, including its skylight and trim.
+  if(u_taipei101Mode==2&&u_mallCorners>0&&height>42.03&&height<42.05)discard;
   bool authored=tone>=2.0;
   float packedColor=max(0.0,tone-2.0);
   vec3 original=vec3(floor(packedColor/65536.0),mod(floor(packedColor/256.0),256.0),mod(packedColor,256.0))/255.0;
+  if(u_taipei101Mode==2){outColor=vec4(original,1.0);return;}
   if(u_songyanTile){
     vec3 ink=anatomyTone(original,n);
     if(height>4.2&&n.z>.66&&abs(level-height)<.14){
@@ -230,8 +245,13 @@ void main() {
       if(all(lessThan(abs(v_building-u_songyanMatches[i]),vec3(.0015))))discard;
     }
   }
+  bool protectedFacade=v_facadeFamily>2.5;
   vec3 surface=authored?original:wall(tone,height);
-  float neighborhood=smoothstep(16.5,17.55,u_zoom)
+  // The full-tower portrait frames 101 at zoom 15.9–16.6. Bring the surrounding
+  // measured facades into the same drawing scale without changing the camera.
+  float towerVicinity=1.0-smoothstep(650.0,1050.0,length(site));
+  float materialZoom=u_zoom+(u_hybrid&&!authored?towerVicinity:0.0);
+  float neighborhood=smoothstep(16.5,17.55,materialZoom)
     *(1.0-smoothstep(140.0,207.0,length((site-vec2(63.0,60.0))*vec2(.96,.85))));
   bool mall=site.x>-103.0&&site.x<56.0&&site.y>-53.0&&site.y<104.0;
   bool east=site.x>82.0;
@@ -299,7 +319,7 @@ void main() {
     vec2 edges=max(run.xy-linkSite,linkSite-run.zw);
     linkCoverage=max(linkCoverage,1.0-smoothstep(0.0,15.0,max(edges.x,edges.y)));
   }
-  float link=linkCoverage*smoothstep(16.55,17.6,u_zoom)*(1.0-neighborhood);
+  float link=linkCoverage*smoothstep(16.55,17.6,materialZoom)*(1.0-neighborhood);
   if(link>0.0){
     vec3 sandstone=mix(vec3(.904,.788,.634),vec3(.743,.550,.470),smoothstep(.10,.90,tone));
     vec3 modern=mix(vec3(.738,.777,.702),vec3(.515,.657,.672),smoothstep(27.0,81.0,height));
@@ -311,7 +331,7 @@ void main() {
   if(u_districtMaterialDetail && u_zoom>14.4){
     vec2 uv=u_districtMaterialTransform.xy+v_position.xy*u_districtMaterialTransform.zw;
     vec2 mask=texture(u_districtMaterialMask,uv).rg;
-    float district=mask.r*smoothstep(16.50,17.65,u_zoom)
+    float district=mask.r*smoothstep(16.50,17.65,materialZoom)
       *(1.0-neighborhood)*(1.0-linkCoverage);
     if(district>0.0&&!authored){
       vec3 terracotta=mix(vec3(.905,.791,.651),vec3(.754,.566,.473),smoothstep(.08,.92,tone));
@@ -325,11 +345,13 @@ void main() {
       vec3 styled=anatomyFinish(material,n,v_position.xy,level,height,tone,false,nearbyShop);
       surface=mix(surface,styled,district);
     }
-    if(u_hybrid&&!authored&&height>9.0){
+    if(u_hybrid&&!authored){
       ivec2 size=textureSize(u_districtMaterialMask,0);
       ivec2 pixel=clamp(ivec2(uv*vec2(size)),ivec2(0),size-1);
       float landmarkCode=texelFetch(u_districtMaterialMask,pixel,0).b;
-      if(abs(landmarkCode-30.0/255.0)<.006){
+      bool school=abs(landmarkCode-30.0/255.0)<.006;
+      protectedFacade=protectedFacade||school||landmarkCode>.22;
+      if(school&&height>9.0){
         // Keep surveyed roofs and wall shapes. Long window bays and sills distinguish campus façades.
         vec3 plaster=mix(vec3(.902,.798,.654),vec3(.841,.672,.544),tone);
         vec3 schoolRoof=mix(vec3(.687,.665,.592),vec3(.655,.531,.440),tone);
@@ -340,7 +362,7 @@ void main() {
         }
         surface=mix(surface,campus,smoothstep(16.2,17.6,u_zoom)*.88);
       }
-      if(landmarkCode>.22){
+      if(landmarkCode>.22&&height>9.0){
         bool memorial=landmarkCode<.46;
         bool hotel=landmarkCode>=.46&&landmarkCode<.75;
         if(memorial&&u_cityLandmarks.x>.5&&abs(base-6.05)<.05&&height>13.9)discard;
@@ -379,6 +401,22 @@ void main() {
     }
     vec3 crafted=anatomyFinish(material,n,streetSite,level,height,tone,oldFactory,retail);
     surface=mix(surface,crafted,plot);
+  }
+  // Original Pocket City paint sampled in metres on the surveyed wall.
+  // This changes neither the municipal mesh nor any authored landmark geometry.
+  if(u_pocketReady && u_hybrid && !authored && !protectedFacade && !roof && height>3.0){
+    bool tall=v_facadeFamily>1.5;
+    float width=tall?12.4:9.6, period=tall?21.6:19.2;
+    float along=facadeCoordinate(v_position.xy,n);
+    float variant=min(3.0,floor(clamp(tone,0.0,.9999)*4.0));
+    vec2 local=fract(vec2(along/width,(height-level)/period));
+    vec2 uv=(vec2(variant,clamp(v_facadeFamily,0.0,2.0))+mix(vec2(.5/256.0,.5/512.0),vec2(1.-.5/256.0,1.-.5/512.0),local))/vec2(4.0,3.0);
+    vec4 paint=texture(u_pocketFacades,uv);
+    float close=smoothstep(16.4,18.0,u_zoom);
+    float wallBand=smoothstep(3.7,4.3,level)*(1.-smoothstep(height-.25,height,level));
+    surface=mix(surface,anatomyTone(hybridMaterial(tone,height,false),n),close*wallBand);
+    vec3 ink=mix(paint.rgb*vec3(.87,.89,.95),paint.rgb,light*.65+.25);
+    surface=mix(surface,ink,paint.a*close*wallBand*.94);
   }
   outColor=vec4(surface,1.0);
 }
@@ -495,7 +533,8 @@ export class SurveyLayer {
     this.streetCenters=streetCenters;
     this.anatomy=anatomy;
     this.hybrid=hybrid;
-    this.index=index;this.landmark=landmark;
+    this.index=index;
+    this.landmark=Number.isFinite(landmark?.source?.min)?{...landmark,...taipei101Exterior}:null;
     this.cityLandmarks=cityLandmarks;
     this.songyan=null;
     this.#status=status;
@@ -508,6 +547,8 @@ export class SurveyLayer {
       map.on('resize',this.#settlePhoneTiles);
     }
     this.program=program(gl);
+    this.ink=new Taipei101Ink(gl,taipei101Ink,program,unpack,()=>map.triggerRepaint());
+    this.inkMatrix=new Float32Array(16);
     this.matrixLocation=gl.getUniformLocation(this.program,'u_transform');
     this.zoomLocation=gl.getUniformLocation(this.program,'u_zoom');
     this.focusLocation=gl.getUniformLocation(this.program,'u_focusOffset');
@@ -522,8 +563,10 @@ export class SurveyLayer {
     this.districtMaterialTransformLocation=gl.getUniformLocation(this.program,'u_districtMaterialTransform');
     this.districtMaterialMaskLocation=gl.getUniformLocation(this.program,'u_districtMaterialMask');
     this.cityLandmarkLocation=gl.getUniformLocation(this.program,'u_cityLandmarks');
+    this.taipei101ModeLocation=gl.getUniformLocation(this.program,'u_taipei101Mode');
     this.memorialShellLocation=gl.getUniformLocation(this.program,'u_replaceMemorialShell');
     this.domeShellLocation=gl.getUniformLocation(this.program,'u_replaceDomeShell');
+    this.factoryTileLocation=gl.getUniformLocation(this.program,'u_factoryTile');
     this.esliteShellLocation=gl.getUniformLocation(this.program,'u_replaceEsliteShell');
     this.dihuaLocation=gl.getUniformLocation(this.program,'u_dihuaOffset');
     this.songyanOffsetLocation=gl.getUniformLocation(this.program,'u_songyanOffset');
@@ -553,10 +596,38 @@ export class SurveyLayer {
     if(this.linkScene)this.linkRuns.set(this.linkScene.runs.flat());
     this.anatomyLocation=gl.getUniformLocation(this.program,'u_anatomy');
     this.hybridLocation=gl.getUniformLocation(this.program,'u_hybrid');
+    this.familyLocation=gl.getUniformLocation(this.program,'u_hasFacadeFamily');
+    this.pocketLocation=gl.getUniformLocation(this.program,'u_pocketFacades');
+    this.pocketReadyLocation=gl.getUniformLocation(this.program,'u_pocketReady');
+    this.pocketTexture=gl.createTexture();this.pocketReady=false;
+    const prior=gl.getParameter(gl.TEXTURE_BINDING_2D);
+    gl.bindTexture(gl.TEXTURE_2D,this.pocketTexture);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
+    gl.bindTexture(gl.TEXTURE_2D,prior);
+    if(typeof Image!=='undefined'){
+    const image=this.pocketImage=new Image();
+    image.onload=()=>{
+      if(this.#disposed)return;
+      const binding=gl.getParameter(gl.TEXTURE_BINDING_2D),flip=gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL),premult=gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL);
+      gl.bindTexture(gl.TEXTURE_2D,this.pocketTexture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flip);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,premult);
+      gl.bindTexture(gl.TEXTURE_2D,binding);this.pocketReady=new URLSearchParams(globalThis.location?.search??'').get('facades')!=='before';map.triggerRepaint();
+    };
+    image.onerror=()=>console.warn('Pocket City facade atlas unavailable; retaining existing survey material.');
+    image.src=new URL('./assets/pocket-survey/facades.png',import.meta.url);
+    }
+
     map.triggerRepaint();
   }
   onRemove(){
     this.#disposed=true;
+    this.ink?.dispose();
     if(this.phone){
       clearTimeout(this.#phoneSettleTimer);
       this.map.off('movestart',this.#pausePhoneTiles);
@@ -567,6 +638,8 @@ export class SurveyLayer {
     for(const b of this.#fetched.values())this.#delete(b);
     this.gl.deleteProgram(this.program);
     this.gl.deleteTexture(this.districtMaterialTexture);
+    if(this.pocketImage)this.pocketImage.onload=this.pocketImage.onerror=null;
+    this.gl.deleteTexture(this.pocketTexture);
   }
   setEnabled(value) {
     this.#enabled=value;
@@ -592,7 +665,7 @@ export class SurveyLayer {
   }
   get diagnostics(){
     return {mode:this.#mode,requested:this.#wanted.length,visible:this.#displayed.map(t=>t.id),
-      live:this.#pending.size,failed:this.#failures.size,landmark:this.#landmarkDrawn,songyan:this.#songyanDrawn,
+      originalPocketFacades:this.pocketReady,classifiedTiles:[...this.#fetched.values()].filter(t=>t.styleBuffer).length,live:this.#pending.size,failed:this.#failures.size,landmark:this.#landmarkDrawn,songyan:this.#songyanDrawn,
       triangles:this.#displayed.reduce((sum,t)=>sum+t.verts/3,0)};
   }
   #select(level) {
@@ -605,6 +678,8 @@ export class SurveyLayer {
       .sort((a,b)=>a.distance-b.distance).map(({tile})=>tile);
   }
   #delete(entry){
+    entry.styleController?.abort();
+    if(entry.styleBuffer)this.gl.deleteBuffer(entry.styleBuffer);
     if(entry.directionBuffer)this.gl.deleteBuffer(entry.directionBuffer);
     this.gl.deleteBuffer(entry.buffer);this.gl.deleteVertexArray(entry.vao);
   }
@@ -613,10 +688,21 @@ export class SurveyLayer {
     this.#pending.set(k,ctl);
     const url=tile.mesh??new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
-    const builder=level==='landmark'&&tile.id==='101'
-      ?()=>buildTaipei101Tower(tile.source.min)
-      :level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
-    const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
+    const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
+    let payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
+    if(tile.id==='songyan'&&tile.mesh){
+      payload=payload.then(bytes=>{
+        if(bytes.byteLength!==tile.verts*24)throw Error('Invalid waterfront size');
+        return bytes;
+      }).catch(error=>{
+        if(ctl.signal.aborted)throw error;
+        return unpack(new URL(`./data/${level}/${tile.file}.bin.gz`,import.meta.url),ctl.signal);
+      });
+    }
+    // Fetch class bytes concurrently, but never delay geometry/first paint for facade metadata.
+    const stylePayload=level===200
+      ?unpack(new URL(`./assets/pocket-survey/classes/${tile.id}.bin.gz`,import.meta.url),ctl.signal).catch(()=>null)
+      :null;
     payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
       const verts=data.byteLength/24;
@@ -636,7 +722,22 @@ export class SurveyLayer {
         directionBytes=directions.byteLength;
       }
       gl.bindVertexArray(null);gl.bindBuffer(gl.ARRAY_BUFFER,null);
-      this.#fetched.set(k,{vao,buffer,directionBuffer,verts,bytes:data.byteLength+directionBytes,seen:performance.now()});
+      const entry={vao,buffer,directionBuffer,verts,bytes:data.byteLength+directionBytes,seen:performance.now(),styleController:ctl};
+      this.#fetched.set(k,entry);
+      stylePayload?.then(bytes=>{
+        if(!bytes||this.#disposed||ctl.signal.aborted||this.#fetched.get(k)!==entry)return;
+        const families=new Uint8Array(bytes);
+        if(families.length!==verts)return;
+        for(let i=0;i<verts;i+=3){
+          if(families[i]>3||families[i]!==families[i+1]||families[i]!==families[i+2])return;
+        }
+        const priorVAO=gl.getParameter(gl.VERTEX_ARRAY_BINDING),priorBuffer=gl.getParameter(gl.ARRAY_BUFFER_BINDING);
+        entry.styleBuffer=gl.createBuffer();gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,entry.styleBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER,families,gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,1,gl.UNSIGNED_BYTE,false,0,0);
+        gl.bindVertexArray(priorVAO);gl.bindBuffer(gl.ARRAY_BUFFER,priorBuffer);
+        entry.bytes+=families.byteLength;this.map.triggerRepaint();
+      });
       this.#failures.delete(k);
     }).catch(error=>{
       if(!ctl.signal.aborted){
@@ -700,12 +801,14 @@ export class SurveyLayer {
     this.memorialDrawn=false;
     this.domeDrawn=false;
     this.esliteDrawn=false;
+    this.factoryDrawn=false;
     for(const {key,tile} of heritage){
       const asset=this.#fetched.get(key);
       if(!asset)continue;
       this.#displayed.push({...tile,key,verts:asset.verts});
       if(tile.id===sunYatSenHall.id)this.memorialDrawn=true;
       else if(tile.id===taipeiDome.id)this.domeDrawn=true;
+      else if(tile.id===songyanFactory.id)this.factoryDrawn=true;
       else if(tile.id===esliteSongyan.id)this.esliteDrawn=true;
       else this.#cityLandmarksVisible[tile.style]=1;
     }
@@ -768,21 +871,36 @@ export class SurveyLayer {
     gl.uniform1i(this.districtMaterialDetailLocation,this.districtMaterial?.image?1:0);
     gl.uniform1i(this.anatomyLocation,this.anatomy?1:0);
     gl.uniform1i(this.hybridLocation,this.hybrid?1:0);
+    gl.activeTexture(gl.TEXTURE1);
+    const previousPocket=gl.getParameter(gl.TEXTURE_BINDING_2D);
+    gl.bindTexture(gl.TEXTURE_2D,this.pocketTexture);
+    gl.uniform1i(this.pocketLocation,1);gl.uniform1i(this.pocketReadyLocation,this.pocketReady?1:0);
+    gl.activeTexture(gl.TEXTURE0);
     gl.uniform3fv(this.cityLandmarkLocation,this.#cityLandmarksVisible);
     if(this.#songyanDrawn){
       gl.uniform4fv(this.songyanLimitLocation,this.songyan.limit);
       gl.uniform3fv(this.songyanMatchesLocation,this.songyan.matchValues);
     }
+    const exact101=this.#landmarkDrawn&&this.landmark?.mesh===taipei101Exterior.mesh;
+    if(exact101)transform(options.defaultProjectionData.mainMatrix,this.landmark,this.inkMatrix);
+    const inkReady=exact101&&this.ink.prepare(this.inkMatrix);
     for(const tile of this.#displayed){
-      const {vao}=this.#fetched.get(tile.key);
+      const {vao,styleBuffer}=this.#fetched.get(tile.key);
+      gl.uniform1i(this.familyLocation,styleBuffer?1:0);
+
+      const mode101=exact101?(tile.key==='landmark/101'?2:taipei101SurveyTiles.has(tile.key)?1:0):0;
+      gl.uniform1i(this.taipei101ModeLocation,mode101);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
       gl.uniform1i(this.domeShellLocation,this.domeDrawn&&isDomeSurveyTile(tile.key)?1:0);
+      const replaceFactory=this.factoryDrawn&&factoryTiles.has(tile.key);
+      gl.uniform3f(this.factoryTileLocation,(tile.mx-songyanFactory.mx)/songyanFactory.m,
+        (songyanFactory.my-tile.my)/songyanFactory.m,replaceFactory?tile.m/songyanFactory.m:0);
       gl.uniform1i(this.esliteShellLocation,this.esliteDrawn&&esliteSurveyTiles.has(tile.key)?1:0);
       if(this.mallMask){
         const {mx,my,m}=this.mallMask;
         gl.uniform3f(this.mallTileLocation,(tile.mx-mx)/m,(my-tile.my)/m,tile.m/m);
       }
-      gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'||tile.id===esliteSongyan.id?1:0);
+      gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'||tile.id===esliteSongyan.id||tile.id===songyanFactory.id?1:0);
       gl.uniform3f(this.dihuaLocation,this.dihua?(tile.mx-this.dihua.mx)/tile.m:0,
         this.dihua?(this.dihua.my-tile.my)/tile.m:0,this.dihuaDrawn?1:0);
       gl.uniform3f(this.songyanOffsetLocation,
@@ -814,9 +932,13 @@ export class SurveyLayer {
       }
       gl.uniformMatrix4fv(this.matrixLocation,false,this.#matrix);
       gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLES,0,tile.verts);
+      const first=this.factoryDrawn&&tile.file==='songyan-v5'&&tile.verts===91908?legacyFactoryVertices:0;
+      const end=inkReady&&mode101===2?taipei101Ink.solidVerts:tile.verts;
+      gl.drawArrays(gl.TRIANGLES,first,end-first);
     }
     gl.bindVertexArray(null);
+    if(inkReady)this.ink.draw(this.inkMatrix,!!this.mallMask,this.program);
+    gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,previousPocket);gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D,previousTexture);
     gl.activeTexture(activeTexture);
   }
