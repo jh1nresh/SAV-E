@@ -1,3 +1,4 @@
+import {installFreeCamera} from './free-camera.js';
 import {taipeiDome,addDomeApron} from './taipei-dome.js';
 import {connectIOSMap} from './ios-map.js?v=mall-1';
 import {addOfficialFloorGuide} from './taipei101-floor-guide.js';
@@ -115,7 +116,7 @@ function updateFrontageView(){
     }
   }
 }
-let manualPitch=false, showModels=true, showGrid=false;
+let showModels=true, showGrid=false;
 let districtsByName=new Map();
 let districtShapes=[];
 const terrainSource='https://s3.amazonaws.com/elevation-tiles-prod/terrarium/';
@@ -217,7 +218,6 @@ function jump(options){
 }
 function fit(bounds,city){
   if(!map)return;
-  manualPitch=false;
   const compact=stage.clientWidth<600;
   map.fitBounds(bounds,{bearing:0,pitch:city?18:0,padding:{left:compact?22:70,right:compact?26:70,top:compact?80:58,bottom:42},
     maxZoom:city?15.1:8.9,duration:reducedMotion.matches?0:720});
@@ -225,7 +225,6 @@ function fit(bounds,city){
 function worldOverview(){
   if(!map)return;
   lanternView=false;
-  manualPitch=false;
   const url=new URL(location.href);
   for(const key of ['city','street','view','nature','campus','landmark','bearing','pitch'])url.searchParams.delete(key);
   history.replaceState(null,'',url);
@@ -233,7 +232,6 @@ function worldOverview(){
 }
 function locate(record,animate=true){
   const tower=record===landmarks['101'];
-  manualPitch=true;
   const compact=stage.clientWidth<600;
 
   const zoom=record.zoom?(compact?(record.mobileZoom??record.zoom-.35):record.zoom):tower?(compact?15.25:15.81):(compact?17.69:18.22);
@@ -247,7 +245,6 @@ function locate(record,animate=true){
 }
 function focus101Street(animate=true){
   if(!map)return;
-  manualPitch=true;
   // Match the original oblique view: the camera looks northwest at the east and south facades.
   const scale=Math.min(stage.clientHeight/810,stage.clientWidth/430);
   const zoom=Math.max(buildingZoom,Math.min(16.65,16.36+Math.log2(Math.max(.1,scale))));
@@ -265,11 +262,9 @@ function focus101Street(animate=true){
   map.on('moveend',restoreLens);
 }
 function focusCorridor(){
-  manualPitch=true;
   map.jumpTo({center:[121.56865,25.03960],bearing:0,pitch:38,zoom:stage.clientWidth<600?15.85:16.77});
 }
 function togglePitch(){
-  manualPitch=true;
   const angle=map.getPitch();
   jump({pitch:angle<23?54:0});
 }
@@ -506,14 +501,17 @@ try{
     localTerrain.set(terrainSource+'14/'+key+'.png',
       new URL('./assets/taipei-street-grade/14-'+key.replace('/','-')+'.png',import.meta.url).href);
   }
+  const pitchLimit=iosChannel?65:75; // Preserve the native camera persistence contract.
   map=new ml.Map({
     container:'map',style:mapStyle(base,districts),...globeCamera(stage.clientWidth,stage.clientHeight),
-    minZoom:-2,maxZoom:21.6,maxPitch:65,
+    minZoom:-2,maxZoom:21.6,maxPitch:pitchLimit,
+    dragPan:true,dragRotate:true,touchZoomRotate:true,touchPitch:true,
     transformRequest:url=>({url:localTerrain.get(url)??taiwanLocalDEM(url)??url}),
     attributionControl:false,renderWorldCopies:false,localIdeographFontFamily:'sans-serif',
     canvasContextAttributes:{antialias:!appChrome},
     ...(appChrome?{pixelRatio:Math.min(window.devicePixelRatio,reducedLoad?1:1.5),maxTileCacheSize:reducedLoad?8:16}:{}),
   });
+  const freeCamera=installFreeCamera(map,stage,{locate:record=>locate({...record,mobileZoom:record.zoom,mobilePitch:record.pitch})});
   if(!appChrome){
     map.addControl(new ml.NavigationControl({visualizePitch:true}),'top-right');
     map.addControl(new ml.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
@@ -564,6 +562,8 @@ try{
     });
   }
   await map.once('load');
+  performance.mark('globe-first-loaded');
+  stage.dataset.globeReadyMs=String(Math.round(performance.now()));
   function syncTerrain(){
     const terrain=!reducedLoad&&map.getZoom()>=12;
     if(terrain!==Boolean(map.getTerrain()))map.setTerrain(terrain?{source:'dem',exaggeration:1}:null);
@@ -778,6 +778,8 @@ try{
     if(row.camera)return row.camera;
     return {center:row.center,zoom:row.id==='tamsui'?18.32:17.95,mobileZoom:17.45,pitch:52,mobilePitch:49,bearing:row.id==='tamsui'?18:row.bearing??-17};
   }
+  // A late catalog response must not override a gesture or camera control.
+  if(!freeCamera.userInteracted){
   const startCity=worldAtlas?.rows.find(row=>row.id===preview.get('city'));
   const street=preview.get('street');
   const cityLandmark=cityLandmarks.find(row=>row.id===preview.get('landmark'));
@@ -790,7 +792,7 @@ try{
     const zoom=Math.max(4,Math.min(21.6,coordinate[2]));
     const defaultPitch=zoom<11?0:42;
     const requestedPitch=Number(preview.get('pitch')??defaultPitch);
-    const pitch=Number.isFinite(requestedPitch)?Math.max(0,Math.min(65,requestedPitch)):defaultPitch;
+    const pitch=Number.isFinite(requestedPitch)?Math.max(0,Math.min(pitchLimit,requestedPitch)):defaultPitch;
     locate({center:coordinate.slice(0,2),zoom,mobileZoom:Math.max(4,zoom-.35),
       pitch,mobilePitch:pitch,bearing:Number.isFinite(facing)?facing:-17},false);
   }else if(preview.get('nature')==='yushan')locate(yushanView,false);
@@ -809,6 +811,7 @@ try{
     else if(street==='101')focus101Street(false);
     else locate(landmarks[street],false);
   }else if(preview.get('city')==='taipei')fit(taipei,true);
+  }
   if(cityDistricts.length&&!atlas170)addCityStreetLoading(map,cityDistricts,loaded=>{
     streetDetail.addStreets(loaded);
     for(const {key,data} of loaded)streetDistricts.set(key,data);
@@ -838,19 +841,7 @@ try{
     updateMallPins();
     stage.addEventListener('mall101-floor',updateMallPins);
   }
-  function adjustPitch(){
-    if(!manualPitch&&!indoor101?.state().active&&!map.isMoving()){
-      const z=map.getZoom();
-      const center=map.getCenter();
-      const highland=z>=12&&center.lng>=120&&center.lng<=122&&center.lat>=21.8&&center.lat<=25.4
-        &&map.queryTerrainElevation(center)>=1200;
-      const goal=highland?55:z>=16.35?50:z>=15.1?43:z<10?0:z<buildingZoom?18:34;
-      if(Math.abs(goal-map.getPitch())>3)jump({pitch:goal});
-    }
-  }
-  map.on('moveend',adjustPitch);
-  map.on('idle',adjustPitch);
-  map.on('pitchstart',event=>{if(event.originalEvent)manualPitch=true});
+  // Zoom and completed tile loads must never reset a user-selected camera.
   map.on('resize',()=>{updateGrid();updateUI()});
   updateUI();
   window.savvyTaipei={
@@ -868,7 +859,6 @@ try{
     }),
   };
   if(iosChannel){
-    map.on('pocketcamerarestore',()=>{manualPitch=true;});
     const explore=appChrome&&atlas170?{
       button:$('#place-in-explore'),
       friendButton:$('#place-in-friends'),

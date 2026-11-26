@@ -1,0 +1,13 @@
+.free-camera{position:absolute;z-index:2;right:12px;bottom:64px;max-width:min(270px,calc(100% - 24px));background:#fff5e7;color:#273f35;border:1px solid #d9d5c5;border-radius:9px;padding:0 12px;font-size:13px}
+.free-camera summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}
+.free-camera label{display:block;margin:6px 0 12px}
+.free-camera output{float:right;font-variant-numeric:tabular-nums}
+.free-camera input[type=range]{display:block;width:100%;height:32px;margin:4px 0 0;accent-color:#2e6856}
+.free-camera select{display:block;width:100%;min-height:38px;margin-top:5px;background:#fff5e7;border:1px solid #b3bcaa;border-radius:5px}
+.free-camera small{display:block;max-width:240px;line-height:1.5;margin:10px 0 12px;color:#5e6a5c}
+.pan-actions{display:flex;gap:5px}.pan-actions button{flex:1;background:#c8ebcf;min-width:44px;min-height:44px;border-radius:5px}
+.free-camera :focus-visible{outline:2px solid #2e6856;outline-offset:3px}
+@media(max-width:720px){.free-camera{right:8px;bottom:58px}.free-camera[open]~#mall101-control{visibility:hidden}}
+
+/* The iOS host owns its controls; gestures still use the same free camera. */
+.ios-map .free-camera{display:none}
