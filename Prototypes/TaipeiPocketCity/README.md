@@ -71,6 +71,21 @@ python3 -B tools/serve-preview.py --port 42418
 - Apple 地圖自行選取當前比例下顯示的地點。選取 Apple 地點只開地點資訊。Apple 地點與原型收錄的店家分別由 Apple 和公開圖資提供，兩份資料的收錄範圍可能不同。
 - 原始的 [台北 101 收藏印章示範](../Taipei101PocketCity/README.md)可獨立執行。
 
+## 台北店家門牌與導航
+
+地點索引以 OpenStreetMap 和臺北市商業處既有資料為底。店名、門牌及座標交叉核對後，地點卡使用民政局門牌供搜尋、顯示與導航。只有門牌及分店身分有證據時才去重。原地圖位置和街景仍用 Pocket City 的點位。餐飲衛生評核名單用於補點，評核資料不足以表示現時營業狀態。
+
+本次資料用 OpenStreetMap 2026 年 11 月 21 日快照、臺北市民政局 2026 年 11 月 2 日門牌，以及臺北市衛生局餐飲衛生管理分級評核名單。以 2026 年 11 月 26 日的基礎索引重建後，12 區共 9,368 家有名稱的店家對到門牌，涵蓋 90 家由評核名單補入的店家，去除 4 筆可確認的重複點。以 ODbL 1.0 提供 OpenStreetMap 衍生欄位，市府欄位依政府資料開放授權條款第 1 版及其署名要求提供。[OpenStreetMap](https://www.openstreetmap.org/copyright) · [市府民政局門牌](https://data.gov.tw/dataset/155472) · [市府衛生局評核名單](https://data.taipei/dataset/detail?id=59579c19-a561-4564-8c0f-545bfb32c0f6) · [政府資料開放授權條款](https://data.gov.tw/license)
+
+解開本目錄既有的圖資後，可用 Python、ijson、pyproj 及 Shapely 2 重建公開店家資料。參數分別指定已還原的圖資目錄、OSM 元素 JSON.GZ、門牌 CSV.GZ、評核 CSV、輸出的 JavaScript 及核對報告。原始資料保留在本機。
+
+```bash
+python3 -B scripts/build-taipei-open-shop-catalog.py \
+  --data data --osm taipei-osm.json.gz --doors taipei-doors.csv.gz \
+  --inspections inspections.csv --out taipei-open-shop-catalog-data.js \
+  --report /tmp/taipei-open-shop-audit.json
+```
+
 ## Apple 地圖與插畫的資料來源
 
 Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Apple 地圖上，不寫進插畫圖包或 Savvy 收藏。插畫幾何來自獨立公開圖資，兩種底圖都能使用這份插畫。保留 Apple 和供應商標示及 OpenStreetMap 署名。[Apple 地圖服務條款，附件 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/) · [OSM 授權與署名](https://www.openstreetmap.org/copyright)
