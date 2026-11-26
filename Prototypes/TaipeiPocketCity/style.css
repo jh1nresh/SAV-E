@@ -287,7 +287,8 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 .ios-pin-art img { position:absolute; inset:-2px; width:34px; height:34px; border:2px solid #FFFAFD; border-radius:50%; box-sizing:border-box; object-fit:cover; box-shadow:0 1px 4px #30282164; }
 .ios-pin-bookmark { position:absolute; right:-5px; bottom:-2px; width:12px; height:15px; background:#fff9eb; clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%); }
 .ios-pin-bookmark::before { content:""; position:absolute; inset:2px; background:#4F43B9; clip-path:inherit; }
-.ios-art-pin.selected .ios-pin-art { outline:2px solid #24201e; outline-offset:3px; border-radius:50%; }
+.ios-art-pin.selected .ios-pin-art { outline:2px solid #8481F5; outline-offset:3px; border-radius:50%; }
+.ios-category-art { filter:drop-shadow(0 1px 2px #23183540); }
 .ios-pin-friend { position:absolute; left:-6px; bottom:-3px; width:14px; height:14px; box-sizing:border-box; border-radius:50%; border:1.5px solid #fff9eb; background:#0e4a33; }
 .ios-pin-friend::before,.ios-pin-friend::after { content:""; position:absolute; left:50%; transform:translateX(-50%); background:#fff9eb; }
 .ios-pin-friend::before { top:1.5px; width:4px; height:4px; border-radius:50%; }

@@ -1268,7 +1268,7 @@ struct AuthLoadingView: View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: 8) {
-                    SaveInkEntryBrand()
+                    SaveInkEntryBrand(usesBrandTint: true)
                     Group {
                         if showsOpeningAnimation {
                             SavvyOriginalOpening(startedAt: openingStartedAt)
@@ -1327,9 +1327,13 @@ struct AuthLoadingView: View {
 }
 
 private struct SaveInkEntryBrand: View {
+    var usesBrandTint = false
+
     var body: some View {
         Image("SavvyWordmark")
+            .renderingMode(usesBrandTint ? .template : .original)
             .resizable()
+            .foregroundStyle(SaveBrandUI.brand)
             .scaledToFit()
             .frame(width: 164)
             .accessibilityLabel("Savvy")

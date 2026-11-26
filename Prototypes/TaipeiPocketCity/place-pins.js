@@ -1,5 +1,5 @@
 // Category glyphs stay recognizable without a business photo. Use the Savvy
-// blush/indigo palette instead of imitating a photo or adding a source label.
+// indigo palette with a white glyph, like a compact map category marker.
 const badge=(disc,ink,label,solid,lines='')=>({disc,ink,label,solid,lines});
 const styles = {
   food: badge('#ff9c42','#542805','#a34506',
@@ -61,16 +61,14 @@ export function pinLabelColor(type){return styles[type].label;}
 function pinCanvas(type,style=styles[type]){
   const canvas=document.createElement('canvas');
   const {solid,lines}=style;
-  const disc = ['food','cafe','market','culture','tower'].includes(type) ? '#FCDDEA' : '#E5DFFF';
-  const ink = '#4F43B9';
+  const disc = '#4F43B9';
+  const ink = '#FFFAFD';
   canvas.width=canvas.height=72;
   const ctx=canvas.getContext('2d');
   ctx.scale(3,3);
   ctx.beginPath();ctx.arc(12,12,10.7,0,Math.PI*2);
   ctx.fillStyle=disc;ctx.fill();
   ctx.lineWidth=1.8;ctx.strokeStyle='#FFFAFD';ctx.stroke();
-  ctx.beginPath();ctx.arc(12,12,9.9,0,Math.PI*2);
-  ctx.lineWidth=0.5;ctx.strokeStyle='#4F43B938';ctx.stroke();
   ctx.fillStyle=ctx.strokeStyle=ink;
   if(solid)ctx.fill(new Path2D(solid),'evenodd');
   if(lines){

@@ -290,6 +290,7 @@ struct SaveCaptureFlowView: View {
                 selectedPhoto = nil
                 isPhotoPickerPresented = true
             }
+#if !(DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW)
             optionRow(
                 systemImage: "magnifyingglass",
                 title: localized("Search nearby", "搜尋附近"),
@@ -298,6 +299,7 @@ struct SaveCaptureFlowView: View {
                 isInputFocused = false
                 onSearchNearby()
             }
+#endif
             optionRow(
                 systemImage: "square.and.arrow.down",
                 title: localized("Import file", "匯入檔案"),

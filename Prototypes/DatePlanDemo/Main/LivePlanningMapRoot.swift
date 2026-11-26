@@ -507,11 +507,9 @@ struct LivePlanningMapRoot: View {
                     Spacer(minLength: 8)
                     Text("Passport").font(.headline)
                     Spacer(minLength: 8)
-                    Button(action: onOpenAccount) {
-                        Image(systemName: "gearshape").frame(width: 44, height: 44)
-                            .contentShape(Circle())
-                            .liveFloatingGlass(in: Circle())
-                    }.savvyPressFeedback().accessibilityLabel(copy("Account settings", "帳號設定"))
+                    // Account settings has one entry inside Passport. Keep the
+                    // title centered against the back button without another gear.
+                    Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
                 } else {
                     Button { navigate(to: .passport) } label: {
                         Image(systemName: "person.crop.circle").font(.title3)
