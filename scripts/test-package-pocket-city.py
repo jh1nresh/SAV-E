@@ -67,6 +67,15 @@ class PocketCityPackageTests(unittest.TestCase):
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))
 
+    def test_pocket_facades_and_camera_are_packaged(self):
+        runtime=set(pkg.runtime_paths())
+        root='assets/pocket-survey/'
+        self.assertTrue({'free-camera.js','free-camera.css',root+'facades.png',root+'facades.json',root+'classes/index.json'} <= runtime)
+        index=json.loads((pkg.WEB/root/'classes/index.json').read_text())
+        self.assertEqual(len(index['tiles']),4816)
+        self.assertEqual({p for p in runtime if p.startswith(root+'classes/')},
+                         {root+'classes/index.json', *(root+'classes/'+i+'.bin.gz' for i in index['tiles'])})
+
     def test_taipei200_uses_only_declared_pack_names(self):
         root = 'assets/taipei200/'
         index = json.loads((pkg.WEB / root / 'index.json').read_text())

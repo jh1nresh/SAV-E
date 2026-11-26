@@ -50,7 +50,7 @@ def runtime_paths():
     def document(name):
         return json.loads(include(name).read_text())
 
-    for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
+    for path in ('index.html', 'style.css', 'free-camera.css', 'assets/pocket-survey/facades.png', 'assets/pocket-survey/facades.json', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
                  'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
                  'assets/taipei-road-bridges.json.gz', 'assets/songshan-river-meadow.json.gz', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
@@ -72,6 +72,13 @@ def runtime_paths():
     for name in taipei200_pack_names(document(street_scenes + 'index.json')):
         include(street_scenes + name)
     include(street_scenes + 'grid.json.gz')
+    facade_classes='assets/pocket-survey/classes/'
+    class_ids=document(facade_classes+'index.json')['tiles']
+    if (len(class_ids)!=len(set(class_ids)) or not class_ids or
+            not all(isinstance(i,str) and re.fullmatch(r'[0-9]+_[0-9]+',i) for i in class_ids)):
+        raise ValueError('Invalid Pocket City facade class index')
+    for key in class_ids:
+        include(facade_classes+key+'.bin.gz')
     # Start from the iOS entry point and follow static ESM and module-worker references.
     modules = ['app.js', 'assets/maplibre-gl-worker.mjs']
     while modules:
