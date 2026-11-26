@@ -275,6 +275,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     };
   }
   function setLocalLife(records){
+    const previous=localLife?.model;
     if(localLife){
       map.removeLayer(localLife.model.id);
       map.removeLayer(localLife.scenery.id);
@@ -282,9 +283,8 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     }
     if(records.length){
       const objects=Object.values(Object.assign({},...records.map(r=>r.objects)));
-      const paths=Object.values(Object.assign({},...records.map(r=>r.paths)));
       const origin=map.getCenter().toArray();
-      const model=new StreetPeople('city170',origin,paths,16.65,hybrid);
+      const model=StreetPeople.forStreetPacks(origin,records,hybrid,previous);
       model.paused=paused;
       model.umbrellaShare=umbrellaShare;
       const scenery=new StreetScenery('city170',origin,objects,MercatorCoordinate,false,hybrid);
