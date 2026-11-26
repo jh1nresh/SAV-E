@@ -1,14 +1,16 @@
+import {update101Weather} from './taipei101-single-ground.js';
+import {asphaltColors} from './taipei-asphalt.js';
 const tileSize=166;
 const weatherProfiles={
   day:{shadow:1,umbrellaShare:0},
   cloudy:{shadow:.38,umbrellaShare:0,ground:{
-    'road':'#8891a0','walk':'#e3cfad','plaza':'#d5bdab',
+    'walk':'#e3cfad','plaza':'#d5bdab',
   },paving:'#e4d5b8'},
   drizzle:{shadow:.27,umbrellaShare:2,ground:{
-    'road':'#79869a','road-edge':'#b8aa99','walk':'#dfc5a1','walk-edge':'#b9876e','plaza':'#cfb09a',
+    'road-edge':'#b8aa99','walk':'#dfc5a1','walk-edge':'#b9876e','plaza':'#cfb09a',
   },paving:'#dfc9a7',drops:24,dropLength:5},
   rain:{shadow:.16,umbrellaShare:3,ground:{
-    'road':'#636f87','road-edge':'#a49a8b','walk':'#cdb093','walk-edge':'#a57760','plaza':'#beaa99',
+    'road-edge':'#a49a8b','walk':'#cdb093','walk-edge':'#a57760','plaza':'#beaa99',
   },paving:'#c9b496',drops:60,dropLength:11},
 };
 
@@ -44,11 +46,17 @@ export function addPocketCityWeather(map,stage,setStreetRain,initialWeather){
 
   function refresh(){
     const profile=weatherProfiles[mode];
+    const color=asphaltColors[mode];
+    if(map.getGlobalState().taipeiAsphalt!==color){
+      map.setGlobalStateProperty('taipeiAsphalt',color);
+      map.fire('pocketasphalt',{color});
+    }
+    update101Weather(map,mode);
     for(const {id} of map.getStyle().layers){
       const kind=id.match(/^street-.+?-(road-edge|walk-edge|road|walk|plaza)$/)?.[1];
-      if(kind)paint(id,'fill-color',profile.ground?.[kind]);
+      if(kind&&kind!=='road')paint(id,'fill-color',profile.ground?.[kind]);
     }
-    for(const kind of ['road-edge','road','walk']){
+    for(const kind of ['road-edge','walk']){
       paint('city170-'+kind,'line-color',profile.ground?.[kind]);
     }
     paint('city170-prepared-skill-paving','fill-color',profile.paving);

@@ -26,6 +26,16 @@ export function add101Ground(map){
     map.getLayer('atlas-shadows')?'atlas-shadows':'survey');
 }
 
+// ImageSource cancels an in-flight image request when the weather changes again.
+const groundWeather=new WeakMap();
+export function update101Weather(map,mode){
+  const source=map.getSource('taipei101-single-ground');
+  if(!source||(groundWeather.get(source)??'day')===mode)return;
+  groundWeather.set(source,mode);
+  const file=mode==='day'?'taipei101-single-ground.png':'taipei101-ground-'+mode+'.png';
+  source.updateImage({url:new URL('./assets/'+file,import.meta.url).href});
+}
+
 export const planting101=trees;
 export const walks101=routes.map(p=>({
   points:p.map(pt=>geographicPoint(meta,pt)),single101:true,

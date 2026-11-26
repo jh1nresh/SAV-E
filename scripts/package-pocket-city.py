@@ -42,12 +42,18 @@ def runtime_paths():
     for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
                  'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
-                 'assets/songshan-river-meadow.json.gz', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
+                 'assets/taipei-road-bridges.json.gz', 'assets/songshan-river-meadow.json.gz', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
                  'assets/taipei-tree-canopies.json.gz', 'assets/taipei-streetlights.json.gz',
                  'assets/taipei101-single-ground.png', 'assets/taipei101-pocket-city-ink.bin.gz', 'assets/taipei101-pocket-city.bin.gz',
                  'assets/taipei-songyan-factory.bin.gz', 'assets/taipei-songyan-factory-terrain.png',
                  'assets/taipei-songyan-waterfront.bin.gz', 'assets/taipei-eslite-songyan.bin.gz'):
         include(path)
+    for key in document('assets/taipei-street-grade/index.json'):
+        if not re.fullmatch(r'[0-9]{5}/[0-9]{4}', key):
+            raise ValueError(f'Invalid Taipei street terrain tile: {key}')
+        include(f"assets/taipei-street-grade/14-{key.replace('/', '-')}.png")
+    for mode in ('cloudy', 'drizzle', 'rain'):
+        include(f'assets/taipei101-ground-{mode}.png')
     for district in ('xinyi', 'songshan', 'daan', 'zhongshan', 'datong', 'wanhua',
                      'zhongzheng', 'shilin', 'beitou', 'neihu', 'nangang', 'wenshan'):
         include(f'assets/{district}-street-ground.json.gz')

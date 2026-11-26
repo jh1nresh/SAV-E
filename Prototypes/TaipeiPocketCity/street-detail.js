@@ -1,3 +1,4 @@
+import {asphalt} from './taipei-asphalt.js';
 import {bouncePhotoPin} from './photo-pin-motion.js';
 import {createPlaceCallout} from './place-callout.js?v=shop-floor-1';
 import {originalPlacePhoto,photoPlaces} from './place-photos.js';
@@ -9,7 +10,7 @@ import {StreetScenery} from './street-scenery.js?v=tree-clearance-1';
 const isDistrict=key=>key.endsWith('-district');
 const limitsStreetLabels=key=>isDistrict(key)||key==='xinyi-link';
 
-function addGroundColors(map,prefix,data,anatomy,blendRoadOutline,hybrid,projectedShadows){
+function addGroundColors(map,prefix,data,anatomy,blendRoadOutline,hybrid,projectedShadows,continuousRoads){
   map.addSource(`${prefix}-ground`,{type:'geojson',data,buffer:256});
   const beneathShadow=map.getLayer('taipei101-single-ground')?'taipei101-single-ground':
       map.getLayer('atlas-shadows')?'atlas-shadows':'survey';
@@ -20,7 +21,7 @@ function addGroundColors(map,prefix,data,anatomy,blendRoadOutline,hybrid,project
     ['shadow','#545b70',.18],['crossing','#f2e5ce',.97],
   ]:hybrid?[
     ['wood','#78a86d',.76],['plaza','#dfb79a',.88],['grass','#acd473',.95],['water','#69afbd',1],
-    ['road-edge','#c8bba7',1],['road','#828b9d',1],
+    ['road-edge','#c8bba7',1],['road',continuousRoads?asphalt:'#828b9d',1],
     ['walk-edge','#c79570',.92],['walk','#f2d5a7',1],
     ['shadow','#3b528e',.28],['crossing','#fff1d5',.98],
   ]:[
@@ -93,7 +94,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     const model=new StreetPeople(prefix,data.origin,data.paths,key==='xinyi-link'?17.05:16.65,hybrid);
     model.paused=paused;
     model.umbrellaShare=umbrellaShare;
-    addGroundColors(map,prefix,data.ground,useAnatomy,!linked&&key!=='yongchun',hybrid,!!shadows);
+    addGroundColors(map,prefix,data.ground,useAnatomy,!linked&&key!=='yongchun',hybrid,!!shadows,continuousRoads);
     const scenery=new StreetScenery(prefix,data.origin,data.objects,MercatorCoordinate,useAnatomy,hybrid);
     map.addLayer(scenery,firstLabel);
     map.addLayer(model,firstLabel);
