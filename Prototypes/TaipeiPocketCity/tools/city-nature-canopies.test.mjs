@@ -8,6 +8,7 @@ import {indexTreeCanopies,plainCanopy} from '../taipei-tree-canopies.js';
 function scene(id,loadCanopies) {
   const models=[], uploads=[], draws=[];
   let zoom=17, elevation=12;
+  const listeners=new Map();
   const gl=new Proxy({
     STATIC_DRAW:1, DYNAMIC_DRAW:2, getShaderParameter:()=>true, getProgramParameter:()=>true,
     bufferData(_target,data,usage){(usage===1?models:uploads).push(data);},
@@ -17,11 +18,15 @@ function scene(id,loadCanopies) {
     toArray:()=>[[121.50,25.03],[121.52,25.05]]};
   const map={getZoom:()=>zoom,getBounds:()=>bounds,getPitch:()=>45,getBearing:()=>0,
     getCenter:()=>[121.51,25.04],terrain:{getDrawnElevationForLngLat:()=>elevation},
-    triggerRepaint(){},on(){},off(){}};
+    triggerRepaint(){},
+    on(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},
+    off(type,fn){listeners.get(type)?.delete(fn);}};
   const art=new CityNature(loadCanopies);
   if(id)art.id=id;
   art.onAdd(map,gl);
-  return {art,models,uploads,draws,zoom:z=>{zoom=z;},terrain:z=>{elevation=z;},
+  return {art,models,uploads,draws,listeners,remove:()=>art.onRemove(map,gl),
+    emit:(type,event={})=>{for(const fn of [...listeners.get(type)??[]])fn(event);},
+    zoom:z=>{zoom=z;},terrain:z=>{elevation=z;},
     render:()=>art.render(gl,{defaultProjectionData:{mainMatrix:new Float32Array(16)}})};
 }
 
@@ -47,6 +52,24 @@ test('surveyed crown silhouettes retain their root, height scale and distinct wi
     assert.ok(mesh.overview/3<=350 && mesh.street/3<850);
   }
   assert.ok(spans[0]>spans[1]*1.15 && spans[1]>spans[2]*1.4);
+});
+
+test('terrain coverage settles before cached tree roots refresh, without uploading every frame',()=>{
+  const s=scene();
+  s.art.setRows([[121.51,25.04,8,'round',1]]);s.render();
+  assert.equal(s.uploads[1][2],12);
+  // A DEM event may precede the renderer installing its newly drawn coverage.
+  s.emit('sourcedata',{sourceId:'dem',sourceDataType:'content'});
+  s.render();s.terrain(24);s.emit('render');s.render();
+  assert.equal(s.uploads.at(-3)[2],24);
+  const uploads=s.uploads.length;
+  for(let i=0;i<10;i++){s.emit('render');s.render();}
+  assert.equal(s.uploads.length,uploads);
+  // A camera move can reuse downloaded DEMs while changing drawn coverage.
+  s.terrain(31);s.emit('moveend');s.render();s.emit('render');s.render();
+  assert.equal(s.uploads.at(-3)[2],31);
+  s.emit('moveend');s.remove();
+  assert.ok([...s.listeners.values()].every(group=>group.size===0));
 });
 
 test('moving between neighbourhood and street zoom reuses the same rooted instances',()=>{
