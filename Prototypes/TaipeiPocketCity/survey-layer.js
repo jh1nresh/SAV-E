@@ -1,4 +1,5 @@
 import {Taipei101Ink} from './taipei101-ink.js';
+import {createFacadeTexture,uploadFacadeTexture} from './pocket-facade-texture.js';
 import {taipei101Ink,taipei101Exterior,taipei101SurveyTiles,taipei101ShellMatch} from './taipei101-exterior.js?v=original-ink-2';
 import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
@@ -58,7 +59,7 @@ uniform vec3 u_songyanMatches[4];
 uniform bool u_songyanTile;
 uniform bool u_anatomy;
 uniform bool u_hybrid;
-uniform sampler2D u_pocketFacades;
+uniform highp sampler2DArray u_pocketFacades;
 uniform bool u_pocketReady;
 out vec4 outColor;
 
@@ -409,9 +410,11 @@ void main() {
     float width=tall?12.4:9.6, period=tall?21.6:19.2;
     float along=facadeCoordinate(v_position.xy,n);
     float variant=min(3.0,floor(clamp(tone,0.0,.9999)*4.0));
-    vec2 local=fract(vec2(along/width,(height-level)/period));
-    vec2 uv=(vec2(variant,clamp(v_facadeFamily,0.0,2.0))+mix(vec2(.5/256.0,.5/512.0),vec2(1.-.5/256.0,1.-.5/512.0),local))/vec2(4.0,3.0);
-    vec4 paint=texture(u_pocketFacades,uv);
+    // Repeat unwrapped metre coordinates in the sampler. fract() here would
+    // create false derivative jumps at every repeat and select the wrong mip.
+    vec2 local=vec2(along/width,(height-level)/period);
+    float layer=variant+clamp(v_facadeFamily,0.0,2.0)*4.0;
+    vec4 paint=texture(u_pocketFacades,vec3(local,layer));
     float close=smoothstep(16.4,18.0,u_zoom);
     float wallBand=smoothstep(3.7,4.3,level)*(1.-smoothstep(height-.25,height,level));
     surface=mix(surface,anatomyTone(hybridMaterial(tone,height,false),n),close*wallBand);
@@ -599,25 +602,18 @@ export class SurveyLayer {
     this.familyLocation=gl.getUniformLocation(this.program,'u_hasFacadeFamily');
     this.pocketLocation=gl.getUniformLocation(this.program,'u_pocketFacades');
     this.pocketReadyLocation=gl.getUniformLocation(this.program,'u_pocketReady');
-    this.pocketTexture=gl.createTexture();this.pocketReady=false;
-    const prior=gl.getParameter(gl.TEXTURE_BINDING_2D);
-    gl.bindTexture(gl.TEXTURE_2D,this.pocketTexture);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(4));
-    gl.bindTexture(gl.TEXTURE_2D,prior);
+    this.pocketTexture=createFacadeTexture(gl);this.pocketReady=false;
     if(typeof Image!=='undefined'){
     const image=this.pocketImage=new Image();
     image.onload=()=>{
       if(this.#disposed)return;
-      const binding=gl.getParameter(gl.TEXTURE_BINDING_2D),flip=gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL),premult=gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL);
-      gl.bindTexture(gl.TEXTURE_2D,this.pocketTexture);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
-      gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,flip);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,premult);
-      gl.bindTexture(gl.TEXTURE_2D,binding);this.pocketReady=new URLSearchParams(globalThis.location?.search??'').get('facades')!=='before';map.triggerRepaint();
+      try{
+        const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+        const context=canvas.getContext('2d');context.drawImage(image,0,0);
+        uploadFacadeTexture(gl,this.pocketTexture,context.getImageData(0,0,image.width,image.height));
+        this.pocketReady=new URLSearchParams(globalThis.location?.search??'').get('facades')!=='before';
+        map.triggerRepaint();
+      }catch(error){console.warn('Pocket City facade paint unavailable; retaining existing survey material.',error);}
     };
     image.onerror=()=>console.warn('Pocket City facade atlas unavailable; retaining existing survey material.');
     image.src=new URL('./assets/pocket-survey/facades.png',import.meta.url);
@@ -872,8 +868,8 @@ export class SurveyLayer {
     gl.uniform1i(this.anatomyLocation,this.anatomy?1:0);
     gl.uniform1i(this.hybridLocation,this.hybrid?1:0);
     gl.activeTexture(gl.TEXTURE1);
-    const previousPocket=gl.getParameter(gl.TEXTURE_BINDING_2D);
-    gl.bindTexture(gl.TEXTURE_2D,this.pocketTexture);
+    const previousPocket=gl.getParameter(gl.TEXTURE_BINDING_2D_ARRAY);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.pocketTexture);
     gl.uniform1i(this.pocketLocation,1);gl.uniform1i(this.pocketReadyLocation,this.pocketReady?1:0);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform3fv(this.cityLandmarkLocation,this.#cityLandmarksVisible);
@@ -938,7 +934,7 @@ export class SurveyLayer {
     }
     gl.bindVertexArray(null);
     if(inkReady)this.ink.draw(this.inkMatrix,!!this.mallMask,this.program);
-    gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,previousPocket);gl.activeTexture(gl.TEXTURE0);
+    gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D_ARRAY,previousPocket);gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D,previousTexture);
     gl.activeTexture(activeTexture);
   }
