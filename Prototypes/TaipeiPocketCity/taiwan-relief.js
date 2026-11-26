@@ -1,5 +1,6 @@
 // The survey mask and shaded DEM sheets are in Web Mercator, like the vector map.
 import coverage from './taiwan/relief/index.js';
+import taipei from './taiwan/taipei-relief/index.js';
 import mountains from './taiwan/mountains/index.js';
 
 const mountainBase=new URL('./taiwan/mountains/',import.meta.url);
@@ -7,10 +8,13 @@ const mountainDEM=new Set(mountains.dem);
 const localBase=new URL('./taiwan/relief/',import.meta.url);
 const terrainPrefix=coverage.terrainSource+'/';
 const localDEM=new Set(coverage.dem);
+const taipeiDEM=new Set(taipei.dem);
+const taipeiBase=new URL('./taiwan/taipei-relief/dem/',import.meta.url);
 
 export function taiwanLocalDEM(url){
   if(!url.startsWith(terrainPrefix)||!url.endsWith('.png'))return;
   const name=url.slice(terrainPrefix.length,-4).replaceAll('/','-');
+  if(taipeiDEM.has(name))return new URL(name+'.png',taipeiBase).href;
   if(mountainDEM.has(name))return new URL('dem/'+name+'.png',mountainBase).href;
   if(localDEM.has(name))return new URL('dem/'+name+'.png',localBase).href;
 }

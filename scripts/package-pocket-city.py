@@ -41,7 +41,8 @@ def runtime_paths():
 
     for path in ('index.html', 'style.css', 'taipei101-indoor.css', 'assets/icon.png', 'assets/maplibre-gl.css',
                  'assets/MapLibre-LICENSE.txt', 'assets/Pocket-City-LICENSE.txt', 'assets/base-style.json',
-                 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
+                 'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
+                 'assets/songshan-river-meadow.json.gz', 'assets/taipei-arcade-floors.json.gz', 'assets/taipei-river-art.json.gz',
                  'assets/taipei-tree-canopies.json.gz', 'assets/taipei-streetlights.json.gz',
                  'assets/taipei101-single-ground.png', 'assets/taipei101-pocket-city-ink.bin.gz', 'assets/taipei101-pocket-city.bin.gz',
                  'assets/taipei-songyan-factory.bin.gz', 'assets/taipei-songyan-factory-terrain.png',
@@ -84,11 +85,11 @@ def runtime_paths():
     for directory in ('places', 'streets', 'materials'):
         for key in document(f'taiwan/{directory}/index.json')['tiles']:
             include(f'taiwan/{directory}/{key}.json.gz')
-    for directory in ('relief', 'mountains'):
+    for directory in ('relief', 'mountains', 'taipei-relief'):
         root = f'taiwan/{directory}'
         js = include(f'{root}/index.js').read_text()
         relief = json.loads(js.split('export default', 1)[1].strip().rstrip(';'))
-        for sheet in relief['sheets']:
+        for sheet in relief.get('sheets', []):
             include(f'{root}/{sheet["name"]}.webp')
         for tile in relief['dem']:
             include(f'{root}/dem/{tile}.png')

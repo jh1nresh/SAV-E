@@ -49,7 +49,13 @@ class PocketCityPackageTests(unittest.TestCase):
             self.assertTrue(all(f'{folder}/{key}.json.gz' in runtime for key in index['tiles']))
         district_art = {p for p in runtime if p.endswith('-street-ground.json.gz')}
         self.assertEqual(len(district_art), 12)
-        self.assertIn('taipei-street-districts.js', runtime)
+        terrain_manifest = (pkg.WEB / 'taiwan/taipei-relief/index.js').read_text()
+        terrain = json.loads(terrain_manifest.split('export default', 1)[1].strip().rstrip(';'))
+        self.assertTrue(terrain['dem'])
+        self.assertTrue(all(f'taiwan/taipei-relief/dem/{key}.png' in runtime for key in terrain['dem']))
+        self.assertTrue({'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
+                         'assets/songshan-river-meadow.json.gz', 'xinyi-ridge-woods.js',
+                         'songshan-river-meadow.js', 'taipei-street-districts.js'} <= runtime)
         self.assertFalse(any(name.startswith(('examples/', 'bundles/', 'tools/', 'scripts/')) or
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))
