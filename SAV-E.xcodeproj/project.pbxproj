@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C5A6A0000000000000000003 /* SakugaNativeDrawing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A6A0000000000000000004 /* SakugaNativeDrawing.swift */; };
+		C5A6A0000000000000000001 /* SavvySakugaFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A6A0000000000000000002 /* SavvySakugaFeedback.swift */; };
 		D0CF5E1E6F145692C1C6D365 /* DatePlanModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86392DA85DC10A4ADB33915B /* DatePlanModel.swift */; };
 		833D37439B03977F381EB707 /* GuideBrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C8A8F0663D372E34151F3A4 /* GuideBrief.swift */; };
 		209EB0AD259D4C639FAFE46C /* LiveBusinessPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEF21FB7489D0FA5F1A2357 /* LiveBusinessPhoto.swift */; };
@@ -301,6 +303,7 @@
 		INK1A000000000000000006 /* SaveInkNotebookScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000005 /* SaveInkNotebookScreens.swift */; };
 		INK1A000000000000000008 /* SaveInkNotebookRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A000000000000000007 /* SaveInkNotebookRoot.swift */; };
 		INK1A00000000000000000B /* SaveInkNotebookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = INK1A00000000000000000A /* SaveInkNotebookTests.swift */; };
+		C5A6B0000000000000000001 /* SakugaOpening in Resources */ = {isa = PBXBuildFile; fileRef = C5A6B0000000000000000002 /* SakugaOpening */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -403,6 +406,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C5A6A0000000000000000004 /* SakugaNativeDrawing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakugaNativeDrawing.swift; sourceTree = "<group>"; };
+		C5A6A0000000000000000002 /* SavvySakugaFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvySakugaFeedback.swift; sourceTree = "<group>"; };
 		86392DA85DC10A4ADB33915B /* DatePlanModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DatePlanModel.swift; path = "Prototypes/DatePlanDemo/Core/DatePlanModel.swift"; sourceTree = SOURCE_ROOT; };
 		1C8A8F0663D372E34151F3A4 /* GuideBrief.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GuideBrief.swift; path = "Prototypes/DatePlanDemo/Core/GuideBrief.swift"; sourceTree = SOURCE_ROOT; };
 		DDEF21FB7489D0FA5F1A2357 /* LiveBusinessPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveBusinessPhoto.swift; path = "Prototypes/DatePlanDemo/Main/LiveBusinessPhoto.swift"; sourceTree = SOURCE_ROOT; };
@@ -698,6 +703,7 @@
 		INK1A000000000000000005 /* SaveInkNotebookScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookScreens.swift; sourceTree = "<group>"; };
 		INK1A000000000000000007 /* SaveInkNotebookRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookRoot.swift; sourceTree = "<group>"; };
 		INK1A00000000000000000A /* SaveInkNotebookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveInkNotebookTests.swift; sourceTree = "<group>"; };
+		C5A6B0000000000000000002 /* SakugaOpening */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SakugaOpening; path = "SAV-E/Resources/SakugaOpening"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -818,6 +824,7 @@
 				8EBE852DE7618089938F9421 /* Assets.xcassets */,
 				6361F6E836FD533A68A17D61 /* PrivacyInfo.xcprivacy */,
 				C91900000000000000000002 /* DisplayFont */,
+				C5A6B0000000000000000002 /* SakugaOpening */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -923,6 +930,8 @@
 			isa = PBXGroup;
 			children = (
 				85E674763445F956B8660707 /* Color+Theme.swift */,
+				C5A6A0000000000000000002 /* SavvySakugaFeedback.swift */,
+				C5A6A0000000000000000004 /* SakugaNativeDrawing.swift */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -1735,6 +1744,7 @@
 				78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */,
 				DD2947EE2F000476CB869B83 /* PrivacyInfo.xcprivacy in Resources */,
 				C91900000000000000000001 /* DisplayFont in Resources */,
+				C5A6B0000000000000000001 /* SakugaOpening in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2012,6 +2022,8 @@
 				6834F63ABDFBD48BAB5825EA /* CategoryPill.swift in Sources */,
 				CDC6527B4176C047D3886751 /* ClipContentPreview.swift in Sources */,
 				47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */,
+				C5A6A0000000000000000001 /* SavvySakugaFeedback.swift in Sources */,
+				C5A6A0000000000000000003 /* SakugaNativeDrawing.swift in Sources */,
 				C44497858CBEC5C4CDD76988 /* Components.swift in Sources */,
 				F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */,
 				CCEDE6095DE94222B9FB8A7E /* DebugLegacyMigrator.swift in Sources */,
@@ -2633,7 +2645,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SAVVY_MAIN_APP";
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = SavvyPreviewIcon;
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;

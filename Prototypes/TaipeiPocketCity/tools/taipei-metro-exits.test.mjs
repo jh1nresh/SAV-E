@@ -4,6 +4,7 @@ import {Style} from '../assets/maplibre-gl.mjs';
 import {addCityPlaceIndex,cityPlaceLayers,loadCityPlaces} from '../city-place-index.js';
 import {mallStreetExit4,metroExitCard,metroExitFeatures,metroExitLayer,metroExitPlaceId,isDuplicateMetroExit} from '../taipei-metro-exits.js';
 import {mallMetroExit4} from '../taipei101-wayfinding.js';
+import {addedOpenShops} from '../taipei-open-shop-catalog.js';
 
 test('use all 280 Taipei City exit records with stable distinct identities and original coordinates',()=>{
   assert.equal(metroExitFeatures.length,280);
@@ -35,7 +36,7 @@ test('the shared map and search index retains existing shops alongside exits',as
   })));
   const index=await loadCityPlaces();
   assert.equal(request.mock.callCount(),1);
-  assert.equal(index.features.length,281);
+  assert.equal(index.features.length,1+metroExitFeatures.length+addedOpenShops.length);
   assert.deepEqual(index.features[0],shop);
   assert(index.features.some(f=>f.properties.placeId===mallStreetExit4));
 });
@@ -78,6 +79,10 @@ test('street exits are only a close-up layer and mall suppression composes with 
   events.get('pocketmallplaces')();
   assert(JSON.stringify(exits.filter).includes(ownID));
   assert(!JSON.stringify(exits.filter).includes(mallStreetExit4));
+  events.get('pocketaccountpins')({placeIds:['poi/node/13784533059']});
+  const names=JSON.stringify(layers.get('taipei-place-names').filter);
+  assert(names.includes('poi/node/13724520041'));
+  assert(!names.includes('poi/node/13784533059'));
   events.get('pocketaccountpins')({placeIds:[]});
   assert.deepEqual(exits.filter,original);
 });

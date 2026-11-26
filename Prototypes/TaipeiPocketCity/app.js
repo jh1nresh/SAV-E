@@ -19,6 +19,7 @@ import {addCityContext} from './city-context.js?v=city-colour-3';
 import {plotOverlaps} from './authored-footprint.js';
 import {addCityAtlas} from './city-atlas-layer.js?v=city-colour-3';
 import {metroExitDataset} from './taipei-metro-exits.js';
+import {taipeiDoorplateDataset} from './taipei-open-shop-catalog.js';
 import {cityPlaceLayers} from './city-place-index.js?v=friendly-frontages-1';
 import {inFuxing,bookshopView,shopRowView,bookshopEvidence,bookstoreId} from './fuxing-block.js?v=frontage-views-1';
 import * as ml from './assets/maplibre-gl.mjs';
@@ -517,6 +518,7 @@ try{
     map.addControl(new ml.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
   }
   const credits=new ml.AttributionControl({compact:false,customAttribution:[
+    '<a href="'+taipeiDoorplateDataset+'" target="_blank" rel="noopener">臺北市民政局門牌</a>',
     ...(appChrome?['天氣預報 <a href="https://www.met.no/en">MET Norway</a> · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>']:[]),
     '<a href="https://data.gov.tw/dataset/7441">國土測繪中心鄉鎮界線</a>',
     '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">地形 Mapzen · USGS / NOAA</a>',
@@ -638,7 +640,7 @@ try{
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);
   if(rerun && streetDetail){
-    cityNature=new CityNature(loadTreeCanopies);
+    cityNature=new CityNature(loadTreeCanopies,planting101);
     map.addLayer(cityNature,firstLabel);
     const localLife=(records,visiblePacks=[])=>{
       if(preview.get('dihua')!=='before'&&visiblePacks.includes('p221_2038'))
@@ -692,7 +694,7 @@ try{
   }
   add101Ground(map);
   if(!cityNature){
-    cityNature=new CityNature();
+    cityNature=new CityNature(undefined,planting101);
     map.addLayer(cityNature,firstLabel);
     cityNature.setRows(planting101);
   }

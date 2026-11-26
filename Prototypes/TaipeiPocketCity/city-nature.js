@@ -1,7 +1,7 @@
 // Pocket Nature's Watarase field atlas uses forked wood and sunlit scalloped leaf sprays.
 // Here each spray stays on its tree in 3D while its outline faces the reader.
 import {MercatorCoordinate,LngLat} from './assets/maplibre-gl.mjs';
-import {program,transform} from './survey-layer.js';
+import {program,transform,buildingZoom} from './survey-layer.js';
 import {plainCanopy,treeCanopyKey} from './taipei-tree-canopies.js';
 
 const vertex=`#version 300 es
@@ -218,8 +218,9 @@ export class CityNature {
     this.revision++;
     this.onRootsChanged?.();
   }
-  constructor(loadCanopies){
+  constructor(loadCanopies,landmarkRows=[]){
     this.loadCanopies=loadCanopies;
+    this.landmarkRows=landmarkRows;
   }
   setRows(rows){
     this.rows=rows;
@@ -293,7 +294,8 @@ export class CityNature {
     this.tile={mx:base.x,my:base.y,m};
     const groups=this.forms.map(()=>[]);
     const visible=[];
-    for(const row of this.rows){
+    this.landmarkOnly=this.map.getZoom()<16.9;
+    for(const row of this.landmarkOnly?this.landmarkRows:this.rows){
       const [lon,lat,h,form,kind]=row;
       if(lon<w-dx||lat<s-dy||lon>e+dx||lat>n+dy)continue;
       const z=this.map.terrain?.getDrawnElevationForLngLat(new LngLat(lon,lat));
@@ -317,12 +319,13 @@ export class CityNature {
   }
   render(gl,opts){
     this.drawn=0;
-    if(this.map.getZoom()<16.9 || !this.rows.length){
+    const zoom=this.map.getZoom(),landmarkOnly=zoom<16.9;
+    if(zoom<buildingZoom || !(landmarkOnly?this.landmarkRows:this.rows).length){
       if(this.rootKey){this.publishRoots([],'');this.dirty=true;}
       return;
     }
     const b=this.map.getBounds(),r=this.region;
-    if(this.dirty||!r||b.getWest()<r[0]||b.getEast()>r[2]||b.getSouth()<r[1]||b.getNorth()>r[3])this.sample(gl,b);
+    if(this.dirty||this.landmarkOnly!==landmarkOnly||!r||b.getWest()<r[0]||b.getEast()>r[2]||b.getSouth()<r[1]||b.getNorth()>r[3])this.sample(gl,b);
     const pitch=this.map.getPitch()*Math.PI/180,bearing=this.map.getBearing()*Math.PI/180;
     gl.useProgram(this.program);
     gl.uniform3f(this.uniforms.rightAxis,Math.cos(bearing),-Math.sin(bearing),0);

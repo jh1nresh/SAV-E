@@ -54,7 +54,7 @@ const groups = {
   health:['chemist','pharmacy','clinic','hospital','dentist','藥局'],
 };
 const byCategory = new Map(Object.entries(groups).flatMap(([type,values])=>values.map(value=>[value,type])));
-export function placePinType(category){return byCategory.get(category) ?? 'other';}
+export function placePinType(category){return byCategory.get(category) ?? (Object.hasOwn(styles,category) ? category : 'other');}
 export function pinLabelColor(type){return styles[type].label;}
 
 function pinCanvas(type,style=styles[type]){
@@ -77,6 +77,7 @@ function pinCanvas(type,style=styles[type]){
 export function placeButtonIcon(category){
   const type=placePinType(category);
   const canvas=pinCanvas(type);
+  canvas.className='category-pin-art';
   canvas.setAttribute('aria-hidden','true');
   return {canvas,color:pinLabelColor(type)};
 }

@@ -262,7 +262,7 @@ struct ContentView: View {
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
-#if targetEnvironment(simulator)
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
         if storageScope == .livePlanningReviewFixture {
             rootOwner = LivePlanningReviewFixture.shared.ownerSubject
             rootAuthGeneration = LivePlanningReviewFixture.shared.sessionGeneration
@@ -397,7 +397,7 @@ struct ContentView: View {
                 }, dependencies: livePlanningDependencies
             )
         } else {
-            rootScaffold
+            AuthLoadingView()
         }
 #else
         rootScaffold
@@ -406,7 +406,7 @@ struct ContentView: View {
 
 #if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var usesLiveReviewFixture: Bool {
-#if targetEnvironment(simulator)
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
         storageScope == .livePlanningReviewFixture
 #else
         false
@@ -418,14 +418,14 @@ struct ContentView: View {
     }
 
     private var livePlanningDependencies: LivePlanningDependencies? {
-#if targetEnvironment(simulator)
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
         if usesLiveReviewFixture { return LivePlanningReviewFixture.shared.dependencies }
 #endif
         return nil
     }
 
     private var isLivePreviewSessionCurrent: Bool {
-#if targetEnvironment(simulator)
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
         if usesLiveReviewFixture { return LivePlanningReviewFixture.shared.isCurrent }
 #endif
         let auth = PrivyAuthService.shared
@@ -469,7 +469,11 @@ struct ContentView: View {
             fullScreenContent(for: route)
                 .presentationDetents([.height(430), .large])
                 .presentationDragIndicator(.visible)
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+                .presentationBackground(.regularMaterial)
+#else
                 .presentationBackground(SaveAtlasPalette.canvas)
+#endif
         }
         .fullScreenCover(item: detailPresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
