@@ -43,7 +43,7 @@ def road_profile(feature, new):
 class StreetGrade(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        wanted = {'road/way/48810790','road/way/118880895'}
+        wanted = {'road/way/48810790','road/way/118880895','road/way/300503363','road/way/35992785'}
         cls.examples = {}
         for path in (ROOT/'data/city170').glob('p*.json.gz'):
             for f in json.loads(gzip.decompress(path.read_bytes()))['features']['features']:
@@ -66,6 +66,33 @@ class StreetGrade(unittest.TestCase):
                 self.assertLess(max(abs(new[12:]-new[:-12])),.75*max(abs(old[12:]-old[:-12])))
             if ident=='48810790':
                 self.assertLess(np.ptp(after),2)
+
+    def test_guangfu_alley_east_approach_from_measured_blocks(self):
+        # Both ends of the previous eastern crest have neighbouring 2025 LOD1
+        # building-base bins at 5.22–5.28 m. Check every metre along the main
+        # 323 m way, so relocating the 12 m crest to the next intersection fails.
+        way = self.examples['road/way/118880895']
+        grade,xy = road_profile(way,True)
+        self.assertGreater(len(grade),315)
+        self.assertLess(np.max(abs(grade[12:]-grade[:-12]))/12,.065)
+        witness = np.argmin(np.hypot((xy[:,0]-121.56039)*100780,(xy[:,1]-25.05004)*110800))
+        self.assertLess(abs(grade[witness]-5.28),1.5)
+        east = self.examples['road/way/300503363']
+        eastern_grade,_ = road_profile(east,True)
+        self.assertLess(np.max(abs(eastern_grade[12:]-eastern_grade[:-12]))/12,.075)
+        west_coords = way['geometry']['coordinates']
+        east_coords = east['geometry']['coordinates']
+        self.assertEqual(west_coords[-1],east_coords[-1])
+        joined = {'geometry':{'coordinates':west_coords + east_coords[-2::-1]}}
+        complete,_ = road_profile(joined,True)
+        peak = abs(complete[12:]-complete[:-12])/12
+        self.assertLess(peak.max(),.075)
+        join = len(grade)-1
+        self.assertLess(peak[join-11:join+1].max(),.071)
+        jixiang = self.examples['road/way/35992785']
+        self.assertIn(east_coords[0],jixiang['geometry']['coordinates'])
+        side,_ = road_profile(jixiang,True)
+        self.assertLess(np.max(abs(side[12:]-side[:-12]))/12,.05)
 
     def test_registered_ground_water_hills_and_bridge(self):
         old = GEN['BASE']['decode'](ROOT/'data/city-streets/terrain/14-13724-7014.png')
