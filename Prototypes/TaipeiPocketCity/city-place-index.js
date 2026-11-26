@@ -1,5 +1,6 @@
 import {cityLandmarks,districtLandmarks} from './taipei-priority-places.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
+import {addressShopFeature,addedOpenShops,canonicalShopId,isDuplicateShop} from './taipei-open-shop-catalog.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 import {metroExitFeatures,metroExitLayer} from './taipei-metro-exits.js';
 import {photoPlaces} from './place-photos.js';
@@ -30,7 +31,8 @@ const revealZoom=['case',
 let pending;
 export function loadCityPlaces(){
   return pending??=readPocketCityAsset('city-place-index').then(data=>({
-    ...data,features:data.features.map(withShopFacts).concat(metroExitFeatures),
+    ...data,features:data.features.filter(feature=>!isDuplicateShop(feature.id))
+      .map(feature=>addressShopFeature(withShopFacts(feature))).concat(metroExitFeatures,addedOpenShops),
   })).catch(error=>{pending=null;throw error;});
 }
 
@@ -75,7 +77,7 @@ export function addCityPlaceIndex(map,pin){
   const previousFilters = new Map(accountLayers.filter(id=>map.getLayer(id)).map(id=>[id,map.getFilter(id)??null]));
   function refreshFilters(placeIds){
     const wing=map.savvyMallFootprint;
-    const hiddenIds=[...new Set([...placeIds,...(map.savvyMallAdjacentPlaceIds??[])])];
+    const hiddenIds=[...new Set([...Array.from(placeIds,canonicalShopId),...(map.savvyMallAdjacentPlaceIds??[])])];
     const identity=['coalesce',['get','placeId'],['id'],''];
     for (const id of accountLayers) {
       if (!map.getLayer(id)) continue;

@@ -36,18 +36,58 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taipei-registered-frontages.js', 'taipei-friendly-frontages.js',
                          'shop-convenience-fascias.js', 'taipei-convenience-art.js',
                          'city170-fountain-water-data.js', 'assets/taipei-streetlights.json.gz',
-                         'taipei-eslite-songyan.js', 'assets/taipei-eslite-songyan.bin.gz',
+                         'taipei-eslite-songyan.js', 'assets/taipei101-single-ground.png', 'assets/taipei101-pocket-city-ink.bin.gz', 'assets/taipei101-pocket-city.bin.gz',
+                         'assets/taipei-songyan-factory.bin.gz', 'assets/taipei-songyan-factory-terrain.png',
+                         'assets/songshan-street-ground.json.gz', 'assets/xinyi-street-ground.json.gz', 'assets/taipei-songyan-waterfront.bin.gz', 'assets/taipei-eslite-songyan.bin.gz',
+                         'taipei-open-shop-catalog.js', 'taipei-open-shop-catalog-data.js',
                          'taipei-market-stalls.js', 'taipei-market-stalls-data.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)
+        terrain_keys = json.loads((pkg.WEB / 'assets/taipei-street-grade/index.json').read_text())
+        self.assertIn('13724/7014', terrain_keys)  # 101 and Songyan share a DEM tile.
+        for key in terrain_keys:
+            self.assertIn(f"assets/taipei-street-grade/14-{key.replace('/', '-')}.png", runtime)
+        for mode in ('cloudy', 'drizzle', 'rain'):
+            self.assertIn(f'assets/taipei101-ground-{mode}.png', runtime)
         for directory in ('streets', 'materials'):
             folder = f'taiwan/{directory}'
             index = json.loads((pkg.WEB / folder / 'index.json').read_text())
             self.assertTrue(index['tiles'])
             self.assertTrue(all(f'{folder}/{key}.json.gz' in runtime for key in index['tiles']))
+        district_art = {p for p in runtime if p.endswith('-street-ground.json.gz')}
+        self.assertEqual(len(district_art), 12)
+        terrain_manifest = (pkg.WEB / 'taiwan/taipei-relief/index.js').read_text()
+        terrain = json.loads(terrain_manifest.split('export default', 1)[1].strip().rstrip(';'))
+        self.assertTrue(terrain['dem'])
+        self.assertTrue(all(f'taiwan/taipei-relief/dem/{key}.png' in runtime for key in terrain['dem']))
+        self.assertTrue({'taipei-road-bridges.js', 'taipei-bridge-mesh.js', 'assets/taipei-road-bridges.json.gz'} <= runtime)
+        self.assertTrue({'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
+                         'assets/songshan-river-meadow.json.gz', 'xinyi-ridge-woods.js',
+                         'songshan-river-meadow.js', 'taipei-street-districts.js'} <= runtime)
         self.assertFalse(any(name.startswith(('examples/', 'bundles/', 'tools/', 'scripts/')) or
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))
+
+    def test_pocket_facades_and_camera_are_packaged(self):
+        runtime=set(pkg.runtime_paths())
+        root='assets/pocket-survey/'
+        self.assertTrue({'free-camera.js','free-camera.css',root+'facades.png',root+'facades.json',root+'classes/index.json'} <= runtime)
+        index=json.loads((pkg.WEB/root/'classes/index.json').read_text())
+        self.assertEqual(len(index['tiles']),4816)
+        self.assertEqual({p for p in runtime if p.startswith(root+'classes/')},
+                         {root+'classes/index.json', *(root+'classes/'+i+'.bin.gz' for i in index['tiles'])})
+
+    def test_taipei200_uses_only_declared_pack_names(self):
+        root = 'assets/taipei200/'
+        index = json.loads((pkg.WEB / root / 'index.json').read_text())
+        names = pkg.taipei200_pack_names(index)
+        runtime = set(pkg.runtime_paths())
+        self.assertEqual({p for p in runtime if p.startswith(root)},
+                         {root + p for p in ['index.json', 'grid.json.gz', *names]})
+        self.assertIn('taipei200.js', runtime)
+        for bad in ('../secret', '123/77', 'pack.json.gz', '', '７_２'):
+            with self.assertRaises(ValueError):
+                pkg.taipei200_pack_names({**index, 'packs': [{'id': bad, 'cells': index['cells']}]})
 
     def test_default_bundle_covers_taipei_at_every_intermediate_zoom(self):
         root = 'cities/map-tiles/'

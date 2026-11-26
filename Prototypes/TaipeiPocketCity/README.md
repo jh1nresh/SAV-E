@@ -63,7 +63,7 @@ bash native/run.sh
 ```sh
 cd Prototypes/TaipeiPocketCity
 python3 prepare_data.py
-python3 -m http.server 42418 --bind 127.0.0.1
+python3 -B tools/serve-preview.py --port 42418
 ```
 
 - [復興南路書店](http://127.0.0.1:42418/index.html?street=fuxing)可從同一鏡位切換「舊版對照」或隱藏店名。點「看整排」拉遠。搜尋框能跳到其他行政區。
@@ -71,13 +71,28 @@ python3 -m http.server 42418 --bind 127.0.0.1
 - Apple 地圖自行選取當前比例下顯示的地點。選取 Apple 地點只開地點資訊。Apple 地點與原型收錄的店家分別由 Apple 和公開圖資提供，兩份資料的收錄範圍可能不同。
 - 原始的 [台北 101 收藏印章示範](../Taipei101PocketCity/README.md)可獨立執行。
 
+## 台北店家門牌與導航
+
+地點索引以 OpenStreetMap 和臺北市商業處既有資料為底。店名、門牌及座標交叉核對後，地點卡使用民政局門牌供搜尋、顯示與導航。只有門牌及分店身分有證據時才去重。原地圖位置和街景仍用 Pocket City 的點位。餐飲衛生評核名單用於補點，評核資料不足以表示現時營業狀態。
+
+本次資料用 OpenStreetMap 2026 年 11 月 21 日快照、臺北市民政局 2026 年 11 月 2 日門牌，以及臺北市衛生局餐飲衛生管理分級評核名單。以 2026 年 11 月 26 日的基礎索引重建後，12 區共 9,368 家有名稱的店家對到門牌，涵蓋 90 家由評核名單補入的店家，去除 4 筆可確認的重複點。以 ODbL 1.0 提供 OpenStreetMap 衍生欄位，市府欄位依政府資料開放授權條款第 1 版及其署名要求提供。[OpenStreetMap](https://www.openstreetmap.org/copyright) · [市府民政局門牌](https://data.gov.tw/dataset/155472) · [市府衛生局評核名單](https://data.taipei/dataset/detail?id=59579c19-a561-4564-8c0f-545bfb32c0f6) · [政府資料開放授權條款](https://data.gov.tw/license)
+
+解開本目錄既有的圖資後，可用 Python、ijson、pyproj 及 Shapely 2 重建公開店家資料。參數分別指定已還原的圖資目錄、OSM 元素 JSON.GZ、門牌 CSV.GZ、評核 CSV、輸出的 JavaScript 及核對報告。原始資料保留在本機。
+
+```bash
+python3 -B scripts/build-taipei-open-shop-catalog.py \
+  --data data --osm taipei-osm.json.gz --doors taipei-doors.csv.gz \
+  --inspections inspections.csv --out taipei-open-shop-catalog-data.js \
+  --report /tmp/taipei-open-shop-audit.json
+```
+
 ## Apple 地圖與插畫的資料來源
 
 Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Apple 地圖上，不寫進插畫圖包或 Savvy 收藏。插畫幾何來自獨立公開圖資，兩種底圖都能使用這份插畫。保留 Apple 和供應商標示及 OpenStreetMap 署名。[Apple 地圖服務條款，附件 6](https://developer.apple.com/support/terms/apple-developer-program-license-agreement/) · [OSM 授權與署名](https://www.openstreetmap.org/copyright)
 
 ## 圖資與來源
 
-台北 12 區按 170 公尺街廓整理。3D 版保留市府建物量體、24,072 筆可定位的來源店家和公共樹籍。7,906 筆可對上臨街外牆。復興南路示範街廓有 19 間店面。信義書局的紅招牌與騎樓參照紀錄照片，書架、入口深度及鄰店外觀為插畫重建。[信義書局紀錄](https://www.dream-land.com.tw/56%E4%BF%A1%E7%BE%A9%E6%9B%B8%E5%B1%80/)
+台北 12 區的街面由 Pocket City 逐格重建，共 7,047 個 200 × 200 公尺格。地圖依視窗載入各格的人行鋪面、車道線與斑馬線。3D 版保留市府建物量體、24,072 筆可定位的來源店家和公共樹籍。7,906 筆可對上臨街外牆。復興南路示範街廓有 19 間店面。信義書局的紅招牌與騎樓參照紀錄照片，書架、入口深度及鄰店外觀為插畫重建。[信義書局紀錄](https://www.dream-land.com.tw/56%E4%BF%A1%E7%BE%A9%E6%9B%B8%E5%B1%80/)
 
 臺北地面店家的樓層核對使用經濟部商業發展署的開放資料。[台北市商業登記資料-F零售、批發及餐飲業](https://data.gov.tw/dataset/53661) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
@@ -96,6 +111,17 @@ iPhone 離線地圖隨附台北的第 3–14 倍率向量圖磚，以 `cities/ma
 - 3D 街景使用 OpenFreeMap、OpenMapTiles、Mapzen 地形及 MapLibre GL JS。插畫參考 April Zhu 的 Pocket City 與 Pocket Nature。[Pocket City](https://april-zhu.com/pocketcity) · [Pocket Nature](https://april-zhu.com/pocketnature) · [Pocket City 授權](assets/Pocket-City-LICENSE.txt) · [MapLibre 授權](assets/MapLibre-LICENSE.txt)
 
 `prepare_data.py` 會查核每包 SHA-256，還原完成才建立 `data/`。可用 `tools/bundle_data.py <準備好的圖資資料夾> <輸出資料夾>` 重新封裝。封裝與還原會保留每份資料解壓後的內容，gzip 壓縮位元組可能不同。`scripts/` 保留地圖資料與模型的製作工具，各自使用原始來源與額外的製圖相依套件。
+
+## 重建台北 200 公尺街面
+
+從本目錄執行，使用與既有街景相同的台北 OSM 快照。第一遍保留每格完整 Pocket City 場景。第二遍在四邊各多讀 25 公尺，排除高架及地下道路，再將完整線條裁回原格，讓斑馬線可以跨格。編譯時以市界、地面車道、人行空間和水域核對可繪範圍。
+
+```sh
+uv run --python 3.12 --with ijson --with pyproj --with 'shapely>=2.1' python scripts/prepare-taipei200.py --osm "$TAIPEI_OSM" --skill "$POCKET_CITY_SKILL" --work "$BUILD_ROOT/scenes"
+uv run --python 3.12 --with ijson --with pyproj --with 'shapely>=2.1' python scripts/prepare-taipei200.py --osm "$TAIPEI_OSM" --skill "$POCKET_CITY_SKILL" --work "$BUILD_ROOT/paint" --paint-halo
+uv run --python 3.12 --with ijson --with pyproj --with 'shapely>=2.1' python scripts/compile-taipei200.py --work "$BUILD_ROOT/scenes" --paint-context "$BUILD_ROOT/paint"
+uv run --python 3.12 --with pyproj --with 'shapely>=2.1' python scripts/test-taipei200-paint.py
+```
 
 ## 台北 170 公尺逐格稽核
 

@@ -35,7 +35,8 @@ export function addPocketCityPaint(map,paintReady){
       if(data?.type!=='FeatureCollection'||!Array.isArray(data.features))throw Error('Invalid Pocket City paint data');
       map.off('moveend',loadAtStreetZoom);
       map.addSource('pocket-city-street-paint',{type:'geojson',data,maxzoom:19});
-      const before=map.getLayer('atlas-shadows')?'atlas-shadows':'survey';
+      const before=map.getLayer('taipei101-single-ground')?'taipei101-single-ground':
+      map.getLayer('atlas-shadows')?'atlas-shadows':'survey';
       for(const [kind,minZoom,fullyVisible,color,opacity] of [
         ['skill-paving',16.5,17.6,'#efdbb7',.85],
         ['lane',17.25,18.05,'#f6edd4',.83],

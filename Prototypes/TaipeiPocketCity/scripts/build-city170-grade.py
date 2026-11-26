@@ -8,7 +8,6 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
-import ijson
 
 
 def above_or_below_ground(tags):
@@ -26,6 +25,7 @@ def above_or_below_ground(tags):
 
 
 def build(source,data):
+    import ijson
     expected=json.loads((data/'city170/index.json').read_bytes())['source']['provenance']['taipeiExtractUncompressedSHA256']
     with gzip.open(source,'rb') as stream:
         if hashlib.file_digest(stream,'sha256').hexdigest()!=expected:raise ValueError('Wrong Taipei OSM snapshot')

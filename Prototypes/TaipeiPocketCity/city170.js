@@ -1,3 +1,6 @@
+import {taipei200Scenes,taipei200Grid,streetPaintUpdate} from './taipei200.js';
+import {misplacedIllustratedTree} from './taipei-illustrated-trees.js';
+import {inside101Ground,planting101} from './taipei101-single-ground.js';
 import {metroExitCard,metroExitLayer} from './taipei-metro-exits.js';
 import {withShopFacts} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 import {addArcadeFloors} from './taipei-arcade-floors.js?v=sections-2';
@@ -14,13 +17,20 @@ import fountainWater from './city170-fountain-water-data.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
+import preparedWalks from './taipei200-walks-data.js';
+import {parkWalksForPack} from './songshan-park-walks.js';
+import {addDistrictStreetGround,districtStreetMarkings} from './xinyi-street-ground.js';
+import {frontagePackIds} from './xinyi-shop-frontages.js';
+import {campusBounds,showSchool} from './school-camera.js';
+import {runningTrack} from './city170-running-tracks.js';
 import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
-import {courtDetails} from './city170-courts.js?v=court-nets-1';
+import {courtDetails} from './city170-courts.js?v=football-1';
 import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=friendly-frontages-1';
-import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=fountain-water-1';
+import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=football-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
+import {addressShopFeature,addedOpenShops,isDuplicateShop} from './taipei-open-shop-catalog.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
 import {loadStreetlightPacks,streetlightObjects,streetlightZoom} from './taipei-streetlight-data.js';
@@ -116,9 +126,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const paint = 'city170-prepared';
   const schools = 'city170-schools';
   const roadAnchors = 'city170-road-anchors';
-  for (const id of [data, paint, schools, 'city170-equipment']) {
-    map.addSource(id, {type:'geojson', data:collection([]), maxzoom:19});
+  for (const id of [data, paint, schools]) {
+    map.addSource(id, {type:'geojson', data:collection([]), maxzoom:19,...(id===paint?{maxzoom:20,tolerance:0}:{})});
   }
+  // At z18 simplification collapses narrow goal uprights and net posts to a line.
+  map.addSource('city170-equipment',{type:'geojson',data:collection([]),maxzoom:19,tolerance:0});
   // One shared vector tile holds neighboring school courts at close zoom.
   map.addSource('city170-playing-areas',{type:'geojson',data:collection([]),maxzoom:16,buffer:256,tolerance:0});
   // Keep short visible label lines intact across a native vector tile edge.
@@ -130,6 +142,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   addCityAirfield(map,firstLabel);
   addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
+  addDistrictStreetGround(map);
   addArcadeFloors(map,'survey');
   addCityHydrants(map,firstLabel);
   addParkWater(map,firstLabel);
@@ -238,7 +251,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   canvas.addEventListener('mouseleave',()=>canvas.classList.remove('over-place'));
   map.on('movestart',()=>canvas.classList.remove('over-place'));
 
-  let index, schoolData, grid, pendingGrid, current = 0, timer, failures = 0;
+  let index, schoolData, current = 0, timer, failures = 0;
   let lifeKey='';
   let lifeRecords=[],lifeRevision=-1,sceneKey='';
   let publicLights,lightsPending=false,removed=false;
@@ -290,6 +303,13 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   const pack = id => remember(id, () => readPocketCityAsset('city170/' + id));
   const markings = id => remember('paint/' + id, () => readPocketCityAsset('city170-prepared/' + id.slice(1)));
 
+  const scenes=taipei200Scenes(remember);
+  const grid=taipei200Grid(map);
+  let displayed=null,scenePhase='loading';
+  const currentView=()=>{
+    const b=map.getBounds();
+    return [b.getWest(),b.getSouth(),b.getEast(),b.getNorth()];
+  };
   const schoolInputs = [...document.querySelectorAll('.school-find')];
   const schoolList = document.querySelector('#school-list');
   const schoolPositions = new Map();
@@ -304,11 +324,12 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
     schoolData = value;
     map.getSource(schools).setData(value);
     const options = document.createDocumentFragment();
+    const bounds = campusBounds(value.features);
     for (const f of value.features) {
       if (f.properties.kind !== 'school-label' || !f.properties.name) continue;
       let key = f.properties.name;
       if (schoolPositions.has(key)) key += '（' + f.geometry.coordinates.map(n => n.toFixed(4)).join(', ') + '）';
-      schoolPositions.set(key, f.geometry.coordinates);
+      schoolPositions.set(key, {center:f.geometry.coordinates,bounds:bounds.get(f.id)});
       const option = document.createElement('option');
       option.value = key;
       options.append(option);
@@ -318,16 +339,20 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   for (const input of schoolInputs) {
     input.addEventListener('focus', () => loadSchools().catch(error => console.warn(error.message)));
     input.addEventListener('change', () => {
-      const center = schoolPositions.get(input.value.trim());
-      if (!center) return;
+      const school = schoolPositions.get(input.value.trim());
+      if (!school) return;
       for (const other of schoolInputs) other.value = input.value;
       document.querySelector('.mobile').open = false;
-      map.jumpTo({center,zoom:17.35,pitch:38});
+      showSchool(map,school);
     });
   }
   async function refresh() {
     if(removed)return;
     const epoch = ++current;
+    const view=currentView();
+    if(map.getZoom()<16.35||!displayed?.visibleCells(view)?.length){
+      displayed=null;scenePhase=map.getZoom()<16.35?'outside':'loading';
+    }
     loadLandDetails();
     clearTimeout(timer);
     try {
@@ -370,11 +395,12 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         return response.json();
       });
       if (epoch !== current) return;
-      const b = map.getBounds();
-      const view = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
       const visible = index.packs.filter(item => overlaps(item.bounds, view));
+      // Start both data sources together. Keep the original paint usable during
+      // the first 200m load or if one of the adjacent packs fails.
+      const applyStreetPaint=streetPaintUpdate(visible.length?scenes.inView(view):null);
       const packIds=visible.map(item=>item.id);
-      setShopPacks(map.getZoom()>=17.55?packIds:[]);
+      setShopPacks(frontagePackIds(visible,map.getZoom()));
       if(!boundary)boundary=await remember('boundary',async()=>{
         const response=await fetch(new URL('./data/city170-boundary.json',import.meta.url));
         if(!response.ok)throw Error('City boundary '+response.status);
@@ -394,8 +420,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
             .catch(error=>{console.warn('臺北樹籍',id,error.message);return null;}))),
         ]);
         if(epoch!==current)return;
-        nature.setRows(inventories.flatMap(pack=>pack??[]));
-        lifeRecords=records.map((record,i)=>{
+        nature.setRows([...inventories.flatMap(pack=>pack??[]).filter(([x,y])=>!inside101Ground(x,y)),...planting101]);
+        lifeRecords=records.map((life,i)=>{
+          const rows=preparedWalks[packIds[i]]??[];
+          const extra=Object.fromEntries(rows.map(([id,points,people])=>['scene200/'+id,{points,people}]));
+          const record=parkWalksForPack(packs[i],rows.length?{...life,paths:{...life.paths,...extra}}:life);
           const playground=parkPlaygrounds[packIds[i]];
           const fitness=parkFitness[packIds[i]];
           const pavilions=riverPavilions[packIds[i]];
@@ -457,6 +486,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         const [x,y]=f.geometry.coordinates;
         return x>=view[0]&&x<=view[2]&&y>=view[1]&&y<=view[3];
       }));
+      const streetIds=new Set(features.map(feature=>feature.id));
+      features.push(...addedOpenShops.filter(feature=>{
+        const [x,y]=feature.geometry.coordinates;
+        return !streetIds.has(feature.id)&&x>=view[0]&&x<=view[2]&&y>=view[1]&&y<=view[3];
+      }));
       if(dihuaLayer && map.getZoom()>=19.25 && overlaps(view,[121.50982,25.05634,121.50995,25.05672])){
         // At façade scale the user can tap the entrance itself.
         const onStreet=(x,y)=>x>=view[0]&&x<=view[2]&&y>=view[1]&&y<=view[3];
@@ -493,6 +527,12 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           if(map.getZoom()>=18.5 && feature.properties.category==='bicycle_rental')equipment.push(...bikeDockParts(feature));
           continue;
         }
+        const track=runningTrack(feature);
+        if(track){
+          detailedPitchIds.add(feature.id);
+          playingAreas.push(...track);
+          continue;
+        }
         const [painted,...parts]=courtDetails(feature,map.getZoom()>=18.5);
         if(painted){
           detailedPitchIds.add(feature.id);
@@ -502,10 +542,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       }
       map.getSource('city170-equipment').setData(collection(equipment));
       map.getSource('city170-playing-areas').setData(collection(playingAreas));
-      const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f) &&
+      const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f)
+        &&(f.properties.kind!=='poi'||!isDuplicateShop(f.id)) &&
         (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
-        ?withShopFacts({...f,properties:{...f.properties,placeId:f.id}}):f)));
+        ?addressShopFeature(withShopFacts({...f,properties:{...f.properties,placeId:f.id}})):f)));
       map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
       cityRoadLabels(cells.length>0);
       status = {cells:cells.length, features:features.length, prepared:0};
@@ -519,7 +560,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       for (let i = 0; i < packs.length; i++) {
         for (const cell of packs[i].cells) {
           if(!overlaps(cell.bounds,view))continue;
-          const items=paintPacks[i][cell.id]??[];
+          const items=districtStreetMarkings(paintPacks[i][cell.id]??[],cell);
           const blocked=openGround[cell.id];
           if(!blocked){pieces.push(...items);continue;}
           const roots=new Set(blocked.map(pt=>pt.join(',')));
@@ -528,16 +569,42 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
           }
         }
       }
-      map.getSource(paint).setData(collection(pieces.filter(f=>f.properties.kind!=='grove-tree'||!nature.activeTrees.near(...f.geometry.coordinates,9))));
-      setPrepared(packs.length > 0);
-      status.prepared = pieces.length;
+      const retained=pieces.filter(f=>f.properties.kind!=='grove-tree'||
+        (!misplacedIllustratedTree(...f.geometry.coordinates)&&!nature.activeTrees.near(...f.geometry.coordinates,9)));
+      const nextScene=await applyStreetPaint(map.getSource(paint),retained,()=>epoch===current,()=>{
+        displayed=null;scenePhase='loading';
+        status.prepared=retained.length;
+        setPrepared(packs.length>0);
+      });
+      if(epoch!==current)return;
+      status.prepared=retained.length;
+      if(nextScene){
+        setPrepared(true);
+        const counts=new Map();
+        for(const feature of nextScene.features){
+          const id=feature.properties.scene200;
+          counts.set(id,(counts.get(id)??0)+feature.geometry.coordinates.length);
+        }
+        displayed={visibleCells:nextScene.visibleCells,counts};
+        scenePhase='ready';
+        refreshMissingCells();
+      }else{displayed=null;scenePhase='outside';}
       failures = 0;
     } catch (error) {
       if (epoch !== current) return;
-      console.warn('Taipei 170m', error.message);
+      displayed=null;scenePhase='fallback';
+      console.warn('Taipei street scene', error.message);
       timer = setTimeout(refresh, Math.min(30000, 1800 * 2 ** Math.min(failures++, 4)));
     }
   }
+  function refreshMissingCells(){
+    if(!removed&&displayed&&map.getZoom()>=16.35&&!map.isMoving()&&
+       displayed.visibleCells(currentView())===null){
+      displayed=null;scenePhase='loading';
+      clearTimeout(timer);timer=setTimeout(refresh,0);
+    }
+  }
+  map.on('idle',refreshMissingCells);
   nature.onRootsChanged=()=>{
     clearTimeout(timer);
     timer=setTimeout(refresh,125);
@@ -547,19 +614,21 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   map.on('remove',()=>{
     removed=true;
     ++current;
+    grid.clear();
     clearTimeout(timer);
   });
   refresh();
   return {
     openNearbyPlace,
-    state:() => ({...status,cellSize:170,coverage:index?.stats??null}),
-    grid(show) {
-      if (show && !grid && !pendingGrid) {
-        pendingGrid = readPocketCityAsset('city170/grid').then(value => {
-          map.getSource('plots').setData(value);
-          grid = value;
-        }).catch(error => console.warn('170m grid', error.message)).finally(() => {pendingGrid = null;});
-      }
+    sourceState:()=>({...status,cellSize:170,coverage:index?.stats??null}),
+    state:()=>{
+      const cells=map.getZoom()>=16.35?displayed?.visibleCells(currentView()):null;
+      const ready=Boolean(cells?.length&&map.isSourceLoaded(paint));
+      const phase=ready?'ready':scenePhase==='ready'?'loading':scenePhase;
+      const waitingFor=phase!=='loading'?null:!displayed?'scene':!cells?.length?'viewport':'source';
+      return {ready,phase,waitingFor,cellSize:ready?200:null,cells:ready?cells.length:0,visibleCells:ready?cells:[],
+        prepared:ready?cells.reduce((n,id)=>n+(displayed.counts.get(id)??0),0):0,coverage:scenes.coverage()};
     },
+    grid:show=>grid.show(show),
   };
 }

@@ -2,11 +2,14 @@ import {additionalShopFloor,shopFloorLabel} from './shop-floor-labels.js';
 import {frontageCamera} from './fuxing-block.js?v=frontage-views-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
 import {loadCityPlaces} from './city-place-index.js?v=friendly-frontages-1';
+import {isDuplicateShop,withOpenShopAddress} from './taipei-open-shop-catalog.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {loadVerifiedSavvyMapPins} from './savvy-place-sources.js';
 import {frontageSearchRow} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 
-const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎').replace(/\s+/g,'');
+const fold=s=>s.normalize('NFKC').toLocaleLowerCase().replaceAll('臺','台').replaceAll('竪','豎')
+  .replace(/([一二三四五六七八九])段/g,(_,n)=>('一二三四五六七八九'.indexOf(n)+1)+'段')
+  .replace(/(\d+)號之(\d+)/g,'$1-$2號').replace(/(\d+)之(\d+)號/g,'$1-$2號').replace(/\s+/g,'');
 export function surveyedShopCamera(row,views,viewport){
   const [, , ,x,y,angle,id]=row;
   if(!Number.isFinite(angle) || !views || !Object.hasOwn(views.frontageViews,id))return;
@@ -37,7 +40,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
   let pending,frontages,verifiedPending,verifiedEntries,cameras,cameraRequest,cameraAttempts=0;
   const forms=document.querySelectorAll('.shop-search');
   function entry(row){
-    return {row,key:fold(row[0]),area:fold([row[1],row[2],row[7]?.categoryLabel,shopFloorLabel(row[6],row[7]?.source)].filter(Boolean).join(' '))};
+    return {row,key:fold(row[0]),area:fold([row[1],row[2],row[7]?.address,row[7]?.categoryLabel,shopFloorLabel(row[6],row[7]?.source)].filter(Boolean).join(' '))};
   }
   function indexedRow(feature){
     const place=streetShopProperties(feature.properties);
@@ -70,7 +73,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
       const records=new Map(heritage.map(row=>[row[6],row]));
       for(const row of rows){
         const id=row[6];
-        if(!records.has(id))records.set(id,[...frontageSearchRow(row),indexed.has(id)?streetShopProperties(indexed.get(id).properties):undefined]);
+        if(!records.has(id)&&!isDuplicateShop(id))records.set(id,[...frontageSearchRow(row),indexed.has(id)?streetShopProperties(indexed.get(id).properties):undefined]);
       }
       for(const [id,feature] of indexed){
         if(records.has(id))continue;
@@ -100,7 +103,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
         button.type='button';
         const title=document.createElement('strong'),detail=document.createElement('small');
         title.textContent=name;
-        detail.textContent=[district,street,additionalShopFloor(id,heritagePlace?.source,street),angle!==null?'店面':district||street?'':'地點']
+        detail.textContent=heritagePlace?.address||[district,street,additionalShopFloor(id,heritagePlace?.source,street),angle!==null?'店面':district||street?'':'地點']
           .filter(Boolean).join(' · ');
         button.append(title,detail);
         button.addEventListener('click',()=>{
@@ -117,13 +120,13 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
           const osm=id.match(/^poi\/(node|way|relation)\/(\d+)$/);
           const inspected=id.startsWith('inspection/');
           const commerce=id.startsWith('commerce/');
-          openPlace({id,point:[x,y],name,categoryLabel:'店家地點',
+          openPlace(withOpenShopAddress({id,point:[x,y],name,categoryLabel:'店家地點',
             source:osm?'OpenStreetMap':inspected?'臺北市衛生局':commerce?'臺北市商業處':undefined,
             url:osm?'https://www.openstreetmap.org/'+osm[1]+'/'+osm[2]:
               inspected||commerce?'https://data.taipei/dataset/detail?id='+(inspected?'59579c19-a561-4564-8c0f-545bfb32c0f6':'0d09e03e-bb11-4213-a9c8-6bfd392fbb16'):undefined,
             ...heritagePlace,retainMapCamera:!heritagePlace?.mapView&&surveyed?.verifiedFrontage===true,
             detail:heritagePlace?.source==='Savvy'?heritagePlace.detail
-              :heritagePlace?.detail||[district,street].filter(Boolean).join(' · ')||''});
+              :heritagePlace?.detail||[district,street].filter(Boolean).join(' · ')||''}));
         });
         list.append(button);
       }
@@ -136,7 +139,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
       function display(){
         if(turn!==serial||list.contains(document.activeElement))return;
         const byId=new Map();
-        for(const e of [...saved,...nearby,...national])if(!byId.has(e.row[6]))byId.set(e.row[6],e);
+        for(const e of [...saved,...nearby,...national])if(!byId.has(e.row[6])&&!isDuplicateShop(e.row[6]))byId.set(e.row[6],e);
         render([...byId.values()],query,terms);
       }
       const results=await Promise.allSettled([

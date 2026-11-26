@@ -4,16 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f6f2e8">
-  <title>Pocket City · Savvy</title>
+  <title>Pocket City · 同一顆地球</title>
   <link rel="icon" href="./assets/icon.png">
   <link rel="stylesheet" href="./assets/maplibre-gl.css">
-  <link rel="stylesheet" href="./taipei101-indoor.css?v=floor-focus-1">
-  <link rel="stylesheet" href="./style.css?v=shuqi-light-1">
+  <link rel="stylesheet" href="./taipei101-indoor.css?v=original-ink">
+  <link rel="stylesheet" href="./style.css?v=metro-label-2">
+  <link rel="stylesheet" href="./free-camera.css">
 </head>
 <body>
   <header>
     <a class="wordmark" href="./">Savvy</a>
-    <span class="divider"></span><strong>Pocket City</strong><span class="preview">本機預覽</span>
+    <span class="divider"></span><strong>Pocket City</strong><span class="preview">地球版</span>
     <a id="apple-places-link" href="./apple.html">Apple 地點</a>
   </header>
   <main>
@@ -42,6 +43,17 @@
           <button type="button" id="pitch" title="切換俯視與斜視" aria-label="斜視" aria-pressed="false">∠</button>
         </div>
       </div>
+      <details id="free-camera" class="free-camera">
+        <summary>視角與地點</summary>
+        <label>前往 <select id="globe-destination" aria-label="前往地點">
+          <option value="">選擇地點</option><option value="taipei">台北 101</option><option value="songyan">松菸・大巨蛋</option>
+          <option value="tamsui">淡水紅毛城</option><option value="jiufen">九份豎崎路</option><option value="shanghai">上海</option><option value="beijing">北京</option><option value="la">Los Angeles</option>
+        </select></label>
+        <label>旋轉 <output id="bearing-value">0°</output><input id="camera-bearing" aria-label="旋轉角度" type="range" min="-180" max="180" value="0" step="1"></label>
+        <label>俯仰 <output id="pitch-value">0°</output><input id="camera-pitch" aria-label="俯仰角度" type="range" min="0" max="75" value="0" step="1"></label>
+        <div class="pan-actions" role="group" aria-label="移動地圖"><button type="button" data-pan="left" aria-label="向左移動">←</button><button type="button" data-pan="up" aria-label="向上移動">↑</button><button type="button" data-pan="down" aria-label="向下移動">↓</button><button type="button" data-pan="right" aria-label="向右移動">→</button></div>
+        <small>拖曳移動；右鍵拖曳旋轉與俯仰。觸控可雙指旋轉，上下推移調整俯仰。</small>
+      </details>
       <nav id="mall101-control" aria-label="台北101購物中心樓層" hidden>
         <small data-floor-note hidden>樓層示意</small>
         <button type="button" data-floor-toggle aria-expanded="false" aria-controls="mall101-floors"></button>
@@ -106,7 +118,7 @@
       <input type="search" list="school-list" class="school-find" placeholder="搜尋台北學校" aria-label="搜尋台北學校">
           <datalist id="school-list"></datalist>
           <label><input id="models" type="checkbox" checked> 台北實測建物</label>
-          <label><input id="grid" type="checkbox"> 170 公尺格網</label>
+          <label><input id="grid" type="checkbox"> 200 公尺格網</label>
         <label><input type="checkbox" data-place-names checked> 店屋與店名</label>
           <button type="button" id="show-map-credits">圖資來源</button>
           <small>全台地形採數值高程，街廓、山水與店家採公開圖資。台北建物採市府 2025 圖資。店家採 OpenStreetMap、市府商業處與衛生局名錄，樹木採市府樹籍。缺少樓高時採示意高度；窗框、雨棚、林冠與天氣為插畫示意。</small>
@@ -114,6 +126,6 @@
       </details>
     </section>
   </main>
-  <script type="module" src="./app.js?v=eslite-songyan-1"></script>
+  <script type="module" src="./app.js?v=free-globe-1"></script>
 </body>
 </html>

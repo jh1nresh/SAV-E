@@ -22,21 +22,73 @@ function playingArea(feature){
   if(p.offGround||p.kind!=='pitch'||p.category!=='pitch'||g.type!=='Polygon'||g.coordinates.length!==1)return;
   if(Number(p.layer??0)!==0 || ['bridge','tunnel','indoor','covered'].some(tag=>p[tag]&&p[tag]!=='no'))return;
   const template=Object.hasOwn(draws,p.sport)&&draws[p.sport];
+  const soccer=p.sport==='soccer';
   const ring=g.coordinates[0];
-  if(!template||ring.length!==5)return;
+  if((!soccer&&!template)||ring.length!==5||ring.some(point=>!Array.isArray(point)||!Number.isFinite(point[0])||!Number.isFinite(point[1]))||
+    ring[0][0]!==ring[4][0]||ring[0][1]!==ring[4][1])return;
   const q=ring.slice(0,4);
   const metresEast=111320*Math.cos(q[0][1]*Math.PI/180);
   const edges=q.map(([x,y],i)=>[(q[(i+1)%4][0]-x)*metresEast,(q[(i+1)%4][1]-y)*110574]);
   const lengths=edges.map(([x,y])=>Math.hypot(x,y));
+  const angleTolerance=soccer?.035:.10;
   if(edges.some(([x,y],i)=>{
     const j=(i+1)%4;
-    return Math.abs(x*edges[j][0]+y*edges[j][1])>.10*lengths[i]*lengths[j];
+    return Math.abs(x*edges[j][0]+y*edges[j][1])>angleTolerance*lengths[i]*lengths[j];
   }))return;
   if(lengths[0]<lengths[1]){q.push(q.shift());lengths.push(lengths.shift());}
   // Exclude sports complexes or shapes containing multiple courts.
-  if(lengths.some((m,i)=>m<template.size[i%2]*.82||m>template.size[i%2]*1.18))return;
+  if(soccer){
+    // Require the footprint of one adult pitch, allowing a narrow run-off.
+    // Reject tapered or skewed lots, indoor/roof courts and non-grass surfaces.
+    if(Number(p.level??0)!==0||p.location&&p.location!=='outdoor'&&p.location!=='surface'||
+      p.surface&&!['grass','artificial_turf'].includes(p.surface))return;
+    if(lengths.some((m,i)=>i%2?m<64||m>79:m<100||m>114))return;
+    if(Math.abs(lengths[0]-lengths[2])>1.5||Math.abs(lengths[1]-lengths[3])>1.5)return;
+  }else if(lengths.some((m,i)=>m<template.size[i%2]*.82||m>template.size[i%2]*1.18))return;
   const at=([u,v])=>[0,1].map(axis=>(1-v)*((1-u)*q[0][axis]+u*q[1][axis])+v*((1-u)*q[3][axis]+u*q[2][axis]));
   return {at,lengths,template};
+}
+
+// IFAB Law 1, https://www.theifab.com/laws/latest/the-field-of-play/.
+// The inset is illustrative and keeps both the markings and goal supports on
+// the mapped surface. Offsets below are metres in the pitch's own axes.
+const goalInset=1.65, touchInset=1.25, halfGoal=3.66;
+function soccerMarkings(at,[length,width]){
+  const near=goalInset,far=length-goalInset,side=width/2-touchInset;
+  const point=(x,y)=>at([x/length,.5+y/width]);
+  const lines=[];
+  function line(...points){lines.push(points.map(([x,y])=>point(x,y)));}
+  function arc(cx,cy,radius,start,end,steps){
+    const points=[];
+    for(let i=0;i<=steps;i++){
+      const t=start+(end-start)*i/steps;
+      points.push([cx+radius*Math.cos(t),cy+radius*Math.sin(t)]);
+    }
+    line(...points);
+  }
+  line([near,-side],[far,-side],[far,side],[near,side],[near,-side]);
+  line([length/2,-side],[length/2,side]);
+  arc(length/2,0,9.15,0,2*Math.PI,48);
+  // Short round marks remain legible in the shared line layer.
+  line([length/2-.12,0],[length/2+.12,0]);
+  const arcAngle=Math.acos((16.5-11)/9.15);
+  for(const direction of [1,-1]){
+    const x=direction===1?near:far;
+    for(const depth of [5.5,16.5]){
+      const half=halfGoal+depth,edge=x+direction*depth;
+      line([x,-half],[edge,-half],[edge,half],[x,half]);
+    }
+    const spot=x+direction*11;
+    line([spot-.12,0],[spot+.12,0]);
+    const facing=direction===1?0:Math.PI;
+    arc(spot,0,9.15,facing-arcAngle,facing+arcAngle,20);
+    for(const edge of [-1,1]){
+      const start=edge===direction?-Math.PI/2:0;
+      const turn=direction===1?0:Math.PI;
+      arc(x,edge*side,1,start+turn,start+turn+Math.PI/2,6);
+    }
+  }
+  return lines;
 }
 
 // Draw reconstructed sports details only inside a qualified, single playing area.
@@ -44,7 +96,7 @@ export function courtDetails(feature, withEquipment=false){
   const area=playingArea(feature);
   if(!area)return [];
   const {at,lengths,template}=area;
-  const lines=template.marks.map(line=>line.map(at));
+  const lines=feature.properties.sport==='soccer'?soccerMarkings(at,lengths):template.marks.map(line=>line.map(at));
   if(feature.properties.sport==='basketball'){
     lines.push(Array.from({length:25},(_,i)=>{
       const t=i*Math.PI/12;
@@ -79,6 +131,16 @@ export function courtDetails(feature, withEquipment=false){
       geometry:{type:'Polygon',coordinates:inner?[ring(outline),ring(inner)]:[ring(outline)]}});
   }
   const rectangle=(x,y,dx,dy)=>[[x-dx,y-dy],[x+dx,y-dy],[x+dx,y+dy],[x-dx,y+dy]];
+  if(feature.properties.sport==='soccer'){
+    for(const end of [0,1]){
+      const x=end===0?goalInset:length-goalInset;
+      const shaft=.06,centre=halfGoal+shaft;
+      for(const sign of [-1,1]){
+        part(end+'-post-'+sign,rectangle(x,sign*centre,shaft,shaft),0,2.56,'#f7f2df');
+      }
+      part(end+'-crossbar',rectangle(x,0,shaft,centre+shaft),2.44,2.56,'#f7f2df');
+    }
+  }
   if(feature.properties.sport==='basketball'){
     for(const end of [0,1]){
       const x=offset=>end===0?offset:length-offset;

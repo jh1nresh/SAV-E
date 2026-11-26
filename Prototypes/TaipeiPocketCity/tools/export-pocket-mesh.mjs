@@ -220,19 +220,47 @@ const cameras = [
   ...Array.from({length: 4}, (_, i) => [45 + i * 90, -15]),
 ];
 
-export function exportMesh(html) {
+// Preserve original polygon boundaries only. Triangulation diagonals are not ink.
+function recordSourceStroke(paths,attrs,source,kit,cache,lines) {
+  const style=source.replace(/\bd="[^"]*"/,'d=""');
+  if(!cache.has(style))cache.set(style,kit.stroke('<path '+style+'/>'));
+  const [stroke,width,opacity]=cache.get(style);
+  if(opacity!==1)throw Error('Unsupported translucent architectural ink');
+  const rgb=colorOf(stroke);
+  if(!rgb || width<=0)return;
+  const signedWidth=attrs.style?.includes('stroke-width:')?-width:width;
+  for(const {points,close} of paths){
+    for(let n=1;n<points.length+(close?1:0);n++){
+      const a=points[n-1], b=points[n%points.length];
+      const ka=pointKey(a), kb=pointKey(b);
+      if(ka===kb)continue;
+      const key=ka<kb?ka+';'+kb:kb+';'+ka;
+      lines.set(key,{a,b,rgb,width:signedWidth});
+    }
+  }
+}
+
+export function exportMesh(html, {paintedInk=false}={}) {
   const paths = [];
   const capturePath = (points, close) => {
     paths.push({points: Array.from(points, p => [Number(p[0]), Number(p[1]), Number(p[2] ?? 0)]), close});
     return `@${paths.length - 1}@`;
   };
-  const context = createContext({capturePath, self: {PHONE_PROFILE:false, PAGE_SEARCH:''}, URLSearchParams, console,
+  const context = createContext({capturePath, self: {PHONE_PROFILE:false, PAGE_SEARCH:paintedInk?'?season=warm':''}, URLSearchParams, console,
     Path2D: class { moveTo() {} lineTo() {} }},
     {codeGeneration:{strings:false, wasm:false}});
-  const script = `${extract(html)}\n({models, facades, buildings:SCENE.buildings, paint:paintSingaporeElevation, camera:(yaw,pitch)=>{
+  // The optional 101 transport asks the original Canvas compiler for its line
+  // colors and widths. Fixed-width ink is evaluated at one CSS pixel per unit.
+  const painter=paintedInk?`
+    referenceView:[CITY.cameras.iso.yaw,CITY.cameras.iso.pitch],
+    stroke(markup) {
+      const [op]=compileInk(markup);
+      return [op.stroke,op.width,op.alpha*op.strokeAlpha];
+    },`:'';
+  const script = `${extract(html)}\n({${painter}models, facades, buildings:SCENE.buildings, paint:paintSingaporeElevation, camera:(yaw,pitch)=>{
     setCam(yaw,pitch); PITCH=pitch; const basis=camBasis(yaw,pitch);
     CAM_R=basis.R; CAM_U=basis.U; CAM_V=basis.V; CAM_D=CAM_U.map(v=>-v);
-    UPX=.72; SEASON={};
+    UPX=.72; ${paintedInk?'INK_K=.83;':'SEASON={};'}
   }})`;
   const kit = runInContext(script, context, {filename:'pocket-city-kit.js', timeout:15000});
   const groups = new Map();
@@ -241,9 +269,11 @@ export function exportMesh(html) {
     if (!groups.has(owner)) groups.set(owner, []);
     groups.get(owner).push(model);
   }
-  const parts = [], vertices = [];
+  const parts = [], vertices = [], ink=[], fallback=[];
+  const paintCache=new Map();
   for (const [owner, models] of groups) {
-    const first = vertices.length;
+    const first = vertices.length, firstInk=ink.length;
+    const sourceLines=new Map();
     const faceKeys = new Set(), canvasFaces = new Set(), planes = new Map(), inkPaths = new Set();
     const add = (rings, rgb, viewer) => {
       if (!rgb || rings[0].length < 3) return;
@@ -274,7 +304,13 @@ export function exportMesh(html) {
       const triangles = raised.length === 1 ? triangulate(raised[0]) : triangulateEvenOdd(raised);
       for (const triangle of triangles) for (const p of triangle) vertices.push([...p, ...rgb]);
     };
-    for (const [yaw, pitch] of cameras) {
+    // In the acceptance camera, the later visible face owns a shared edge.
+    // Additional angles supply faces absent from that first view.
+    const views=paintedInk?[kit.referenceView,...cameras]:cameras;
+    for (const view of views) {
+      const [yaw,pitch]=view;
+      const referenceInkView=paintedInk && view===views[0];
+      const viewLines=new Map();
       kit.camera(yaw, pitch);
       const a = yaw * Math.PI / 180, b = pitch * Math.PI / 180;
       const viewer = [Math.cos(a) * Math.cos(b), Math.sin(a) * Math.cos(b), Math.sin(b)];
@@ -284,6 +320,7 @@ export function exportMesh(html) {
         for (const [, kind, source] of svg.matchAll(/<(path|elevation)\b([^>]*)>/g)) {
           const attrs = Object.fromEntries([...source.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, key, value]) => [key, value]));
           if (kind === 'elevation') {
+            if(referenceInkView)continue;
             const id = Number(attrs.id);
             if (canvasFaces.has(id)) continue;
             canvasFaces.add(id);
@@ -291,6 +328,10 @@ export function exportMesh(html) {
           } else {
             if (!/^(?:@\d+@)+$/.test(attrs.d)) continue; // Screen-space ink stays in the kit.
             const captured = [...attrs.d.matchAll(/@(\d+)@/g)].map(([, index]) => paths[Number(index)]);
+            if(paintedInk && attrs.stroke && attrs.stroke!=='none'){
+              recordSourceStroke(captured, attrs, source, kit, paintCache, viewLines);
+            }
+            if(referenceInkView)continue; // Preserve the normal mesh and legacy strip camera order.
             if (attrs.fill && attrs.fill !== 'none' && captured.every(path => path.close)) {
               if (captured.length > 1 && attrs['fill-rule'] !== 'evenodd') throw new Error('Unsupported multi-ring fill rule');
               add(captured.map(path => path.points), colorOf(attrs.fill, undefined, Number(attrs.opacity || 1)), viewer);
@@ -302,18 +343,22 @@ export function exportMesh(html) {
               if (close || !measured || inkPaths.has(key)) continue;
               inkPaths.add(key);
               const rgb = colorOf(attrs.stroke);
+              const stripStart=vertices.length;
               for (const strip of inkStrips(points, Math.min(.06, measured * .05), viewer)) add([strip], rgb);
+              if(paintedInk&&vertices.length>stripStart)fallback.push([stripStart,vertices.length]);
             }
           }
         }
       }
+      for(const [key,line] of viewLines)if(!sourceLines.has(key))sourceLines.set(key,line);
     }
+    for(const line of sourceLines.values())ink.push(line);
     const count = vertices.length - first;
     if (!count) throw new Error(`Empty mesh for ${owner.name || owner}`);
     const natural = owner.ids?.flatMap(id => kit.buildings.filter(b => b.id === id || b.of === id));
     const at = center(natural?.length ? natural.map(b => ({fp:b.ring})) : models);
     const label = owner.name || models[0].label;
-    parts.push({first,count,at:at.map(v => Math.round(v * precision) / precision), ...(label && {name:label})});
+    parts.push({first,count,at:at.map(v => Math.round(v * precision) / precision), ...(label && {name:label}), ...(paintedInk&&{firstInk,inkCount:ink.length-firstInk})});
   }
   const buffer = Buffer.allocUnsafe(vertices.length * stride);
   for (const [i, [x, y, z, red, green, blue]] of vertices.entries()) {
@@ -323,7 +368,7 @@ export function exportMesh(html) {
     buffer.writeFloatLE(z, offset + 8);
     buffer[offset + 12] = red; buffer[offset + 13] = green; buffer[offset + 14] = blue; buffer[offset + 15] = 255;
   }
-  return {buffer, parts};
+  return {buffer, parts,...(paintedInk&&{ink,fallback})};
 }
 
 async function main(inputs) {
