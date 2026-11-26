@@ -93,6 +93,7 @@ def masks(data, boundary, area, x0, y0, dims, districts):
     # Inspect owning packs, including entries outside the district. They can
     # carry a long bridge or river which passes into the repair area.
     profiles = []
+    guangfu_alley = []
     for path in sorted((data/'city170').glob('p*.json.gz')):
         for f in read(path)['features']['features']:
             p = f['properties']
@@ -109,6 +110,8 @@ def masks(data, boundary, area, x0, y0, dims, districts):
             if p['kind'] == 'road' and not separated:
                 # At a grid pitch of 8.65 m, both polygon holes can snap onto
                 # the same row and erase a 3–5 m alley. Preserve its centreline.
+                if 'songshan' in districts and f['id'] in ('road/way/118880895','road/way/300503363'):
+                    guangfu_alley.append(g)
                 if not major:
                     draw_geometry(roads,g,x0,y0)
                 samples = road_samples(g, x0, y0, dims)
@@ -140,7 +143,7 @@ def masks(data, boundary, area, x0, y0, dims, districts):
     text = (ROOT/'taipei-dome-geography.js').read_text().split('export const domeApron=',1)[1]
     coords = json.JSONDecoder().raw_decode(re.sub(r',\s*]', ']', text.split('coordinates:',1)[1].lstrip()))[0]
     draw_geometry(structures,Polygon(coords[0]),x0,y0)
-    return [np.asarray(img) for img in (roads,natural,structures,region)], profiles
+    return [np.asarray(img) for img in (roads,natural,structures,region)], profiles, guangfu_alley
 
 
 def road_samples(line, x0, y0, dims):
@@ -158,12 +161,12 @@ def road_samples(line, x0, y0, dims):
     return samples[inside]
 
 
-def checked_profile(original, proposed, profiles):
+def checked_profile(original, proposed, profiles, step=4, focus=None, baseline=None):
     """Keep the survey correction where it can join the actual road grades.
 
-    One shared weight every four DEM pixels allows both sides of a street to
+    Shared weights on the control grid allow both sides of a street to
     follow the same correction. Bilinear interpolation of DEM heights along each
-    road is linear in those weights. Zero correction is always feasible.
+    road is linear in those weights. A surveyed focus can impose a tighter cap.
     """
     samples = np.concatenate(profiles)
     x,y,u,v,distance = samples.T
@@ -172,15 +175,24 @@ def checked_profile(original, proposed, profiles):
     signed = samples_of(original,u,v) - samples_of(original,x,y)
     old = abs(signed)/distance
     offsets = np.cumsum([len(p) for p in profiles])[:-1]
-    nearby = np.concatenate([maximum_filter1d(part,size=17,mode='nearest') for part in np.split(old,offsets)])
     # Bound small crests against their own 48 m neighbourhood. A repaired
     # interval over 7% may gain at most 1.5 grade points; a neighbourhood
     # already above 3.5% may gain at most half a grade point at its peak.
-    limits = np.minimum(np.maximum(.035,nearby+.005),np.maximum(.07,old+.015))*distance
+    def grade_limit(slopes):
+        nearby = np.concatenate([maximum_filter1d(part,size=17,mode='nearest') for part in np.split(slopes,offsets)])
+        return np.minimum(np.maximum(.035,nearby+.005),np.maximum(.07,slopes+.015))*distance
+    limits = grade_limit(old)
+    if baseline is not None:
+        raw_slope = abs(samples_of(baseline,u,v)-samples_of(baseline,x,y))/distance
+        # A cropped neighbourhood can omit a gradient beyond the window.
+        # In that case keep its previously validated grade as the upper bound.
+        limits = np.minimum(limits,np.maximum(abs(signed),grade_limit(raw_slope)))
+    if focus is not None:
+        inside=(samples_of(focus,x,y)>.98)&(samples_of(focus,u,v)>.98)
+        limits[inside]=np.minimum(limits[inside],.06*distance[inside])
     delta = proposed-original
     active = (samples_of(abs(delta),x,y)+samples_of(abs(delta),u,v))>0
     rows,cols = original.shape
-    step = 4
     width = (cols-1)//step+2
     count = width*((rows-1)//step+2)
 
@@ -218,6 +230,9 @@ def checked_profile(original, proposed, profiles):
         cross = sampled_correction(rx+dc,ry+dr)-sampled_correction(rx,ry)
         difference = original[ry+dr,rx+dc]-original[ry,rx]
         slope_cap = np.maximum(.15*M,abs(difference)+.04*M)-1/256
+        if baseline is not None:
+            raw_difference = baseline[ry+dr,rx+dc]-baseline[ry,rx]
+            slope_cap = np.minimum(slope_cap,np.maximum(.15*M,abs(raw_difference)+.04*M)-1/256)
         groups.extend([cross,-cross])
         allowed.extend([slope_cap-difference,slope_cap+difference])
     constraints = vstack(groups,format='csr')
@@ -284,6 +299,37 @@ def survey_grade(data, eligibility, bounds, x0, y0):
     return grade, support
 
 
+def refine_guangfu_alley(before, after, lines, profiles, target, support, protected, origin):
+    """Remove the short residual crest on the two surveyed Guangfu N. Rd Lane 11 ways."""
+    route = unary_union(lines)
+    west, south, east, north = route.bounds
+    # A 200 m margin contains the complete 160 m taper and the 12 m samples
+    # on approaching roads. Optimize only this window at native DEM resolution.
+    padding = math.ceil(200/M)
+    left, top = np.floor(screen_xy(west,north)).astype(int) - origin - padding
+    right, bottom = np.ceil(screen_xy(east,south)).astype(int) - origin + padding
+    window = np.s_[top:bottom,left:right]
+    current = after[window]
+    width, height = right-left, bottom-top
+    ink = Image.new('1',(width,height))
+    draw_geometry(ink,route,origin[0]+left,origin[1]+top)
+    distance = distance_transform_edt(~np.asarray(ink))*M
+    grade = target[window]
+    blend = (1-ramp(25,160,distance))*ramp(.55,.88,support[window])
+    blend *= (1-ramp(.018,.048,np.hypot(*np.gradient(grade,M))))
+    blend *= ramp(22,46,distance_transform_edt(~protected[window])*M)
+    focus = ((distance<25) & (blend>.7)).astype(float)
+    offset = np.array([left,top,left,top,0])
+    sections = []
+    for samples in profiles:
+        local = samples-offset
+        keep = np.all((local[:,:4]>=0)&(local[:,:4]<[width-1,height-1,width-1,height-1]),axis=1)
+        if keep.any():
+            sections.append(local[keep])
+    after[window] = checked_profile(current,current+blend*(grade-current),sections,
+                                    step=1,focus=focus,baseline=before[window])
+
+
 DISTRICTS = {'xinyi':'信義區','songshan':'松山區','daan':'大安區','zhongshan':'中山區',
              'zhongzheng':'中正區','datong':'大同區','wanhua':'萬華區','shilin':'士林區',
              'beitou':'北投區','neihu':'內湖區','nangang':'南港區','wenshan':'文山區'}
@@ -311,7 +357,7 @@ def build(output, districts=None):
             tiles[x,y] = window
             before[window] = BASE['decode'](source(x,y))
             valid[window] = True
-    (roads,natural,structures,region),profiles = masks(data,boundary,box(*limits),256*a,256*b,dims,districts)
+    (roads,natural,structures,region),profiles,guangfu = masks(data,boundary,box(*limits),256*a,256*b,dims,districts)
     road_dist = distance_transform_edt(~roads)*M
     # A false roof plateau can cover a whole city block between two streets.
     # Retain one block of survey support so its centre cannot pin the carriageway.
@@ -333,6 +379,8 @@ def build(output, districts=None):
     border = distance_transform_edt(np.pad(valid,1))[1:-1,1:-1]
     mask *= ramp(18,65,border*M) * candidate
     after = checked_profile(before, before+mask*(grade-before), profiles)
+    if guangfu:
+        refine_guangfu_alley(before,after,guangfu,profiles,grade,support,natural|structures,(256*a,256*b))
     output.mkdir(parents=True,exist_ok=True)
     changed = []
     for (x,y),window in sorted(tiles.items()):
