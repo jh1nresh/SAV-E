@@ -1,4 +1,4 @@
-import {onSongshanAthleticsField} from './songshan-athletics.js';
+import {misplacedIllustratedTree} from './taipei-illustrated-trees.js';
 import {streetMeshes101,streetObjects101} from './taipei101-single-furniture.js';
 import {inside101Ground} from './taipei101-single-ground.js';
 import {program,transform} from './survey-layer.js';
@@ -157,7 +157,7 @@ export class StreetScenery {
     this.projection={mx:base.x,my:base.y,m};
     this.matrix=new Float32Array(16);
     objects=objects.filter(([x,y,kind])=>{
-      if(kind==='tree' && onSongshanAthleticsField(x,y))return false;
+      if(kind==='tree' && misplacedIllustratedTree(x,y))return false;
       if(!inside101Ground(x,y))return true;
       if(kind==='tree')return false;
       return kind!=='street-light'||!streetObjects101.some(([u,v,type])=>type==='single101-lamp'&&

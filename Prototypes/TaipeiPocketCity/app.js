@@ -24,7 +24,7 @@ import {SurveyLayer,buildingZoom} from './survey-layer.js?v=xinyi-connected-1';
 import {sunYatSenHall} from './sun-yat-sen-hall.js';
 import {songyanFactory} from './taipei-songyan-factory.js';
 import {esliteSongyan} from './taipei-eslite-songyan.js';
-import {addStreetDetail} from './street-detail.js?v=taipei-post-boxes-1';
+import {addStreetDetail} from './street-detail.js?v=tree-clearance-1';
 import {addMetroPreview} from './metro-preview.js?v=metro-label-2';
 import {streetObjects101} from './taipei101-single-furniture.js';
 import {add101Ground,planting101,walks101} from './taipei101-single-ground.js';
@@ -34,7 +34,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=campus-1';
 
 import {addShopSearch} from './city-shop-search.js?v=friendly-frontages-1';
-import {addCity170,dihuaSearch} from './city170.js?v=running-tracks-1';
+import {addCity170,dihuaSearch} from './city170.js?v=tree-clearance-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=taipei-streets-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
