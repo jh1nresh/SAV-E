@@ -1,3 +1,5 @@
+import {streetMeshes101,streetObjects101} from './taipei101-single-furniture.js';
+import {inside101Ground} from './taipei101-single-ground.js';
 import {program,transform} from './survey-layer.js';
 import {drawMarketStall} from './taipei-market-stalls.js';
 import {drawPlaygroundObject} from './taipei-playground-mesh.js';
@@ -69,6 +71,19 @@ function buildObject(kind,size,angle,index,origin,vertices,anatomy,hybrid){
     ? (kind==='entrance'?'#c67a3d':'#927a62')
     : (hybrid?hybridAccents:accents)[index%3];
   switch(kind){
+    case 'single101-shelter': case 'single101-cafe':{
+      const model=streetMeshes101[index];
+      for(let i=0;i<model.length;i+=4){
+        const ink=model[i+3];
+        vertices.push(x+model[i],y+model[i+1],z+model[i+2],(ink>>16)/255,((ink>>8)&255)/255,(ink&255)/255);
+      }
+      break;
+    }
+    case 'single101-lamp':
+      prism([0,0,0],[.07,.07],[[0,1],[5.3,1]],6,'#52655d');
+      prism([0,0,5.45],[.24,.24],[[-.24,.1],[-.13,.86],[0,1],[.13,.86],[.24,.1]],8,'#fff3c4');
+      prism([0,0,5.62],[.1,.1],[[0,1],[.1,1]],6,'#52655d');
+      break;
     case 'street-light':
       drawStreetlight(index,{box,prism});
       break;
@@ -140,6 +155,12 @@ export class StreetScenery {
     const m=base.meterInMercatorCoordinateUnits();
     this.projection={mx:base.x,my:base.y,m};
     this.matrix=new Float32Array(16);
+    objects=objects.filter(([x,y,kind])=>{
+      if(!inside101Ground(x,y))return true;
+      if(kind==='tree')return false;
+      return kind!=='street-light'||!streetObjects101.some(([u,v,type])=>type==='single101-lamp'&&
+        Math.hypot((x-u)*100850,(y-v)*110574)<2);
+    });
     this.objects=objects.map(([lng,lat,kind,size,angle,index])=>{
       const {x,y}=MercatorCoordinate.fromLngLat([lng,lat]);
       return {point:[lng,lat],x:(x-base.x)/m,y:(base.y-y)/m,kind,size,angle,index};

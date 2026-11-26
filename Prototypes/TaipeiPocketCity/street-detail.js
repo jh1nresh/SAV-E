@@ -11,7 +11,8 @@ const limitsStreetLabels=key=>isDistrict(key)||key==='xinyi-link';
 
 function addGroundColors(map,prefix,data,anatomy,blendRoadOutline,hybrid,projectedShadows){
   map.addSource(`${prefix}-ground`,{type:'geojson',data,buffer:256});
-  const beneathShadow=map.getLayer('atlas-shadows')?'atlas-shadows':'survey';
+  const beneathShadow=map.getLayer('taipei101-single-ground')?'taipei101-single-ground':
+      map.getLayer('atlas-shadows')?'atlas-shadows':'survey';
   const colors=anatomy?[
     ['plaza','#ddc3a2',.85],['grass','#aec084',.93],['water','#70a3a5',1],
     ['road-edge','#c5b8a4',1],['road','#9c9da0',1],

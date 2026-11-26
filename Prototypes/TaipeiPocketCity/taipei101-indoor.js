@@ -342,6 +342,9 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       !(b.getEast()<zone[0]||b.getNorth()<zone[1]||b.getWest()>zone[2]||b.getSouth()>zone[3]);
     guide.style.display=visible?'':'none';badge.hidden=!visible;
     if(!visible)return;
+    const tower=map.project([121.56481,25.03367]),mall=map.project(center);
+    badge.classList.toggle('mall101-label-west',mall.x<tower.x);
+    badge.classList.toggle('mall101-overview',map.getZoom()<17.4);
     const points=ring.map(c=>map.project(c));
     const verts=points.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
     if(outline.getAttribute('points')!==verts)outline.setAttribute('points',verts);

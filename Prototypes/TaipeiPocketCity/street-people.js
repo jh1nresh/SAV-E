@@ -1,3 +1,4 @@
+import {inside101Ground,touches101Ground} from './taipei101-single-ground.js';
 import {program,transform} from './survey-layer.js';
 
 const vertex=`#version 300 es
@@ -54,7 +55,7 @@ function toRoute(path,projection){
   }).filter(segment=>segment.size>.01);
   const longitude=path.points.map(point=>point[0]),latitude=path.points.map(point=>point[1]);
   const bounds=[Math.min(...longitude),Math.min(...latitude),Math.max(...longitude),Math.max(...latitude)];
-  return {segments,length,count:path.people,bounds};
+  return {segments,length,count:path.people,bounds,near101:touches101Ground(bounds),single101:!!path.single101};
 }
 
 function routeTouchesBounds(route,[[west,south],[east,north]]){
@@ -231,6 +232,7 @@ export class StreetPeople {
         const speed=.83+(index%4)*.18;
         const current=position(route,fraction,this.elapsed,speed);
         if(!bounds.contains(current.point))continue;
+        if(route.near101 && inside101Ground(...current.point)!==route.single101)continue;
         const terrain=map.queryTerrainElevation(current.point);
         if(terrain==null)continue;
         const size=(.9+(index%4)*.08)*visibilityScale;

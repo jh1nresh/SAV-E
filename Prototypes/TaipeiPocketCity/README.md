@@ -63,7 +63,7 @@ bash native/run.sh
 ```sh
 cd Prototypes/TaipeiPocketCity
 python3 prepare_data.py
-python3 -m http.server 42418 --bind 127.0.0.1
+python3 -B tools/serve-preview.py --port 42418
 ```
 
 - [復興南路書店](http://127.0.0.1:42418/index.html?street=fuxing)可從同一鏡位切換「舊版對照」或隱藏店名。點「看整排」拉遠。搜尋框能跳到其他行政區。
