@@ -481,6 +481,21 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'fill-outline-color':'#f6edcf'},
   },underBuildings);
   add({
+    id:'city170-running-track',source:'city170-playing-areas',type:'fill',minzoom:17,filter:kinds('running-track'),
+    paint:{'fill-color':'#bc775d'},
+  },underBuildings);
+  add({
+    id:'city170-track-edges',source:'city170-playing-areas',type:'line',minzoom:17,filter:kinds('running-track'),
+    layout:{'line-join':'round'},paint:{'line-color':'#f5d5ab',
+      'line-width':['interpolate',['linear'],['zoom'],17,.65,20,1.4]},
+  },underBuildings);
+  add({
+    id:'city170-running-lanes',source:'city170-playing-areas',type:'line',minzoom:17.8,filter:kinds('track-lanes'),
+    layout:{'line-join':'round'},paint:{'line-color':'#fff0d8',
+      'line-width':['interpolate',['linear'],['zoom'],17.8,.45,20,1.15],
+      'line-opacity':fade(17.8,18.7,.91)},
+  },underBuildings);
+  add({
     id:'city170-court-markings',source:'city170-playing-areas',type:'line',minzoom:17,filter:kinds('court-markings'),
     paint:{'line-color':'#fff2d5','line-width':['interpolate',['linear'],['zoom'],17,.7,20,1.65],
       'line-opacity':fade(17,18,.92)},
