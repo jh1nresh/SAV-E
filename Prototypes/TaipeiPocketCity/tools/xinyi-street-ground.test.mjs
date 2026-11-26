@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
+import {streetDistricts} from '../taipei-street-districts.js';
 import {plotOverlaps} from '../authored-footprint.js';
 import {unpackDistrictGround,addDistrictStreetGround,districtStreetMarkings} from '../xinyi-street-ground.js';
 
@@ -87,7 +88,7 @@ test('Songshan public surfaces leave the isolated elevated carriageway, apron, t
   assert.ok(!songshanRoads.some(f=>contains(f,[121.5545488,25.0444231])));
   assert.ok(songshanRoads.length>=9);
   assert.deepEqual(Object.fromEntries(['walk','path','kerb'].map(kind=>
-    [kind,songshan.features.filter(f=>f.properties.kind===kind).length])),{walk:1421,path:26,kerb:916});
+    [kind,songshan.features.filter(f=>f.properties.kind===kind).length])),{walk:1421,path:26,kerb:943});
 });
 
 test('the full 60 m flat-ended runway excludes every decoded ground polygon and kerb segment',async()=>{
@@ -112,10 +113,23 @@ test('the full 60 m flat-ended runway excludes every decoded ground polygon and 
   }
 });
 
+function verifyMarkingColors(paint,ready){
+  assert.equal(paint[0],'case');assert.deepEqual(paint.slice(2),['#f0dfc0','#fff0d4']);
+  const [allOperator,has,...conditions]=paint[1];
+  assert.equal(allOperator,'all');assert.deepEqual(has,['has','districtStreetMask']);
+  const missing=streetDistricts.filter(d=>!ready.includes(d.mask));
+  assert.deepEqual(conditions,missing.map(d=>
+    ['==',['%',['floor',['/',['number',['get','districtStreetMask'],0],d.mask]],2],0]));
+}
+
 const baseOrder=['street-songshan-road','taipei101-single-ground','atlas-shadows',
   'city170-prepared-lane','city170-prepared-crossing','survey','street-songshan-road-labels'];
 const grounds=['xinyi-street-ground','songshan-street-ground'];
 function groundMap(outlines=[]){
+  // Isolate these two districts for the connection tests. Dedicated citywide tests supply all polygons.
+  const outside={type:'Polygon',coordinates:[[[0,0],[1,0],[1,1],[0,1],[0,0]]]};
+  outlines=[...outlines,...streetDistricts.slice(2).filter(d=>!outlines.some(f=>f.properties.name===d.name))
+    .map(d=>({properties:{name:d.name},geometry:outside}))];
   const events=new Map(),sources=new Map(),layers=new Map(),images=new Map(),paints=new Map();
   const order=baseOrder.slice(),view={zoom:15,box:[[121.52,25.01],[121.53,25.02]]};
   const map={on:(id,cb)=>events.set(id,cb),off:id=>events.delete(id),getZoom:()=>view.zoom,
@@ -123,6 +137,8 @@ function groundMap(outlines=[]){
       sources:{districts:{data:{features:outlines}}}}),getLayer:id=>order.includes(id),
     getPaintProperty:(id)=>paints.get(id)??'#fff0d4',setPaintProperty:(id,prop,value)=>paints.set(id,value),
     addSource:(id,src)=>{assert.ok(!sources.has(id));sources.set(id,src);},
+    removeLayer:id=>{assert.ok(layers.delete(id));order.splice(order.indexOf(id),1);},
+    removeSource:id=>assert.ok(sources.delete(id)),
     addImage:(id,image)=>{assert.ok(!images.has(id));images.set(id,image);},
     addLayer:(layer,before)=>{assert.ok(!layers.has(layer.id));layers.set(layer.id,layer);
       assert.ok(order.includes(before));order.splice(order.indexOf(before),0,layer.id);}};
@@ -147,9 +163,9 @@ test('Songshan and Xinyi load on demand with one paving pattern, deterministic l
   view.box=[[121.56,25.0484],[121.562,25.0486]];await events.get('moveend')();
   assert.deepEqual(requests,['松山區']);
   assert.equal(sources.get(grounds[1]).data.features.length,songshan.features.length);
-  assert.deepEqual(paints.get('city170-prepared-lane')[1].at(-1),['literal',[2]]);
+  verifyMarkingColors(paints.get('city170-prepared-lane'),[2]);
   view.box=[[121.560,25.0450],[121.562,25.0452]];view.zoom=15.95;await events.get('moveend')();
-  assert.deepEqual(requests,['松山區','信義區']);assert.equal(events.has('moveend'),false);
+  assert.deepEqual(requests,['松山區','信義區']);assert.equal(events.has('moveend'),true);
   assert.equal(sources.get(grounds[0]).data.features.length,ground.features.length);
   const suffixes=['paving','asphalt','concrete-joints','kerb'];
   assert.deepEqual(order,[baseOrder[0],...grounds.flatMap(g=>suffixes.map(s=>g+'-'+s)),...baseOrder.slice(1)]);
@@ -164,8 +180,7 @@ test('Songshan and Xinyi load on demand with one paving pattern, deterministic l
     assert.equal(patterned[0].paint['fill-opacity'].at(-1),.55);
   }
   assert.deepEqual([...paints.keys()],['city170-prepared-lane','city170-prepared-crossing']);
-  for(const paint of paints.values())assert.deepEqual(paint,['case',
-    ['in',['get','districtStreetMask'],['literal',[1,2,3]]],'#f0dfc0','#fff0d4']);
+  for(const paint of paints.values())verifyMarkingColors(paint,[1,2]);
   assert.equal(images.size,5);
   for(const [id,image] of images){
     assert.match(id,/^district-street-pavers-/);assert.equal(image.width*image.height*4,image.data.length);
@@ -183,9 +198,9 @@ test('a failed neighboring district keeps its base paint and can retry independe
   addDistrictStreetGround(map);view.zoom=18;view.box=[[121.55,25.03],[121.58,25.066]];
   const initial=events.get('moveend')();await events.get('moveend')();await initial;
   assert.equal(warn.mock.callCount(),1);assert.deepEqual([...sources.keys()],[grounds[0]]);
-  assert.deepEqual(paints.get('city170-prepared-crossing')[1].at(-1),['literal',[1]]);
+  verifyMarkingColors(paints.get('city170-prepared-crossing'),[1]);
   fail=false;await events.get('moveend')();
-  assert.deepEqual(ids,['xinyi','songshan','songshan']);assert.equal(images.size,5);assert.equal(events.has('moveend'),false);
+  assert.deepEqual(ids,['xinyi','songshan','songshan']);assert.equal(images.size,5);assert.equal(events.has('moveend'),true);
 });
 
 test('removing the map cancels both pending districts',async t=>{
@@ -201,11 +216,86 @@ test('removing the map cancels both pending districts',async t=>{
 
 test('existing stripes use only the districts serving their cell and never duplicate a feature',()=>{
   const items=['lane','crossing','grove-tree'].map(kind=>({properties:{kind}}));
-  for(const [names,mask] of [[['信義區'],1],[['松山區'],2],[['信義區','松山區'],3]]){
+  for(const [names,mask] of [[['信義區'],1],[['松山區'],2],[['信義區','松山區'],3],[['大安區','信義區','松山區'],7]]){
     const output=districtStreetMarkings(items,{districts:names});
     assert.deepEqual(output.map(f=>f.properties.districtStreetMask),[mask,mask,undefined]);
     assert.equal(output[2],items[2]);
   }
-  for(const names of [[],['大安區'],['大安區','信義區']])assert.equal(districtStreetMarkings(items,{districts:names}),items);
+  for(const names of [[],['跨出台北市'],['信義區','跨出台北市']])assert.equal(districtStreetMarkings(items,{districts:names}),items);
   assert.deepEqual(items.map(f=>f.properties.districtStreetMask),[undefined,undefined,undefined]);
+});
+
+
+test('panning away releases district sources and layers; returning restores the pavement',async t=>{
+  const {map,events,sources,layers,images,view}=groundMap();
+  t.mock.method(globalThis,'fetch',async()=>new Response(bytes));
+  addDistrictStreetGround(map);
+  view.zoom=18;view.box=[[121.57,25.032],[121.571,25.033]];
+  await events.get('moveend')();assert.ok(sources.has(grounds[0]));
+  view.box=[[121.48,25.135],[121.481,25.136]];
+  await events.get('moveend')();assert.equal(sources.size,0);assert.equal(layers.size,0);
+  view.box=[[121.57,25.032],[121.571,25.033]];
+  await events.get('moveend')();assert.ok(sources.has(grounds[0]));assert.equal(images.size,5);
+});
+
+test('all twelve districts can be entered, released, and revisited on one map', {skip:!process.env.POCKET_TAIPEI_DATA},async t=>{
+  const {join}=await import('node:path');
+  const official=JSON.parse(await readFile(join(process.env.POCKET_TAIPEI_DATA,'districts.geojson'))).features;
+  assert.equal(official.length,12);
+  const {map,events,sources,view}=groundMap(official);
+  const fetched=new Set();
+  t.mock.method(globalThis,'fetch',async url=>{
+    fetched.add(url.pathname.split('/').at(-1));
+    return new Response(await readFile(url));
+  });
+  addDistrictStreetGround(map);view.zoom=18;
+  // Centres of inhabited 170 m cells entirely inside their named district.
+  const locations=[[121.56591,25.04070],[121.55754,25.05148],[121.55431,25.03205],
+    [121.53396,25.05310],[121.51038,25.05471],[121.50696,25.04398],
+    [121.51539,25.04549],[121.52401,25.08997],[121.50227,25.13302],
+    [121.59137,25.08050],[121.60642,25.05589],[121.54211,24.99014]];
+  for(const [i,[x,y]] of [...locations,locations[0]].entries()){
+    const district=streetDistricts[i%12];
+    view.box=[[x-.0001,y-.0001],[x+.0001,y+.0001]];
+    await events.get('moveend')();
+    assert.ok(sources.get(district.id+'-street-ground')?.data.features.length,district.name);
+    assert.ok(sources.size<12);
+  }
+  assert.equal(fetched.size,12);
+});
+
+test('a late response after panning away cannot replace a newer request for the same district',async t=>{
+  const {map,events,sources,view}=groundMap();
+  const requests=[];
+  t.mock.method(globalThis,'fetch',(_,options)=>new Promise(resolve=>requests.push({resolve,signal:options.signal})));
+  addDistrictStreetGround(map);view.zoom=18;
+  const local=[[121.57,25.032],[121.571,25.033]];
+  view.box=local;const first=events.get('moveend')();
+  view.box=[[121.48,25.135],[121.481,25.136]];await events.get('moveend')();
+  assert.ok(requests[0].signal.aborted);
+  view.box=local;const second=events.get('moveend')();
+  requests[0].resolve(new Response(bytes));await first;
+  assert.equal(sources.size,0);await events.get('moveend')();assert.equal(requests.length,2);
+  requests[1].resolve(new Response(bytes));await second;assert.ok(sources.has(grounds[0]));
+});
+
+test('zooming out releases mounted streets and cancels other district loads before their response',async t=>{
+  const {map,events,sources,layers,paints,view}=groundMap();
+  let pending;
+  t.mock.method(globalThis,'fetch',async (url,{signal})=>{
+    if(url.pathname.endsWith('/songshan-street-ground.json.gz'))
+      return new Promise(resolve=>{pending={signal,resolve};});
+    return new Response(bytes);
+  });
+  addDistrictStreetGround(map);view.zoom=18;
+  view.box=[[121.57,25.032],[121.571,25.033]];await events.get('moveend')();
+  assert.ok(sources.has(grounds[0]));
+  view.box=[[121.55,25.03],[121.58,25.066]];const loading=events.get('moveend')();
+  view.zoom=12;await events.get('moveend')();
+  assert.ok(pending.signal.aborted);assert.equal(sources.size,0);assert.equal(layers.size,0);
+  verifyMarkingColors(paints.get('city170-prepared-lane'),[]);
+  pending.resolve(new Response(songshanBytes));await loading;
+  assert.equal(sources.size,0);assert.equal(layers.size,0);
+  view.zoom=18;view.box=[[121.57,25.032],[121.571,25.033]];await events.get('moveend')();
+  assert.ok(sources.has(grounds[0]));
 });

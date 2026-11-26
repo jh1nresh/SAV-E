@@ -47,6 +47,9 @@ class PocketCityPackageTests(unittest.TestCase):
             index = json.loads((pkg.WEB / folder / 'index.json').read_text())
             self.assertTrue(index['tiles'])
             self.assertTrue(all(f'{folder}/{key}.json.gz' in runtime for key in index['tiles']))
+        district_art = {p for p in runtime if p.endswith('-street-ground.json.gz')}
+        self.assertEqual(len(district_art), 12)
+        self.assertIn('taipei-street-districts.js', runtime)
         self.assertFalse(any(name.startswith(('examples/', 'bundles/', 'tools/', 'scripts/')) or
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))

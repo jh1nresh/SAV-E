@@ -32,8 +32,8 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=campus-1';
 
 import {addShopSearch} from './city-shop-search.js?v=friendly-frontages-1';
-import {addCity170,dihuaSearch} from './city170.js?v=songshan-streets-1';
-import {addCityShopfronts} from './city-shopfronts.js?v=songshan-streets-1';
+import {addCity170,dihuaSearch} from './city170.js?v=taipei-streets-1';
+import {addCityShopfronts} from './city-shopfronts.js?v=taipei-streets-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
 

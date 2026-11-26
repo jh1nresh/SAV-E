@@ -4,6 +4,7 @@ import {readFile,readdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {gunzipSync} from 'node:zlib';
 import {buildShop,addCityShopfronts} from '../city-shopfronts.js';
+import {shopFloorLabel} from '../shop-floor-labels.js';
 import {completeFrontagePack} from '../taipei-frontage-pack.js';
 import {frontagePackIds,isNeighborhoodShopWall} from '../xinyi-shop-frontages.js';
 
@@ -21,14 +22,16 @@ test('the neighborhood view requests local packs and requires an identified shop
   const local={id:'local',bounds:[121.56,25.041,121.568,25.048]};
   const songshan={id:'songshan',bounds:[121.546,25.052,121.55,25.058]};
   const boundary={id:'boundary',bounds:[121.557,25.046,121.56,25.05]};
-  const distant={id:'distant',bounds:[121.50,25.08,121.51,25.09]};
+  const daan={id:'daan',bounds:[121.531,25.021,121.534,25.024]};
+  const distant={id:'distant',bounds:[120.99,24.50,121.01,24.52]};
   assert.deepEqual(frontagePackIds([local,distant],16.7),[]);
-  assert.deepEqual(frontagePackIds([local,songshan,boundary,distant],16.8),['local','songshan','boundary']);
+  assert.deepEqual(frontagePackIds([local,songshan,boundary,daan,distant],16.8),['local','songshan','boundary','daan']);
   assert.deepEqual(frontagePackIds([local,distant],17.55),['local','distant']);
   assert.ok(isNeighborhoodShopWall(bakery,xinyi));
   assert.ok(isNeighborhoodShopWall(bakery,()=>'松山區'));
-  assert.ok(!isNeighborhoodShopWall(bakery,()=>'大安區'));
-  for(const patch of [{kind:'market-area'},{vendor:true},{buildingId:null},{streetId:null},{wall:null},{evidence:'survey-near-wall'},{surveyTop:null}]){
+  assert.ok(isNeighborhoodShopWall(bakery,()=>'大安區'));
+  assert.ok(!isNeighborhoodShopWall(bakery,()=>'新店區'));
+  for(const patch of [{kind:'market-area'},{vendor:true},{groundZ:bakery.surveyBase-2},{surveyTop:bakery.groundZ+1},{buildingId:null},{streetId:null},{wall:null},{evidence:'survey-near-wall'},{surveyTop:null}]){
     assert.ok(!isNeighborhoodShopWall({...bakery,...patch},xinyi));
   }
 });
@@ -68,6 +71,23 @@ test('true storefronts keep their name, picking area and projecting cornice belo
   }
 });
 
+test('an elevated measured wall meets the sidewalk without moving the storefront or its picking geometry',()=>{
+  // Actual 1.438 m foundation at 天文茶坊, Wenshan.
+  const row={...bakery,surveyBase:307.25,groundZ:305.812,surveyTop:310.711};
+  for(const overview of [false,true]){
+    const before=[],after=[],center=[0,0,row.surveyBase],atlas={write:()=>null};
+    const original=buildShop(before,row,center,1,atlas,false,overview);
+    const supported=buildShop(after,row,center,1,atlas,false,overview,row.groundZ);
+    assert.equal(supported.first,6);
+    assert.equal(supported.count,original.count);
+    assert.deepEqual(supported.hit,original.hit);
+    assert.deepEqual(after.slice(6*13),before);
+    const heights=Array.from({length:6},(_,i)=>after[i*13+2]);
+    assert.equal(Math.min(...heights),row.groundZ);
+    assert.equal(Math.max(...heights),row.surveyBase+.08);
+  }
+});
+
 test('the normal shop layer draws a shared Songshan bay once across packs at either detail level',async t=>{
   const fallback={...aposo,id:'poi/node/2',buildingId:null,evidence:'survey-near-wall'};
   t.mock.method(globalThis,'fetch',async()=>new Response(JSON.stringify([aposo,fallback])));
@@ -95,7 +115,7 @@ test('the normal shop layer draws a shared Songshan bay once across packs at eit
 });
 
 const data=process.env.POCKET_TAIPEI_DATA;
-test('published Songshan and Xinyi shops use identified surveyed bays and keep Raohe market separate',{skip:!data},async()=>{
+test('all twelve Taipei districts show identified surveyed bays and keep Raohe market separate',{skip:!data},async()=>{
   const districts=JSON.parse(await readFile(join(data,'districts.geojson')));
   function inside(ring,x,y){
     let hit=false;
@@ -105,7 +125,7 @@ test('published Songshan and Xinyi shops use identified surveyed bays and keep R
     }
     return hit;
   }
-  const shapes=districts.features.filter(f=>['松山區','信義區'].includes(f.properties.name));
+  const shapes=districts.features;
   const districtAt=(x,y)=>shapes.find(f=>inside(f.geometry.coordinates[0],x,y))?.properties.name;
   const base=join(data,'city170-frontages'),rows=[];
   for(const file of await readdir(base)){
@@ -115,6 +135,20 @@ test('published Songshan and Xinyi shops use identified surveyed bays and keep R
   const eligible=rows.filter(row=>isNeighborhoodShopWall(row,districtAt));
   const buildable=eligible.filter(row=>row.surveyTop-Math.max(row.groundZ,row.surveyBase)>=1.9);
   assert.equal(new Set(buildable.map(r=>r.id)).size,buildable.length);
+  // Coverage from the matched frontage pack snapshot, after the municipal polygon and fit checks.
+  const searchRows=JSON.parse(gunzipSync(await readFile(join(base,'search.json.gz'))));
+  const pins=new Set(searchRows.filter(row=>row[5]===null).map(row=>row[6]));
+  const minimum={'北投區':67,'士林區':532,'內湖區':215,'中山區':898,'大同區':278,'松山區':347,
+    '南港區':134,'中正區':608,'信義區':373,'萬華區':246,'大安區':1085,'文山區':661};
+  const counts=new Map();
+  for(const row of buildable){
+    assert.ok(!pins.has(row.id),row.id);
+    const level=shopFloorLabel(row.id);
+    assert.ok(!level||['1F','地面層'].includes(level),row.id);
+    const district=districtAt(...row.center);
+    counts.set(district,(counts.get(district)??0)+1);
+  }
+  for(const [district,count] of Object.entries(minimum))assert.ok(counts.get(district)>=count,district);
   const songshan=buildable.filter(r=>districtAt(...r.center)==='松山區');
   assert.ok(songshan.length>=347);
   assert.ok(new Set(songshan.map(r=>r.buildingId)).size>=273);

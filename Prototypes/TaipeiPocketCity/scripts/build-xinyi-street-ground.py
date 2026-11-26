@@ -4,7 +4,7 @@ From TaipeiPocketCity, using the ground geometry from the accepted Songyan scene
     uv run --python 3.12 --with shapely==2.2.0 scripts/build-xinyi-street-ground.py \
         --verify-xinyi --out assets/xinyi-street-ground.json.gz
 
-For another district, pass --district and --district-ground. For example:
+For another district, pass --district. Add --district-ground if legacy street art exists. For example:
     uv run --python 3.12 --with shapely==2.2.0 scripts/build-xinyi-street-ground.py \
         --district 萬華區 --district-ground data/city-streets/wanhua-district.json.gz \
         --out path/to/wanhua-street-ground.json.gz
@@ -42,7 +42,7 @@ EAST = 111320 * math.cos(math.radians(LAT))
 NORTH = 110574
 SONGYAN_GROUND_SHA = '2aad78e25bc97bd4ffe74cf97ffe1dc7d1315e08375f65b5325529cdceddff73'
 XINYI_GIS_SHA = '0bf1ca133cf2c580f4ff988359d7bfb37368b787dbfa5c8d102f05e54f339aa8'
-XINYI_GEOMETRY_SHA = '8d3969c4301791eb41cd3d6f8819995874d566c446d4b8bd14c2ff88ba381c12'
+XINYI_GEOMETRY_SHA = 'c65afc783df710082d1dede260eaa4d58c866879c8f504d6e572edcdc3ba0646'
 UNPAVED = {'dirt', 'gravel', 'ground', 'unpaved', 'compacted', 'earth', 'woodchips'}
 
 
@@ -188,12 +188,21 @@ def district_road_join(inputs, neighbor_name, path, outlines, district_name, roa
     """Continue actual at-grade asphalt a fraction of a metre over a shared administrative clip."""
     outlines_by_name = {f['properties']['name']: shape(f['geometry']) for f in outlines}
     shared = outlines_by_name[district_name].boundary.intersection(outlines_by_name[neighbor_name].boundary)
-    if shared.length == 0:
+    # Xinyi and Songshan have one exactly shared archived border. Other archive
+    # editions may round the same border coordinates differently by millimetres.
+    # Intersecting raw lines then leaves only points along a real shared street.
+    if {neighbor_name, district_name} == {'信義區', '松山區'}:
+        shared_metres = metres(shared)
+    else:
+        local_edge = metres(outlines_by_name[district_name]).boundary
+        neighbor_edge = metres(outlines_by_name[neighbor_name]).boundary
+        shared_metres = local_edge.intersection(neighbor_edge.buffer(.035))
+    if shared_metres.length < 1:
         raise ValueError(f'{neighbor_name} does not share a district edge with {district_name}')
     # Clipping and simplifying each district independently on the integer grid
     # can leave a thin crack. Require asphalt in the neighbor AND in the new
     # district's unclipped, obstacle-subtracted source. Leave physical kerbs alone.
-    seam = metres(shared).buffer(.45)
+    seam = shared_metres.buffer(.45)
 
     neighbor = inputs.json(path, f'adjacent-ground/{neighbor_name}')
     to_metres = [EAST/1e6, 0, 0, NORTH/1e6, (ORIGIN[0]/1e6-LON)*EAST, (ORIGIN[1]/1e6-LAT)*NORTH]
@@ -250,7 +259,7 @@ def main():
     parser.add_argument('--city', type=Path, default=CITY, help='TaipeiPocketCity root with unpacked data/')
     parser.add_argument('--district', default=DISTRICT, help='official administrative name')
     parser.add_argument('--district-ground', type=Path, help='existing prepared district streets JSON or .json.gz')
-    parser.add_argument('--join-ground', nargs=2, metavar=('DISTRICT', 'ASSET'),
+    parser.add_argument('--join-ground', action='append', default=[], nargs=2, metavar=('DISTRICT', 'ASSET'),
                         help='continue matching at-grade roads across a shared edge using an accepted neighboring asset')
     parser.add_argument('--scene', type=Path, help='authored Pocket City scene JSON or static HTML export')
     parser.add_argument('--verify-xinyi', action='store_true', help='require the frozen GIS and geometry hashes before writing')
@@ -259,8 +268,6 @@ def main():
     args = parser.parse_args()
     if args.district == DISTRICT and not args.scene:
         args.scene = Path(__file__).with_name('songyan-street-plot.json.gz')
-    if args.district != DISTRICT and not args.district_ground:
-        parser.error('Choose the matching --district-ground when building a different district')
     if args.verify_xinyi and args.district != DISTRICT:
         parser.error('--verify-xinyi is specific to the frozen Xinyi asset')
     inputs = Inputs(args.city)
@@ -268,16 +275,23 @@ def main():
     outlines = inputs.json(data/'districts.geojson')['features']
     boundary = next(f for f in outlines if f['properties']['name'] == args.district)
     district = clean(metres(shape(boundary['geometry'])))
-    existing = inputs.json(args.district_ground or data/'street-xinyi-district.json', 'district-ground')
-    road_feature = next(f for f in existing['ground']['features'] if f['properties']['kind'] == 'road')
-    old_road = clean(metres(shape(road_feature['geometry'])))
+    old_road = None
+    legacy = args.district_ground
+    if legacy is None and args.district == DISTRICT:
+        legacy = data/'street-xinyi-district.json'
+    if legacy:
+        existing = inputs.json(legacy, 'district-ground')
+        legacy_roads = [clean(metres(shape(f['geometry']))) for f in existing['ground']['features']
+                        if f['properties'].get('kind') == 'road']
+        if legacy_roads:
+            old_road = legacy_roads[0] if len(legacy_roads) == 1 else merge(legacy_roads)
     grade_data = inputs.read(args.city/'city170-grade-ids.js').decode().split('export default ', 1)[1].split(';', 1)[0]
     off_ground = {f'{key}/{value}' for key, values in json.loads(grade_data).items() for value in values}
     index = inputs.json(data/'city170/index.json')
     parts, paving, cells, excluded = source_geometry(inputs, district, args.district, index, off_ground)
     base = merge(parts['road'])
     obstacles = merge(parts['water'] + parts['building'])
-    road = merge([base, old_road.intersection(base.buffer(3))]).difference(obstacles)
+    road = (merge([base, old_road.intersection(base.buffer(3))]) if old_road is not None else base).difference(obstacles)
     walk = merge([merge(paving), merge(parts['walk'])]).difference(obstacles)
     path = merge(parts['path']).difference(obstacles)
     plot_digest = None
@@ -285,28 +299,30 @@ def main():
         plot, plot_roads, plot_walks, plot_digest = read_plot(inputs, args.scene, args.district)
         road = merge([road.difference(plot), plot_roads.difference(obstacles)])
         walk = merge([walk.difference(plot), plot_walks.difference(obstacles)])
-    road_join = None
-    if args.join_ground:
-        name, neighbor_path = args.join_ground
-        road_join = district_road_join(inputs, name, Path(neighbor_path), outlines, args.district, road)
+    road_joins = [district_road_join(inputs, name, Path(pathname), outlines, args.district, road)
+                  for name, pathname in args.join_ground]
     road = road.intersection(district)
     walk = walk.intersection(district).difference(road)
     path = path.intersection(district).difference(road)
     walk = walk.difference(path)
     # Remove sub-decimetre extraction seams before taking kerbs. An administrative
     # boundary cuts the paint extent, but it does not create a physical kerb.
+    # GEOS area buffering at the input's fixed 3 cm precision can collapse a
+    # narrow ring and fill an entire city block during the inward offset. Work
+    # at floating precision for both offsets, then return to the original grid.
+    road = set_precision(road, 0)
     road = clean(road.buffer(.08, join_style=2).buffer(-.08, join_style=2).simplify(.10))
     kerbs = road.boundary.difference(district.boundary.buffer(.32))
     surfaces = {'road': road, 'walk': walk, 'path': path}
     exclusion = None
-    if args.district == '松山區':
+    if args.district in ('松山區', '中山區', '內湖區'):
         runway = inputs.json(Path(__file__).with_name('songshan-runway.geojson'), 'songshan-runway')
         # Allow for the half-diagonal of the final microdegree grid (~7.5 cm)
         # and the half-width of a rendered kerb. Clip after simplification so
         # it cannot reconnect a line across the runway.
         exclusion = metres(shape(runway['geometry'])).buffer(.25, join_style='mitre')
     rows = {kind: integer_polygons(clean(surface.simplify(.15)), exclusion) for kind, surface in surfaces.items()}
-    if road_join is not None:
+    for road_join in road_joins:
         # Keep the accepted integer polygons intact, including very long edges.
         # A narrow overlap inside each edge prevents its separate rounding from
         # reopening a crack without renoding any existing carriageway corner.
