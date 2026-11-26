@@ -196,7 +196,7 @@ extension Color {
     }
 }
 
-/// Main planning preview: the existing icon's coral, cream and warm charcoal.
+/// Opt-in detail styling for the main planning preview.
 private struct SaveBrandDetailStyleKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -209,16 +209,21 @@ extension EnvironmentValues {
 }
 
 enum SaveBrandUI {
-    static let brand = SaveAtlasPalette.brandCoral
-    static let ink = Color(light: "2F2C27", dark: "F7EFE2")
-    static let muted = Color(light: "6A6057", dark: "C8BDAF")
-    static let canvas = Color(light: "FAF5ED", dark: "191715")
-    static let surface = Color(light: "FFFCF7", dark: "28231F")
-    static let soft = Color(light: "F8E6DA", dark: "3B2B24")
-    static let accent = Color(light: "B33F2B", dark: "F0A084")
-    static let action = Color(light: "BC462F", dark: "ED9478")
-    static let actionInk = Color(light: "FFFCF7", dark: "241B17")
-    static let darkTabFill = Color(hex: "383A40")
+    private static let pink = "FCDDEA"
+    private static let indigo = "4F43B9"
+    private static let plum = "231835"
+    private static let lavender = "8481F5"
+
+    static let brand = Color(light: indigo, dark: lavender)
+    static let ink = Color(light: plum, dark: "F1EAFD")
+    static let muted = Color(light: "61516E", dark: "C8BCDB")
+    static let canvas = Color(light: "FDEBF2", dark: plum)
+    static let surface = Color(light: "FFFAFD", dark: "302343")
+    static let soft = Color(light: pink, dark: "3D2C55")
+    static let accent = Color(light: indigo, dark: "B6ACFF")
+    static let action = brand
+    static let actionInk = Color(light: pink, dark: plum)
+    static let darkTabFill = Color(hex: "59489D")
 }
 
 enum SaveAtlasPalette {
