@@ -2,6 +2,7 @@ import {Taipei101Ink} from './taipei101-ink.js';
 import {taipei101Ink,taipei101Exterior,taipei101SurveyTiles,taipei101ShellMatch} from './taipei101-exterior.js?v=original-ink-2';
 import {taipeiDome,buildTaipeiDome,isDomeSurveyTile} from './taipei-dome.js';
 import {buildPalaceModel} from './palace-museum.js';
+import {songyanFactory,factoryTiles,factorySurveyMatch,legacyFactoryVertices} from './taipei-songyan-factory.js';
 import {esliteSongyan,esliteSurveyTiles,esliteSurveyMatch} from './taipei-eslite-songyan.js';
 import {sunYatSenHall,buildSunYatSenHall,isMemorialSurveyTile} from './sun-yat-sen-hall.js';
 
@@ -44,6 +45,7 @@ uniform int u_taipei101Mode; // 1 = matched survey tile, 2 = the authored exteri
 uniform bool u_replaceMemorialShell;
 uniform bool u_replaceDomeShell;
 uniform bool u_replaceEsliteShell;
+uniform vec3 u_factoryTile;
 uniform vec3 u_songyanOffset;
 uniform vec3 u_dihuaOffset;
 uniform vec4 u_songyanLimit;
@@ -175,8 +177,10 @@ vec3 heritageFinish(float code,vec3 normal,float level,float height){
 
 ${esliteSurveyMatch}
 ${taipei101ShellMatch}
+${factorySurveyMatch}
 
 void main() {
+  if(u_factoryTile.z>0.&&isFactoryShell(v_building,v_position.xy*u_factoryTile.z+u_factoryTile.xy))discard;
   if(u_replaceEsliteShell&&isEsliteSurveyPart(v_building))discard;
   vec3 n=normalize(cross(dFdx(v_position),dFdy(v_position)));
   if(n.z<-.5)n=-n;
@@ -235,7 +239,11 @@ void main() {
     }
   }
   vec3 surface=authored?original:wall(tone,height);
-  float neighborhood=smoothstep(16.5,17.55,u_zoom)
+  // The full-tower portrait frames 101 at zoom 15.9–16.6. Bring the surrounding
+  // measured facades into the same drawing scale without changing the camera.
+  float towerVicinity=1.0-smoothstep(650.0,1050.0,length(site));
+  float materialZoom=u_zoom+(u_hybrid&&!authored?towerVicinity:0.0);
+  float neighborhood=smoothstep(16.5,17.55,materialZoom)
     *(1.0-smoothstep(140.0,207.0,length((site-vec2(63.0,60.0))*vec2(.96,.85))));
   bool mall=site.x>-103.0&&site.x<56.0&&site.y>-53.0&&site.y<104.0;
   bool east=site.x>82.0;
@@ -303,7 +311,7 @@ void main() {
     vec2 edges=max(run.xy-linkSite,linkSite-run.zw);
     linkCoverage=max(linkCoverage,1.0-smoothstep(0.0,15.0,max(edges.x,edges.y)));
   }
-  float link=linkCoverage*smoothstep(16.55,17.6,u_zoom)*(1.0-neighborhood);
+  float link=linkCoverage*smoothstep(16.55,17.6,materialZoom)*(1.0-neighborhood);
   if(link>0.0){
     vec3 sandstone=mix(vec3(.904,.788,.634),vec3(.743,.550,.470),smoothstep(.10,.90,tone));
     vec3 modern=mix(vec3(.738,.777,.702),vec3(.515,.657,.672),smoothstep(27.0,81.0,height));
@@ -315,7 +323,7 @@ void main() {
   if(u_districtMaterialDetail && u_zoom>14.4){
     vec2 uv=u_districtMaterialTransform.xy+v_position.xy*u_districtMaterialTransform.zw;
     vec2 mask=texture(u_districtMaterialMask,uv).rg;
-    float district=mask.r*smoothstep(16.50,17.65,u_zoom)
+    float district=mask.r*smoothstep(16.50,17.65,materialZoom)
       *(1.0-neighborhood)*(1.0-linkCoverage);
     if(district>0.0&&!authored){
       vec3 terracotta=mix(vec3(.905,.791,.651),vec3(.754,.566,.473),smoothstep(.08,.92,tone));
@@ -532,6 +540,7 @@ export class SurveyLayer {
     this.taipei101ModeLocation=gl.getUniformLocation(this.program,'u_taipei101Mode');
     this.memorialShellLocation=gl.getUniformLocation(this.program,'u_replaceMemorialShell');
     this.domeShellLocation=gl.getUniformLocation(this.program,'u_replaceDomeShell');
+    this.factoryTileLocation=gl.getUniformLocation(this.program,'u_factoryTile');
     this.esliteShellLocation=gl.getUniformLocation(this.program,'u_replaceEsliteShell');
     this.dihuaLocation=gl.getUniformLocation(this.program,'u_dihuaOffset');
     this.songyanOffsetLocation=gl.getUniformLocation(this.program,'u_songyanOffset');
@@ -623,7 +632,16 @@ export class SurveyLayer {
     const url=tile.mesh??new URL(`./data/${level}/${tile.file??tile.id}.bin.gz`,import.meta.url);
     if(tile.id==='dihua-fronts')url.searchParams.set('v',String(tile.verts));
     const builder=level==='city-streets/landmark'&&landmarkBuilders.get(tile.id);
-    const payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
+    let payload=builder?Promise.resolve().then(()=>builder().buffer):unpack(url,ctl.signal);
+    if(tile.id==='songyan'&&tile.mesh){
+      payload=payload.then(bytes=>{
+        if(bytes.byteLength!==tile.verts*24)throw Error('Invalid waterfront size');
+        return bytes;
+      }).catch(error=>{
+        if(ctl.signal.aborted)throw error;
+        return unpack(new URL(`./data/${level}/${tile.file}.bin.gz`,import.meta.url),ctl.signal);
+      });
+    }
     payload.then(data=>{
       if(this.#disposed||ctl.signal.aborted)return;
       const verts=data.byteLength/24;
@@ -707,12 +725,14 @@ export class SurveyLayer {
     this.memorialDrawn=false;
     this.domeDrawn=false;
     this.esliteDrawn=false;
+    this.factoryDrawn=false;
     for(const {key,tile} of heritage){
       const asset=this.#fetched.get(key);
       if(!asset)continue;
       this.#displayed.push({...tile,key,verts:asset.verts});
       if(tile.id===sunYatSenHall.id)this.memorialDrawn=true;
       else if(tile.id===taipeiDome.id)this.domeDrawn=true;
+      else if(tile.id===songyanFactory.id)this.factoryDrawn=true;
       else if(tile.id===esliteSongyan.id)this.esliteDrawn=true;
       else this.#cityLandmarksVisible[tile.style]=1;
     }
@@ -790,12 +810,15 @@ export class SurveyLayer {
       gl.uniform1i(this.taipei101ModeLocation,mode101);
       gl.uniform1i(this.memorialShellLocation,this.memorialDrawn&&isMemorialSurveyTile(tile.key)?1:0);
       gl.uniform1i(this.domeShellLocation,this.domeDrawn&&isDomeSurveyTile(tile.key)?1:0);
+      const replaceFactory=this.factoryDrawn&&factoryTiles.has(tile.key);
+      gl.uniform3f(this.factoryTileLocation,(tile.mx-songyanFactory.mx)/songyanFactory.m,
+        (songyanFactory.my-tile.my)/songyanFactory.m,replaceFactory?tile.m/songyanFactory.m:0);
       gl.uniform1i(this.esliteShellLocation,this.esliteDrawn&&esliteSurveyTiles.has(tile.key)?1:0);
       if(this.mallMask){
         const {mx,my,m}=this.mallMask;
         gl.uniform3f(this.mallTileLocation,(tile.mx-mx)/m,(my-tile.my)/m,tile.m/m);
       }
-      gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'||tile.id===esliteSongyan.id?1:0);
+      gl.uniform1i(this.songyanTileLocation,tile.id==='songyan'||tile.id==='dihua-fronts'||tile.id===esliteSongyan.id||tile.id===songyanFactory.id?1:0);
       gl.uniform3f(this.dihuaLocation,this.dihua?(tile.mx-this.dihua.mx)/tile.m:0,
         this.dihua?(this.dihua.my-tile.my)/tile.m:0,this.dihuaDrawn?1:0);
       gl.uniform3f(this.songyanOffsetLocation,
@@ -827,7 +850,9 @@ export class SurveyLayer {
       }
       gl.uniformMatrix4fv(this.matrixLocation,false,this.#matrix);
       gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLES,0,inkReady&&mode101===2?taipei101Ink.solidVerts:tile.verts);
+      const first=this.factoryDrawn&&tile.file==='songyan-v5'&&tile.verts===91908?legacyFactoryVertices:0;
+      const end=inkReady&&mode101===2?taipei101Ink.solidVerts:tile.verts;
+      gl.drawArrays(gl.TRIANGLES,first,end-first);
     }
     gl.bindVertexArray(null);
     if(inkReady)this.ink.draw(this.inkMatrix,!!this.mallMask,this.program);

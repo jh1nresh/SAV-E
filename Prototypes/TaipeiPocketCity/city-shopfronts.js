@@ -13,7 +13,7 @@ import {buildFuxingFront} from './fuxing-fronts.js?v=dihua-shops-1';
 import {decodeMapJSON} from './pocket-city-atlas.js?v=taipei-fronts-2';
 import {completeFrontagePack} from './taipei-frontage-pack.js?v=friendly-frontages-1';
 
-const minZoom=17.55;
+import {isXinyiShopWall,shopDetailZoom,xinyiFrontageZoom} from './xinyi-shop-frontages.js';
 const layerId='city-shopfronts';
 const vertex=`#version 300 es
 layout(location=0) in vec3 position;
@@ -336,7 +336,7 @@ function tradeWindow(trade, left, right, point, quad){
   }
 }
 
-export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
+export function buildShop(vertices,row,center,scale,atlas,fuxing=false,overview=false){
   const [x,y,z]=center;
   const angle=row.angle*Math.PI/180, nx=Math.cos(angle),ny=Math.sin(angle);
   const tx=-ny,ty=nx;
@@ -379,6 +379,31 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
     return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055),
       lip:row.arcadeDepth?corners(-half,half,.08,top,row.arcadeDepth+.14):null};
   }
+  // This measured bay certifies a ground-floor shop. Survey geometry owns the
+  // uninterrupted window pattern and roofline above it.
+  function cornice(){
+    quad([point(-half,top,.04),point(half,top,.04),point(half,top,.24),point(-half,top,.24)],cream);
+    panel(-half,half,top-.07,top,.24,paint.frame);
+  }
+  const door=Math.min(.61,half*.36);
+  // Keep the original openings when adding stock inside an existing window.
+  const doorCenter=trade&&!neighborhoodServiceLabels.has(trade)&&half<2.85?half-.14-door:0;
+  const dl=doorCenter-door,dr=doorCenter+door;
+  if(overview){
+    // At neighborhood scale preserve the fascia, opening and projecting canopy.
+    // Detailed stock, letter textures and door hardware are built on approach.
+    panel(-half,half,.08,top,0,paint.frame);
+    panel(-half+.16,half-.16,.35,2.58,.045,paint.glass);
+    panel(-half,half,2.64,top-.08,.082,convenience?.background??paint.fascia);
+    panel(dl-.085,dr+.085,.12,2.60,.07,paint.frame);
+    panel(dl,dr,.2,2.52,.085,paint.glass);
+    cornice();
+    if(paint.detail==='awning'){
+      quad([point(-half,2.47,.65),point(half,2.47,.65),point(half,2.70,.08),point(-half,2.70,.08)],paint.fascia);
+      panel(-half,half,2.38,2.47,.65,paint.frame);
+    }
+    return {row,first,count:vertices.length/13-first,hit:corners(-half,half,.08,top,.055)};
+  }
   panel(-half,half,.08,top,0,paint.wall);
   panel(-half,half,.08,.35,.018,stone);
   panel(-half,half,top-.57,top-.045,.036,convenience?.background??paint.fascia);
@@ -394,12 +419,7 @@ export function buildShop(vertices,row,center,scale,atlas,fuxing=false){
   // A narrow cornice, a threshold and end posts give the one-storey bay a readable edge.
   panel(-half,half,.07,.14,.14,stone);
   for(const side of [-half+.02,half-.12])panel(side,side+.10,.15,2.70,.093,trim);
-  quad([point(-half,top,.04),point(half,top,.04),point(half,top,.24),point(-half,top,.24)],cream);
-  panel(-half,half,top-.07,top,.24,paint.frame);
-  const door=Math.min(.61,half*.36);
-  // Keep the original openings when adding stock inside an existing window.
-  const doorCenter=trade&&!neighborhoodServiceLabels.has(trade)&&half<2.85?half-.14-door:0;
-  const dl=doorCenter-door,dr=doorCenter+door;
+  cornice();
   panel(dl-.085,dr+.085,.12,2.67,.025,paint.frame);
   panel(dl,dr,.22,2.56,.041,paint.glass);
   panel(dl+.06,dr-.06,1.45,2.44,.049,highlights);
@@ -496,11 +516,13 @@ export async function readShopfrontPack(id, signal){
   return completeFrontagePack(id,await decodeMapJSON(response));
 }
 
-export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},surveyTiles,onPickMiss=()=>{}){
+export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},surveyTiles,onPickMiss=()=>{},districtAt){
   const cache=new Map(),loading=new Map(),failures=new Map();
   const matrix=new Float32Array(16);
   let active=new Set(),enabled=true,removed=false,dirty=true;
   let anchor,window,shown=[],vertices=0,textureLimit,tap,queries=[];
+  const xinyiWalls=new WeakSet();
+  let overview=false;
   let lastPick=null,walls,retry,showNames=true,fuxingEnabled=true,namesLocation;
   let gl,buffer,vao,pipeline,texture,matrixLocation,signLocation;
 
@@ -511,7 +533,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   }
   function kick(){
     clearTimeout(retry);
-    if(!enabled||removed||map.getZoom()<minZoom)return;
+    if(!enabled||removed||map.getZoom()<xinyiFrontageZoom)return;
     const blocked=[...active].map(id=>failures.get(id)).filter(t=>t>Date.now());
     if(blocked.length)retry=setTimeout(kick,Math.max(1,Math.min(...blocked)-Date.now()+5));
     for(const id of active){
@@ -521,7 +543,9 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       loading.set(id,controller);
       readShopfrontPack(id,controller.signal).then(payload=>{
         if(removed||controller.signal.aborted)return;
-        cache.set(id,payload.filter(shopRow));
+        const rows=payload.filter(shopRow);
+        for(const row of rows)if(isXinyiShopWall(row,districtAt))xinyiWalls.add(row);
+        cache.set(id,rows);
         failures.delete(id);
         for(const key of cache.keys()){
           if(cache.size<=32)break;
@@ -543,7 +567,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
   const click=event=>{
     unloadQueries();
     if(event.defaultPrevented)return;
-    if(!enabled||map.getZoom()<minZoom||!shown.length){onPickMiss(event.point);return;}
+    if(!enabled||map.getZoom()<xinyiFrontageZoom||!shown.length){onPickMiss(event.point);return;}
     const {clientWidth,clientHeight}=map.getCanvas();
     if(!shown.some(shop=>hitShop(shop,matrix,event.point,clientWidth,clientHeight))){
       lastPick={tested:0,visible:0,id:null};
@@ -560,14 +584,14 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
     const data=new Map();
     for(const id of active){
       for(const row of cache.get(id)??[]){
-        if(!walls?.has(row.surveyTile))continue;
+        if(!walls?.has(row.surveyTile)||(overview&&!xinyiWalls.has(row)))continue;
         const [lon,lat]=row.center;
         if(lon>=west&&lon<=east&&lat>=south&&lat<=north)data.set(row.id,row);
       }
     }
     const at=MercatorCoordinate.fromLngLat(map.getCenter());
     anchor={mx:at.x,my:at.y,m:at.meterInMercatorCoordinateUnits()};
-    const atlas=nameAtlas(map,data.size,textureLimit);
+    const atlas=nameAtlas(map,overview?0:data.size,textureLimit);
     const out=[];
     shown=[];
     for(const row of data.values()){
@@ -578,7 +602,7 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       if(height<1.9)continue;
       const world=MercatorCoordinate.fromLngLat(row.center);
       const origin=[(world.x-anchor.mx)/anchor.m,(anchor.my-world.y)/anchor.m,z];
-      shown.push(buildShop(out,row,origin,Math.min(1,(height-.13)/3.25),atlas,fuxingEnabled));
+      shown.push(buildShop(out,row,origin,Math.min(1,(height-.13)/3.25),atlas,fuxingEnabled,overview));
     }
     gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(out),gl.STATIC_DRAW);
@@ -667,11 +691,13 @@ export function addCityShopfronts(map,openPlace,firstLabel,updateBuilt=()=>{},su
       map.on('click',click);
     },
     render(_gl,options){
-      if(!enabled||map.getZoom()<minZoom||!active.size){
+      if(!enabled||map.getZoom()<xinyiFrontageZoom||!active.size){
         if(shown.length){shown=[];updateBuilt([]);dirty=true;}
         unloadQueries();
         return;
       }
+      const nextOverview=map.getZoom()<shopDetailZoom;
+      if(overview!==nextOverview){overview=nextOverview;dirty=true;}
       const nextWalls=surveyTiles();
       if(walls!==nextWalls){walls=nextWalls;dirty=true;}
       resolveTap();
