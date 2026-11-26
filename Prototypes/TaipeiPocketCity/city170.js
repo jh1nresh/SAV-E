@@ -21,6 +21,7 @@ import {pinLabelColor} from './place-pins.js?v=category-badges-1';
 import {addCityPlaceIndex,cityPlaceLayers,nearbyPlaces} from './city-place-index.js?v=friendly-frontages-1';
 import {addCity170Style, city170PlaceLayers} from './city170-style.js?v=fountain-water-1';
 import {streetShopProperties} from './shop-trades.js?v=neighborhood-services-1';
+import {addressShopFeature,addedOpenShops,isDuplicateShop} from './taipei-open-shop-catalog.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js?v=taipei-audit-1';
 import {withMarketScenery} from './taipei-market-stalls.js';
 import {loadStreetlightPacks,streetlightObjects,streetlightZoom} from './taipei-streetlight-data.js';
@@ -457,6 +458,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         const [x,y]=f.geometry.coordinates;
         return x>=view[0]&&x<=view[2]&&y>=view[1]&&y<=view[3];
       }));
+      const streetIds=new Set(features.map(feature=>feature.id));
+      features.push(...addedOpenShops.filter(feature=>{
+        const [x,y]=feature.geometry.coordinates;
+        return !streetIds.has(feature.id)&&x>=view[0]&&x<=view[2]&&y>=view[1]&&y<=view[3];
+      }));
       if(dihuaLayer && map.getZoom()>=19.25 && overlaps(view,[121.50982,25.05634,121.50995,25.05672])){
         // At façade scale the user can tap the entrance itself.
         const onStreet=(x,y)=>x>=view[0]&&x<=view[2]&&y>=view[1]&&y<=view[3];
@@ -502,10 +508,11 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       }
       map.getSource('city170-equipment').setData(collection(equipment));
       map.getSource('city170-playing-areas').setData(collection(playingAreas));
-      const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f) &&
+      const mapped=features.filter(f=>!detailedPitchIds.has(f.id)&&!hasFocalPin(f)
+        &&(f.properties.kind!=='poi'||!isDuplicateShop(f.id)) &&
         (f.properties.kind!=='tree'||!nature.activeTrees.near(...f.geometry.coordinates,5)));
       map.getSource(data).setData(collection(mapped.map(f=>f.properties.kind==='poi'
-        ?withShopFacts({...f,properties:{...f.properties,placeId:f.id}}):f)));
+        ?addressShopFeature(withShopFacts({...f,properties:{...f.properties,placeId:f.id}})):f)));
       map.getSource(roadAnchors).setData(collection(cityStreetLabels(mapped,map,view)));
       cityRoadLabels(cells.length>0);
       status = {cells:cells.length, features:features.length, prepared:0};

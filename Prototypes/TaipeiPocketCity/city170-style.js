@@ -563,7 +563,9 @@ export function addCity170Style(map, sourceId, firstLabel) {
   // Street-scale labels use the same collision system as road and school names.
   add({
     id:'city170-shop-names', type:'symbol', minzoom:16.95, maxzoom:17.8,
-    filter:['all',places,named,['any',['==',['get','commerceListed'],true],['in',category,['literal',[
+    // The city index supplies addressed shops during the overlap at zoom 17.
+    filter:['all',places,named,['any',['<',['zoom'],17],['!',['has','openShopAddress']]],
+      ['any',['==',['get','commerceListed'],true],['in',category,['literal',[
       'commerce_store','inspection_store','restaurant','cafe','bakery','convenience','fast_food','clothes',
       'hairdresser','pharmacy','beverages','supermarket','deli','optician','beauty','books',
       'ice_cream','tea','bar','shoes','florist','gift','jewelry','electronics','hardware'

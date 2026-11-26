@@ -1,6 +1,7 @@
 import {additionalShopFloor} from './shop-floor-labels.js';
 import {setPlacePinEmphasis} from './photo-pin-motion.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
+import {doorplatePoint,taipeiDoorplateDataset,withOpenShopAddress} from './taipei-open-shop-catalog.js';
 import {originalPlacePhoto} from './place-photos.js';
 import {cityPlaceID,reviewedSavvyPosts} from './savvy-place-sources.js';
 
@@ -214,7 +215,8 @@ export function createPlaceCallout(map){
       expiryTimer=setTimeout(()=>showPosts(place,serial,localPhoto),Math.min(2**31-1,Math.max(0,expiry-Date.now())));
     }
   }
-  function open(place,button=null){
+  function open(input,button=null){
+    const place=withOpenShopAddress({...input,placeId:cityPlaceID(input)});
     const wasOpen=!card.hidden;
     if(map.savvySavedOnly&&!button?.classList.contains('is-saved'))return;
     reset();
@@ -223,7 +225,7 @@ export function createPlaceCallout(map){
     button?.setAttribute('aria-expanded','true');
     name.textContent=place.name||place.categoryLabel||'地點';
     kind.textContent=place.kind==='school-label'?'學校':place.categoryLabel??place.kind??'地點';
-    const street=place.detail===kind.textContent?'':place.detail;
+    const street=place.address||(place.detail===kind.textContent?'':place.detail);
     const floor=place.indoorFloor?undefined:additionalShopFloor(cityPlaceID(place),place.source,street,kind.textContent);
     detail.textContent=[street,floor].filter(Boolean).join(' · ');
     detail.hidden=!detail.textContent;
@@ -244,16 +246,19 @@ export function createPlaceCallout(map){
     postsList.hidden=true;
     postsList.replaceChildren();
     void showPosts(place,openSerial,photo);
-    const destination=appleDirections(anchor);
+    const destination=appleDirections(doorplatePoint(place))??appleDirections(anchor);
     directions.hidden=!destination;
     if(destination)directions.href=destination;
     else directions.removeAttribute('href');
     const site=URL.canParse(place.url)?new URL(place.url):null;
     const hasSite=site?.protocol==='https:'&&!/(^|\.)openstreetmap\.org$/i.test(site.hostname)&&place.source!=='Savvy';
-    official.hidden=!hasSite;
+    official.hidden=!hasSite&&!place.verifiedDoor;
     if(hasSite){
       official.href=site.href;
       official.textContent=(place.source||'官方資訊')+' ↗';
+    }else if(place.verifiedDoor){
+      official.href=taipeiDoorplateDataset;
+      official.textContent='市府門牌 ↗';
     }else official.removeAttribute('href');
     map.fire('pocketplacechange',{placeId:cityPlaceID(place)});
     card.hidden=false;
