@@ -1,7 +1,7 @@
 import {misplacedIllustratedTree} from './taipei-illustrated-trees.js';
 import {streetMeshes101,streetObjects101} from './taipei101-single-furniture.js';
 import {inside101Ground} from './taipei101-single-ground.js';
-import {program,transform} from './survey-layer.js';
+import {program,transform,buildingZoom} from './survey-layer.js';
 import {drawMarketStall} from './taipei-market-stalls.js';
 import {drawPlaygroundObject} from './taipei-playground-mesh.js';
 import {drawParkFitness} from './taipei-park-fitness-mesh.js';
@@ -150,6 +150,7 @@ export class StreetScenery {
   drawnTriangles=0;
   constructor(id,origin,objects,MercatorCoordinate,anatomy,hybrid){
     this.id=`${id}-scenery`;
+    this.minZoom=id==='street-101'?buildingZoom:17;
     this.anatomy=anatomy;
     this.hybrid=hybrid;
     const base=MercatorCoordinate.fromLngLat(origin);
@@ -198,7 +199,7 @@ export class StreetScenery {
   render(gl,options){
     const map=this.map;
     this.drawnTriangles=0;
-    if(map.getZoom()<17)return;
+    if(map.getZoom()<this.minZoom)return;
     const [[west,south],[east,north]]=map.getBounds().toArray();
     const [w,s,e,n]=this.bounds;
     if(e<west||w>east||n<south||s>north)return;

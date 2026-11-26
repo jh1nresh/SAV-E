@@ -87,6 +87,9 @@ struct SaveApp: App {
     @State private var accountScopedURLProcessingID: UUID?
     @State private var lastAccountUserId: String?
     @State private var minimumOpeningAnimationCompleted = false
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @State private var previewOpeningStartedAt: Double?
+#endif
     /// A real clue typed during onboarding is handed to the explicit capture
     /// screen after sign-in. It is not queued or saved until the user taps
     /// Analyze into Review.
@@ -116,7 +119,11 @@ struct SaveApp: App {
             return 8_000_000_000
         }
 #endif
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        return 3_200_000_000
+#else
         return 1_800_000_000
+#endif
     }
 
     init() {
@@ -293,6 +300,9 @@ struct SaveApp: App {
             SaveInkNotebookRoot(launch: .preview(screen))
         } else {
             standardRootContent
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+                .environment(\.savvyOpeningStart, previewOpeningStartedAt)
+#endif
         }
     }
 
@@ -308,9 +318,12 @@ struct SaveApp: App {
                 forceOnboardingForUITests = false
 #endif
                 minimumOpeningAnimationCompleted = false
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+                previewOpeningStartedAt = nil
+#endif
             }
         } else if shouldShowOpeningAnimation {
-            AuthLoadingView()
+            AuthLoadingView(showsOpeningAnimation: true)
                 .task {
                     await completeMinimumOpeningAnimation()
                 }
@@ -353,6 +366,9 @@ struct SaveApp: App {
     @MainActor
     private func completeMinimumOpeningAnimation() async {
         guard !minimumOpeningAnimationCompleted else { return }
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        if previewOpeningStartedAt == nil { previewOpeningStartedAt = CACurrentMediaTime() }
+#endif
 #if DEBUG
         // Screenshot evidence must not race the normal eight-second test hold.
         if ProcessInfo.processInfo.arguments.contains("--uitest-freeze-opening") { return }
@@ -773,7 +789,8 @@ private struct AuthenticatedRootView: View {
             case .verified(let verifiedGeneration) where verifiedGeneration == sessionGeneration:
                 verifiedAccountContent
             case .idle, .verifying, .verified:
-                AuthLoadingView()
+                // Account verification must not replay the completed startup animation.
+                AuthLoadingView(showsOpeningAnimation: false)
             case .accountNeedsConfirmation(let kind):
                 accountConfirmationView(kind)
             case .recoveryNeeded(let reason):
@@ -1240,9 +1257,42 @@ private struct AccountAccessView: View {
 // MARK: - Auth Loading View
 
 struct AuthLoadingView: View {
+    var showsOpeningAnimation = false
     @Environment(\.appLanguageSettings) private var languageSettings
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+    @Environment(\.savvyOpeningStart) private var openingStartedAt
+#endif
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 8) {
+                    SaveInkEntryBrand(usesBrandTint: true)
+                    Group {
+                        if showsOpeningAnimation {
+                            SavvyOriginalOpening(startedAt: openingStartedAt)
+                        } else {
+                            ProgressView()
+                                .tint(SaveBrandUI.ink)
+                                .accessibilityLabel(languageSettings.text(.opening))
+                        }
+                    }
+                    .frame(maxWidth: 420).frame(height: 310)
+                    .accessibilityIdentifier("opening.loading")
+                }
+                .frame(maxWidth: 400).padding(.horizontal, 16).padding(.vertical, 24)
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }.clipped()
+        }
+        .foregroundStyle(SaveBrandUI.ink)
+        .background(SaveBrandUI.canvas.ignoresSafeArea())
+#else
+        originalLoading
+#endif
+    }
+
+    private var originalLoading: some View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -1277,9 +1327,13 @@ struct AuthLoadingView: View {
 }
 
 private struct SaveInkEntryBrand: View {
+    var usesBrandTint = false
+
     var body: some View {
         Image("SavvyWordmark")
+            .renderingMode(usesBrandTint ? .template : .original)
             .resizable()
+            .foregroundStyle(SaveBrandUI.brand)
             .scaledToFit()
             .frame(width: 164)
             .accessibilityLabel("Savvy")

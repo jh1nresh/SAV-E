@@ -1048,7 +1048,21 @@ final class SaveInkNotebookTests: XCTestCase {
         let app = try source("SAV-E/App/SaveApp.swift")
         let launch = try source("SAV-E/Views/InkNotebook/SaveInkNotebookRoot.swift")
         XCTAssertTrue(app.contains("SaveInkNotebookRoot()"))
-        XCTAssertFalse(app.contains("ContentView("))
+        // A development-only phone preview is allowed; shipping builds must
+        // still select the notebook without a launch flag or preview symbol.
+        let previewStart = try XCTUnwrap(app.range(of:
+            "private var verifiedAccountContent: some View {\n#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW\n"))
+        let shippingStart = try XCTUnwrap(app.range(of: "#else\n", range: previewStart.upperBound..<app.endIndex))
+        let shippingEnd = try XCTUnwrap(app.range(of: "#endif", range: shippingStart.upperBound..<app.endIndex))
+        let preview = String(app[previewStart.upperBound..<shippingStart.lowerBound])
+        let shipping = String(app[shippingStart.upperBound..<shippingEnd.lowerBound])
+        XCTAssertFalse(preview.contains("#if"), "Keep the preview boundary explicit")
+        XCTAssertFalse(preview.contains("#endif"))
+        XCTAssertTrue(preview.contains("ContentView("))
+        XCTAssertTrue(shipping.contains("SaveInkNotebookRoot()"))
+        var shippingApp = app
+        shippingApp.removeSubrange(previewStart.upperBound..<shippingStart.lowerBound)
+        XCTAssertFalse(shippingApp.contains("ContentView("))
         XCTAssertFalse(app.contains("--uitest-legacy-root"))
         XCTAssertFalse(app.contains("--savvy-ink-notebook"))
         XCTAssertFalse(launch.contains("--savvy-ink-notebook"))

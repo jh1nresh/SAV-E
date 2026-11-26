@@ -640,7 +640,7 @@ try{
   map.getCanvas().setAttribute('aria-label','Pocket City 地圖，可拖曳、縮放及旋轉');
   if(streets.length||cityDistricts.length)streetDetail=addStreetDetail(map,ml,streets,firstLabel,look==='anatomy',hybrid,shadows,rerun);
   if(rerun && streetDetail){
-    cityNature=new CityNature(loadTreeCanopies);
+    cityNature=new CityNature(loadTreeCanopies,planting101);
     map.addLayer(cityNature,firstLabel);
     const localLife=(records,visiblePacks=[])=>{
       if(preview.get('dihua')!=='before'&&visiblePacks.includes('p221_2038'))
@@ -694,7 +694,7 @@ try{
   }
   add101Ground(map);
   if(!cityNature){
-    cityNature=new CityNature();
+    cityNature=new CityNature(undefined,planting101);
     map.addLayer(cityNature,firstLabel);
     cityNature.setRows(planting101);
   }

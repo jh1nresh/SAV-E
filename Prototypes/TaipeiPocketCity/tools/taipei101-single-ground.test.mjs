@@ -6,6 +6,27 @@ import {geographicPoint} from '../cities/geography.js';
 import {meta,coordinates} from '../taipei101-single-ground-data.js';
 import {add101Ground,inside101Ground,touches101Ground,planting101,walks101} from '../taipei101-single-ground.js';
 import {streetMeshes101,streetObjects101} from '../taipei101-single-furniture.js';
+import {StreetScenery} from '../street-scenery.js';
+import {StreetPeople} from '../street-people.js';
+import {MercatorCoordinate} from '../assets/maplibre-gl.mjs';
+import {buildingZoom} from '../survey-layer.js';
+
+test('the complete 101 tower view retains plaza objects and walking routes at phone zoom',t=>{
+  const previous=globalThis.matchMedia;
+  globalThis.matchMedia=()=>({matches:false});
+  t.after(()=>{if(previous)globalThis.matchMedia=previous;else delete globalThis.matchMedia;});
+  const bounds={toArray:()=>[[121.562,25.031],[121.567,25.035]]};
+  const map={on(){},getZoom:()=>16.22,isSourceLoaded:()=>true,queryTerrainElevation:()=>12,getBounds:()=>bounds};
+  const gl=new Proxy({},{get:()=>()=>true});
+  const scene=new StreetScenery('street-101',[121.5645,25.033],streetObjects101,MercatorCoordinate,false,true);
+  scene.onAdd(map,gl);scene.render(gl,{defaultProjectionData:{mainMatrix:new Float32Array(16)}});
+  assert.ok(scene.drawnTriangles>0);
+  const other=new StreetScenery('street-other',[121.5645,25.033],streetObjects101,MercatorCoordinate,false,true);
+  other.onAdd(map,gl);other.render(gl,{defaultProjectionData:{mainMatrix:new Float32Array(16)}});
+  assert.equal(other.drawnTriangles,0);
+  const people=new StreetPeople('street-101',[121.5645,25.033],walks101,buildingZoom,true);
+  people.map=map;assert.ok(people.isActive(bounds));
+});
 
 test('the source plaza image follows its rotated 200 m plot and draws below map shadows',async()=>{
   const layers=[],sources=[];

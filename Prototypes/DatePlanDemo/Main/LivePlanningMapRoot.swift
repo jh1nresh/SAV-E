@@ -36,12 +36,14 @@ struct LivePlanningMapRoot: View {
     @StateObject private var plan: LiveRoutePlan
     @StateObject private var discovery: LivePublicDiscoveryModel
     @State private var destination = DemoDestination.saved
+    @State private var tabLanding: TabLanding?
     @State private var previousRootDestination = DemoDestination.saved
     @State private var savedQuery = ""
     @FocusState private var savedSearchFocused: Bool
     @State private var hasOpenedMap = false
     @State private var mapPresentation = PocketCityPresentation()
     @State private var appliedWeatherArea: PocketCityForecast.Area?
+    @State private var mapForecast: PocketCityForecast.Result?
     @State private var pocketMapFailed = false
     @State private var showsFriends = false
     @State private var savedOnly = false
@@ -74,6 +76,7 @@ struct LivePlanningMapRoot: View {
     @State private var newListTitle = ""
     @State private var joinCode = ""
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.appLanguageSettings) private var language
@@ -158,6 +161,7 @@ struct LivePlanningMapRoot: View {
     private func followWeather(in area: PocketCityForecast.Area?) async {
         if appliedWeatherArea != area {
             mapPresentation.weather = .day
+            mapForecast = nil
             appliedWeatherArea = area
         }
         guard let area else { return }
@@ -166,8 +170,13 @@ struct LivePlanningMapRoot: View {
             while !Task.isCancelled {
                 let forecast = try await PocketCityForecast.shared.forecast(for: area)
                 guard !Task.isCancelled, area == weatherArea else { return }
-                mapPresentation.weather = forecast.weather ?? .day
-                try await Task.sleep(for: .seconds(max(60, forecast.refreshAfter.timeIntervalSinceNow)))
+                let now = Date()
+                mapForecast = forecast
+                mapPresentation.weather = forecast.current(at: now)
+                    .flatMap { PocketCityForecast.weather(for: $0.symbol) } ?? .day
+                let nextHour = forecast.upcoming(at: now).first?.time ?? forecast.refreshAfter
+                let nextUpdate = min(nextHour, forecast.refreshAfter)
+                try await Task.sleep(for: .seconds(max(1, nextUpdate.timeIntervalSinceNow)))
             }
         } catch { /* Map moved or left the foreground. */ }
     }
@@ -282,6 +291,12 @@ struct LivePlanningMapRoot: View {
             if phase != .active { suspendPlanning() }
         }
         .onDisappear { atlasSheetOpen = false; atlasDrawer.dismiss(); isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .task(id: tabLanding) {
+            guard let landing = tabLanding else { return }
+            do { try await Task.sleep(for: .seconds(LiveTabLanding.duration)) }
+            catch { return }
+            if !Task.isCancelled, tabLanding == landing { tabLanding = nil }
+        }
         .task(id: weatherArea) { await followWeather(in: weatherArea) }
         .task(id: discoveryQuery) {
             guard discoveryQuery != "inactive", let viewport = discoveryViewport, sessionIsCurrent else {
@@ -368,7 +383,7 @@ struct LivePlanningMapRoot: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .transition(reduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             }
-        }.animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: atlasDrawer.detail != nil)
+        }.animation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.88), value: atlasDrawer.detail != nil)
     }
 
     private var pageSwipe: some Gesture {
@@ -487,39 +502,49 @@ struct LivePlanningMapRoot: View {
                         Image(systemName: "chevron.left").frame(width: 44, height: 44)
                             .contentShape(Circle())
                             .liveFloatingGlass(in: Circle())
-                    }.buttonStyle(.plain).accessibilityLabel(copy("Back", "返回"))
+                    }.savvyPressFeedback().accessibilityLabel(copy("Back", "返回"))
                         .accessibilityIdentifier("live.passport.back")
                     Spacer(minLength: 8)
                     Text("Passport").font(.headline)
                     Spacer(minLength: 8)
-                    Button(action: onOpenAccount) {
-                        Image(systemName: "gearshape").frame(width: 44, height: 44)
-                            .contentShape(Circle())
-                            .liveFloatingGlass(in: Circle())
-                    }.buttonStyle(.plain).accessibilityLabel(copy("Account settings", "帳號設定"))
+                    // Account settings has one entry inside Passport. Keep the
+                    // title centered against the back button without another gear.
+                    Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
                 } else {
                     Button { navigate(to: .passport) } label: {
                         Image(systemName: "person.crop.circle").font(.title3)
                             .frame(width: 44, height: 44)
                             .contentShape(Circle())
                             .liveFloatingGlass(in: Circle())
-                    }.buttonStyle(.plain).accessibilityLabel("Passport")
+                    }.savvyPressFeedback().accessibilityLabel("Passport")
                         .accessibilityIdentifier("demo.tab.passport")
                     HStack(spacing: 8) {
                         rootButton(.saved, title: copy("Saved", "收藏"))
                         rootButton(.map, title: copy("Map", "地圖"))
                     }
                     Spacer(minLength: 0)
+                    if destination == .map, !usesFixtureMap {
+                        LiveMapWeatherCard(area: weatherArea,
+                                           forecast: appliedWeatherArea == weatherArea ? mapForecast : nil)
+                            .id(weatherArea)
+                    }
                 }
             }.padding(.horizontal, 4).frame(minHeight: 44)
                 .padding(.vertical, 4)
         }
     }
 
+    private struct TabLanding: Equatable {
+        let destination: DemoDestination
+        let start: Date
+    }
+
     private func navigate(to value: DemoDestination) {
         guard destination != value else { return }
         let switchesTabs = destination != .passport && value != .passport
         let pageAnimation: Animation? = switchesTabs && !reduceMotion ? .easeInOut(duration: 0.24) : nil
+        tabLanding = switchesTabs && !reduceMotion && scenePhase == .active
+            ? TabLanding(destination: value, start: .now) : nil
         withAnimation(pageAnimation) { destination = value }
     }
 
@@ -528,6 +553,9 @@ struct LivePlanningMapRoot: View {
         let isDark = colorScheme == .dark
         let fill = isDark ? SaveBrandUI.darkTabFill : DateTheme.action
         let ink = isDark ? DateTheme.ink : DateTheme.actionInk
+        let landingStart = selected && !reduceMotion && scenePhase == .active && tabLanding?.destination == value
+            ? tabLanding?.start : nil
+        let travelsRight = (value == .map) == (layoutDirection == .leftToRight)
         return Button { navigate(to: value) } label: {
             Text(title)
                 .font(.subheadline.weight(.semibold))
@@ -540,6 +568,7 @@ struct LivePlanningMapRoot: View {
                 .overlay {
                     Capsule().strokeBorder(DateTheme.ink.opacity(selected ? 0.12 : 0.07))
                 }
+                .modifier(LiveTabLanding(start: landingStart, travelsRight: travelsRight))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -655,7 +684,7 @@ struct LivePlanningMapRoot: View {
                                     .foregroundStyle(friendsVisitedOnly == visitedOnly ? DateTheme.actionInk : DateTheme.ink)
                                     .background(friendsVisitedOnly == visitedOnly ? DateTheme.action : DateTheme.soft,
                                                 in: RoundedRectangle(cornerRadius: 12))
-                            }.buttonStyle(.plain)
+                            }.savvyPressFeedback()
                                 .accessibilityAddTraits(friendsVisitedOnly == visitedOnly ? .isSelected : [])
                         }
                     }
@@ -684,7 +713,7 @@ struct LivePlanningMapRoot: View {
                         if outing.selectedListID == nil {
                             ForEach(friendEntries) { friend in
                                 Button { selected = friend.pin } label: { venueRow(name: friend.pin.place.name, address: friend.pin.place.address, symbol: friend.pin.place.category.iconName, suffix: friend.statusTitle(language.language)) }
-                                    .buttonStyle(.plain)
+                                    .savvyPressFeedback()
                             }
                             if friendPlaces.isEmpty, !outing.isLoading {
                                 Text(friendsVisitedOnly ? copy("No shared visited places yet.", "還沒有朋友分享去過的地點。") : copy("No shared places yet. Create a list or join with an invite code.", "還沒有可顯示的朋友分享。可先建立共同清單。"))
@@ -694,11 +723,11 @@ struct LivePlanningMapRoot: View {
                             ForEach(groupPlaces) { pin in
                                 HStack {
                                     Button { selected = pin } label: { venueRow(name: pin.place.name, address: pin.place.address, symbol: pin.place.category.iconName, suffix: copy("Group candidate", "隊伍候選")) }
-                                        .buttonStyle(.plain)
+                                        .savvyPressFeedback()
                                     Button { toggleStop(pin.id) } label: {
                                         Image(systemName: selectedStops.contains(pin.id) ? "checkmark.circle.fill" : "plus.circle")
                                             .font(.system(size: 25)).frame(width: 44, height: 48)
-                                    }.buttonStyle(.plain).foregroundStyle(DateTheme.coral).disabled(plan.isLoading)
+                                    }.savvyPressFeedback().foregroundStyle(DateTheme.coral).disabled(plan.isLoading)
                                 }
                             }
                             if groupPlaces.isEmpty { Text(copy("Add places from your collection or search to start planning.", "這份清單還沒有可放上地圖的地點。可從個人收藏或搜尋結果明確加入。"))
@@ -738,17 +767,18 @@ struct LivePlanningMapRoot: View {
                     if destination == .saved {
                         Button { savedSearchFocused = true } label: {
                             Image(systemName: "magnifyingglass").font(.system(size: 20))
-                        }.buttonStyle(.plain).accessibilityHidden(true)
+                        }.savvyPressFeedback().accessibilityHidden(true)
                         TextField(searchTitle, text: $savedQuery)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                             .focused($savedSearchFocused).submitLabel(.search)
                             .accessibilityIdentifier("live.library.search")
+                            .savvyInputFeedback()
                         if !savedQuery.isEmpty {
                             Button {
                                 savedQuery = ""
                             } label: {
                                 Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
-                            }.buttonStyle(.plain).accessibilityLabel(copy("Clear search", "清除搜尋"))
+                            }.savvyPressFeedback().accessibilityLabel(copy("Clear search", "清除搜尋"))
                         }
                     } else {
                         Button { searchPresented = true } label: {
@@ -758,7 +788,7 @@ struct LivePlanningMapRoot: View {
                             }
                             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                             .contentShape(Rectangle())
-                        }.buttonStyle(.plain).accessibilityIdentifier("live.search")
+                        }.savvyPressFeedback().accessibilityIdentifier("live.search")
                     }
                 }
                 .font(.subheadline).foregroundStyle(DateTheme.muted)
@@ -769,7 +799,7 @@ struct LivePlanningMapRoot: View {
                         .frame(width: 62, height: 62)
                         .foregroundStyle(DateTheme.actionInk).contentShape(Circle())
                         .liveFloatingGlass(in: Circle(), prominent: true)
-                }.buttonStyle(.plain).accessibilityLabel(copy("Add clue", "新增線索"))
+                }.savvyPressFeedback(prominent: true).accessibilityLabel(copy("Add clue", "新增線索"))
                     .accessibilityIdentifier("live.library.add")
             }
         }
@@ -983,7 +1013,7 @@ struct LiveGuidePanel: View {
                 Spacer()
                 Button(action: onManage) {
                     Image(systemName: "person.2").frame(width: 44, height: 44)
-                }.buttonStyle(.plain)
+                }.savvyPressFeedback()
                     .accessibilityLabel(language.localized(english: "Shared lists and members", traditionalChinese: "共同清單與成員"))
                     .accessibilityIdentifier("live.team")
             }
@@ -1052,7 +1082,7 @@ struct LiveGuideTimeline: View {
                             .background(DateTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                             .overlay(RoundedRectangle(cornerRadius: 16).stroke(DateTheme.blue.opacity(plan.started && index == plan.currentIndex ? 0.6 : 0.08)))
                             .contentShape(Rectangle())
-                        }.buttonStyle(.plain).disabled(!plan.isAccessValidated)
+                        }.savvyPressFeedback().disabled(!plan.isAccessValidated)
                     }
                 }
             }.scrollIndicators(.hidden)
@@ -1090,7 +1120,12 @@ private struct LiveMapSearch: View {
     var body: some View {
         NavigationStack {
             List {
-                if searching { ProgressView(copy("Searching…", "搜尋中…")).listRowBackground(DateTheme.ink.opacity(0.04)) }
+                if searching {
+                    HStack(spacing: 12) {
+                        SavvyLoadingCloud().frame(width: 56, height: 38)
+                        Text(copy("Searching…", "搜尋中…"))
+                    }.listRowBackground(DateTheme.ink.opacity(0.04))
+                }
                 if let error { Text(error).foregroundStyle(DateTheme.muted).listRowBackground(DateTheme.ink.opacity(0.04)) }
                 ForEach(values) { pin in
                     Button { onPick(pin); dismiss() } label: {
@@ -1099,7 +1134,7 @@ private struct LiveMapSearch: View {
                             Text(pin.place.address).font(.caption).foregroundStyle(.secondary)
                             Text(copy("View on map · not saved", "在地圖查看 · 尚未收藏")).font(.caption2)
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 7).contentShape(Rectangle())
-                    }.buttonStyle(.plain).listRowBackground(DateTheme.ink.opacity(0.04))
+                    }.savvyPressFeedback().listRowBackground(DateTheme.ink.opacity(0.04))
                 }
             }.scrollContentBackground(.hidden)
                 .toolbarBackground(.hidden, for: .navigationBar)
@@ -1108,6 +1143,7 @@ private struct LiveMapSearch: View {
                 .navigationTitle(copy("Search map", "搜尋地圖")).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Done", "完成")) { dismiss() } } }
         }.tint(DateTheme.blue).foregroundStyle(DateTheme.ink)
+            .savvyInputFeedback()
             .onDisappear { operation?.cancel(); request?.cancel() }
     }
     private func copy(_ english: String, _ chinese: String) -> String {
@@ -1143,6 +1179,165 @@ private struct LivePlaceSheetMaterial: ViewModifier {
         if reduceTransparency { content.presentationBackground(DateTheme.surface) }
         else if #available(iOS 26.0, *) { content }
         else { content.presentationBackground(.regularMaterial) }
+    }
+}
+
+// Native adaptation of the Sakuga VFX Tabs landing effect by Justin Finkelman (MIT).
+// https://github.com/finktheartist/sakuga-vfx/blob/c3dabb173928a3ad2372183103caf2e6f50953d0/tabs/tabs.js
+private struct LiveTabLanding: ViewModifier {
+    static let duration = 0.34
+    private static let topBleed: CGFloat = 16
+    private static let sideBleed: CGFloat = 8
+
+    let start: Date?
+    let travelsRight: Bool
+
+    func body(content: Content) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: start == nil)) { timeline in
+            let progress = start.map { Self.progress(from: $0, at: timeline.date) } ?? 1
+            let stretch = Self.stretch(at: progress)
+            content.scaleEffect(x: 1 + stretch, y: 1 - stretch * 0.8)
+                .background {
+                    if progress > 0.16 && progress < 1 {
+                        Canvas { context, size in
+                            drawLanding(in: context, size: size, progress: (progress - 0.16) / 0.84)
+                        }
+                        .padding(.top, -Self.topBleed)
+                        .padding(.horizontal, -Self.sideBleed)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .transition(.identity)
+                    }
+                }
+        }
+    }
+
+    static func progress(from start: Date, at time: Date) -> Double {
+        min(max(time.timeIntervalSince(start) / duration, 0), 1)
+    }
+
+    static func stretch(at progress: Double) -> CGFloat {
+        CGFloat(0.09 * sin(2 * .pi * progress) * pow(1 - progress, 2))
+    }
+
+    private func drawLanding(in context: GraphicsContext, size: CGSize, progress: Double) {
+        let travel = CGFloat(1 - pow(1 - progress, 3))
+        let strength = CGFloat(min(progress / 0.15, 1) * pow(1 - progress, 1.4))
+        let center = CGPoint(x: size.width / 2, y: Self.topBleed - 2 - 4 * travel)
+        var wedges = Path()
+        for ray in [-1.0, 0, 1.0] {
+            let x = center.x + ray * (5 + 4 * travel)
+            let y = center.y + abs(ray) * 2
+            wedges.move(to: .init(x: x - strength * 1.6, y: y))
+            wedges.addLine(to: .init(x: x + ray * 4, y: y - strength * (9 - abs(ray) * 2)))
+            wedges.addLine(to: .init(x: x + strength * 1.6, y: y))
+            wedges.closeSubpath()
+        }
+        context.fill(wedges, with: .color(DateTheme.blue.opacity(Double(strength))))
+
+        let trailingSign: CGFloat = travelsRight ? -1 : 1
+        let trailingEdge = travelsRight ? Self.sideBleed : size.width - Self.sideBleed
+        let puffX = trailingEdge - trailingSign + trailingSign * (1 + 3 * travel)
+        let puffY = Self.topBleed + 10 - 4 * travel
+        for lobe in 0..<3 {
+            let offset = CGFloat(lobe - 1)
+            let radius = strength * (4 - abs(offset))
+            let rect = CGRect(x: puffX + offset * 2.2 - radius,
+                              y: puffY - abs(offset) * 2.5 - radius,
+                              width: radius * 2, height: radius * 2)
+            let path = Path(ellipseIn: rect)
+            context.fill(path, with: .color(DateTheme.soft.opacity(Double(strength))))
+            context.stroke(path, with: .color(DateTheme.blue.opacity(Double(strength) * 0.65)), lineWidth: 0.9)
+        }
+    }
+}
+
+private struct LiveMapWeatherCard: View {
+    let area: PocketCityForecast.Area?
+    let forecast: PocketCityForecast.Result?
+    @Environment(\.appLanguageSettings) private var language
+    @State private var showsForecast = false
+
+    var body: some View {
+        TimelineView(.everyMinute) { context in
+            let reading = forecast?.current(at: context.date)
+            Button { showsForecast = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: reading.map(symbol) ?? "cloud")
+                    Text(reading?.celsius.map(degrees) ?? "—")
+                        .monospacedDigit()
+                }
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .padding(.horizontal, 10)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Capsule())
+                .liveFloatingGlass(in: Capsule())
+            }
+            .savvyPressFeedback()
+            .disabled(reading?.celsius == nil)
+            .accessibilityLabel(copy("Weather", "天氣"))
+            .accessibilityValue(reading?.celsius.map(degrees) ?? copy("Unavailable", "暫無資料"))
+            .accessibilityHint(copy("Shows the hourly forecast", "查看逐小時預報"))
+            .accessibilityIdentifier("live.map.weather")
+            .popover(isPresented: $showsForecast, arrowEdge: .top) {
+                hourlyForecast(at: context.date)
+                    .presentationCompactAdaptation(.popover)
+            }
+        }
+    }
+
+    private func hourlyForecast(at now: Date) -> some View {
+        let taipeiZone = area.flatMap { value in
+            (249...253).contains(value.latitudeTenths) && (1213...1218).contains(value.longitudeTenths)
+                ? TimeZone(identifier: "Asia/Taipei") : nil
+        }
+        let format = Date.FormatStyle(locale: language.locale, timeZone: taipeiZone ?? .autoupdatingCurrent)
+            .hour().minute()
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(copy("Hourly forecast", "逐小時預報")).font(.headline)
+            Text(taipeiZone == nil ? copy("Device time", "裝置時間") : copy("Taipei time", "台北時間"))
+                .font(.caption).foregroundStyle(DateTheme.muted)
+            ForEach(forecast?.upcoming(at: now) ?? []) { hour in
+                HStack {
+                    Text(hour.time.formatted(format))
+                    Spacer()
+                    Image(systemName: symbol(hour))
+                    Text(hour.celsius.map(degrees) ?? "—").monospacedDigit()
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Link(copy("Data from MET Norway", "資料來源 MET Norway"),
+                 destination: URL(string: "https://docs.api.met.no/doc/locationforecast/")!)
+                .font(.caption)
+        }
+        .frame(idealWidth: 220)
+        .padding(16)
+    }
+
+    private func symbol(_ reading: PocketCityForecast.Reading) -> String {
+        if reading.symbol.contains("thunder") { return "cloud.bolt.rain.fill" }
+        if reading.symbol.contains("snow") || reading.symbol.contains("sleet") { return "cloud.snow.fill" }
+        if reading.symbol.contains("fog") { return "cloud.fog.fill" }
+        if reading.symbol.hasPrefix("partlycloudy") {
+            return reading.isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+        }
+        switch PocketCityForecast.weather(for: reading.symbol) {
+        case .day: return reading.isNight ? "moon.stars.fill" : "sun.max.fill"
+        case .rain: return "cloud.rain.fill"
+        case .drizzle: return "cloud.drizzle.fill"
+        case .cloudy: return "cloud.fill"
+        default: return "cloud"
+        }
+    }
+
+    private func degrees(_ value: Double) -> String {
+        "\(value.formatted(.number.precision(.fractionLength(0))))°"
+    }
+
+    private func copy(_ english: String, _ chinese: String) -> String {
+        language.localized(english: english, traditionalChinese: chinese)
     }
 }
 
@@ -1225,16 +1420,17 @@ private struct LiveAtlasPlaceDrawer: View {
                     .accessibilityHidden(true)
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        if !detail.kind.isEmpty { Text(detail.kind).font(.caption.weight(.medium)).foregroundStyle(.secondary) }
-                        Text(detail.name).font(.title3.bold()).accessibilityAddTraits(.isHeader)
+                        Text(detail.name).font(.title2.bold()).accessibilityAddTraits(.isHeader)
                             .accessibilityFocused($headingFocused)
+                        if !detail.kind.isEmpty { Text(detail.kind).font(.subheadline).foregroundStyle(.secondary) }
                     }
                     Spacer(minLength: 4)
                     Button { drawer.action("close", serial: detail.serial) } label: {
                         Image(systemName: "xmark").font(.subheadline.weight(.semibold))
-                            .frame(width: 44, height: 44).contentShape(Circle())
+                            .frame(width: 44, height: 44)
+                            .background(DateTheme.ink.opacity(0.06), in: Circle()).contentShape(Circle())
                     }
-                    .buttonStyle(.plain).accessibilityLabel(copy("Close place", "關閉地點"))
+                    .savvyPressFeedback().accessibilityLabel(copy("Close place", "關閉地點"))
                     .accessibilityIdentifier("pocket.detail.close")
                 }
             }
@@ -1307,33 +1503,40 @@ private struct LiveAtlasPlaceDrawer: View {
     }
 
     private var bodyContents: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !detail.address.isEmpty && detail.address != detail.kind {
-                Text(detail.address).font(.subheadline).foregroundStyle(.secondary)
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) { actions }
-                VStack(alignment: .leading, spacing: 0) { actions }
-            }
+        VStack(alignment: .leading, spacing: 16) {
             if let photo = photoDisplay {
                 VStack(alignment: .leading, spacing: 4) {
                     Button { enlargedPhoto = true } label: {
                         Color.clear
-                            .frame(height: min(140, maxHeight * 0.34))
+                            .frame(height: min(184, maxHeight * 0.4))
                             .overlay { Image(uiImage: photo.image).resizable().scaledToFill() }
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                    .buttonStyle(.plain).accessibilityLabel(photo.alternative)
+                    .savvyPressFeedback().accessibilityLabel(photo.alternative)
                     .accessibilityHint(copy("Enlarge photo", "查看大圖"))
                     Button(photo.credit) { openOriginal(photo) }
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { actions }
+                VStack(alignment: .leading, spacing: 8) { actions }
+            }
+            if !detail.address.isEmpty && detail.address != detail.kind {
+                Label(detail.address, systemImage: "mappin.and.ellipse")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             ForEach(Array(detail.choices.enumerated()), id: \.offset) { index, title in
                 Button { drawer.action("choice", serial: detail.serial, index: index) } label: {
                     Label(title, systemImage: "mappin").frame(minHeight: 44, alignment: .leading)
                 }
-                .buttonStyle(.plain)
+                .savvyPressFeedback()
+            }
+            if detail.posts.contains(where: { $0.expiresAt > now }) {
+                Divider()
+                Text(copy("From Instagram & Threads", "Instagram 與 Threads 原文"))
+                    .font(.subheadline.weight(.semibold))
             }
             ForEach(detail.posts.filter { $0.expiresAt > now }) { post in
                 Button {
@@ -1350,7 +1553,7 @@ private struct LiveAtlasPlaceDrawer: View {
                         Spacer(minLength: 4)
                         Image(systemName: "arrow.up.right").font(.caption)
                     }.frame(minHeight: 44)
-                }.buttonStyle(.plain)
+                }.savvyPressFeedback()
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16).padding(.bottom, 14)
