@@ -7,13 +7,28 @@ const packId=/^\d+_\d+$/;
 const validBox=b=>Array.isArray(b)&&b.length===4&&b.every(Number.isFinite)&&b[0]<=b[2]&&b[1]<=b[3];
 const overlaps=(a,b)=>a[0]<=b[2]&&a[2]>=b[0]&&a[1]<=b[3]&&a[3]>=b[1];
 const empty=()=>({type:'FeatureCollection',features:[]});
+function combinedSignal(signals){
+  if(typeof AbortSignal.any==='function')return {signal:AbortSignal.any(signals),cleanup(){}};
+  // iOS 17.0–17.3 has timeout(), but not any(). Release both subscriptions
+  // on first abort and after the complete read, including response decoding.
+  const controller=new AbortController();
+  const cleanup=()=>{for(const signal of signals)signal.removeEventListener('abort',abort);};
+  const abort=event=>{controller.abort(event.target.reason);cleanup();};
+  const aborted=signals.find(signal=>signal.aborted);
+  if(aborted)controller.abort(aborted.reason);
+  else for(const signal of signals)signal.addEventListener('abort',abort,{once:true});
+  return {signal:controller.signal,cleanup};
+}
 async function read(name,signal){
   // A stalled local-resource handler must release the in-flight cache entry.
   // The existing street loader retries failures while the camera stays still.
   const timeout=AbortSignal.timeout(12000);
-  const res=await fetch(new URL('./assets/taipei200/'+name,import.meta.url),{signal:signal?AbortSignal.any([signal,timeout]):timeout});
-  if(!res.ok)throw Error('Taipei 200m '+name+' '+res.status);
-  return decodeMapJSON(res);
+  const request=signal?combinedSignal([signal,timeout]):{signal:timeout,cleanup(){}};
+  try{
+    const res=await fetch(new URL('./assets/taipei200/'+name,import.meta.url),{signal:request.signal});
+    if(!res.ok)throw Error('Taipei 200m '+name+' '+res.status);
+    return await decodeMapJSON(res);
+  }finally{request.cleanup();}
 }
 function manifest(value){
   const packs=value?.packs;

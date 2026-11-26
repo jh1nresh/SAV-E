@@ -5,6 +5,7 @@ import {originalPlacePhoto,photoPlaces} from './place-photos.js';
 import {cityPlaceID} from './savvy-place-sources.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
 import {StreetPeople} from './street-people.js';
+import {buildingZoom} from './survey-layer.js';
 import {StreetScenery} from './street-scenery.js?v=tree-clearance-1';
 
 const isDistrict=key=>key.endsWith('-district');
@@ -91,7 +92,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
     const prefix=`street-${key}`;
     const linked=limitsStreetLabels(key);
     const useAnatomy=key==='101'&&anatomy;
-    const model=new StreetPeople(prefix,data.origin,data.paths,key==='xinyi-link'?17.05:16.65,hybrid);
+    const model=new StreetPeople(prefix,data.origin,data.paths,key==='101'?buildingZoom:key==='xinyi-link'?17.05:16.65,hybrid);
     model.paused=paused;
     model.umbrellaShare=umbrellaShare;
     addGroundColors(map,prefix,data.ground,useAnatomy,!linked&&key!=='yongchun',hybrid,!!shadows,continuousRoads);

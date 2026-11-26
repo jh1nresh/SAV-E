@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
+import {getEventListeners} from 'node:events';
 import {taipei200Scenes,streetPaintUpdate,taipei200Grid} from '../taipei200.js';
 
 const west=[121.50,25,121.502,25.002],east=[121.502,25,121.504,25.002];
@@ -125,6 +126,78 @@ test('grid cancels on hide and re-entry, and publishes only clipped footprints i
   requests[0].resolve(data);await stale;assert.equal(writes.length,0);
   requests[1].resolve(data);await current;assert.deepEqual(writes.at(-1),[data.features[1]]);
   await grid.show(true);assert.equal(writes.length,1);await grid.show(false);assert.deepEqual(writes.at(-1),[]);
+});
+
+test('without AbortSignal.any, grid cancellation and timeout release every combining listener',async t=>{
+  const descriptor=Object.getOwnPropertyDescriptor(AbortSignal,'any');
+  Object.defineProperty(AbortSignal,'any',{...descriptor,value:undefined});
+  t.after(()=>Object.defineProperty(AbortSignal,'any',descriptor));
+  t.mock.method(console,'warn',()=>{});
+  const timeouts=[],inputs=new Set(),requests=[];
+  t.mock.method(AbortSignal,'timeout',milliseconds=>{
+    assert.equal(milliseconds,12000);
+    const controller=new AbortController();timeouts.push(controller);return controller.signal;
+  });
+  const add=AbortSignal.prototype.addEventListener;
+  t.mock.method(AbortSignal.prototype,'addEventListener',function(type,listener,options){
+    if(type==='abort')inputs.add(this);
+    return add.call(this,type,listener,options);
+  });
+  t.mock.method(globalThis,'fetch',(_url,{signal})=>{
+    const response=deferred();requests.push({signal,...response});
+    signal.addEventListener('abort',()=>response.reject(signal.reason),{once:true});
+    return response.promise;
+  });
+  const map={getBounds:()=>({getWest:()=>west[0],getSouth:()=>west[1],getEast:()=>west[2],getNorth:()=>west[3]}),
+    getZoom:()=>12,getSource:()=>({setData(){}})};
+  const grid=taipei200Grid(map);
+  const cancelled=grid.show(true);
+  assert.equal(requests.length,1,'the compatibility path must reach fetch');
+  const caller=[...inputs].find(s=>s!==timeouts[0].signal&&s!==requests[0].signal);
+  assert.ok(caller);
+  grid.clear();await cancelled;
+  assert.equal(requests[0].signal.aborted,true);
+  assert.equal(requests[0].signal.reason,caller.reason);
+  for(const signal of inputs)assert.equal(getEventListeners(signal,'abort').length,0);
+
+  inputs.clear();
+  const stalled=grid.show(true),reason=new DOMException('Timed out','TimeoutError');
+  timeouts[1].abort(reason);await stalled;
+  assert.equal(requests[1].signal.reason,reason);
+  for(const signal of inputs)assert.equal(getEventListeners(signal,'abort').length,0);
+});
+
+test('without AbortSignal.any, combining listeners survive body decoding and clean up on success or failure',async t=>{
+  const descriptor=Object.getOwnPropertyDescriptor(AbortSignal,'any');
+  Object.defineProperty(AbortSignal,'any',{...descriptor,value:undefined});
+  t.after(()=>Object.defineProperty(AbortSignal,'any',descriptor));
+  t.mock.method(console,'warn',()=>{});
+  const inputs=new Set();
+  const add=AbortSignal.prototype.addEventListener;
+  t.mock.method(AbortSignal.prototype,'addEventListener',function(type,listener,options){
+    if(type==='abort')inputs.add(this);
+    return add.call(this,type,listener,options);
+  });
+  const body=deferred(),entered=deferred();let fail=false;
+  t.mock.method(globalThis,'fetch',async()=>{
+    if(fail)throw Error('Local handler failed');
+    return {ok:true,blob:()=>{entered.resolve();return body.promise;}};
+  });
+  const writes=[],map={getBounds:()=>({getWest:()=>west[0],getSouth:()=>west[1],getEast:()=>west[2],getNorth:()=>west[3]}),
+    getZoom:()=>12,getSource:()=>({setData:data=>writes.push(data)})};
+  const grid=taipei200Grid(map),pending=grid.show(true);
+  await entered.promise;
+  assert.equal(inputs.size,2);
+  for(const signal of inputs)assert.equal(getEventListeners(signal,'abort').length,1);
+  body.resolve(new Blob([JSON.stringify({type:'FeatureCollection',features:[{
+    type:'Feature',id:'cell',geometry:{type:'Polygon',coordinates:[[a,b,a]]},properties:{},
+  }]})]));
+  await pending;assert.equal(writes.at(-1).features.length,1);
+  for(const signal of inputs)assert.equal(getEventListeners(signal,'abort').length,0);
+  grid.clear();inputs.clear();fail=true;
+  await grid.show(true);
+  assert.equal(inputs.size,2);
+  for(const signal of inputs)assert.equal(getEventListeners(signal,'abort').length,0);
 });
 
 test('the runtime decodes every shipped 200m pack and registers the same 7,047 footprints as the municipal grid',async()=>{

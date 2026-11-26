@@ -5,7 +5,7 @@ import {gunzipSync} from 'node:zlib';
 import {CityNature} from '../city-nature.js';
 import {indexTreeCanopies,plainCanopy} from '../taipei-tree-canopies.js';
 
-function scene(id,loadCanopies) {
+function scene(id,loadCanopies,landmarkRows) {
   const models=[], uploads=[], draws=[];
   let zoom=17, elevation=12;
   const listeners=new Map();
@@ -21,7 +21,7 @@ function scene(id,loadCanopies) {
     triggerRepaint(){},
     on(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);},
     off(type,fn){listeners.get(type)?.delete(fn);}};
-  const art=new CityNature(loadCanopies);
+  const art=new CityNature(loadCanopies,landmarkRows);
   if(id)art.id=id;
   art.onAdd(map,gl);
   return {art,models,uploads,draws,listeners,remove:()=>art.onRemove(map,gl),
@@ -29,6 +29,22 @@ function scene(id,loadCanopies) {
     zoom:z=>{zoom=z;},terrain:z=>{elevation=z;},
     render:()=>art.render(gl,{defaultProjectionData:{mainMatrix:new Float32Array(16)}})};
 }
+
+test('full-tower framing keeps only bounded landmark trees, then restores street inventory',()=>{
+  const landmark=[121.51,25.04,7.2,'round',1],street=[121.511,25.041,8,'round',1];
+  const s=scene(undefined,undefined,[landmark]);
+  s.zoom(16.22);s.art.setRows([]);s.render();
+  assert.deepEqual(s.art.activeTrees.rows,[landmark]);
+  assert.equal(s.art.drawn,1);
+  s.art.setRows([landmark,street]);s.render();
+  assert.deepEqual(s.art.activeTrees.rows,[landmark]);
+  const uploads=s.uploads.length;s.render();assert.equal(s.uploads.length,uploads);
+  s.zoom(17);s.render();assert.deepEqual(s.art.activeTrees.rows,[landmark,street]);
+  s.zoom(16.22);s.render();assert.deepEqual(s.art.activeTrees.rows,[landmark]);
+  s.zoom(14);s.render();assert.equal(s.art.drawn,0);assert.deepEqual(s.art.activeTrees.rows,[]);
+  const normal=scene();normal.zoom(16.22);normal.art.setRows([street]);normal.render();
+  assert.equal(normal.art.drawn,0);
+});
 
 test('surveyed crown silhouettes retain their root, height scale and distinct widths',()=>{
   const {art,models}=scene();
