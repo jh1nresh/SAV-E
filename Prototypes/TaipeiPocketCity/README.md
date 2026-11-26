@@ -77,7 +77,7 @@ Mac 版透過 MapKit 即時取得地點。Apple 提供的地點只顯示在 Appl
 
 ## 圖資與來源
 
-台北 12 區按 170 公尺街廓整理。3D 版保留市府建物量體、24,072 筆可定位的來源店家和公共樹籍。7,906 筆可對上臨街外牆。復興南路示範街廓有 19 間店面。信義書局的紅招牌與騎樓參照紀錄照片，書架、入口深度及鄰店外觀為插畫重建。[信義書局紀錄](https://www.dream-land.com.tw/56%E4%BF%A1%E7%BE%A9%E6%9B%B8%E5%B1%80/)
+台北 12 區的街面由 Pocket City 逐格重建，共 7,047 個 200 × 200 公尺格。地圖依視窗載入各格的人行鋪面、車道線與斑馬線。3D 版保留市府建物量體、24,072 筆可定位的來源店家和公共樹籍。7,906 筆可對上臨街外牆。復興南路示範街廓有 19 間店面。信義書局的紅招牌與騎樓參照紀錄照片，書架、入口深度及鄰店外觀為插畫重建。[信義書局紀錄](https://www.dream-land.com.tw/56%E4%BF%A1%E7%BE%A9%E6%9B%B8%E5%B1%80/)
 
 臺北地面店家的樓層核對使用經濟部商業發展署的開放資料。[台北市商業登記資料-F零售、批發及餐飲業](https://data.gov.tw/dataset/53661) · [政府資料開放授權條款第 1 版](https://data.gov.tw/license)
 
@@ -96,6 +96,17 @@ iPhone 離線地圖隨附台北的第 3–14 倍率向量圖磚，以 `cities/ma
 - 3D 街景使用 OpenFreeMap、OpenMapTiles、Mapzen 地形及 MapLibre GL JS。插畫參考 April Zhu 的 Pocket City 與 Pocket Nature。[Pocket City](https://april-zhu.com/pocketcity) · [Pocket Nature](https://april-zhu.com/pocketnature) · [Pocket City 授權](assets/Pocket-City-LICENSE.txt) · [MapLibre 授權](assets/MapLibre-LICENSE.txt)
 
 `prepare_data.py` 會查核每包 SHA-256，還原完成才建立 `data/`。可用 `tools/bundle_data.py <準備好的圖資資料夾> <輸出資料夾>` 重新封裝。封裝與還原會保留每份資料解壓後的內容，gzip 壓縮位元組可能不同。`scripts/` 保留地圖資料與模型的製作工具，各自使用原始來源與額外的製圖相依套件。
+
+## 重建台北 200 公尺街面
+
+從本目錄執行，使用與既有街景相同的台北 OSM 快照。第一遍保留每格完整 Pocket City 場景。第二遍在四邊各多讀 25 公尺，排除高架及地下道路，再將完整線條裁回原格，讓斑馬線可以跨格。編譯時以市界、地面車道、人行空間和水域核對可繪範圍。
+
+```sh
+uv run --python 3.12 --with ijson --with pyproj --with 'shapely>=2.1' python scripts/prepare-taipei200.py --osm "$TAIPEI_OSM" --skill "$POCKET_CITY_SKILL" --work "$BUILD_ROOT/scenes"
+uv run --python 3.12 --with ijson --with pyproj --with 'shapely>=2.1' python scripts/prepare-taipei200.py --osm "$TAIPEI_OSM" --skill "$POCKET_CITY_SKILL" --work "$BUILD_ROOT/paint" --paint-halo
+uv run --python 3.12 --with ijson --with pyproj --with 'shapely>=2.1' python scripts/compile-taipei200.py --work "$BUILD_ROOT/scenes" --paint-context "$BUILD_ROOT/paint"
+uv run --python 3.12 --with pyproj --with 'shapely>=2.1' python scripts/test-taipei200-paint.py
+```
 
 ## 台北 170 公尺逐格稽核
 
