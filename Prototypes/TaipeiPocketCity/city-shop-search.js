@@ -100,7 +100,7 @@ export function addShopSearch(map,locate,heritage,openPlace,focusFront,searchNat
         button.type='button';
         const title=document.createElement('strong'),detail=document.createElement('small');
         title.textContent=name;
-        detail.textContent=[district,street,additionalShopFloor(id,heritagePlace?.source,street),heritagePlace?.source==='Savvy'?'Savvy 貼文':angle!==null?'店面':district||street?'':'地點']
+        detail.textContent=[district,street,additionalShopFloor(id,heritagePlace?.source,street),angle!==null?'店面':district||street?'':'地點']
           .filter(Boolean).join(' · ');
         button.append(title,detail);
         button.addEventListener('click',()=>{

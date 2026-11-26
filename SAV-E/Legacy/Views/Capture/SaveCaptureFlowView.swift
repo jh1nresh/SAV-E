@@ -29,6 +29,41 @@ struct SaveCaptureFlowView: View {
     @State private var detent: PresentationDetent = Self.raisedMediumDetent
     @State private var entitlements = SaveEntitlementStore.shared
 
+    private enum Appearance {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        static let paper = SaveBrandUI.canvas
+        static let contentBackground = Color.clear
+        static let ink = SaveBrandUI.ink
+        static let muted = SaveBrandUI.muted
+        static let action = SaveBrandUI.action
+        static let actionInk = SaveBrandUI.actionInk
+        static let line = SaveBrandUI.ink.opacity(0.10)
+        static let radius: CGFloat = 22
+        static func body(_ size: CGFloat) -> Font { size <= 13 ? .caption : .body }
+        static func strong(_ size: CGFloat) -> Font { body(size).weight(.semibold) }
+#else
+        static let paper = SaveAtlasPalette.paper
+        static let contentBackground = paper
+        static let ink = SaveAtlasPalette.ink
+        static let muted = SaveAtlasPalette.muted
+        static let action = SaveAtlasPalette.coral
+        static let actionInk = Color.white
+        static let line = SaveAtlasPalette.ink
+        static let radius = SaveAtlasPalette.cardRadius
+        static func body(_ size: CGFloat) -> Font { SaveAtlasType.body(size) }
+        static func strong(_ size: CGFloat) -> Font { SaveAtlasType.strong(size) }
+#endif
+    }
+
+    @ScaledMetric(relativeTo: .body) private var scaledControlHeight = SaveLayout.buttonHeight
+    private var controlHeight: CGFloat {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        scaledControlHeight
+#else
+        SaveLayout.buttonHeight
+#endif
+    }
+
     /// Medium + 40pt so the Home peek matches the locked capture mock.
     private static var raisedMediumDetent: PresentationDetent {
         .height((UIScreen.main.bounds.height * 0.5) + 40)
@@ -51,7 +86,11 @@ struct SaveCaptureFlowView: View {
         .interactiveDismissDisabled(isAnalyzing)
         .presentationDetents([Self.raisedMediumDetent, .large], selection: $detent)
         .presentationDragIndicator(.visible)
-        .presentationBackground(SaveAtlasPalette.paper)
+        #if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        .presentationBackground(.regularMaterial)
+#else
+        .presentationBackground(Appearance.paper)
+#endif
         // Keep capture.flow on the cover root. Without `.contain`, the
         // identifier collapses this Group and hides takeout.import.root
         // after the in-sheet swap. Do not remount Postal Import.
@@ -95,15 +134,15 @@ struct SaveCaptureFlowView: View {
 
                         if isReadingPhoto {
                             ProgressView(localized("Reading photo…", "讀取照片中…"))
-                                .font(SaveAtlasType.body(13))
+                                .font(Appearance.body(13))
                                 .padding(.top, SaveSpace.md)
                                 .accessibilityIdentifier("capture.readingPhoto")
                         }
 
                         if let errorMessage {
                             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                                .font(SaveAtlasType.body(13))
-                                .foregroundStyle(SaveAtlasPalette.coral)
+                                .font(Appearance.body(13))
+                                .foregroundStyle(Appearance.action)
                                 .padding(.top, SaveSpace.md)
                                 .accessibilityIdentifier("capture.error")
                         }
@@ -120,13 +159,13 @@ struct SaveCaptureFlowView: View {
             }
             .padding(.horizontal, SaveLayout.screenMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(SaveAtlasPalette.paper.ignoresSafeArea())
+            .background(Appearance.contentBackground.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(action: onCancel) {
                         Image(systemName: "xmark")
                             .font(.body.weight(.semibold))
-                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .foregroundStyle(Appearance.ink)
                             .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
                     }
                     .disabled(isAnalyzing)
@@ -144,8 +183,8 @@ struct SaveCaptureFlowView: View {
                     "AI assist is unavailable right now. You can still save a link or import a file.",
                     "目前無法使用 AI 協助。仍可從連結或檔案存地點。"
                 ))
-                .font(SaveAtlasType.body(13))
-                .foregroundStyle(SaveAtlasPalette.muted)
+                .font(Appearance.body(13))
+                .foregroundStyle(Appearance.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("ai.quotaExhausted")
@@ -153,26 +192,27 @@ struct SaveCaptureFlowView: View {
 
             Button(action: analyze) {
                 HStack(spacing: SaveSpace.xs) {
-                    if isAnalyzing { ProgressView().tint(.white) }
+                    if isAnalyzing { ProgressView().tint(Appearance.actionInk) }
                     Text(isAnalyzing
                          ? localized("Analyzing…", "分析中…")
                          : localized("Save", "儲存"))
                 }
-                .font(SaveAtlasType.strong(17))
-                .foregroundStyle(.white)
+                .font(Appearance.strong(17))
+                .foregroundStyle(Appearance.actionInk)
                 .frame(maxWidth: .infinity)
-                .frame(height: SaveLayout.buttonHeight)
+                .frame(height: controlHeight)
                 .background(
-                    SaveAtlasPalette.coral,
-                    in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                    Appearance.action,
+                    in: RoundedRectangle(cornerRadius: Appearance.radius, style: .continuous)
                 )
             }
             .disabled(!canSubmitDraft)
+            .savvyPressFeedback(prominent: true, plain: false)
             .accessibilityIdentifier("capture.analyze")
 
             Text(savedCountText)
-                .font(SaveAtlasType.body(13))
-                .foregroundStyle(SaveAtlasPalette.muted)
+                .font(Appearance.body(13))
+                .foregroundStyle(Appearance.muted)
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("capture.savedCount")
         }
@@ -182,14 +222,15 @@ struct SaveCaptureFlowView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: SaveSpace.tight) {
-            SaveDisplayTitle(
-                text: localized("Save a place", "存一個地方"),
-                pointSize: 34,
-                relativeTo: .title
-            )
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            Text(localized("Save a place", "存一個地方"))
+                .font(.title2.weight(.bold)).foregroundStyle(Appearance.ink)
+#else
+            SaveDisplayTitle(text: localized("Save a place", "存一個地方"), pointSize: 34, relativeTo: .title)
+#endif
             if let tripName {
                 Text(localized("For \(tripName)", "準備加入「\(tripName)」"))
-                    .font(SaveAtlasType.body(13))
+                    .font(Appearance.body(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
             }
         }
@@ -201,14 +242,14 @@ struct SaveCaptureFlowView: View {
         ZStack(alignment: .leading) {
             if sharedText.isEmpty {
                 Text(localized("Paste a link or type a name", "貼上連結或輸入名稱"))
-                    .font(SaveAtlasType.body(16))
-                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .font(Appearance.body(16))
+                    .foregroundStyle(Appearance.muted)
                     .padding(.horizontal, SaveSpace.md)
                     .allowsHitTesting(false)
             }
             TextEditor(text: $sharedText)
-                .font(SaveAtlasType.body(16))
-                .foregroundStyle(SaveAtlasPalette.ink)
+                .font(Appearance.body(16))
+                .foregroundStyle(Appearance.ink)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, SaveSpace.sm)
                 .padding(.vertical, SaveSpace.tight)
@@ -220,14 +261,20 @@ struct SaveCaptureFlowView: View {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
                         Button(localized("Done", "完成")) { isInputFocused = false }
+                            .savvyPressFeedback(plain: false)
                             .accessibilityIdentifier("capture.keyboardDone")
                     }
                 }
         }
-        .frame(height: SaveLayout.buttonHeight)
+        .frame(height: controlHeight)
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+        .padding(.vertical, 8)
+        .background(SaveBrandUI.surface, in: RoundedRectangle(cornerRadius: Appearance.radius))
+        .savvyInputFeedback()
+#endif
         .overlay {
-            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                .stroke(SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
+            RoundedRectangle(cornerRadius: Appearance.radius, style: .continuous)
+                .stroke(Appearance.line, lineWidth: SaveAtlasPalette.strokeWidth)
         }
     }
 
@@ -285,7 +332,7 @@ struct SaveCaptureFlowView: View {
             .frame(maxWidth: .infinity, maxHeight: SaveLayout.buttonHeight)
             .accessibilityHidden(true)
         }
-        .frame(height: SaveLayout.buttonHeight)
+        .frame(height: controlHeight)
     }
 
     private func optionRow(
@@ -297,7 +344,7 @@ struct SaveCaptureFlowView: View {
         Button(action: action) {
             optionLabel(systemImage: systemImage, title: title)
         }
-        .buttonStyle(.plain)
+        .savvyPressFeedback()
         .accessibilityIdentifier(identifier)
     }
 
@@ -305,16 +352,16 @@ struct SaveCaptureFlowView: View {
         HStack(spacing: SaveLayout.stickerToText) {
             Image(systemName: systemImage)
                 .font(.system(size: 24, weight: .regular))
-                .foregroundStyle(SaveAtlasPalette.ink)
+                .foregroundStyle(Appearance.ink)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
             Text(title)
-                .font(SaveAtlasType.body(17))
-                .foregroundStyle(SaveAtlasPalette.ink)
+                .font(Appearance.body(17))
+                .foregroundStyle(Appearance.ink)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: SaveLayout.buttonHeight)
+        .frame(height: controlHeight)
         .contentShape(Rectangle())
     }
 
@@ -334,22 +381,29 @@ struct SaveCaptureFlowView: View {
         let city = SaveDoodleHomeCatalog.localityLabel(in: place.address) ?? ""
         let meta = city.isEmpty ? eatGo : "\(eatGo) · \(city)"
         return HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+            Image(systemName: "bookmark.fill")
+                .font(.title3).foregroundStyle(SaveBrandUI.brand)
+                .frame(width: 44, height: 44)
+                .background(SaveBrandUI.soft, in: RoundedRectangle(cornerRadius: 14))
+#else
             SaveDoodleSticker(
                 category: place.category,
                 placeName: place.name,
                 visited: place.status == .visited
             )
             .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+#endif
 
             VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
                 Text(place.name)
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .font(Appearance.strong(17))
+                    .foregroundStyle(Appearance.ink)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
                 Text(meta)
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .font(Appearance.body(13))
+                    .foregroundStyle(Appearance.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -357,12 +411,12 @@ struct SaveCaptureFlowView: View {
         .padding(.vertical, SaveSpace.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            SaveAtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+            Appearance.paper,
+            in: RoundedRectangle(cornerRadius: Appearance.radius, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                .stroke(SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
+            RoundedRectangle(cornerRadius: Appearance.radius, style: .continuous)
+                .stroke(Appearance.line, lineWidth: SaveAtlasPalette.strokeWidth)
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("capture.recentSave")

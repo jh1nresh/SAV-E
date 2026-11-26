@@ -15,7 +15,9 @@ struct LivePlanningLibraryView: View {
     @Environment(\.appLanguageSettings) private var language
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
-    @State private var filter: LiveLibraryFilter = .all
+    @State private var regionID: String?
+    @State private var category: PlaceCategory?
+    @State private var reviewsExpanded = false
 
     init(places: [Place], isLoading: Bool, onOpen: @escaping (Place) -> Void,
          onCapture: @escaping () -> Void, reviewCandidates: [PlaceReviewCandidate] = [],
@@ -43,19 +45,9 @@ struct LivePlanningLibraryView: View {
         LiveLibraryReviewProjection(candidates: reviewCandidates, batchIDs: reviewBatchIDs, query: searchText)
     }
 
-    private var matches: [Place] {
-        let text = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return places.filter { place in
-            let statusMatches = filter == .all
-                || (filter == .wantToGo && place.status == .wantToGo)
-                || (filter == .visited && place.status == .visited)
-            return statusMatches && (text.isEmpty
-                || place.name.localizedStandardContains(text)
-                || place.address.localizedStandardContains(text))
-        }
-    }
-
     var body: some View {
+        let collection = LiveLibraryCollection(places: places, query: searchText, regionID: regionID, category: category)
+        let pending = review
         VStack(spacing: 12) {
             if sharedQuery == nil {
                 HStack(spacing: 8) {
@@ -66,12 +58,13 @@ struct LivePlanningLibraryView: View {
                         .font(.system(.body, design: .rounded))
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .submitLabel(.search).accessibilityIdentifier("live.library.search")
+                        .savvyInputFeedback()
                     if !query.isEmpty {
                         Button(action: clearSearch) {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(DateTheme.muted)
                                 .frame(minWidth: 44, minHeight: 44)
                         }
-                        .buttonStyle(.plain).accessibilityLabel(copy("Clear search", "清除搜尋"))
+                        .savvyPressFeedback().accessibilityLabel(copy("Clear search", "清除搜尋"))
                     }
                 }
                 .padding(.leading, 16).padding(.trailing, 4).frame(minHeight: 52)
@@ -79,26 +72,45 @@ struct LivePlanningLibraryView: View {
             }
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    reviewSection
-                    Text(copy("Saved places", "已收藏地點"))
-                        .font(.system(.headline, design: .rounded))
-                        .padding(.top, 12).accessibilityAddTraits(.isHeader)
-                    savedFilters
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if reviewBatchIDs != nil {
+                        reviewSection(pending)
+                    } else if !pending.eligible.isEmpty {
+                        Button { reviewsExpanded.toggle() } label: {
+                            HStack(spacing: 8) {
+                                Text(copy("To review · \(pending.eligible.count)", "待確認 · \(pending.eligible.count)"))
+                                Spacer()
+                                Image(systemName: reviewsExpanded ? "chevron.down" : "chevron.right")
+                                    .accessibilityHidden(true)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .savvyPressFeedback()
+                        .accessibilityValue(reviewsExpanded ? copy("Expanded", "已展開") : copy("Collapsed", "已收合"))
+                        .accessibilityIdentifier("live.library.review.disclosure")
+                        if reviewsExpanded { reviewSection(pending) }
+                    }
+                    collectionHeader(collection)
                     if isLoading {
                         ProgressView(copy("Loading saved places…", "載入收藏…"))
                             .font(.system(.subheadline, design: .rounded)).padding(.vertical, 16)
                             .frame(maxWidth: .infinity)
                     }
-                    if matches.isEmpty && !isLoading {
+                    if collection.matches.isEmpty && !isLoading {
                         emptyState
                     } else {
-                        ForEach(matches) { place in
-                            Button { onOpen(place) } label: {
-                                LiveLibraryPlaceRow(place: place)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: dynamicTypeSize.isAccessibilitySize ? 320 : 142),
+                                                     spacing: 12, alignment: .top)],
+                                  alignment: .leading, spacing: 12) {
+                            ForEach(collection.matches) { entry in
+                                Button { onOpen(entry.place) } label: {
+                                    LiveLibraryPlaceTile(entry: entry)
+                                }
+                                .savvyPressFeedback()
+                                .accessibilityIdentifier("live.library.place.\(entry.id.uuidString)")
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("live.library.place.\(place.id.uuidString)")
                         }
                     }
                 }.padding(.bottom, 8)
@@ -114,7 +126,7 @@ struct LivePlanningLibraryView: View {
                         .padding(.horizontal, 16).padding(.vertical, 4)
                         .foregroundStyle(DateTheme.actionInk).background(DateTheme.action, in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .savvyPressFeedback(prominent: true)
                 .accessibilityLabel(copy("Add from a post or screenshot", "從貼文或截圖新增"))
                 .accessibilityIdentifier("live.library.add")
             }
@@ -124,35 +136,57 @@ struct LivePlanningLibraryView: View {
         .accessibilityIdentifier("live.library")
     }
 
-    private var savedFilters: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(LiveLibraryFilter.allCases, id: \.self) { value in
-                    Button { filter = value } label: {
-                        Text(filterTitle(value)).font(.system(.subheadline, design: .rounded, weight: .semibold))
-                            .padding(.horizontal, 16).frame(minHeight: 44)
-                            .foregroundStyle(filter == value ? DateTheme.actionInk : DateTheme.ink)
-                            .background(filter == value ? DateTheme.action : DateTheme.surface, in: Capsule())
+    private func collectionHeader(_ collection: LiveLibraryCollection) -> some View {
+        let filtering = regionID != nil || category != nil
+        return HStack(spacing: 8) {
+            Text(copy("Everything", "全部收藏"))
+                .font(.system(.title2, design: .rounded, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 4)
+            if !collection.regions.isEmpty || !collection.categories.isEmpty {
+                Menu {
+                    Picker(copy("Region", "地區"), selection: $regionID) {
+                        Text(copy("All regions", "所有地區")).tag(nil as String?)
+                        ForEach(collection.regions) { region in
+                            Text(region.name).tag(Optional(region.id))
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(filter == value ? .isSelected : [])
-                    .accessibilityIdentifier("live.library.savedFilter.\(String(describing: value))")
+                    Picker(copy("Category", "類別"), selection: $category) {
+                        Text(copy("All categories", "所有類別")).tag(nil as PlaceCategory?)
+                        ForEach(collection.categories, id: \.self) { value in
+                            Text(value.displayName(language: language.language)).tag(Optional(value))
+                        }
+                    }
+                    if filtering {
+                        Button(copy("Clear filters", "清除篩選"), action: clearFilters)
+                    }
+                } label: {
+                    Image(systemName: filtering ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .background(DateTheme.soft, in: Circle())
                 }
+                .tint(filtering ? DateTheme.blue : DateTheme.ink)
+                .accessibilityLabel(copy("Filter saved places", "篩選收藏"))
+                .accessibilityValue(filtering ? copy("Filters active", "已套用篩選") : copy("Showing everything", "顯示全部收藏"))
+                .accessibilityIdentifier("live.library.filter")
             }
-        }.scrollIndicators(.hidden)
+        }
     }
 
-    private var reviewSection: some View {
-        let projection = review
+    private func reviewSection(_ projection: LiveLibraryReviewProjection) -> some View {
         return VStack(alignment: .leading, spacing: 10) {
-            Text(copy("To review", "待確認"))
-                .font(.system(.headline, design: .rounded)).accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("live.library.review.heading")
             if reviewBatchIDs != nil {
+                Text(copy("To review", "待確認"))
+                    .font(.system(.headline, design: .rounded)).accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("live.library.review.heading")
                 VStack(alignment: .leading, spacing: 4) {
                     Label(copy("This capture · review before saving", "本次線索 · 確認後才會收藏"), systemImage: "magnifyingglass")
                         .font(.system(.subheadline, design: .rounded)).foregroundStyle(DateTheme.muted)
-                    Button(copy("Show all to review", "顯示全部待確認"), action: onClearReviewBatch)
+                    Button(copy("Show all to review", "顯示全部待確認")) {
+                        reviewsExpanded = true
+                        onClearReviewBatch()
+                    }
                         .font(.system(.subheadline, design: .rounded, weight: .semibold))
                         .frame(minHeight: 44).foregroundStyle(DateTheme.blue)
                         .accessibilityIdentifier("live.library.review.showAll")
@@ -175,7 +209,7 @@ struct LivePlanningLibraryView: View {
                 ForEach(projection.matches) { candidate in
                     let id = candidate.id
                     Button { onOpenReview(id) } label: { LiveLibraryReviewRow(candidate: candidate) }
-                        .buttonStyle(.plain)
+                        .savvyPressFeedback()
                         .accessibilityHint(copy("Open this clue to check it before saving", "打開線索，確認後才會收藏"))
                         .accessibilityIdentifier("live.library.review.\(id.uuidString)")
                 }
@@ -206,10 +240,10 @@ struct LivePlanningLibraryView: View {
                 .font(.system(.headline, design: .rounded))
             Text(places.isEmpty
                  ? copy("Add a clue from a post or screenshot, then confirm the place.", "從貼文或截圖加入線索，再確認地點。")
-                 : copy("Try another name, address or status.", "試試其他名稱、地址或收藏狀態。"))
+                 : copy("Try another name, address or filter.", "試試其他名稱、地址或篩選。"))
                 .font(.system(.subheadline, design: .rounded)).foregroundStyle(DateTheme.muted)
-            if !query.isEmpty || filter != .all {
-                Button(copy("Clear filters", "清除篩選")) { query = ""; filter = .all }
+            if !searchText.isEmpty || regionID != nil || category != nil {
+                Button(copy("Clear filters", "清除篩選")) { clearSearch(); clearFilters() }
                     .font(.system(.body, design: .rounded, weight: .semibold))
                     .frame(minHeight: 44).foregroundStyle(DateTheme.blue)
             }
@@ -217,12 +251,9 @@ struct LivePlanningLibraryView: View {
         .frame(maxWidth: .infinity, alignment: .leading).padding(20).modifier(LiveLibraryCard())
     }
 
-    private func filterTitle(_ value: LiveLibraryFilter) -> String {
-        switch value {
-        case .all: copy("All", "全部")
-        case .wantToGo: copy("Want to go", "想去")
-        case .visited: copy("Marked visited", "標記去過")
-        }
+    private func clearFilters() {
+        regionID = nil
+        category = nil
     }
 
     private func copy(_ english: String, _ chinese: String) -> String {
@@ -399,7 +430,7 @@ struct LivePlanningPassportView: View {
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .padding(16).modifier(LiveLibraryCard()).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+        }.savvyPressFeedback()
     }
 
     private func copy(_ english: String, _ chinese: String) -> String {
@@ -407,41 +438,125 @@ struct LivePlanningPassportView: View {
     }
 }
 
-private enum LiveLibraryFilter: CaseIterable, Hashable { case all, wantToGo, visited }
+struct LiveLibraryCollection {
+    struct Region: Identifiable {
+        let id: String
+        let name: String
+    }
+    struct Entry: Identifiable {
+        let id: UUID
+        let place: Place
+        let region: Region?
+        let location: String
 
-@MainActor
-private struct LiveLibraryPlaceRow: View {
-    let place: Place
-    @Environment(\.appLanguageSettings) private var language
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            LiveBusinessPhoto(place: place)
-            .frame(width: 58, height: 58).background(DateTheme.soft)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(place.name.isEmpty ? language.localized(english: "Untitled saved place", traditionalChinese: "未命名收藏") : place.name)
-                    .font(.system(.headline, design: .rounded)).multilineTextAlignment(.leading)
-                if !place.address.isEmpty {
-                    Text(place.address).font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(DateTheme.muted).multilineTextAlignment(.leading)
+        @MainActor
+        init(place: Place) {
+            id = place.id
+            self.place = place
+            let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            let taiwanAddress = address.replacingOccurrences(of: "臺", with: "台")
+            if let municipality = Self.taiwanMunicipality(in: taiwanAddress) {
+                let label = String(taiwanAddress[municipality])
+                region = Region(id: SaveAddressLocality.resolve(label)?.cityID ?? label, name: label)
+                location = Self.locationLabel(label, remainder: taiwanAddress[municipality.upperBound...])
+            } else if let area = SaveAddressLocality.resolve(address),
+               area.metroKey != nil || area.region != nil || area.country != nil
+                || area.label.last.map({ "市縣县都".contains($0) }) == true {
+                region = Region(id: area.cityID, name: area.label)
+                if let city = address.range(of: area.label) {
+                    location = Self.locationLabel(area.label, remainder: address[city.upperBound...])
+                } else {
+                    location = area.label
                 }
-                Text(place.status == .visited
-                     ? language.localized(english: "Saved · marked visited", traditionalChinese: "已收藏 · 標記去過")
-                     : language.localized(english: "Saved · want to go", traditionalChinese: "已收藏 · 想去"))
-                    .font(.system(.caption, design: .rounded, weight: .medium)).foregroundStyle(DateTheme.blue)
+            } else {
+                region = nil
+                location = address
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right").font(.system(.caption, weight: .semibold))
-                .foregroundStyle(DateTheme.muted).padding(.top, 4).accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-        .padding(16).modifier(LiveLibraryCard()).contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
+
+        private static func taiwanMunicipality(in address: String) -> Range<String.Index>? {
+            let prefix = address.range(of: #"^(?:\d{3,6}\s*)?(?:台灣|台湾)?\s*"#,
+                                       options: .regularExpression)
+            let remainder = address[(prefix?.upperBound ?? address.startIndex)...]
+            return remainder.range(
+                of: #"^(?:台北市|新北市|基隆市|桃園市|新竹[市縣]|苗栗縣|台中市|彰化縣|南投縣|雲林縣|嘉義[市縣]|台南市|高雄市|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣|金門縣|連江縣)"#,
+                options: .regularExpression
+            )
+        }
+
+        private static func locationLabel(_ city: String, remainder: Substring) -> String {
+            guard let district = remainder.range(of: #"^\s*[\p{Han}]{1,5}?[區区鄉乡鎮镇市]"#,
+                                                  options: .regularExpression) else { return city }
+            return city + " · " + remainder[district].trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
+    let regions: [Region]
+    let categories: [PlaceCategory]
+    let matches: [Entry]
 
+    @MainActor
+    init(places: [Place], query: String, regionID: String?, category: PlaceCategory?) {
+        let entries = places.map(Entry.init)
+        var seen = Set<String>()
+        regions = entries.compactMap(\.region).filter { seen.insert($0.id).inserted }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        let presentCategories = Set(places.map(\.category))
+        categories = PlaceCategory.allCases.filter(presentCategories.contains)
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        matches = entries.filter { entry in
+            (regionID == nil || entry.region?.id == regionID)
+                && (category == nil || entry.place.category == category)
+                && (text.isEmpty || entry.place.name.localizedStandardContains(text)
+                    || entry.place.address.localizedStandardContains(text)
+                    || entry.location.localizedStandardContains(text))
+        }
+    }
+}
+
+@MainActor
+private struct LiveLibraryPlaceTile: View {
+    let entry: LiveLibraryCollection.Entry
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        let place = entry.place
+        let visited = place.status == .visited
+        let location = entry.location.isEmpty
+            ? language.localized(english: "Location unavailable", traditionalChinese: "暫無位置資訊")
+            : entry.location
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.aspectRatio(1.27, contentMode: .fit)
+                .overlay { LiveBusinessPhoto(place: place) }
+                .clipped()
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(place.name.isEmpty
+                     ? language.localized(english: "Untitled saved place", traditionalChinese: "未命名收藏")
+                     : place.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                Text(location)
+                    .font(.caption)
+                    .foregroundStyle(DateTheme.muted)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .accessibilityLabel(place.address.isEmpty ? location : place.address)
+                if visited {
+                    Text(language.localized(english: "Marked visited", traditionalChinese: "標記去過"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(DateTheme.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+        }
+        .multilineTextAlignment(.leading)
+        .background(DateTheme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
 }
 
 private struct LiveLibraryCard: ViewModifier {

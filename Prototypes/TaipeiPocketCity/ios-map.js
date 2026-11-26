@@ -1,6 +1,6 @@
 import {originalPlacePhoto} from './place-photos.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
-import {bouncePhotoPin} from './photo-pin-motion.js';
+import {setPlacePinEmphasis} from './photo-pin-motion.js';
 
 // The bundled page is the only document allowed to talk to the iOS host.
 // Keep account pins in memory. In particular, keep names out of tile/font requests.
@@ -191,10 +191,13 @@ export function connectIOSMap(map, Marker, channel, controls, explore, {floorEve
         button.className = 'ios-place-pin';
         button.addEventListener('click', event => {
           event.stopPropagation();
-          const art = button.querySelector?.('.ios-pin-art');
-          if (art) bouncePhotoPin(art, .72);
           if (button.pocketPlace && explore?.open) explore.open(button.pocketPlace,button);
-          else channel.postMessage({event: 'select', ids: button.placeIDs});
+          else {
+            if (button.pinIsOpen) {
+              setPlacePinEmphasis(button.querySelector?.('.ios-pin-art'), true, {repeat:true});
+            }
+            channel.postMessage({event: 'select', ids: button.placeIDs});
+          }
         });
         marker = new Marker({element: button, anchor: 'bottom'}).setLngLat(group[0].point).addTo(map);
         markers.set(key, marker);
@@ -210,13 +213,20 @@ export function connectIOSMap(map, Marker, channel, controls, explore, {floorEve
       button.dataset.kind = single ? representative.kind : 'group';
       const selected = all.some(pin => pin.selected);
       button.classList.toggle('selected', selected);
-      button.classList.toggle('ios-pin-open', selected || (single && !!openPlaceId && openPlaceId === representative.reviewedPlaceId));
+      const open = selected || (single && !!openPlaceId && openPlaceId === representative.reviewedPlaceId);
+      button.classList.toggle('ios-pin-open', open);
       const saved = single && all.some(pin => pin.isSaved || pin.kind === 'saved' || pin.kind === 'visited');
       button.classList.toggle('is-saved', saved);
+      const previous = button.querySelector?.('.ios-pin-art');
       if (representative.category || representative.isSaved !== undefined || representative.photo) {
         const pin = single ? representative : {name:group.length+' 個地點',category:'other'};
         renderPin(button, pin, single ? representative.photo : null, saved, single && all.some(p=>p.kind === 'shared'));
       } else button.textContent = representative.name;
+      const art = button.querySelector?.('.ios-pin-art');
+      if (art && (button.pinIsOpen !== open || art !== previous)) {
+        setPlacePinEmphasis(art, open, {animate:art === previous});
+      }
+      button.pinIsOpen = open;
       button.setAttribute('aria-label', all.map(pin => pin.label).join(', '));
     }
   }

@@ -145,7 +145,7 @@ export function createPlaceCallout(map){
       moveFocusMarker();
       map.on('move',moveFocusMarker);
     }
-    setPlacePinEmphasis(activeArt,true);
+    setPlacePinEmphasis(activeArt,true,{repeat:true});
   }
   handle.addEventListener('pointerdown',event=>{
     dragStart=event.clientY;handle.setPointerCapture(event.pointerId);
@@ -231,8 +231,7 @@ export function createPlaceCallout(map){
     choices.hidden=!place.choices?.length;
     for(const candidate of place.choices??[]){
       const option=document.createElement('button');
-      option.type='button';option.textContent=(candidate.name||candidate.categoryLabel||'地點')
-        +(candidate.source==='Savvy'?' · Savvy 貼文':'');
+      option.type='button';option.textContent=candidate.name||candidate.categoryLabel||'地點';
       const candidateFloor=additionalShopFloor(cityPlaceID(candidate),candidate.source,option.textContent);
       if(candidateFloor)option.textContent+=' · '+candidateFloor;
       option.addEventListener('click',()=>open(candidate));

@@ -344,6 +344,7 @@ struct AIDrawerView: View {
                     withAnimation { drawerDetent = .medium }
                 }
                 .accessibilityIdentifier("drawer.commandField")
+                .savvyInputFeedback()
 
             if isLoading {
                 Button(action: {
@@ -490,6 +491,7 @@ struct AIDrawerView: View {
             }
             .accessibilityLabel(languageSettings.localized(english: "Ask Savvy", traditionalChinese: "詢問 Savvy"))
             .accessibilityIdentifier("drawer.submitCommand")
+            .savvyPressFeedback(prominent: true, plain: false)
         } else {
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
@@ -1544,8 +1546,12 @@ private struct LinkAnalysisStatusCard: View {
         HStack(alignment: .top, spacing: 12) {
             Group {
                 if isLoading {
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+                    SavvyLoadingCloud()
+#else
                     ProgressView()
                         .tint(.saveInk)
+#endif
                 } else {
                     Image(systemName: systemImage)
                         .font(.subheadline.weight(.bold))
@@ -4221,7 +4227,7 @@ private struct UnsavedMapCandidateCard: View {
                 .font(.headline).foregroundStyle(SaveBrandUI.actionInk)
                 .padding(16).frame(maxWidth: .infinity, minHeight: 54)
                 .background(SaveBrandUI.action, in: Capsule()).contentShape(Capsule())
-            }.buttonStyle(.plain).disabled(isWorking).accessibilityIdentifier("drawer.unsaved.primaryAction")
+            }.savvyPressFeedback(prominent: true).disabled(isWorking).accessibilityIdentifier("drawer.unsaved.primaryAction")
             if let sourceURL = candidate.sourceURL, let url = URL(string: sourceURL) {
                 Link(destination: url) {
                     Label(languageSettings.localized(english: "Open map source", traditionalChinese: "開啟地圖來源"), systemImage: "arrow.up.right.square")

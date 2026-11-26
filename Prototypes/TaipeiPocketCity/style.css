@@ -282,22 +282,19 @@ h2 { margin:2px 0; font:700 1.26rem "Songti TC","Noto Serif TC",serif; line-heig
 
 .ios-place-pin.ios-art-pin { display:flex; align-items:center; flex-direction:column-reverse; gap:2px; padding:4px; }
 .ios-place-pin.ios-art-pin::after { display:none; }
-.ios-art-pin .ios-pin-art { display:block; position:relative; width:24px; height:24px; transform-origin:50% 100%; }
+.ios-art-pin .ios-pin-art { display:block; position:relative; width:30px; height:30px; transform-origin:50% 100%; }
 .ios-pin-art canvas { display:block; width:100%; height:100%; }
-.ios-pin-art img { position:absolute; inset:-2px; width:28px; height:28px; border:2px solid #fffcf3; border-radius:50%; box-sizing:border-box; object-fit:cover; box-shadow:0 1px 4px #30282164; }
+.ios-pin-art img { position:absolute; inset:-2px; width:34px; height:34px; border:2px solid #FFFAFD; border-radius:50%; box-sizing:border-box; object-fit:cover; box-shadow:0 1px 4px #30282164; }
 .ios-pin-bookmark { position:absolute; right:-5px; bottom:-2px; width:12px; height:15px; background:#fff9eb; clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%); }
-.ios-pin-bookmark::before { content:""; position:absolute; inset:2px; background:#f26b4a; clip-path:inherit; }
+.ios-pin-bookmark::before { content:""; position:absolute; inset:2px; background:#4F43B9; clip-path:inherit; }
 .ios-art-pin.selected .ios-pin-art { outline:2px solid #24201e; outline-offset:3px; border-radius:50%; }
 .ios-pin-friend { position:absolute; left:-6px; bottom:-3px; width:14px; height:14px; box-sizing:border-box; border-radius:50%; border:1.5px solid #fff9eb; background:#0e4a33; }
 .ios-pin-friend::before,.ios-pin-friend::after { content:""; position:absolute; left:50%; transform:translateX(-50%); background:#fff9eb; }
 .ios-pin-friend::before { top:1.5px; width:4px; height:4px; border-radius:50%; }
 .ios-pin-friend::after { bottom:1.5px; width:7px; height:4px; border-radius:6px 6px 2px 2px; }
 
-.ios-art-pin .ios-pin-art { scale:1; transition:scale 180ms ease-out; }
-.ios-art-pin.ios-pin-open .ios-pin-art { scale:1.28; transition:scale 340ms cubic-bezier(.22,1.5,.42,1); }
-@media (prefers-reduced-motion:reduce) {
-  .ios-art-pin .ios-pin-art,.ios-art-pin.ios-pin-open .ios-pin-art { transition:none; }
-}
+.ios-place-pin.ios-pin-open,.street-pin[aria-expanded="true"],.place-focus-marker { z-index:3; }
+.street-pin canvas,.place-focus-marker canvas { transform-origin:50% 100%; }
 
 /* Embedded HTML controls use system colors if a native surface is unavailable. */
 .ios-map :is(#map-credits,#metro-panel,#place-card,#place-original) {
