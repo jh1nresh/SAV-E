@@ -43,9 +43,9 @@ export function addCityPlaceIndex(map,pin){
   // Symbols and text compete for the same screen space as the base map labels.
   // Increasing the padding at city scales leaves room to read roads and geography.
   const layout={...pin.layout,'symbol-sort-key':revealZoom,
-    'icon-size':['interpolate',['linear'],['zoom'],11,0.93,17,1.08,19,1.16],
-    'text-size':['interpolate',['linear'],['zoom'],11,12.5,17,14,20,16],
-    'text-padding':['interpolate',['linear'],['zoom'],11,25,14,24,16,17,17,10,19,5],
+    'icon-size':['interpolate',['linear'],['zoom'],11,.82,17,.88,19,.94],
+    'text-size':['interpolate',['linear'],['zoom'],11,12,17,12.5,20,14],
+    'text-padding':['interpolate',['linear'],['zoom'],11,32,14,28,16,23,17,20,19,11],
   };
   map.addSource(savvySource,{type:'geojson',data:{type:'FeatureCollection',features:[]},maxzoom:19});
   map.addLayer({id:names,source,type:'symbol',minzoom:11,maxzoom:17.8,
@@ -55,11 +55,11 @@ export function addCityPlaceIndex(map,pin){
   // outdoor areas represented by polygons in the detailed street packs.
   map.addLayer({id:outdoorNames,source,type:'symbol',minzoom:17.8,
     filter:['all',named,matches(category,outdoor)],layout,paint:pin.paint},before);
-  map.addLayer({id:metroExitLayer,source,type:'symbol',minzoom:17.55,
+  map.addLayer({id:metroExitLayer,source,type:'symbol',minzoom:18.2,
     filter:['has','exitLabel'],
-    layout:{...pin.layout,'icon-image':'place-pin-transit','icon-size':.92,
-      'text-field':['get','exitLabel'],'text-size':13,'text-offset':[.98,0],
-      'text-padding':4,'text-optional':true,'symbol-sort-key':0},
+    layout:{...pin.layout,'icon-image':'place-pin-transit','icon-size':.8,
+      'text-field':['get','exitLabel'],'text-size':12,
+      'text-padding':10,'symbol-sort-key':0},
     paint:{...pin.paint,'text-color':'#24599b'}},before);
   map.addLayer({id:savvyNames,source:savvySource,type:'symbol',minzoom:savvyZoom,
     layout:{...layout,'text-optional':true},paint:pin.paint},before);

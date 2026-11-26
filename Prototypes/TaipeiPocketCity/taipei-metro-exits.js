@@ -27,3 +27,13 @@ export const metroExitFeatures=rows.map(([station,number,lon,lat,district,access
   return {type:'Feature',id:placeId,properties,geometry:{type:'Point',coordinates:point}};
 });
 export const metroExitCard=id=>cards.get(id);
+
+// Keep the authoritative exit once, while retaining unmatched entrances elsewhere.
+const compact=name=>(name??'').replace(/^捷運\s*/,'').replace(/[\s／/]/g,'');
+export function isDuplicateMetroExit(place){
+  if(!place.point||!place.name?.includes('出口'))return false;
+  const name=compact(place.name);
+  return metroExitFeatures.some(f=>compact(f.properties.name)===name &&
+    Math.hypot((f.geometry.coordinates[0]-place.point[0])*100780,
+      (f.geometry.coordinates[1]-place.point[1])*110800)<35);
+}

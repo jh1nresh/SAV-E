@@ -4,6 +4,7 @@ import {createPlaceCallout} from './place-callout.js?v=shop-floor-1';
 import {originalPlacePhoto,photoPlaces} from './place-photos.js';
 import {cityPlaceID} from './savvy-place-sources.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
+import {isDuplicateMetroExit} from './taipei-metro-exits.js';
 import {StreetPeople} from './street-people.js';
 import {StreetScenery} from './street-scenery.js?v=tree-clearance-1';
 
@@ -137,7 +138,7 @@ export function addStreetDetail(map,{Marker,MercatorCoordinate},districts,firstL
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
   const photoIds=new Set(photoPlaces.map(place=>place.placeId));
   const pinsFor=({key,data})=>data.places
-    .filter(place=>key==='photos'||!photoIds.has(cityPlaceID(place)))
+    .filter(place=>key==='photos'||(!photoIds.has(cityPlaceID(place))&&!isDuplicateMetroExit(place)))
     .map(place=>({key,place,point:place.point,minZoom:place.minZoom??16.65,priority:place.priority??0,active:false}));
   function createMarker(pin){
     const {place}=pin;

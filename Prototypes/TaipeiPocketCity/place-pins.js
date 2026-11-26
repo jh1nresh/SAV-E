@@ -1,4 +1,4 @@
-// A vivid disc carries the category. Dark glyphs and captions stay legible on the illustrated map.
+// One category-coloured disc and a white glyph; no concentric outline competing with the map.
 const badge=(disc,ink,label,solid,lines='')=>({disc,ink,label,solid,lines});
 const styles = {
   food: badge('#ff9c42','#542805','#a34506',
@@ -59,16 +59,14 @@ export function pinLabelColor(type){return styles[type].label;}
 
 function pinCanvas(type,style=styles[type]){
   const canvas=document.createElement('canvas');
-  const {disc,ink,solid,lines}=style;
+  const {label,solid,lines}=style;
   canvas.width=canvas.height=72;
   const ctx=canvas.getContext('2d');
   ctx.scale(3,3);
   ctx.beginPath();ctx.arc(12,12,10.7,0,Math.PI*2);
-  ctx.fillStyle=disc;ctx.fill();
-  ctx.lineWidth=1.7;ctx.strokeStyle='#fffcf3';ctx.stroke();
-  ctx.beginPath();ctx.arc(12,12,9.9,0,Math.PI*2);
-  ctx.lineWidth=0.75;ctx.strokeStyle=ink;ctx.stroke();
-  ctx.fillStyle=ctx.strokeStyle=ink;
+  ctx.fillStyle=label;ctx.fill();
+  ctx.lineWidth=1.5;ctx.strokeStyle='#fffcf3';ctx.stroke();
+  ctx.fillStyle=ctx.strokeStyle='#ffffff';
   if(solid)ctx.fill(new Path2D(solid),'evenodd');
   if(lines){
     ctx.lineWidth=type==='bike'?1.45:1.8;
@@ -94,14 +92,18 @@ export function placePinStyle(map){
     ['match',category,...Object.entries(groups).flatMap(([type,values])=>[values,fn(type)]),fn('other')]];
   return {
     layout:{
-      'icon-image':byType(type=>'place-pin-'+type),'icon-size':1.16,
-      'icon-pitch-alignment':'viewport','icon-rotation-alignment':'viewport','icon-padding':2,
+      'icon-image':byType(type=>'place-pin-'+type),'icon-size':.88,
+      'icon-pitch-alignment':'viewport','icon-rotation-alignment':'viewport','icon-padding':5,
+      'icon-allow-overlap':false,'icon-ignore-placement':false,'icon-optional':false,
       'text-field':['get','name'],'text-font':['Noto Sans Bold'],
-      'text-size':['interpolate',['linear'],['zoom'],17,14,20,16],
+      'text-size':['interpolate',['linear'],['zoom'],17,12.5,20,14],
       'text-pitch-alignment':'viewport','text-rotation-alignment':'viewport',
-      'text-anchor':'left','text-offset':[1.12,0],'text-max-width':10,'text-padding':4,
+      'text-variable-anchor':['left','right','top','bottom'],'text-radial-offset':1.05,
+      'text-justify':'auto','text-max-width':9,
+      'text-padding':['interpolate',['linear'],['zoom'],16,22,18,13,20,8],
+      'text-allow-overlap':false,'text-ignore-placement':false,'text-optional':false,
       'symbol-sort-key':['to-number',['get','rank'],1],
     },
-    paint:{'text-color':byType(pinLabelColor),'text-halo-color':'#fffcf3','text-halo-width':1.8},
+    paint:{'text-color':byType(pinLabelColor),'text-halo-color':'#fffcf3','text-halo-width':1.1},
   };
 }

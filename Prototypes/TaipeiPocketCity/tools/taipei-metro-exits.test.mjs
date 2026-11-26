@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Style} from '../assets/maplibre-gl.mjs';
 import {addCityPlaceIndex,cityPlaceLayers,loadCityPlaces} from '../city-place-index.js';
-import {mallStreetExit4,metroExitCard,metroExitFeatures,metroExitLayer,metroExitPlaceId} from '../taipei-metro-exits.js';
+import {mallStreetExit4,metroExitCard,metroExitFeatures,metroExitLayer,metroExitPlaceId,isDuplicateMetroExit} from '../taipei-metro-exits.js';
 import {mallMetroExit4} from '../taipei101-wayfinding.js';
 
 test('use all 280 Taipei City exit records with stable distinct identities and original coordinates',()=>{
@@ -54,7 +54,7 @@ test('street exits are only a close-up layer and mall suppression composes with 
   addCityPlaceIndex(map,{layout:{},paint:{}});
   assert(cityPlaceLayers.includes(metroExitLayer));
   const exits=layers.get(metroExitLayer);
-  assert.equal(exits.minzoom,17.55);
+  assert.equal(exits.minzoom,18.2);
   assert.equal(exits.layout['icon-image'],'place-pin-transit');
   assert.deepEqual(exits.layout['text-field'],['get','exitLabel']);
   assert.deepEqual(sources.get(exits.source).data.features,metroExitFeatures);
@@ -80,4 +80,14 @@ test('street exits are only a close-up layer and mall suppression composes with 
   assert(!JSON.stringify(exits.filter).includes(mallStreetExit4));
   events.get('pocketaccountpins')({placeIds:[]});
   assert.deepEqual(exits.filter,original);
+});
+
+test('duplicate authored exits yield to surveyed exit pins without hiding distinct places',()=>{
+  const point=metroExitCard(metroExitPlaceId('永春站','4')).point;
+  assert.equal(isDuplicateMetroExit({name:'永春站 4 號出口',point}),true);
+  assert.equal(isDuplicateMetroExit({name:'永春站 5 號出口',point:[121,25]}),false);
+  assert.equal(isDuplicateMetroExit({name:'永春站附近咖啡',point}),false);
+  assert.equal(isDuplicateMetroExit({name:'永春站 99 號出口',point}),false);
+  assert.equal(isDuplicateMetroExit({name:'商場 4 號出口',point}),false);
+  assert.equal(isDuplicateMetroExit({name:'永春站 4 號出口',point:[121,25]}),false);
 });

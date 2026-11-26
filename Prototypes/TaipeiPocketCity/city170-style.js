@@ -580,7 +580,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
       'hairdresser','pharmacy','beverages','supermarket','deli','optician','beauty','books',
       'ice_cream','tea','bar','shoes','florist','gift','jewelry','electronics','hardware'
     ]]]]],
-    layout:{...pin.layout,'text-padding':9},paint:pin.paint,
+    layout:pin.layout,paint:pin.paint,
   },underLabels);
   add({
     id: 'city170-poi-labels',
