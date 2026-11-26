@@ -7,6 +7,7 @@ import {installTaiwanRelief,taiwanLocalDEM} from './taiwan-relief.js?v=taipei-re
 import {makeTaiwanCoverage,readTaiwanJSON} from './taiwan-coverage.js?v=streets-2';
 import {addTaiwanPlaces,searchTaiwanEntries} from './taiwan-places.js?v=alpine-1';
 import {addXinyiRidgeWoods} from './xinyi-ridge-woods.js';
+import {addTaipeiRoadBridges} from './taipei-road-bridges.js';
 import {addSongshanRiverMeadow} from './songshan-river-meadow.js';
 import {addTaipeiRiverArt} from './taipei-river-art.js?v=waterfront-4';
 import {marketStallLife} from './taipei-market-stalls.js';
@@ -38,6 +39,9 @@ import {addCity170,dihuaSearch} from './city170.js?v=tree-clearance-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=taipei-streets-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
+
+import {applyBaseAsphalt,asphaltColors} from './taipei-asphalt.js';
+import {taipeiBoundary} from './taipei-road-boundary.js';
 
 const $=query=>document.querySelector(query);
 const stage=$('#stage');
@@ -146,6 +150,7 @@ const hybridBaseColors={
 };
 function mapStyle(base,districts) {
   base.name='Savvy Pocket City';
+  if(rerun)base.state={...base.state,taipeiAsphalt:{default:asphaltColors.day}};
   base.projection={type:'globe'};
   base.sky={'sky-color':'#152532','horizon-color':'#b7d9d7','fog-color':'transparent',
     'atmosphere-blend':['interpolate',['linear'],['zoom'],0,.62,5,.4,10,0]};
@@ -156,6 +161,7 @@ function mapStyle(base,districts) {
     const color=(hybrid?hybridBaseColors[l.id]:null)??layersForColor[l.id];
     if(color)l.paint={...l.paint,[l.type+'-color']:color};
     if(l.id.startsWith('road_')&&l.id.endsWith('_casing'))l.paint['line-color']='#c5bdb0';
+    if(rerun)applyBaseAsphalt(l,taipeiBoundary);
     if(l.id.startsWith('tunnel_')&&l.type==='line')l.paint={...l.paint,'line-opacity':.25};
     if(l.id==='building')l.paint={...l.paint,'fill-opacity':.65};
     if(l.id==='poi_r1')delete l.layout['icon-image'];
@@ -416,7 +422,7 @@ $('#world').addEventListener('click',worldOverview);
 
 message('載入地圖…');
 try{
-  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,bundledTaipeiTiles,previewTaipeiTiles,liveTiles,...loadedStreets]=await Promise.all([
+  const [base,districts,index,landmark,sharedMask,atlas,shadows,metro,walkingDetails,skillAtlas,cityIndex,tileIndex,bundledTaipeiTiles,previewTaipeiTiles,liveTiles,streetGradeTiles,...loadedStreets]=await Promise.all([
     get('./assets/base-style.json'),get('./data/districts.geojson'),get('./data/survey-index.json'),
     get('./data/landmark-101.json').catch(()=>null),
     loadImage(hybrid?'./data/street-hybrid-material-mask.png':'./data/street-atlas-material-mask.png').catch(()=>null),
@@ -428,10 +434,11 @@ try{
       .then(data=>data?.summary&&data?.districts?data:null).catch(()=>null):null,
     rerun?get(`./data/city-streets/index.json${terrainRevision}`).catch(()=>null):null,
     get('./cities/map-tiles/index.json?rev=shuqi-1').catch(()=>null),
-    bundledTiles?get('./cities/map-tiles/taipei-bundled/index.json'):null,
+    (bundledTiles||rerun)?get('./cities/map-tiles/taipei-bundled/index.json').catch(()=>null):null,
     bundledTiles?get('./cities/map-tiles/taipei-preview/index.json').catch(()=>null):null,
     bundledTiles?null:fetch('https://tiles.openfreemap.org/planet',{signal:AbortSignal.timeout(1800)})
       .then(res=>res.ok?res.json():null).catch(()=>null),
+    rerun?get('./assets/taipei-street-grade/index.json').catch(()=>[]):[],
     ...streetDataKeys.filter(key=>!rerun||!key.endsWith('-district')).map(key=>get(`./data/street-${key}.json`)
       .then(data=>({key,data})).catch(error=>{console.warn(error.message);return null;})),
   ]);
@@ -474,8 +481,14 @@ try{
         localTerrain.set(key,new URL('./cities/map-tiles/'+x+'-'+y+'.'+ext,import.meta.url).href);
       }
     }
+    // The bridge paint IDs are certified against these Taipei street-level tiles.
+    // Live and bundled views both overzoom the identical z14 geometry.
+    const pinned=new Set(tileIndex.tiles.map(([x,y])=>x+'/'+y));
+    for(const [z,x,y] of bundledTaipeiTiles?.tiles??[])if(z===14)pinned.add(x+'/'+y);
     for(const [folder,region] of [['taipei-bundled',bundledTaipeiTiles],['taipei-preview',previewTaipeiTiles]]){
       for(const [z,x,y] of region?.tiles??[]){
+        if(!bundledTiles&&z!==14)continue;
+        if(rerun&&z===14&&folder==='taipei-preview'&&pinned.has(x+'/'+y))continue;
         const url=vectorTemplate.replace('{z}',z).replace('{x}',x).replace('{y}',y);
         localTerrain.set(url,new URL(`./cities/map-tiles/${folder}/${z}-${x}-${y}.pbf`,import.meta.url).href);
       }
@@ -484,6 +497,12 @@ try{
   if(cityIndex?.terrainTiles?.includes('13724/7014')){
     localTerrain.set(terrainSource+'14/13724/7014.png',
       new URL('./assets/taipei-songyan-factory-terrain.png',import.meta.url).href);
+  }
+  // These tiles incorporate the Songyan campus correction and the survey-backed
+  // street grades. Both terrain and hillshade resolve through this same table.
+  for(const key of streetGradeTiles){
+    localTerrain.set(terrainSource+'14/'+key+'.png',
+      new URL('./assets/taipei-street-grade/14-'+key.replace('/','-')+'.png',import.meta.url).href);
   }
   map=new ml.Map({
     container:'map',style:mapStyle(base,districts),...globeCamera(stage.clientWidth,stage.clientHeight),
@@ -629,6 +648,7 @@ try{
       if(!place.placeId || !shopfronts?.openNamedPlace(place.placeId))streetDetail.openMappedPlace(place);
     };
     atlas170=addCity170(map,firstLabel,openMapLabel,setPreparedGround,streetDetail.setMappedStores,localLife,streetDetail.authoredRoads,streetDetail.hasFocalPin,preview.get('dihua')!=='before'?layer:null,cityNature,ids=>shopfronts?.setPacks(ids));
+    if(tileIndex&&bundledTaipeiTiles)addTaipeiRoadBridges(map,firstLabel);
     addSongshanRiverMeadow(map,firstLabel);
     addXinyiRidgeWoods(map,firstLabel);
     const focusBookshop=(card,x,y)=>{

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {gunzipSync} from 'node:zlib';
+import {asphalt as asphaltPaint} from '../taipei-asphalt.js';
 import {streetDistricts} from '../taipei-street-districts.js';
 import {plotOverlaps} from '../authored-footprint.js';
 import {unpackDistrictGround,addDistrictStreetGround,districtStreetMarkings} from '../xinyi-street-ground.js';
@@ -171,7 +172,7 @@ test('Songshan and Xinyi load on demand with one paving pattern, deterministic l
   assert.deepEqual(order,[baseOrder[0],...grounds.flatMap(g=>suffixes.map(s=>g+'-'+s)),...baseOrder.slice(1)]);
   for(const id of grounds){
     const asphalt=layers.get(id+'-asphalt');
-    assert.equal(asphalt.paint['fill-color'],'#929394');
+    assert.deepEqual(asphalt.paint['fill-color'],asphaltPaint);
     assert.ok(asphalt.minzoom<15.95&&asphalt.paint['fill-opacity'].at(-2)<=16.3);
     assert.equal(layers.get(id+'-kerb').paint['line-color'],'#e3c477');
     // Patterned asphalt produced rectangular draping artefacts at street zoom.

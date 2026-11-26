@@ -1,13 +1,14 @@
 // The normal map connects district street surfaces and the georegistered
 // Songyan artwork. The existing 170 m paint owns crossing and lane
 // geometry, including dashes that cross a cell boundary.
+import {asphalt} from './taipei-asphalt.js';
 import {decodeMapJSON} from './pocket-city-atlas.js';
 import {plotOverlaps} from './authored-footprint.js';
 
 import {streetDistricts as districts} from './taipei-street-districts.js';
 
 const districtMasks=new Map(districts.map(row=>[row.name,row.mask]));
-const street='#929394',walk='#e6c9a6',path='#dcc5a3',kerb='#e3c477',marking='#f0dfc0';
+const walk='#e6c9a6',path='#dcc5a3',kerb='#e3c477',marking='#f0dfc0';
 // The narrow full-tower camera reaches street scale below the detail-pack zoom.
 const roadOverviewZoom=15.35;
 const fade=(z,full)=>['interpolate',['linear'],['zoom'],z,0,full,1];
@@ -79,7 +80,7 @@ function install(map,groundId,data,pattern,nextDistrict){
       filter:['in',['get','kind'],['literal',kinds]],paint:{'fill-antialias':false,...paint}},before);
   };
   material('paving',['walk','path'],{'fill-color':['match',['get','kind'],'path',path,walk],'fill-opacity':fade(roadOverviewZoom,16.25)});
-  material('asphalt',['road'],{'fill-color':street,'fill-opacity':fade(roadOverviewZoom,16.25)});
+  material('asphalt',['road'],{'fill-color':asphalt,'fill-opacity':fade(roadOverviewZoom,16.25)});
   material('concrete-joints',['walk'],{'fill-pattern':pattern,
     'fill-opacity':['interpolate',['linear'],['zoom'],17,0,17.9,.55]},17);
   map.addLayer({id:groundId+'-kerb',type:'line',source:groundId,minzoom:16.65,

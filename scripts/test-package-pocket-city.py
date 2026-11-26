@@ -42,6 +42,12 @@ class PocketCityPackageTests(unittest.TestCase):
                          'taipei-market-stalls.js', 'taipei-market-stalls-data.js',
                          'cities/jiufen-shuqi/map-mesh.bin', 'cities/jiufen-shuqi/scene.json',
                          'cities/map-tiles/13737-7010.png', 'cities/map-tiles/13737-7010.pbf'} <= runtime)
+        terrain_keys = json.loads((pkg.WEB / 'assets/taipei-street-grade/index.json').read_text())
+        self.assertIn('13724/7014', terrain_keys)  # 101 and Songyan share a DEM tile.
+        for key in terrain_keys:
+            self.assertIn(f"assets/taipei-street-grade/14-{key.replace('/', '-')}.png", runtime)
+        for mode in ('cloudy', 'drizzle', 'rain'):
+            self.assertIn(f'assets/taipei101-ground-{mode}.png', runtime)
         for directory in ('streets', 'materials'):
             folder = f'taiwan/{directory}'
             index = json.loads((pkg.WEB / folder / 'index.json').read_text())
@@ -53,6 +59,7 @@ class PocketCityPackageTests(unittest.TestCase):
         terrain = json.loads(terrain_manifest.split('export default', 1)[1].strip().rstrip(';'))
         self.assertTrue(terrain['dem'])
         self.assertTrue(all(f'taiwan/taipei-relief/dem/{key}.png' in runtime for key in terrain['dem']))
+        self.assertTrue({'taipei-road-bridges.js', 'taipei-bridge-mesh.js', 'assets/taipei-road-bridges.json.gz'} <= runtime)
         self.assertTrue({'assets/xinyi-ridge-relief.png', 'assets/xinyi-ridge-woods.json.gz',
                          'assets/songshan-river-meadow.json.gz', 'xinyi-ridge-woods.js',
                          'songshan-river-meadow.js', 'taipei-street-districts.js'} <= runtime)

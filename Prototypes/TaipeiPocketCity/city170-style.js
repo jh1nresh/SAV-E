@@ -1,3 +1,4 @@
+import {asphalt} from './taipei-asphalt.js';
 import {placePinStyle,pinLabelColor} from './place-pins.js?v=street-trades-1';
 import {streetShopPinStyle} from './shop-trades.js?v=neighborhood-services-1';
 export const city170PlaceLayers = ['city170-poi-labels', 'city170-shop-names', 'city170-vendor-awnings', 'city170-poi-dots'];
@@ -383,11 +384,7 @@ export function addCity170Style(map, sourceId, firstLabel) {
     filter: gradeFilter('road'),
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: {
-      'line-color': ['match', category,
-        ['trunk', 'primary', 'secondary'], '#8994a4',
-        ['living_street', 'service'], '#a19fa1',
-        '#969dab',
-      ],
+      'line-color': asphalt,
       'line-width': groundWidth(5.4, 24),
       'line-opacity': fade(16.35, 17.35, 0.98),
     },
