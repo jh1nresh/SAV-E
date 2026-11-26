@@ -37,11 +37,13 @@ struct LivePlanningMapRoot: View {
     @StateObject private var discovery: LivePublicDiscoveryModel
     @State private var destination = DemoDestination.saved
     @State private var previousRootDestination = DemoDestination.saved
+    @State private var mapTabExpanded = false
     @State private var savedQuery = ""
     @FocusState private var savedSearchFocused: Bool
     @State private var hasOpenedMap = false
     @State private var mapPresentation = PocketCityPresentation()
     @State private var appliedWeatherArea: PocketCityForecast.Area?
+    @State private var mapForecast: PocketCityForecast.Result?
     @State private var pocketMapFailed = false
     @State private var showsFriends = false
     @State private var savedOnly = false
@@ -158,6 +160,7 @@ struct LivePlanningMapRoot: View {
     private func followWeather(in area: PocketCityForecast.Area?) async {
         if appliedWeatherArea != area {
             mapPresentation.weather = .day
+            mapForecast = nil
             appliedWeatherArea = area
         }
         guard let area else { return }
@@ -166,8 +169,13 @@ struct LivePlanningMapRoot: View {
             while !Task.isCancelled {
                 let forecast = try await PocketCityForecast.shared.forecast(for: area)
                 guard !Task.isCancelled, area == weatherArea else { return }
-                mapPresentation.weather = forecast.weather ?? .day
-                try await Task.sleep(for: .seconds(max(60, forecast.refreshAfter.timeIntervalSinceNow)))
+                let now = Date()
+                mapForecast = forecast
+                mapPresentation.weather = forecast.current(at: now)
+                    .flatMap { PocketCityForecast.weather(for: $0.symbol) } ?? .day
+                let nextHour = forecast.upcoming(at: now).first?.time ?? forecast.refreshAfter
+                let nextUpdate = min(nextHour, forecast.refreshAfter)
+                try await Task.sleep(for: .seconds(max(1, nextUpdate.timeIntervalSinceNow)))
             }
         } catch { /* Map moved or left the foreground. */ }
     }
@@ -227,6 +235,13 @@ struct LivePlanningMapRoot: View {
                     }
                 }
                 .padding(.horizontal, 24).padding(.vertical, 8)
+                .backgroundPreferenceValue(LiveMapTabAnchor.self) { anchor in
+                    GeometryReader { proxy in
+                        if destination == .map, let anchor {
+                            mapTabSurface(tab: proxy[anchor], viewport: proxy.size)
+                        }
+                    }
+                }
             }.foregroundStyle(DateTheme.ink)
         }
         .onAppear {
@@ -251,6 +266,7 @@ struct LivePlanningMapRoot: View {
             destination = .saved
         }
         .onChange(of: destination) { old, next in
+            mapTabExpanded = false
             if next == .map { hasOpenedMap = true }
             else { atlasSheetOpen = false; atlasDrawer.dismiss() }
             if next == .passport, old != .passport { previousRootDestination = old }
@@ -278,10 +294,23 @@ struct LivePlanningMapRoot: View {
         .onChange(of: outing.posts) { _, _ in
             if selected?.origin == .shared { selected = nil }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { suspendPlanning() }
+        .onChange(of: atlasSheetOpen) { _, isOpen in
+            if isOpen { mapTabExpanded = false }
         }
-        .onDisappear { atlasSheetOpen = false; atlasDrawer.dismiss(); isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                mapTabExpanded = false
+                suspendPlanning()
+            }
+        }
+        .onDisappear {
+            mapTabExpanded = false
+            atlasSheetOpen = false
+            atlasDrawer.dismiss()
+            isMounted = false
+            suspendPlanning()
+            saveOperation?.cancel()
+        }
         .task(id: weatherArea) { await followWeather(in: weatherArea) }
         .task(id: discoveryQuery) {
             guard discoveryQuery != "inactive", let viewport = discoveryViewport, sessionIsCurrent else {
@@ -508,8 +537,14 @@ struct LivePlanningMapRoot: View {
                     HStack(spacing: 8) {
                         rootButton(.saved, title: copy("Saved", "收藏"))
                         rootButton(.map, title: copy("Map", "地圖"))
+                            .anchorPreference(key: LiveMapTabAnchor.self, value: .bounds) { $0 }
                     }
                     Spacer(minLength: 0)
+                    if destination == .map, !usesFixtureMap {
+                        LiveMapWeatherCard(area: weatherArea,
+                                           forecast: appliedWeatherArea == weatherArea ? mapForecast : nil)
+                            .id(weatherArea)
+                    }
                 }
             }.padding(.horizontal, 4).frame(minHeight: 44)
                 .padding(.vertical, 4)
@@ -528,56 +563,132 @@ struct LivePlanningMapRoot: View {
         let isDark = colorScheme == .dark
         let fill = isDark ? SaveBrandUI.darkTabFill : DateTheme.action
         let ink = isDark ? DateTheme.ink : DateTheme.actionInk
-        return Button { navigate(to: value) } label: {
-            Text(title)
+        let isMap = value == .map
+        let drawsOwnSurface = !(isMap && selected)
+        return Button {
+            if isMap && selected {
+                guard !atlasSheetOpen else { return }
+                setMapTabExpanded(!mapTabExpanded)
+            } else {
+                navigate(to: value)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(title)
+                if isMap {
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .rotationEffect(.degrees(mapTabExpanded ? 180 : 0))
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: mapTabExpanded)
+                        .accessibilityHidden(true)
+                }
+            }
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
                 .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 10 : 16)
                 .frame(minWidth: 44, minHeight: 45)
-                .foregroundStyle(selected ? ink : DateTheme.muted)
-                .background(selected ? fill : DateTheme.surface, in: Capsule())
+                .foregroundStyle(isMap && mapTabExpanded ? DateTheme.ink : selected ? ink : DateTheme.muted)
+                .background(drawsOwnSurface ? (selected ? fill : DateTheme.surface) : Color.clear, in: Capsule())
                 .overlay {
-                    Capsule().strokeBorder(DateTheme.ink.opacity(selected ? 0.12 : 0.07))
+                    if drawsOwnSurface {
+                        Capsule().strokeBorder(DateTheme.ink.opacity(selected ? 0.12 : 0.07))
+                    }
                 }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("demo.tab.\(value.key)")
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(isMap && selected
+            ? copy("Shows or hides map layers", "展開或收起地圖圖層") : "")
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: selected)
+    }
+
+    private func setMapTabExpanded(_ expanded: Bool) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.87)) {
+            mapTabExpanded = expanded
+        }
+    }
+
+    private func mapTabSurface(tab: CGRect, viewport: CGSize) -> some View {
+        let width = min(264, viewport.width - 48)
+        let left = min(max(24, tab.midX - width / 2), viewport.width - width - 24)
+        let height = min(usesFixtureMap ? 120 : 240, max(0, viewport.height - tab.maxY - 84))
+        let panel = CGRect(x: left, y: tab.maxY, width: max(0, width), height: height)
+        let shape = LiveMapTabSurface(tab: tab, panel: panel, progress: mapTabExpanded ? 1 : 0)
+        let activeFill = colorScheme == .dark ? SaveBrandUI.darkTabFill : DateTheme.action
+
+        return ZStack(alignment: .topLeading) {
+            if mapTabExpanded {
+                Color.clear.contentShape(Rectangle())
+                    .onTapGesture { setMapTabExpanded(false) }
+                    .accessibilityHidden(true)
+            }
+            shape.fill(mapTabExpanded ? DateTheme.surface : activeFill)
+                .overlay { shape.stroke(DateTheme.ink.opacity(0.12)) }
+                .allowsHitTesting(mapTabExpanded)
+                .accessibilityHidden(true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) { mapLayerItems }
+                    .foregroundStyle(DateTheme.ink)
+                    .tint(DateTheme.blue)
+                    .padding(16)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(width: panel.width, height: max(0, panel.height - 12))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("live.map.tabOptions")
+            .offset(x: panel.minX, y: panel.minY)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipShape(shape)
+            .allowsHitTesting(mapTabExpanded)
+            .accessibilityHidden(!mapTabExpanded)
+        }
+    }
+
+    @ViewBuilder
+    private var mapLayerItems: some View {
+        Toggle(isOn: $showsFriends) {
+            Label(copy("Friends", "朋友"), systemImage: "person.2.fill")
+        }.accessibilityIdentifier("live.mode.group")
+        Toggle(isOn: $savedOnly) {
+            Label(copy("Saved only", "只看收藏"), systemImage: "bookmark.fill")
+        }.accessibilityIdentifier("live.mode.personal")
+        if !usesFixtureMap {
+            Divider()
+            Toggle(isOn: $mapPresentation.metro) {
+                Label(copy("Taipei Metro", "台北捷運"), systemImage: "tram.fill")
+            }
+            .accessibilityIdentifier("live.map.metro")
+            .disabled(pocketMapFailed)
+            Button {
+                setMapTabExpanded(false)
+                creditsRequest &+= 1
+            } label: {
+                Label(copy("Map credits", "圖資來源"), systemImage: "info.circle")
+            }
+            .accessibilityIdentifier("live.map.credits")
+            .disabled(pocketMapFailed)
+        }
+        if !savedOnly {
+            if discovery.unavailable || discovery.paginationFailed {
+                Button(copy("Reload posts", "重新載入貼文")) {
+                    setMapTabExpanded(false)
+                    discoveryReload &+= 1
+                }
+            } else if discovery.page?.nextCursor != nil {
+                Button(copy("More posts", "更多貼文")) {
+                    setMapTabExpanded(false)
+                    Task { await discovery.loadMore() }
+                }
+            }
+        }
     }
 
     private var layerControl: some View {
         Menu {
-            Toggle(isOn: $showsFriends) {
-                Label(copy("Friends", "朋友"), systemImage: "person.2.fill")
-            }.accessibilityIdentifier("live.mode.group")
-            Toggle(isOn: $savedOnly) {
-                Label(copy("Saved only", "只看收藏"), systemImage: "bookmark.fill")
-            }.accessibilityIdentifier("live.mode.personal")
-            if !usesFixtureMap {
-                Divider()
-                Toggle(isOn: $mapPresentation.metro) {
-                    Label(copy("Taipei Metro", "台北捷運"), systemImage: "tram.fill")
-                }
-                .accessibilityIdentifier("live.map.metro")
-                .disabled(pocketMapFailed)
-                Button {
-                    creditsRequest &+= 1
-                } label: {
-                    Label(copy("Map credits", "圖資來源"), systemImage: "info.circle")
-                }
-                .accessibilityIdentifier("live.map.credits")
-                .disabled(pocketMapFailed)
-            }
-            if !savedOnly {
-                if discovery.unavailable || discovery.paginationFailed {
-                    Button(copy("Reload posts", "重新載入貼文")) { discoveryReload &+= 1 }
-                } else if discovery.page?.nextCursor != nil {
-                    Button(copy("More posts", "更多貼文")) { Task { await discovery.loadMore() } }
-                }
-            }
+            mapLayerItems
         } label: {
             Image(systemName: "square.3.layers.3d")
                 .font(.system(size: 19, weight: .semibold))
@@ -1143,6 +1254,146 @@ private struct LivePlaceSheetMaterial: ViewModifier {
         if reduceTransparency { content.presentationBackground(DateTheme.surface) }
         else if #available(iOS 26.0, *) { content }
         else { content.presentationBackground(.regularMaterial) }
+    }
+}
+
+private struct LiveMapTabAnchor: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
+nonisolated private struct LiveMapTabSurface: Shape {
+    let tab: CGRect
+    let panel: CGRect
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let fraction = min(1, max(0, progress))
+        let cap = min(tab.width, tab.height) / 2
+        guard fraction > 0 else { return Path(roundedRect: tab, cornerRadius: cap) }
+
+        let left = tab.minX + (panel.minX - tab.minX) * fraction
+        let right = tab.maxX + (panel.maxX - tab.maxX) * fraction
+        let bottom = tab.maxY + panel.height * fraction
+        let corner = cap + (min(22, panel.width / 2) - cap) * fraction
+        let shoulder = min(tab.midY + 40 * fraction, bottom - corner)
+
+        var outline = Path()
+        outline.move(to: CGPoint(x: tab.minX, y: tab.midY))
+        outline.addArc(center: CGPoint(x: tab.minX + cap, y: tab.midY), radius: cap,
+                       startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        outline.addArc(center: CGPoint(x: tab.maxX - cap, y: tab.midY), radius: cap,
+                       startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+        outline.addCurve(to: CGPoint(x: right, y: shoulder),
+                         control1: CGPoint(x: tab.maxX, y: tab.midY + 18 * fraction),
+                         control2: CGPoint(x: right, y: shoulder - 12 * fraction))
+        outline.addArc(center: CGPoint(x: right - corner, y: bottom - corner), radius: corner,
+                       startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        outline.addArc(center: CGPoint(x: left + corner, y: bottom - corner), radius: corner,
+                       startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        outline.addLine(to: CGPoint(x: left, y: shoulder))
+        outline.addCurve(to: CGPoint(x: tab.minX, y: tab.midY),
+                         control1: CGPoint(x: left, y: shoulder - 12 * fraction),
+                         control2: CGPoint(x: tab.minX, y: tab.midY + 18 * fraction))
+        outline.closeSubpath()
+        return outline
+    }
+}
+
+private struct LiveMapWeatherCard: View {
+    let area: PocketCityForecast.Area?
+    let forecast: PocketCityForecast.Result?
+    @Environment(\.appLanguageSettings) private var language
+    @State private var showsForecast = false
+
+    var body: some View {
+        TimelineView(.everyMinute) { context in
+            let reading = forecast?.current(at: context.date)
+            Button { showsForecast = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: reading.map(symbol) ?? "cloud")
+                    Text(reading?.celsius.map(degrees) ?? "—")
+                        .monospacedDigit()
+                }
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .padding(.horizontal, 10)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Capsule())
+                .liveFloatingGlass(in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(reading?.celsius == nil)
+            .accessibilityLabel(copy("Weather", "天氣"))
+            .accessibilityValue(reading?.celsius.map(degrees) ?? copy("Unavailable", "暫無資料"))
+            .accessibilityHint(copy("Shows the hourly forecast", "查看逐小時預報"))
+            .accessibilityIdentifier("live.map.weather")
+            .popover(isPresented: $showsForecast, arrowEdge: .top) {
+                hourlyForecast(at: context.date)
+                    .presentationCompactAdaptation(.popover)
+            }
+        }
+    }
+
+    private func hourlyForecast(at now: Date) -> some View {
+        let taipeiZone = area.flatMap { value in
+            (249...253).contains(value.latitudeTenths) && (1213...1218).contains(value.longitudeTenths)
+                ? TimeZone(identifier: "Asia/Taipei") : nil
+        }
+        let format = Date.FormatStyle(locale: language.locale, timeZone: taipeiZone ?? .autoupdatingCurrent)
+            .hour().minute()
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(copy("Hourly forecast", "逐小時預報")).font(.headline)
+            Text(taipeiZone == nil ? copy("Device time", "裝置時間") : copy("Taipei time", "台北時間"))
+                .font(.caption).foregroundStyle(DateTheme.muted)
+            ForEach(forecast?.upcoming(at: now) ?? []) { hour in
+                HStack {
+                    Text(hour.time.formatted(format))
+                    Spacer()
+                    Image(systemName: symbol(hour))
+                    Text(hour.celsius.map(degrees) ?? "—").monospacedDigit()
+                }
+                .accessibilityElement(children: .combine)
+            }
+            Link(copy("Data from MET Norway", "資料來源 MET Norway"),
+                 destination: URL(string: "https://docs.api.met.no/doc/locationforecast/")!)
+                .font(.caption)
+        }
+        .frame(idealWidth: 220)
+        .padding(16)
+    }
+
+    private func symbol(_ reading: PocketCityForecast.Reading) -> String {
+        if reading.symbol.contains("thunder") { return "cloud.bolt.rain.fill" }
+        if reading.symbol.contains("snow") || reading.symbol.contains("sleet") { return "cloud.snow.fill" }
+        if reading.symbol.contains("fog") { return "cloud.fog.fill" }
+        if reading.symbol.hasPrefix("partlycloudy") {
+            return reading.isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+        }
+        switch PocketCityForecast.weather(for: reading.symbol) {
+        case .day: return reading.isNight ? "moon.stars.fill" : "sun.max.fill"
+        case .rain: return "cloud.rain.fill"
+        case .drizzle: return "cloud.drizzle.fill"
+        case .cloudy: return "cloud.fill"
+        default: return "cloud"
+        }
+    }
+
+    private func degrees(_ value: Double) -> String {
+        "\(value.formatted(.number.precision(.fractionLength(0))))°"
+    }
+
+    private func copy(_ english: String, _ chinese: String) -> String {
+        language.localized(english: english, traditionalChinese: chinese)
     }
 }
 

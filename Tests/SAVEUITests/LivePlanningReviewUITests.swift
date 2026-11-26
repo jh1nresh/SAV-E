@@ -81,6 +81,50 @@ final class LivePlanningReviewUITests: SAVEUITestCase {
     }
 
     @MainActor
+    func testSelectedMapTabExpandsItsLayerOptions() {
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
+            "--preview-tab-saved", "-save.appLanguage", "en"],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        let mapTab = app.buttons["demo.tab.map"]
+        let savedTab = app.buttons["demo.tab.saved"]
+        let mapSearch = app.buttons["live.search"]
+        let panel = app.descendants(matching: .any)["live.map.tabOptions"].firstMatch
+
+        tap(mapTab, in: app)
+        XCTAssertTrue(mapSearch.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(panel.exists, "Entering Map should leave its layer controls collapsed")
+
+        let collapsedTab = mapTab.frame
+        tap(mapTab, in: app)
+        XCTAssertTrue(panel.waitForExistence(timeout: stepTimeout))
+        let savedOnly = panel.switches["live.mode.personal"]
+        XCTAssertTrue(savedOnly.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(mapTab.frame.minY, collapsedTab.minY, accuracy: 1)
+        XCTAssertEqual(mapTab.frame.midX, collapsedTab.midX, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(savedOnly.frame.minY, collapsedTab.maxY)
+        XCTAssertEqual(savedOnly.value as? String, "0")
+        savedOnly.tap()
+        XCTAssertEqual(savedOnly.value as? String, "1")
+
+        app.coordinate(withNormalizedOffset: .init(dx: 0.5, dy: 0.78)).tap()
+        XCTAssertTrue(panel.waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapSearch.exists, "Collapsing the controls must leave the Map tab open")
+
+        tap(mapTab, in: app)
+        XCTAssertTrue(panel.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(savedOnly.value as? String, "1", "The expanded tab and map share the same layer state")
+        tap(mapTab, in: app)
+        XCTAssertTrue(panel.waitForNonExistence(timeout: stepTimeout))
+
+        tap(savedTab, in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["live.library"].firstMatch.waitForExistence(timeout: stepTimeout))
+        tap(mapTab, in: app)
+        XCTAssertTrue(mapSearch.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(panel.exists, "Returning from Saved must not reopen the layer controls")
+    }
+
+    @MainActor
     func testActualReviewRecoveryLight() throws { try verifyRecovery(dark: false) }
 
     @MainActor
