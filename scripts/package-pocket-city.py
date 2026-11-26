@@ -45,7 +45,7 @@ def runtime_paths():
                  'assets/taipei-tree-canopies.json.gz', 'assets/taipei-streetlights.json.gz',
                  'assets/taipei101-single-ground.png', 'assets/taipei101-pocket-city-ink.bin.gz', 'assets/taipei101-pocket-city.bin.gz',
                  'assets/taipei-songyan-factory.bin.gz', 'assets/taipei-songyan-factory-terrain.png',
-                 'assets/xinyi-street-ground.json.gz', 'assets/taipei-songyan-waterfront.bin.gz', 'assets/taipei-eslite-songyan.bin.gz'):
+                 'assets/songshan-street-ground.json.gz', 'assets/xinyi-street-ground.json.gz', 'assets/taipei-songyan-waterfront.bin.gz', 'assets/taipei-eslite-songyan.bin.gz'):
         include(path)
     # Start from the iOS entry point and follow static ESM and module-worker references.
     modules = ['app.js', 'assets/maplibre-gl-worker.mjs']

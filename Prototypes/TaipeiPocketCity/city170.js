@@ -15,7 +15,8 @@ import fountainWater from './city170-fountain-water-data.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
-import {addXinyiStreetGround,xinyiStreetMarkings} from './xinyi-street-ground.js';
+import {parkWalksForPack} from './songshan-park-walks.js';
+import {addDistrictStreetGround,districtStreetMarkings} from './xinyi-street-ground.js';
 import {frontagePackIds} from './xinyi-shop-frontages.js';
 import {surfaceFeature} from './city170-ground.js';
 import {bikeDockParts} from './city170-bike-docks.js';
@@ -133,7 +134,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
   addCityAirfield(map,firstLabel);
   addCityBenches(map,firstLabel);
   const pin=addCity170Style(map, data, firstLabel);
-  addXinyiStreetGround(map);
+  addDistrictStreetGround(map);
   addArcadeFloors(map,'survey');
   addCityHydrants(map,firstLabel);
   addParkWater(map,firstLabel);
@@ -399,7 +400,8 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         ]);
         if(epoch!==current)return;
         nature.setRows([...inventories.flatMap(pack=>pack??[]).filter(([x,y])=>!inside101Ground(x,y)),...planting101]);
-        lifeRecords=records.map((record,i)=>{
+        lifeRecords=records.map((life,i)=>{
+          const record=parkWalksForPack(packs[i],life);
           const playground=parkPlaygrounds[packIds[i]];
           const fitness=parkFitness[packIds[i]];
           const pavilions=riverPavilions[packIds[i]];
@@ -523,7 +525,7 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
       for (let i = 0; i < packs.length; i++) {
         for (const cell of packs[i].cells) {
           if(!overlaps(cell.bounds,view))continue;
-          const items=xinyiStreetMarkings(paintPacks[i][cell.id]??[],cell);
+          const items=districtStreetMarkings(paintPacks[i][cell.id]??[],cell);
           const blocked=openGround[cell.id];
           if(!blocked){pieces.push(...items);continue;}
           const roots=new Set(blocked.map(pt=>pt.join(',')));
