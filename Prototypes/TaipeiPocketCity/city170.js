@@ -17,6 +17,7 @@ import fountainWater from './city170-fountain-water-data.js';
 import {addBusShelters} from './city170-bus-shelters.js';
 import {addCityBenches} from './city170-benches.js';
 import {addCityAirfield} from './city170-airfield.js';
+import preparedWalks from './taipei200-walks-data.js';
 import {parkWalksForPack} from './songshan-park-walks.js';
 import {addDistrictStreetGround,districtStreetMarkings} from './xinyi-street-ground.js';
 import {frontagePackIds} from './xinyi-shop-frontages.js';
@@ -420,7 +421,9 @@ export function addCity170(map, firstLabel, openPlace, setPrepared, updateStores
         if(epoch!==current)return;
         nature.setRows([...inventories.flatMap(pack=>pack??[]).filter(([x,y])=>!inside101Ground(x,y)),...planting101]);
         lifeRecords=records.map((life,i)=>{
-          const record=parkWalksForPack(packs[i],life);
+          const rows=preparedWalks[packIds[i]]??[];
+          const extra=Object.fromEntries(rows.map(([id,points,people])=>['scene200/'+id,{points,people}]));
+          const record=parkWalksForPack(packs[i],rows.length?{...life,paths:{...life.paths,...extra}}:life);
           const playground=parkPlaygrounds[packIds[i]];
           const fitness=parkFitness[packIds[i]];
           const pavilions=riverPavilions[packIds[i]];
