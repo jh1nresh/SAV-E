@@ -67,6 +67,18 @@ class PocketCityPackageTests(unittest.TestCase):
                              name.endswith(('.tar.xz', 'source.json.gz', 'osm.json', '.py')) for name in runtime))
         self.assertTrue({'apple-config.js', 'savvy-place-sources.json'}.isdisjoint(runtime))
 
+    def test_taipei200_uses_only_declared_pack_names(self):
+        root = 'assets/taipei200/'
+        index = json.loads((pkg.WEB / root / 'index.json').read_text())
+        names = pkg.taipei200_pack_names(index)
+        runtime = set(pkg.runtime_paths())
+        self.assertEqual({p for p in runtime if p.startswith(root)},
+                         {root + p for p in ['index.json', 'grid.json.gz', *names]})
+        self.assertIn('taipei200.js', runtime)
+        for bad in ('../secret', '123/77', 'pack.json.gz', '', '７_２'):
+            with self.assertRaises(ValueError):
+                pkg.taipei200_pack_names({**index, 'packs': [{'id': bad, 'cells': index['cells']}]})
+
     def test_default_bundle_covers_taipei_at_every_intermediate_zoom(self):
         root = 'cities/map-tiles/'
         catalog = json.loads((pkg.WEB / root / 'index.json').read_text())

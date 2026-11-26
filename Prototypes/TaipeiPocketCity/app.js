@@ -35,7 +35,7 @@ import {addCityStreetLoading} from './city-streets.js';
 import {loadSongyanNear} from './songyan-detail.js?v=campus-1';
 
 import {addShopSearch} from './city-shop-search.js?v=friendly-frontages-1';
-import {addCity170,dihuaSearch} from './city170.js?v=tree-clearance-1';
+import {addCity170,dihuaSearch} from './city170.js?v=taipei200-1';
 import {addCityShopfronts} from './city-shopfronts.js?v=taipei-streets-1';
 import {CityNature} from './city-nature.js?v=canopies-2';
 import {loadTreeCanopies} from './taipei-tree-canopies.js';
@@ -332,8 +332,10 @@ function updateUI(){
   const link=streetDistricts.get('xinyi-link');
   const inLink=link&&inside(link.footprint.coordinates[0],lng,lat);
   const illustrated=hasStreetDistrict(district);
+  const streetScene=atlas170?.state();
+  const sceneLabel=streetScene?.ready?'200 公尺街區':streetScene?.phase==='loading'?'載入街區…':'街區';
   $('#resolution').textContent=patch&&z>=15?(worldAtlas.failed(patch.id)?'街區載入失敗':worldAtlas.ready(patch.id)?patch.landmark:'載入街區…'):z<10?'':zoomed
-    ?atlas170?`${nearby?nearby[1].name+' · ':''}170 公尺街區`:(nearby?`${nearby[1].name} · ${nearby[0]!=='101'&&streetDistricts.has(nearby[0])?'220':'200'} 公尺街區`:illustrated||inLink?'街廓 · 220 公尺':'200 公尺 · 插畫立面')
+    ?atlas170?`${nearby?nearby[1].name+' · ':''}${sceneLabel}`:(nearby?`${nearby[1].name} · ${nearby[0]!=='101'&&streetDistricts.has(nearby[0])?'220':'200'} 公尺街區`:illustrated||inLink?'街廓 · 220 公尺':'200 公尺 · 插畫立面')
     :active?'2025 LOD1 量體':town?'':'地圖總覽';
   $('#pitch').setAttribute('aria-pressed',String(map.getPitch()>=23));
 }
@@ -860,7 +862,7 @@ try{
       rendered:map.queryRenderedFeatures().filter(f=>['transportation','water','building'].includes(f.sourceLayer)).length,
       indoor101:indoor101?.state(),detail:layer.diagnostics,street:streetDetail?.state(),metro:metroState?.(),weather:weather?.state(),
       pocketCity:skillAtlas?.summary??null,
-      atlas170:atlas170?.state(),shopfronts:shopfronts?.state(),inventoryTreesDrawn:cityNature?.drawn,
+      atlas200:atlas170?.state(),atlas170:atlas170?.sourceState(),shopfronts:shopfronts?.state(),inventoryTreesDrawn:cityNature?.drawn,
       landmarkAtlas:worldAtlas?.state(),taiwan:{townships:taiwanCoverage?.towns,landCells:taiwanCoverage?.count,visible:taiwanCells?.state()},
       cityAtlas:atlas170?atlas170.state().coverage:cityIndex?.cityCoverage??null,
     }),

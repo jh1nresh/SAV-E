@@ -24,6 +24,17 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def taipei200_pack_names(index):
+    rows = index['packs']
+    ids = [row['id'] for row in rows]
+    if (index.get('size') != 200 or index.get('crs') != 'EPSG:3826' or not ids
+            or not all(isinstance(i, str) and re.fullmatch(r'[0-9]+_[0-9]+', i) for i in ids)
+            or len(set(ids)) != len(ids) or not all(type(r['cells']) is int and r['cells'] > 0 for r in rows)
+            or sum(r['cells'] for r in rows) != index.get('cells')):
+        raise ValueError('Invalid Taipei 200m pack index')
+    return [i + '.json.gz' for i in ids]
+
+
 def runtime_paths():
     """Positive list; authoring inputs, local credentials and shared-post exports never enter the bundle."""
     paths = set()
@@ -57,6 +68,10 @@ def runtime_paths():
     for district in ('xinyi', 'songshan', 'daan', 'zhongshan', 'datong', 'wanhua',
                      'zhongzheng', 'shilin', 'beitou', 'neihu', 'nangang', 'wenshan'):
         include(f'assets/{district}-street-ground.json.gz')
+    street_scenes = 'assets/taipei200/'
+    for name in taipei200_pack_names(document(street_scenes + 'index.json')):
+        include(street_scenes + name)
+    include(street_scenes + 'grid.json.gz')
     # Start from the iOS entry point and follow static ESM and module-worker references.
     modules = ['app.js', 'assets/maplibre-gl-worker.mjs']
     while modules:
