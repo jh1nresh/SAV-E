@@ -1,4 +1,5 @@
-// A vivid disc carries the category. Dark glyphs and captions stay legible on the illustrated map.
+// Category glyphs stay recognizable without a business photo. Use the Savvy
+// blush/indigo palette instead of imitating a photo or adding a source label.
 const badge=(disc,ink,label,solid,lines='')=>({disc,ink,label,solid,lines});
 const styles = {
   food: badge('#ff9c42','#542805','#a34506',
@@ -54,20 +55,22 @@ const groups = {
   health:['chemist','pharmacy','clinic','hospital','dentist','藥局'],
 };
 const byCategory = new Map(Object.entries(groups).flatMap(([type,values])=>values.map(value=>[value,type])));
-export function placePinType(category){return byCategory.get(category) ?? 'other';}
+export function placePinType(category){return byCategory.get(category) ?? (Object.hasOwn(styles,category) ? category : 'other');}
 export function pinLabelColor(type){return styles[type].label;}
 
 function pinCanvas(type,style=styles[type]){
   const canvas=document.createElement('canvas');
-  const {disc,ink,solid,lines}=style;
+  const {solid,lines}=style;
+  const disc = ['food','cafe','market','culture','tower'].includes(type) ? '#FCDDEA' : '#E5DFFF';
+  const ink = '#4F43B9';
   canvas.width=canvas.height=72;
   const ctx=canvas.getContext('2d');
   ctx.scale(3,3);
   ctx.beginPath();ctx.arc(12,12,10.7,0,Math.PI*2);
   ctx.fillStyle=disc;ctx.fill();
-  ctx.lineWidth=1.7;ctx.strokeStyle='#fffcf3';ctx.stroke();
+  ctx.lineWidth=1.8;ctx.strokeStyle='#FFFAFD';ctx.stroke();
   ctx.beginPath();ctx.arc(12,12,9.9,0,Math.PI*2);
-  ctx.lineWidth=0.75;ctx.strokeStyle=ink;ctx.stroke();
+  ctx.lineWidth=0.5;ctx.strokeStyle='#4F43B938';ctx.stroke();
   ctx.fillStyle=ctx.strokeStyle=ink;
   if(solid)ctx.fill(new Path2D(solid),'evenodd');
   if(lines){
@@ -79,6 +82,7 @@ function pinCanvas(type,style=styles[type]){
 export function placeButtonIcon(category){
   const type=placePinType(category);
   const canvas=pinCanvas(type);
+  canvas.className='category-pin-art';
   canvas.setAttribute('aria-hidden','true');
   return {canvas,color:pinLabelColor(type)};
 }

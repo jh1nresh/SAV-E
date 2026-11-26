@@ -45,8 +45,8 @@ test('native pin selections track the current visible IDs without moving the cam
 });
 
 test('all native fallback categories have a map icon', () => {
-  assert.deepEqual(['food','cafe','bar','attraction','stay','shopping'].map(placePinType),
-    ['food','cafe','cafe','culture','stay','shop']);
+  assert.deepEqual(['food','cafe','bar','attraction','stay','shopping','culture','nature','tower','unknown'].map(placePinType),
+    ['food','cafe','cafe','culture','stay','shop','culture','nature','tower','other']);
 });
 
 test('wraps both representations of a viewport crossing the date line', () => {

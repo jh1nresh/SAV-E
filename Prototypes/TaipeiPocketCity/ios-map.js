@@ -28,7 +28,7 @@ function renderPin(button, pin, photo, saved, shared) {
   button.artKey = key;
   button.classList.add('ios-art-pin');
   const art = document.createElement('span');
-  art.className = 'ios-pin-art';
+  art.className = photo ? 'ios-pin-art' : 'ios-pin-art ios-category-art';
   art.setAttribute('aria-hidden','true');
   const {canvas} = placeButtonIcon(pin.category);
   art.append(canvas);
@@ -36,7 +36,7 @@ function renderPin(button, pin, photo, saved, shared) {
     const image = document.createElement('img');
     image.alt = '';
     image.decoding = 'async';
-    image.onerror = () => image.remove();
+    image.onerror = () => { image.remove(); art.classList.add('ios-category-art'); };
     image.src = photo;
     art.append(image);
   }
