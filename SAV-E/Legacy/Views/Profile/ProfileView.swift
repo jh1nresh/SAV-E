@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
 private struct CompactProfileAppearanceKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -223,7 +223,7 @@ struct ProfileView: View {
     }
 
     private var usesCompactAccountAppearance: Bool {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         opensAccountSettings && compactAccountOnly
 #else
         false
@@ -232,7 +232,7 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var settingsPage: some View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if usesCompactAccountAppearance { compactAccountPage } else { legacySettingsPage }
 #else
         legacySettingsPage
@@ -257,7 +257,7 @@ struct ProfileView: View {
         .toolbar(.visible, for: .navigationBar)
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var compactAccountPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -780,7 +780,7 @@ struct ProfileView: View {
                 traditionalChinese: "這會刪除你的 Savvy 帳號與已儲存地點，而且無法復原。"
             ))
         }
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         .environment(\.compactProfileAppearance, usesCompactAccountAppearance)
 #endif
     }
@@ -1999,7 +1999,7 @@ private struct ListManageView: View {
 
 private struct EditProfileSheet: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
     @Binding var displayName: String
@@ -2016,7 +2016,7 @@ private struct EditProfileSheet: View {
 
     var body: some View {
         Group {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             if compactAppearance { compactBody } else { legacyBody }
 #else
             legacyBody
@@ -2031,7 +2031,7 @@ private struct EditProfileSheet: View {
         }
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var compactBody: some View {
         NavigationStack {
             ScrollView {
@@ -2593,7 +2593,7 @@ private struct PassportIconButton: View {
 }
 
 private struct EditableProfileAvatar: View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
     let avatarURLString: String?
@@ -2625,21 +2625,21 @@ private struct EditableProfileAvatar: View {
     }
 
     private var avatarInk: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.blue }
 #endif
         return .saveInk
     }
 
     private var avatarFill: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.soft }
 #endif
         return SaveAtlasPalette.kraft
     }
 
     private var avatarRim: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.surface }
 #endif
         return SaveAtlasPalette.line
@@ -2647,7 +2647,7 @@ private struct EditableProfileAvatar: View {
 }
 
 private struct ProfileAvatarView: View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
     let avatarURLString: String?
@@ -2689,7 +2689,7 @@ private struct ProfileAvatarView: View {
     }
 
     private var avatarRim: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.ink.opacity(0.08) }
 #endif
         return SaveAtlasPalette.line
@@ -2809,14 +2809,14 @@ private struct PassportCityStrip: View {
 
 private struct PassportCountingRulesPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
     let stats: PassportStats
 
     @ViewBuilder
     var body: some View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance {
             VStack(alignment: .leading, spacing: 10) {
                 Label(title, systemImage: "info.circle")
@@ -2886,7 +2886,7 @@ private struct PassportCountingRulesPanel: View {
 
 private struct PassportVisibilityPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
     let places: [Place]
@@ -2895,14 +2895,14 @@ private struct PassportVisibilityPanel: View {
 
     @ViewBuilder
     var body: some View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { compactBody } else { legacyBody }
 #else
         legacyBody
 #endif
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var compactBody: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(languageSettings.localized(english: "Sharing & Privacy", traditionalChinese: "分享與隱私"), systemImage: "hand.raised")
@@ -3007,33 +3007,33 @@ private struct PassportSharedRatingsSheet: View {
     @ObservedObject private var auth = PrivyAuthService.shared
     @StateObject private var model = SharedRestaurantRatingsViewModel()
     let places: [Place]
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
 
     private var ratingsInk: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.ink }
 #endif
         return SaveAtlasPalette.forest
     }
 
     private var ratingsSurface: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.surface }
 #endif
         return SaveAtlasPalette.paper
     }
 
     private var ratingsCanvas: Color {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return DateTheme.canvas }
 #endif
         return SaveAtlasPalette.canvas
     }
 
     private var ratingsControlHeight: CGFloat? {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { return 44 }
 #endif
         return nil
@@ -3123,7 +3123,7 @@ private struct PassportSharedRatingsSheet: View {
 
 private struct PassportVisibilityRow: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
     let place: Place
@@ -3140,14 +3140,14 @@ private struct PassportVisibilityRow: View {
 
     @ViewBuilder
     var body: some View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { compactBody } else { legacyBody }
 #else
         legacyBody
 #endif
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var compactBody: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(place.name).font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.ink)
@@ -3385,20 +3385,20 @@ struct SettingsRow: View {
 private struct LegacyLanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.compactProfileAppearance) private var compactAppearance
 #endif
 
     @ViewBuilder
     var body: some View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if compactAppearance { compactBody } else { legacyBody }
 #else
         legacyBody
 #endif
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var compactBody: some View {
         NavigationStack {
             ScrollView {

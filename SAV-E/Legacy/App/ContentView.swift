@@ -195,7 +195,7 @@ struct ContentView: View {
     @Binding private var pendingClipListSave: SaveCollaborativeList?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private let rootOwner: String?
     private let rootAuthGeneration: Int
 #endif
@@ -213,7 +213,7 @@ struct ContentView: View {
     @State private var selectedRootTab: SaveRootTab
     @State private var requestsSocialConnections = false
     @State private var rootPath: [SaveRootRoute]
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var liveReviewInboxRequest: LiveReviewInboxRequest?
     @State private var liveExactSearchReturnRequest: DrawerLaunchRequest?
@@ -261,7 +261,7 @@ struct ContentView: View {
         _pendingClipListSave = pendingClipListSave
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
 #if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
         if storageScope == .livePlanningReviewFixture {
             rootOwner = LivePlanningReviewFixture.shared.ownerSubject
@@ -372,7 +372,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var currentMapScaffold: some View {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if usesLivePlanningPreview, let owner = rootOwner {
             LivePlanningMapRoot(
                 mapVM: mapVM, ownerSubject: owner, sessionGeneration: rootAuthGeneration,
@@ -404,7 +404,7 @@ struct ContentView: View {
 #endif
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var usesLiveReviewFixture: Bool {
 #if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
         storageScope == .livePlanningReviewFixture
@@ -437,7 +437,7 @@ struct ContentView: View {
 
     private func showCaptureResults(_ ids: [UUID]) {
         rootPath = [.captureResults(ids)]
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if isLivePreviewSessionCurrent {
             liveReviewInboxRequest = LiveReviewInboxRequest(candidateIDs: ids)
         }
@@ -479,7 +479,7 @@ struct ContentView: View {
             fullScreenContent(for: route)
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             if usesLiveReviewFixture {
                 Text("Account actions are unavailable in this isolated UI fixture.")
                     .padding().accessibilityIdentifier("live.fixture.accountUnavailable")
@@ -501,7 +501,7 @@ struct ContentView: View {
 #endif
         }
         .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             guard !usesLiveReviewFixture else { return }
 #endif
             mapVM.acknowledgeSavedPlaceLimitPaywall()
@@ -569,7 +569,7 @@ struct ContentView: View {
             mapVM.reloadCollaborativeLists()
         }
         .onReceive(NotificationCenter.default.publisher(for: .saveMemoryPreferencesDidChange)) { _ in
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             guard !usesLiveReviewFixture else { return }
 #endif
             Task { await drawerVM.loadMemoryPreferences() }
@@ -637,7 +637,7 @@ struct ContentView: View {
     }
 
     private func presentSavedPlaceLimitPaywall() {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         guard !usesLiveReviewFixture else { return }
 #endif
         guard !showSavedPlaceLimitPaywall else { return }
@@ -645,7 +645,7 @@ struct ContentView: View {
     }
 
     private func presentSavedPlaceLimitPaywallIfNeeded() {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         guard !usesLiveReviewFixture else { return }
 #endif
         if mapVM.consumePendingSavedPlaceLimitPaywall() {
@@ -1113,7 +1113,7 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         } else {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             if usesLivePlanningPreview, drawerLaunchRequest.target == .ask, mapDetailDrawerItem == nil {
                 livePlanningSearchSheet
             } else {
@@ -1125,7 +1125,7 @@ struct ContentView: View {
         }
     }
 
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
     private var livePlanningSearchSheet: some View {
         let initialQuery = drawerLaunchRequest.initialQuery ?? ""
         let preservesClue = isExactSearchSessionActive || exactSearchClueID != nil
@@ -1245,7 +1245,7 @@ struct ContentView: View {
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             .environment(\.useSaveBrandDetailStyle, usesLivePlanningPreview)
 #endif
             .background(SaveDottedBackground().ignoresSafeArea())
@@ -1425,7 +1425,7 @@ struct ContentView: View {
 
     private func openMapDetail(_ item: MapDetailDrawerItem) {
         guard incomingPlaceReceipt == nil else { return }
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if usesLivePlanningPreview {
             guard isLivePreviewSessionCurrent else { return }
             if case .unsavedCandidate = item, isRootSheetPresented,
@@ -1522,7 +1522,7 @@ struct ContentView: View {
     }
 
     private func openPassport() {
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         guard !usesLiveReviewFixture else { return }
 #endif
         openPassport(collectionMode: .collection)
@@ -1600,7 +1600,7 @@ struct ContentView: View {
         case .mapDrawer(let request):
             drawerLaunchRequest = request
             drawerDetent = request.focusesSearch ? .large : .medium
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
             if usesLivePlanningPreview {
                 guard isLivePreviewSessionCurrent else { return }
                 liveExactSearchReturnRequest = nil
@@ -1828,7 +1828,7 @@ struct ContentView: View {
             )
             return
         }
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         // A real modal search replaces this cover in the preview. Keep its
         // occupancy until the coordinator observes the dismissal callback.
         if !usesLivePlanningPreview { fullScreenRoute = nil }
@@ -2250,7 +2250,7 @@ struct ContentView: View {
             handleExclusiveChromeDismiss()
             return
         }
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if usesLivePlanningPreview, drawerLaunchRequest.target == .ask, mapDetailDrawerItem == nil {
             endCanceledExactSearchCorrection()
         }
@@ -2285,7 +2285,7 @@ struct ContentView: View {
             handleExclusiveChromeDismiss()
             return
         }
-#if SAVVY_MAIN_APP
+#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
         if let request = liveExactSearchReturnRequest {
             liveExactSearchReturnRequest = nil
             if isLivePreviewSessionCurrent, isExactSearchSessionActive,
