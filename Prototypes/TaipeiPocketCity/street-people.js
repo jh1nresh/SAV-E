@@ -175,7 +175,8 @@ export class StreetPeople {
     }
     this.coverage={bounds};
     this.figureLimit=Math.min(maxVisibleFigures,this.routes.reduce((sum,route)=>sum+route.count,0));
-    this.vertexData=new Float32Array(this.figureLimit*componentsPerFigure);
+    // Offscreen districts must not each retain a full crowd on the phone.
+    this.vertexData=new Float32Array(0);
     this.motion=matchMedia('(prefers-reduced-motion: reduce)');
     this.refresh=()=>this.map.triggerRepaint();
   }
@@ -232,7 +233,19 @@ export class StreetPeople {
       this.timer=0;
     }
     this.umbrellas=0;
-    if(!active)return;
+    if(!active){
+      if(this.vertexData.length){
+        this.vertexData=new Float32Array(0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
+        gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);
+      }
+      return;
+    }
+    if(!this.vertexData.length&&this.figureLimit){
+      this.vertexData=new Float32Array(this.figureLimit*componentsPerFigure);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
+      gl.bufferData(gl.ARRAY_BUFFER,this.vertexData.byteLength,gl.DYNAMIC_DRAW);
+    }
     const vertexData=this.vertexData;
     const mesh=new FigureMesh(vertexData);
     const extent=bounds.toArray();
@@ -248,7 +261,9 @@ export class StreetPeople {
         const current=position(route,fraction,this.elapsed,speed);
         if(!bounds.contains(current.point))continue;
         if(route.near101 && inside101Ground(...current.point)!==route.single101)continue;
-        const terrain=map.queryTerrainElevation(current.point);
+        // The native recovery renderer deliberately disables relief. Its ground
+        // is flat, so a null elevation there is not an unloaded terrain tile.
+        const terrain=map.getTerrain?.()===null?0:map.queryTerrainElevation(current.point);
         if(terrain==null)continue;
         const size=(.9+(personIndex%4)*.08)*visibilityScale;
         mesh.at(current.x,current.y,terrain/size,current.angle);

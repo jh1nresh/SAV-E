@@ -138,13 +138,13 @@ function addPlanLayers(map,venue,namesVisible){
   return wayfinding;
 }
 
-export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closePlace,startFloor,namesVisible=true,load}){
+export function addTaipei101Indoor(map,{stage,setCutaway,openPlace,closePlace,startFloor,namesVisible=true,load}){
   const control=stage.querySelector('#mall101-control'),toggle=control.querySelector('[data-floor-toggle]');
   const menu=control.querySelector('[data-floor-list]'),leave=control.querySelector('[data-floor-exit]');
   const floorNote=control.querySelector('[data-floor-note]');
   const directory=control.querySelector('details'),summary=control.querySelector('[data-directory-summary]'),shops=control.querySelector('[data-directory]');
   let venue,ring,center,current,active=false,loading=false,removed=false,suppressed=false,lastPitch=0;
-  let guide,outline,badge,marker,wayfinding,pendingSearch,entranceMarks=[],returnFloor=startFloor;
+  let guide,outline,badge,wayfinding,pendingSearch,entranceMarks=[],returnFloor=startFloor;
   const muteContextPins=contextPins(map);
   const entryZoom=()=>stage.clientWidth && stage.clientWidth<600 ? 17.6 : 18.35;
   const exitZoom=()=>entryZoom()-.5;
@@ -283,7 +283,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       map.getSource(prefix+'-plan').setData({type:'Feature',geometry:venue.footprint,properties:{}});
       const first=venue.levels.find(f=>f.label===label)??venue.levels.find(f=>f.label==='1F')??venue.levels[0];
       selectFloor(first.label);
-      map.jumpTo(indoorCamera(centerOnMall?center:map.getCenter(),map.getBearing(),centerOnMall?entryZoom()+.05:map.getZoom()));
+      map.jumpTo(indoorCamera(centerOnMall?center:map.getCenter(),map.getBearing(),centerOnMall?Math.max(map.getZoom(),entryZoom()+.05):map.getZoom()));
     }
     drawGuide();
   }
@@ -294,7 +294,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     wayfinding.show(null);
     stage.classList.remove('mall101-inside');setCutaway(false);muteContextPins(false);showAdjacentPoints(false);
     stage.dispatchEvent(new CustomEvent('mall101-floor',{detail:{floor:null}}));
-    if(explicit)map.jumpTo({pitch:lastPitch,zoom:Math.min(map.getZoom(),exitZoom()-.2)});
+    if(explicit)map.jumpTo({pitch:lastPitch});
     else if(map.getPitch()===0&&lastPitch&&map.getZoom()>16.5)map.jumpTo({pitch:lastPitch});
     drawGuide();
   }
@@ -333,18 +333,21 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
       openPlace(selected);return;
     }
     if(active && (!inVenue||map.getZoom()<exitZoom()))exit();
-    else if(!active&&!suppressed&&inVenue&&map.getZoom()>=entryZoom())enter(returnFloor);
+    // Zooming reveals a floor control; it must not take over a pinch gesture or
+    // replace the user's 3D camera. Only an explicit floor deep link auto-enters.
+    else if(!active&&!suppressed&&returnFloor&&inVenue&&map.getZoom()>=entryZoom()){
+      const requested=returnFloor;returnFloor=null;enter(requested);
+    }
     drawGuide();
   }
   function drawGuide(){
     if(!guide||!badge)return;
-    const b=map.getBounds(),visible=!map.savvySavedOnly&&!active&&map.getZoom()>=14.7&&
+    const b=map.getBounds(),visible=!map.savvySavedOnly&&!active&&map.getZoom()>=entryZoom()&&
       !(b.getEast()<zone[0]||b.getNorth()<zone[1]||b.getWest()>zone[2]||b.getSouth()>zone[3]);
-    guide.style.display=visible?'':'none';badge.hidden=!visible;
-    if(!visible)return;
-    const tower=map.project([121.56481,25.03367]),mall=map.project(center);
-    badge.classList.toggle('mall101-label-west',mall.x<tower.x);
-    badge.classList.toggle('mall101-overview',map.getZoom()<17.4);
+    // A toolbar action is distinct from a saved/public place pin. Keep the
+    // geographic outline for the active indoor view only.
+    guide.style.display=active?'':'none';badge.hidden=!visible;
+    if(!active)return;
     const points=ring.map(c=>map.project(c));
     const verts=points.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
     if(outline.getAttribute('points')!==verts)outline.setAttribute('points',verts);
@@ -355,15 +358,12 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
     }
   }
   function handleHit(event){
-    if(!venue||map.savvySavedOnly||event.target!==map.getCanvas()||map.getZoom()<14.7)return;
+    // A canvas click can follow a drag/touch gesture. Outdoor floor entry is
+    // owned by the explicit toolbar button, search result or floor deep link.
+    if(!active||!venue||map.savvySavedOnly||event.target!==map.getCanvas()||map.getZoom()<14.7)return;
     const box=map.getCanvas().getBoundingClientRect(),point=[event.clientX-box.left,event.clientY-box.top];
     const coords=map.unproject(point).toArray();
     const inVenue=insideMall(coords,ring);
-    if(!active){
-      if(!inVenue)return;
-      event.stopImmediatePropagation();
-      enter(null,true);return;
-    }
     const features=map.queryRenderedFeatures([[point[0]-9,point[1]-9],[point[0]+9,point[1]+9]],
       {layers:['names','dots','storefront','rooms','corridor'].map(k=>prefix+'-'+k)});
     const hit=features.find(f=>f.properties.name&&(inVenue||f.properties.adjacent));
@@ -415,12 +415,11 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
         entranceMarks.push({el,coords:f.geometry.coordinates});
       }
       map.getCanvasContainer().append(guide);
-      badge=document.createElement('button');badge.type='button';badge.hidden=true;badge.className='mall101-badge';
+      badge=document.createElement('button');badge.type='button';badge.hidden=true;badge.className='mall101-floor-entry';
       badge.setAttribute('aria-label',data.name+'，查看樓層');
-      const glyph=document.createElement('span');glyph.className='mall101-bag';glyph.setAttribute('aria-hidden','true');
-      const name=document.createElement('span');name.textContent=data.name;badge.append(glyph,name);
+      badge.textContent='101 樓層';
       badge.addEventListener('click',event=>{event.stopPropagation();enter(null,true);toggle.focus({preventScroll:true});});
-      marker=new Marker({element:badge,anchor:'center'}).setLngLat(center).addTo(map);
+      stage.append(badge);
       onMove();
     }catch(error){
       console.warn('台北101樓層資料',error);
@@ -439,7 +438,7 @@ export function addTaipei101Indoor(map,{stage,Marker,setCutaway,openPlace,closeP
   map.on('pocketaccountpins',onAccountPins);
   map.on('moveend',onMove);map.on('render',drawGuide);
   map.on('remove',()=>{removed=true;map.off('pocketaccountpins',onAccountPins);map.off('moveend',onMove);map.off('render',drawGuide);
-    map.getCanvasContainer().removeEventListener('click',handleHit,true);marker?.remove();guide?.remove();});
+    map.getCanvasContainer().removeEventListener('click',handleHit,true);badge?.remove();guide?.remove();});
   void prepare();
   return {setNames,isPinVisible,isStreetPinVisible,isContextPin,openSearchPlace,refreshVisibility,state:()=>({ready:!!venue,active,floor:active?current:null}),exit};
 }
