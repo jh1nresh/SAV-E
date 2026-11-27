@@ -93,6 +93,41 @@ class LalaImportTests(unittest.TestCase):
         review={'places':{'123':{'sourceName':'changed','sourceAddress':'x','evidence':'test'}}}
         with self.assertRaises(ValueError):self.run_import(self.data([self.row()]),review=review)
 
+    def native_review(self):
+        row=self.row()
+        return {'places':{'123':{'sourceName':row['name'],'sourceAddress':row['addr'],
+            'placeId':'poi/node/1','targetName':row['name'],'targetAddress':row['addr'].replace('臺','台'),
+            'evidence':'Exact canonical branch', 'nativeMatches':[{
+                'provider':'apple_maps','providerPlaceId':'H123','name':'Observed branch',
+                'address':'Observed complete branch address','latitude':25.036,'longitude':121.54,
+                'observedAt':'2026-11-27','evidence':'Live native search observation, exact branch address'}]}}}
+
+    def test_reviewed_native_coordinates_do_not_move_or_duplicate_map_pin(self):
+        review=self.native_review()
+        out=self.run_import(self.data([self.row()]),[self.feature()],review=review)
+        entry=out['entries'][0]
+        self.assertEqual(len(out['entries']),1)
+        self.assertEqual(entry['placeId'],'poi/node/1')
+        self.assertEqual(entry['latitude'],25.04)
+        self.assertEqual(entry['aliases'],[])
+        self.assertEqual(entry['matchedPlaces'][-1]['providerPlaceId'],'H123')
+        self.assertEqual(entry['matchedPlaces'][-1]['latitude'],25.036)
+
+    def test_native_review_requires_bounded_identity_coordinates_and_evidence(self):
+        for key,value in [('provider','google'),('providerPlaceId',''),('providerPlaceId','../bad'),
+                          ('address',''),('latitude',True),('latitude',float('nan')),
+                          ('latitude',25.5),('evidence',''),('observedAt','today')]:
+            review=self.native_review();review['places']['123']['nativeMatches'][0][key]=value
+            with self.subTest(key=key,value=value),self.assertRaises(ValueError):
+                self.run_import(self.data([self.row()]),[self.feature()],review=review)
+
+    def test_provider_identity_cannot_be_claimed_by_two_branches(self):
+        review=self.native_review(); second=self.row(cid='456',addr='臺北市大安區仁愛路四段11號2樓')
+        review['places']['456']=copy.deepcopy(review['places']['123'])
+        review['places']['456'].update(sourceAddress=second['addr'],targetAddress=second['addr'].replace('臺','台'),placeId='poi/node/2')
+        with self.assertRaisesRegex(ValueError,'multiple branches'):
+            self.run_import(self.data([self.row(),second]),[self.feature(),self.feature('poi/node/2',address='仁愛路四段11號2樓')],review=review)
+
     def test_distinct_tenant_requires_frozen_rejection_of_every_candidate(self):
         row=self.row(); f=self.feature(name='某百貨'); t=f['properties']
         review={'places':{'123':{'sourceName':row['name'],'sourceAddress':row['addr'],

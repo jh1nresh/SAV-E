@@ -304,4 +304,83 @@ final class LiveMapPlaceTests: XCTestCase {
         XCTAssertFalse(encoded.contains("PRIVATE_"), file: file, line: line)
     }
 }
+
+#endif
+
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
+import Foundation
+import XCTest
+import MapKit
+@testable import SAVE
+
+@MainActor
+final class LiveMapSearchStateTests: XCTestCase {
+    private let region = MKCoordinateRegion(center: .init(latitude: 25.04, longitude: 121.54),
+                                             span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07))
+    private func result(_ name: String) throws -> LiveMapPlace {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: region.center)); item.name = name
+        return try XCTUnwrap(LiveMapPlace.search(item))
+    }
+    func testLateOldResponseCannotReplaceNewSearch() async throws {
+        var pending: [String: CheckedContinuation<[LiveMapPlace], Error>] = [:]
+        let model = LiveMapSearchModel { text, _ in
+            try await withCheckedThrowingContinuation { pending[text] = $0 }
+        }
+        model.submit("Old café", region: region)
+        while pending["Old café"] == nil { await Task.yield() }
+        model.submit("New café", region: region)
+        while pending["New café"] == nil { await Task.yield() }
+        pending["New café"]?.resume(returning: [try result("New café")])
+        while model.searching { await Task.yield() }
+        pending["Old café"]?.resume(returning: [try result("Old café")])
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertEqual(model.values.map(\.place.name), ["New café"])
+        XCTAssertEqual(model.query, "New café")
+    }
+    func testResetRejectsInFlightResultsAndClearsHistory() async throws {
+        var pending: CheckedContinuation<[LiveMapPlace], Error>?
+        let model = LiveMapSearchModel { _, _ in try await withCheckedThrowingContinuation { pending = $0 } }
+        model.submit("Private query", region: region)
+        while pending == nil { await Task.yield() }
+        model.reset()
+        pending?.resume(returning: [try result("Old account result")])
+        for _ in 0..<10 { await Task.yield() }
+        XCTAssertTrue(model.query.isEmpty); XCTAssertTrue(model.recent.isEmpty)
+        XCTAssertTrue(model.values.isEmpty); XCTAssertFalse(model.searching)
+    }
+    func testHistoryOnlyRecordsIntentAndReopenKeepsCompletedResults() async throws {
+        let place = try result("Coffee")
+        var calls = 0
+        let model = LiveMapSearchModel { _, _ in calls += 1; return [place] }
+        model.query = "Coffee"; model.queryChanged(region: region)
+        XCTAssertTrue(model.recent.isEmpty)
+        model.submit(region: region)
+        while model.searching { await Task.yield() }
+        model.suspend(); model.resume(region: region)
+        XCTAssertEqual(model.query, "Coffee"); XCTAssertEqual(model.values.count, 1)
+        XCTAssertEqual(calls, 1)
+        model.submit("coffee", region: region)
+        XCTAssertEqual(model.recent, ["coffee"])
+        model.clearRecent(); XCTAssertTrue(model.recent.isEmpty)
+        XCTAssertEqual(model.query, "coffee")
+        model.reset()
+    }
+    func testFailureCanRetryAndEmptyQueryRestoresInitialState() async {
+        var calls = 0
+        let model = LiveMapSearchModel { _, _ in
+            calls += 1
+            if calls == 1 { throw URLError(.notConnectedToInternet) }
+            return []
+        }
+        model.submit("Cafe", region: region)
+        while model.searching { await Task.yield() }
+        XCTAssertEqual(model.failure, .unavailable)
+        model.submit(region: region)
+        while model.searching { await Task.yield() }
+        XCTAssertEqual(model.failure, .empty)
+        model.query = ""; model.queryChanged(region: region)
+        XCTAssertNil(model.failure); XCTAssertFalse(model.searching)
+        XCTAssertEqual(model.recent, ["Cafe"])
+    }
+}
 #endif

@@ -2887,6 +2887,22 @@
           "address": "台北市文山區景美街 5 號",
           "latitude": 24.9932779,
           "longitude": 121.5417527
+        },
+        {
+          "name": "十一香牛肉面(景美店)",
+          "address": "中国台湾省台北市文山区116台湾台北市文山区景华里景美街5巷2号之1号",
+          "latitude": 24.990345,
+          "longitude": 121.545582,
+          "provider": "apple_maps",
+          "providerPlaceId": "H2710I3F98C5753DCAB"
+        },
+        {
+          "name": "11 Xiang Beef Noodles (Jingmei Shop)",
+          "address": "116 Taiwan Taibei City Wenshan Jinghuali Jingmei Street 5 Alley No.2 Zhi No.1, Wenshan, Taibei, Taiwan China",
+          "latitude": 24.990345,
+          "longitude": 121.545582,
+          "provider": "apple_maps",
+          "providerPlaceId": "H2710I3F98C5753DCAB"
         }
       ],
       "aliases": []
@@ -7303,6 +7319,6 @@
     "city": "3c30cb0b4abdc0a478ecb309dbd2951279d3d1929122b6a75b9e5198aec01648",
     "existing": "8b5660ff7e997cd53df18c187a21223e822d83c72113829d259e35a3dfb89e1e",
     "projection": "44ff474e4064783b2f5ef5bd534d3dfb9498823535c3ee59ed410f807828378a",
-    "reviewed": "f463e5330649ce053e5225ac4bd300a3fd3a3d6fdc5dc6e44d2ceaab545f8abf"
+    "reviewed": "7b1c2656c2d8ae7cba2b4a066ffffed61156d33ccb0430c32197546ce4c676ba"
   }
 }

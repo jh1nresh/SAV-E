@@ -16,6 +16,7 @@ struct LivePlanningDependencies {
     let plan: LiveRoutePlan
     let discovery: LivePublicDiscoveryModel
     let sessionIsCurrent: @MainActor () -> Bool
+    var mapSearch: LiveMapSearchModel? = nil
 }
 
 /// A child of the existing verified account root. The parent owns loading and persistence.
@@ -59,6 +60,9 @@ struct LivePlanningMapRoot: View {
                                                        span: .init(latitudeDelta: 0.07, longitudeDelta: 0.07))
     @State private var friendsVisitedOnly = false
     @State private var searchPresented = false
+    @StateObject private var mapSearch = LiveMapSearchModel()
+    @State private var searchDetent: PresentationDetent = .medium
+    @State private var pendingSearchSelection: LiveMapPlace?
     @State private var selected: LiveMapPlace?
     @State private var pendingSavedDetail: UUID?
     @State private var pendingGuideDestination: LivePublicGuideDestination?
@@ -92,6 +96,7 @@ struct LivePlanningMapRoot: View {
          dependencies: LivePlanningDependencies? = nil) {
         self.mapVM = mapVM; self.ownerSubject = ownerSubject; self.sessionGeneration = sessionGeneration
         self.onOpenSaved = onOpenSaved; self.onOpenAccount = onOpenAccount; self.onCapture = onCapture
+        _mapSearch = StateObject(wrappedValue: dependencies?.mapSearch ?? LiveMapSearchModel())
         usesFixtureMap = dependencies != nil
         self.reviewInboxRequest = reviewInboxRequest
         self.onOpenReview = onOpenReview
@@ -292,7 +297,9 @@ struct LivePlanningMapRoot: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { suspendPlanning() }
         }
-        .onDisappear { atlasSheetOpen = false; atlasDrawer.dismiss(); isMounted = false; suspendPlanning(); saveOperation?.cancel() }
+        .onChange(of: ownerSubject) { _, _ in clearMapSearch() }
+        .onChange(of: sessionGeneration) { _, _ in clearMapSearch() }
+        .onDisappear { clearMapSearch(); atlasSheetOpen = false; atlasDrawer.dismiss(); isMounted = false; suspendPlanning(); saveOperation?.cancel() }
         .task(id: tabLanding) {
             guard let landing = tabLanding else { return }
             do { try await Task.sleep(for: .seconds(LiveTabLanding.duration)) }
@@ -323,16 +330,20 @@ struct LivePlanningMapRoot: View {
             if outing.snapshotRevision == previousSnapshot { plan.cancel(); selectedStops = [] }
         }
         .tint(DateTheme.blue)
-        .sheet(isPresented: $searchPresented) {
-            LiveMapSearch(region: searchRegion) { pin in
+        .sheet(isPresented: $searchPresented, onDismiss: finishSearchSelection) {
+            LiveMapSearch(model: mapSearch, region: searchRegion, detent: $searchDetent) { pin in
                 guard sessionIsCurrent else { return }
                 destination = .map
                 savedOnly = false
-                searchPin = pin
+                searchPin = pin.existingSavedProjection(in: mapVM.places) == nil ? pin : nil
                 camera = .region(.init(center: pin.coordinate, span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012)))
                 // Selecting the same result after a pan is a fresh camera request.
                 cameraRequestID &+= 1
-            }.presentationDetents([.large]).modifier(LivePlaceSheetMaterial())
+                pendingSearchSelection = pin
+            }
+            .presentationDetents([.medium, .large], selection: $searchDetent)
+            .presentationDragIndicator(.visible)
+            .modifier(LivePlaceSheetMaterial())
         }
         .sheet(item: $selected, onDismiss: finishPlaceDismissal) { pin in
             placeCard(pin)
@@ -342,6 +353,19 @@ struct LivePlanningMapRoot: View {
         }
         .onChange(of: selected?.id) { _, _ in saveError = nil }
         .sheet(isPresented: $teamPresented) { teamSheet.presentationDetents([.large]).modifier(LivePlaceSheetMaterial()) }
+    }
+
+    private func clearMapSearch() {
+        mapSearch.reset()
+        pendingSearchSelection = nil
+        searchPresented = false
+    }
+
+    private func finishSearchSelection() {
+        guard let pin = pendingSearchSelection else { return }
+        pendingSearchSelection = nil
+        guard sessionIsCurrent else { return }
+        selectMapPin(pin)
     }
 
     private func mapPage(height: CGFloat) -> some View {
@@ -784,7 +808,7 @@ struct LivePlanningMapRoot: View {
                             }.savvyPressFeedback().accessibilityLabel(copy("Clear search", "清除搜尋"))
                         }
                     } else {
-                        Button { searchPresented = true } label: {
+                        Button { searchDetent = .medium; searchPresented = true } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "magnifyingglass").font(.system(size: 20)).accessibilityHidden(true)
                                 Text(searchTitle).lineLimit(1)
@@ -1108,70 +1132,220 @@ struct LiveGuideTimeline: View {
     }
 }
 
+/// In-memory only: owned by the current account root, never persisted or shared.
 @MainActor
-private struct LiveMapSearch: View {
-    let region: MKCoordinateRegion
-    let onPick: (LiveMapPlace) -> Void
-    @State private var query = ""
-    @State private var values: [LiveMapPlace] = []
-    @State private var searching = false
-    @State private var error: String?
-    @State private var request: MKLocalSearch?
-    @State private var operation: Task<Void, Never>?
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.appLanguageSettings) private var language
-    var body: some View {
-        NavigationStack {
-            List {
-                if searching {
-                    HStack(spacing: 12) {
-                        SavvyLoadingCloud().frame(width: 56, height: 38)
-                        Text(copy("Searching…", "搜尋中…"))
-                    }.listRowBackground(DateTheme.ink.opacity(0.04))
-                }
-                if let error { Text(error).foregroundStyle(DateTheme.muted).listRowBackground(DateTheme.ink.opacity(0.04)) }
-                ForEach(values) { pin in
-                    Button { onPick(pin); dismiss() } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(pin.place.name).font(.headline)
-                            Text(LivePlaceAddress.display(pin.place.address)).font(.caption).foregroundStyle(.secondary)
-                            Text(copy("View on map · not saved", "在地圖查看 · 尚未收藏")).font(.caption2)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 7).contentShape(Rectangle())
-                    }.savvyPressFeedback().listRowBackground(DateTheme.ink.opacity(0.04))
-                }
-            }.scrollContentBackground(.hidden)
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: copy("Search places, restaurants or addresses", "搜尋地點、餐廳或地址"))
-                .onSubmit(of: .search, search)
-                .navigationTitle(copy("Search map", "搜尋地圖")).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .topBarTrailing) { Button(copy("Done", "完成")) { dismiss() } } }
-        }.tint(DateTheme.blue).foregroundStyle(DateTheme.ink)
-            .savvyInputFeedback()
-            .onDisappear { operation?.cancel(); request?.cancel() }
+final class LiveMapSearchModel: ObservableObject {
+    enum Failure { case empty, unavailable }
+    @Published var query = ""
+    @Published private(set) var values: [LiveMapPlace] = []
+    @Published private(set) var searching = false
+    @Published private(set) var failure: Failure?
+    @Published private(set) var recent: [String] = []
+    private var requestedQuery: String?
+    private var generation = 0
+    private var request: MKLocalSearch?
+    private var operation: Task<Void, Never>?
+    private let lookup: ((String, MKCoordinateRegion) async throws -> [LiveMapPlace])?
+
+    init(lookup: ((String, MKCoordinateRegion) async throws -> [LiveMapPlace])? = nil) {
+        self.lookup = lookup
     }
-    private func copy(_ english: String, _ chinese: String) -> String {
-        language.localized(english: english, traditionalChinese: chinese)
-    }
-    private func search() {
-        operation?.cancel(); request?.cancel(); values = []; error = nil; searching = false
+
+    func queryChanged(region: MKCoordinateRegion) {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let input = MKLocalSearch.Request(); input.naturalLanguageQuery = text; input.region = region
-        let search = MKLocalSearch(request: input); request = search; searching = true
-        operation = Task {
-            defer { if !Task.isCancelled { searching = false } }
+        guard text != requestedQuery else { return }
+        cancel()
+        values = []; failure = nil
+        requestedQuery = text
+        guard text.count >= 2 else { return }
+        search(text, region: region, debounce: true)
+    }
+
+    func submit(_ text: String? = nil, region: MKCoordinateRegion) {
+        if let text { query = text }
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { queryChanged(region: region); return }
+        remember(text)
+        search(text, region: region, debounce: false)
+    }
+
+    func rememberSelection() { remember(query) }
+    func clearRecent() { recent = [] }
+    func reset() {
+        cancel(); query = ""; values = []; failure = nil; recent = []; requestedQuery = nil
+    }
+    func cancel() {
+        generation &+= 1
+        operation?.cancel(); request?.cancel()
+        operation = nil; request = nil; searching = false
+    }
+    func suspend() {
+        let wasSearching = searching
+        cancel()
+        if wasSearching { requestedQuery = nil }
+    }
+    func resume(region: MKCoordinateRegion) {
+        if requestedQuery == nil { queryChanged(region: region) }
+    }
+    private func remember(_ value: String) {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        recent.removeAll { $0.caseInsensitiveCompare(value) == .orderedSame }
+        recent.insert(value, at: 0)
+        recent = Array(recent.prefix(6))
+    }
+    private func search(_ text: String, region: MKCoordinateRegion, debounce: Bool) {
+        cancel(); values = []; failure = nil; searching = true; requestedQuery = text
+        let ticket = generation
+        operation = Task { [weak self] in
             do {
-                let response = try await search.start()
-                guard !Task.isCancelled else { return }
-                values = response.mapItems.compactMap(LiveMapPlace.search)
-                if values.isEmpty { error = copy("No matching places. Try another name or address.", "沒有找到對應地點，可換個店名或地址。") }
+                if debounce { try await Task.sleep(for: .milliseconds(350)) }
+                guard let self, !Task.isCancelled, self.generation == ticket else { return }
+                let results: [LiveMapPlace]
+                if let lookup = self.lookup {
+                    results = try await lookup(text, region)
+                } else {
+                    let input = MKLocalSearch.Request()
+                    input.naturalLanguageQuery = text; input.region = region
+                    let request = MKLocalSearch(request: input)
+                    self.request = request
+                    results = try await request.start().mapItems.compactMap(LiveMapPlace.search)
+                }
+                guard !Task.isCancelled, self.generation == ticket else { return }
+                self.values = results
+                self.failure = results.isEmpty ? .empty : nil
+                self.searching = false; self.request = nil; self.operation = nil
             } catch {
-                guard !Task.isCancelled else { return }
-                self.error = copy("Search is unavailable right now. Try again.", "目前無法完成搜尋，請稍後重試。")
+                guard let self, !Task.isCancelled, self.generation == ticket else { return }
+                self.failure = .unavailable
+                self.searching = false; self.request = nil; self.operation = nil
             }
         }
     }
 }
+
+@MainActor
+struct LiveMapSearch: View {
+    @ObservedObject var model: LiveMapSearchModel
+    let region: MKCoordinateRegion
+    @Binding var detent: PresentationDetent
+    let onPick: (LiveMapPlace) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguageSettings) private var language
+    private var isEmpty: Bool { model.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if isEmpty { initialContent }
+                else if model.searching {
+                    HStack(spacing: 12) {
+                        SavvyLoadingCloud().frame(width: 56, height: 38)
+                        Text(copy("Searching…", "搜尋中…"))
+                    }.listRowBackground(DateTheme.ink.opacity(0.04))
+                        .accessibilityIdentifier("live.map.search.loading")
+                } else if let failure = model.failure {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(failure == .empty
+                             ? copy("No matching places. Try another name or address.", "沒有找到對應地點，可換個店名或地址。")
+                             : copy("Search is unavailable right now. Try again.", "目前無法完成搜尋，請稍後重試。"))
+                        if failure == .unavailable {
+                            Button(copy("Try again", "重試")) { submit() }
+                                .frame(minHeight: 44).accessibilityIdentifier("live.map.search.retry")
+                        }
+                    }.foregroundStyle(DateTheme.muted).listRowBackground(DateTheme.ink.opacity(0.04))
+                        .accessibilityIdentifier("live.map.search.message")
+                } else if model.values.isEmpty {
+                    Text(copy("Keep typing, or press Search.", "繼續輸入，或按搜尋。"))
+                        .foregroundStyle(DateTheme.muted).listRowBackground(Color.clear)
+                }
+                ForEach(model.values) { pin in
+                    Button {
+                        model.rememberSelection(); onPick(pin); dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "mappin.circle.fill").foregroundStyle(DateTheme.blue)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(pin.place.name).font(.headline)
+                                Text(LivePlaceAddress.display(pin.place.address)).font(.caption).foregroundStyle(DateTheme.muted)
+                                Text(copy("View on map", "在地圖查看")).font(.caption2)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(DateTheme.muted)
+                        }.padding(.vertical, 7).contentShape(Rectangle())
+                    }.savvyPressFeedback().listRowBackground(DateTheme.ink.opacity(0.04))
+                        .accessibilityIdentifier("live.map.search.result." + pin.id)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .searchable(text: $model.query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: copy("Search places or addresses", "搜尋地點或地址"))
+            .modifier(LiveSearchToolbarVisibility())
+            .onChange(of: model.query) { _, _ in model.queryChanged(region: region) }
+            .onSubmit(of: .search) { submit() }
+            .navigationTitle(copy("Search map", "搜尋地圖")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) {
+                Button(copy("Done", "完成")) { dismiss() }.accessibilityIdentifier("live.map.search.close")
+            } }
+        }.tint(DateTheme.blue).foregroundStyle(DateTheme.ink)
+            .savvyInputFeedback()
+            .onAppear { model.resume(region: region) }
+            .onDisappear { model.suspend() }
+    }
+
+    @ViewBuilder private var initialContent: some View {
+        Section {
+            HStack(spacing: 12) {
+                nearby("Food", "美食", symbol: "fork.knife", id: "food")
+                nearby("Coffee", "咖啡", symbol: "cup.and.saucer", id: "coffee")
+                nearby("Sights", "景點", symbol: "binoculars", id: "sights")
+            }.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        } header: { Text(copy("Search this map area", "搜尋這個區域")) }
+        if !model.recent.isEmpty {
+            Section {
+                ForEach(model.recent, id: \.self) { text in
+                    Button { submit(text) } label: {
+                        Label(text, systemImage: "clock").frame(minHeight: 44)
+                    }.listRowBackground(DateTheme.ink.opacity(0.04))
+                        .accessibilityIdentifier("live.map.search.recent." + text)
+                }
+            } header: {
+                HStack {
+                    Text(copy("Recent searches", "最近搜尋"))
+                    Spacer()
+                    Button(copy("Clear", "清除")) { model.clearRecent() }
+                        .frame(minHeight: 44).accessibilityIdentifier("live.map.search.clearRecent")
+                }
+            }
+        }
+    }
+    private func nearby(_ en: String, _ zh: String, symbol: String, id: String) -> some View {
+        Button { submit(copy(en, zh)) } label: {
+            VStack(spacing: 8) {
+                Image(systemName: symbol).font(.title3)
+                Text(copy(en, zh)).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, minHeight: 70)
+                .padding(.vertical, 8).background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 18))
+        }.buttonStyle(.plain).foregroundStyle(DateTheme.blue)
+            .accessibilityIdentifier("live.map.search.nearby." + id)
+    }
+    private func submit(_ text: String? = nil) {
+        detent = .large
+        model.submit(text, region: region)
+    }
+    private func copy(_ en: String, _ zh: String) -> String {
+        language.localized(english: en, traditionalChinese: zh)
+    }
+}
+private struct LiveSearchToolbarVisibility: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 17.1, *) {
+            content.searchPresentationToolbarBehavior(.avoidHidingContent)
+        } else { content }
+    }
+}
+
 /// One material entry for floating chrome; reading content keeps its opaque surfaces.
 /// Leave system sheets on their native Liquid Glass on iOS 26; older
 /// systems use an adaptive native material with an opaque accessible fallback.

@@ -53,6 +53,33 @@ def assignment(path, name):
 def identity(place):
     return (place['provider'], place['providerPlaceID'])
 
+def native_matches(review, row):
+    """Explicit reviewed provider observations; never broaden the general radius."""
+    matches = review.get('nativeMatches', [])
+    if not isinstance(matches, list) or len(matches) > 8:
+        raise ValueError('Invalid native matches')
+    result = []
+    for match in matches:
+        if not isinstance(match, dict) or match.get('provider') != 'apple_maps':
+            raise ValueError('Invalid native provider')
+        pid = string(match.get('providerPlaceId'), 200)
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', pid):
+            raise ValueError('Invalid native identity')
+        string(match.get('evidence'), 2000)
+        date.fromisoformat(string(match.get('observedAt'), 10))
+        name = string(match.get('name'), 300)
+        address = string(match.get('address'), 500)
+        for key, limit in [('latitude', 90), ('longitude', 180)]:
+            value = match.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or abs(value) > limit:
+                raise ValueError('Invalid native coordinates')
+        # This is a reviewed local discrepancy, not permission to attach distant venues.
+        if distance(row, match) > 1000:
+            raise ValueError('Native observation is outside the reviewed locality')
+        result.append(dict(name=name, address=address, latitude=match['latitude'],
+                           longitude=match['longitude'], provider='apple_maps', providerPlaceId=pid))
+    return result
+
 def read_inputs(data, posts, duplicate_variants=None):
     duplicate_variants = duplicate_variants or {}
     unique={}
@@ -160,12 +187,22 @@ def build(data, posts, city, existing, projection, revision, captured_at, overri
         pid=next(iter(ids)) if ids else 'creator/lala/'+row['cid']
         aliases={ (a['provider'],a['id']) for t in exact for a in t['aliases'] }
         matched_places=[{k:t[k] for k in ('name','address','latitude','longitude')} for t in exact if t['name']]
+        if row['cid'] in overrides:
+            matched_places.extend(native_matches(overrides[row['cid']], row))
         entries.append({**row,'placeId':pid,'mapPlaceIds':[pid], 'isNew':not bool(ids),
                         'matchMethod':method if ids or distinct else 'source_cid',
                         'matchedPlaces':matched_places,
                         'aliases':[{'provider':p,'id':i} for p,i in sorted(aliases)]})
     # Two upstream CIDs claiming the same existing pin are review candidates, not silent overwrites.
     claims=defaultdict(list)
+    native_claims = {}
+    for row in entries:
+        for match in row['matchedPlaces']:
+            if 'providerPlaceId' not in match: continue
+            key = (match['provider'], match['providerPlaceId'])
+            if key in native_claims and native_claims[key] != row['cid']:
+                raise ValueError('Native identity claimed by multiple branches')
+            native_claims[key] = row['cid']
     for row in entries: claims[row['placeId']].append(row)
     kept=[]
     for pid,items in claims.items():
