@@ -90,8 +90,8 @@ def runtime_paths():
             dest = ((WEB / name).parent / ref).resolve()
             modules.append(dest.relative_to(WEB).as_posix())
 
-    for photo in re.findall(r"\bfile:\s*'([\w-]+\.jpg)'", (WEB / 'place-photos.js').read_text()):
-        include('assets/place-photos/' + photo)
+    for photo in place_photo_catalog():
+        include('assets/place-photos/' + photo['file'])
     for row in document('cities/catalog.json'):
         for filename in ('scene.json', 'map-mesh.json', 'map-mesh.bin'):
             include(f'cities/{row["id"]}/{filename}')
@@ -122,6 +122,23 @@ def runtime_paths():
         for tile in relief['dem']:
             include(f'{root}/dem/{tile}.png')
     return sorted(paths)
+
+
+def place_photo_catalog():
+    """One JSON-compatible ESM catalog serves both map pins and native Saved cards."""
+    text = (WEB / 'place-photo-data.js').read_text().strip()
+    if not text.startswith('export default ') or not text.endswith(';'):
+        raise ValueError('Invalid public photo catalog module')
+    rows = json.loads(text[len('export default '):-1])
+    ids = set()
+    for row in rows:
+        if (not re.fullmatch(r'poi/(node|way|relation)/[0-9]+', row['id'])
+                or row['id'] in ids or not re.fullmatch(r'[\w-]+\.jpg', row['file'])
+                or not all(type(row[k]) is int and 0 < row[k] <= 20000 for k in ('width', 'height'))
+                or not all(isinstance(row[k], str) and row[k].strip() for k in ('alt', 'credit', 'commonsFile'))):
+            raise ValueError('Invalid public photo catalog entry')
+        ids.add(row['id'])
+    return rows
 
 
 def inventory(directory):

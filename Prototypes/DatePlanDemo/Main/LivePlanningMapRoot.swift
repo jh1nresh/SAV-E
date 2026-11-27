@@ -36,6 +36,7 @@ struct LivePlanningMapRoot: View {
     @StateObject private var plan: LiveRoutePlan
     @StateObject private var discovery: LivePublicDiscoveryModel
     @State private var destination = DemoDestination.saved
+    @State private var galleryLightsOn = true
     @State private var tabLanding: TabLanding?
     @State private var previousRootDestination = DemoDestination.saved
     @State private var savedQuery = ""
@@ -259,11 +260,12 @@ struct LivePlanningMapRoot: View {
             searchPresented = false
             destination = .saved
         }
+        .preferredColorScheme(destination == .saved && !galleryLightsOn ? .dark : nil)
         .onChange(of: destination) { old, next in
             if next == .map { hasOpenedMap = true }
             else { atlasSheetOpen = false; atlasDrawer.dismiss() }
             if next == .passport, old != .passport { previousRootDestination = old }
-            if next != .saved { savedSearchFocused = false }
+            if next != .saved { savedSearchFocused = false; galleryLightsOn = true }
         }
         .onChange(of: showsFriends) { _, enabled in
             if !enabled {
@@ -649,7 +651,7 @@ struct LivePlanningMapRoot: View {
             onOpenReview: { id in
                 guard sessionIsCurrent else { return }
                 onOpenReview(id)
-            }, onClearReviewBatch: onClearReviewBatch, sharedQuery: $savedQuery)
+            }, onClearReviewBatch: onClearReviewBatch, sharedQuery: $savedQuery, galleryLights: $galleryLightsOn)
     }
 
     private var passport: some View {
@@ -1066,7 +1068,7 @@ struct LiveGuideTimeline: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(pin.place.name).font(.subheadline.weight(.semibold)).foregroundStyle(DateTheme.ink)
                                         .fixedSize(horizontal: false, vertical: true)
-                                    Text(pin.place.address).font(.caption).foregroundStyle(DateTheme.muted).lineLimit(2)
+                                    Text(LivePlaceAddress.display(pin.place.address)).font(.caption).foregroundStyle(DateTheme.muted).lineLimit(2)
                                     if index > 0, plan.routes.indices.contains(index - 1) {
                                         Label(copy("About \(Int(ceil(plan.routes[index - 1].expectedTravelTime / 60))) min walk",
                                                    "步行約 \(Int(ceil(plan.routes[index - 1].expectedTravelTime / 60))) 分鐘"), systemImage: "figure.walk")
@@ -1132,7 +1134,7 @@ private struct LiveMapSearch: View {
                     Button { onPick(pin); dismiss() } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(pin.place.name).font(.headline)
-                            Text(pin.place.address).font(.caption).foregroundStyle(.secondary)
+                            Text(LivePlaceAddress.display(pin.place.address)).font(.caption).foregroundStyle(.secondary)
                             Text(copy("View on map · not saved", "在地圖查看 · 尚未收藏")).font(.caption2)
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 7).contentShape(Rectangle())
                     }.savvyPressFeedback().listRowBackground(DateTheme.ink.opacity(0.04))

@@ -65,7 +65,7 @@ struct LivePlaceDetail: View {
         websitePhoto.cancel()
         await information.load(pin: pin, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
         guard !Task.isCancelled else { return }
-        if case .available = LiveBusinessPhotoSource.resolve(pin.place) { return }
+        if LiveBusinessPhotoSource.resolve(pin.place).hasPhoto { return }
         await websitePhoto.load(website: information.item?.url, ownerSubject: ownerSubject, generation: sessionGeneration)
     }
 
@@ -179,7 +179,7 @@ struct LivePlaceDetail: View {
 
     private var address: some View {
         Text(verbatim: pin.place.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-             ? copy("Address unavailable", "尚無地址") : pin.place.address)
+             ? copy("Address unavailable", "尚無地址") : LivePlaceAddress.display(pin.place.address))
             .font(.body).foregroundStyle(DateTheme.muted)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
@@ -232,10 +232,13 @@ struct LivePlaceDetail: View {
     }
 
     @ViewBuilder private var businessPhotos: some View {
-        if case .available = LiveBusinessPhotoSource.resolve(pin.place) {
+        if LiveBusinessPhotoSource.resolve(pin.place).hasPhoto {
             LiveBusinessPhoto(place: pin.place).frame(height: 200)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .accessibilityIdentifier("live.place.businessPhoto")
+            if case .bundled(let photo) = LiveBusinessPhotoSource.resolve(pin.place), let source = photo.original {
+                Link(photo.credit, destination: source).font(.caption).foregroundStyle(DateTheme.muted)
+            }
         } else if let image = websitePhoto.image {
             VStack(alignment: .leading, spacing: 4) {
                 Image(uiImage: image).resizable().scaledToFill().frame(height: 200).clipped()
@@ -292,7 +295,7 @@ struct LivePlaceDetail: View {
                         Image(systemName: "arrow.up.right").font(.caption)
                     }.font(.subheadline).frame(minHeight: 44)
                 }.accessibilityIdentifier("live.place.sourceLink")
-            } else {
+            } else if LiveCreatorCatalog.shared.match(pin.place) == nil {
                 Label(copy("No source link attached", "未附來源連結"), systemImage: "link")
                     .font(.caption).foregroundStyle(DateTheme.muted).frame(minHeight: 32)
             }
@@ -366,6 +369,35 @@ private struct LiveNativePlaceCard: UIViewControllerRepresentable {
         func mapItemDetailViewControllerDidFinish(_ detailViewController: MKMapItemDetailViewController) { onClose() }
     }
 }
+/// Presentation and comparison only. Never overwrites provider/user address data.
+/// Taiwan's municipality, street, house number and floor remain part of the key.
+enum LivePlaceAddress {
+    static func display(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let traditional = (trimmed.applyingTransform(StringTransform("Hans-Hant"), reverse: false) ?? trimmed)
+            .precomposedStringWithCompatibilityMapping.replacingOccurrences(of: "臺", with: "台")
+        let compact = traditional.components(separatedBy: .whitespacesAndNewlines).joined()
+        let country = #"(?:中國)?台灣(?:省)?"#
+        let postal = #"(?:[0-9]{3,6})?"#
+        let cities = "(?:台北市|新北市|桃園市|台中市|台南市|高雄市|基隆市|新竹市|嘉義市|新竹縣|苗栗縣|彰化縣|南投縣|雲林縣|嘉義縣|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣|金門縣|連江縣)"
+        let prefix = "^" + postal + "(?:" + country + ")?" + postal
+        guard compact.range(of: prefix + cities, options: .regularExpression) != nil else { return trimmed }
+        var result = compact.replacingOccurrences(of: prefix, with: "", options: .regularExpression)
+        // Collapse only an identical city/district prefix. Different districts
+        // remain distinct even if their road and house number happen to match.
+        let duplicate = "^(" + cities + "[^市縣區鄉鎮路街巷弄號0-9]{1,5}[區鄉鎮市])" + postal + "(?:" + country + ")?" + postal + #"\1"#
+        result = result.replacingOccurrences(of: duplicate, with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(?<=[區鄉鎮])[^區鄉鎮市路街巷弄號\d]{1,8}里"#, with: "", options: .regularExpression)
+        for (index, number) in Array("一二三四五六七八九十").enumerated() {
+            result = result.replacingOccurrences(of: "\(number)段", with: "\(index + 1)段")
+        }
+        result = result.replacingOccurrences(of: #"(\d+)號之(\d+)號?"#, with: "$1之$2號", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(\d+)-(\d+)號"#, with: "$1之$2號", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(?i)(b?\d+)f"#, with: "$1樓", options: .regularExpression)
+        return result.replacingOccurrences(of: "一樓", with: "1樓")
+    }
+}
+
 /// A Debug-bundled public creator reference. It never writes Place, user notes, or visits.
 struct LiveCreatorCatalog: Decodable {
     struct Alias: Decodable { let provider: String; let id: String }
@@ -432,25 +464,15 @@ struct LiveCreatorCatalog: Decodable {
         return entries.first { $0.placeId == placeId }
     }
 
-    private static func folded(_ value: String) -> String {
-        value.precomposedStringWithCompatibilityMapping.lowercased()
-            .replacingOccurrences(of: "臺", with: "台").replacingOccurrences(of: "馆", with: "館")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-    }
     private static func nameKey(_ value: String) -> String {
-        String(String.UnicodeScalarView(folded(value).unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+        let traditional = value.applyingTransform(StringTransform("Hans-Hant"), reverse: false) ?? value
+        let folded = traditional.precomposedStringWithCompatibilityMapping.lowercased()
+            .replacingOccurrences(of: "臺", with: "台").replacingOccurrences(of: "麵", with: "面")
+        return String(String.UnicodeScalarView(folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
     }
     private static func addressKey(_ value: String) -> String {
-        var result = folded(value)
-        for (index, number) in Array("一二三四五六七八九十").enumerated() {
-            result = result.replacingOccurrences(of: "\(number)段", with: "\(index + 1)段")
-        }
-        result = result.replacingOccurrences(of: #"(\d+)號之(\d+)"#, with: "$1-$2號", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"(\d+)之(\d+)號"#, with: "$1-$2號", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"(b?\d+)f"#, with: "$1樓", options: .regularExpression)
-        result = result.replacingOccurrences(of: "一樓", with: "1樓")
-        result = result.replacingOccurrences(of: #"^(?:\d{3,6})?(?:台灣)?"#, with: "", options: .regularExpression)
-        return result.replacingOccurrences(of: #"(?<=[區鄉鎮])[^區鄉鎮市路街巷弄號\d]{1,8}里"#, with: "", options: .regularExpression)
+        LivePlaceAddress.display(value).precomposedStringWithCompatibilityMapping.lowercased()
+            .components(separatedBy: .whitespacesAndNewlines).joined()
     }
     func match(_ place: Place) -> Entry? {
         let key = LivePublicDiscoveryVenueKey(savedPlace: place)

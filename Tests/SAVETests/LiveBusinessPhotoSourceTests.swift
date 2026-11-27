@@ -1,4 +1,4 @@
-#if DEBUG && SAVVY_MAIN_APP && SAVVY_DATE_PLAN_PHONE_PREVIEW
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW
 import Foundation
 import XCTest
 @testable import SAVE
@@ -89,6 +89,52 @@ final class LiveBusinessPhotoSourceTests: XCTestCase {
                        .available(try XCTUnwrap(URL(string: businessURL))))
         XCTAssertEqual(LiveBusinessPhotoSource.resolve(reversed),
                        .available(try XCTUnwrap(URL(string: otherBusinessURL))))
+    }
+
+    func testBundledPhotoRequiresExactAtlasBranchAndNearbyCoordinate() {
+        var place = fixture()
+        place.providerPlaceId = "osm-node-123"
+        let row = catalogRow()
+        XCTAssertEqual(LiveBundledBusinessPhoto.match(place, in: [row])?.id, row.id)
+        place.providerPlaceId = "poi/node/124"
+        XCTAssertNil(LiveBundledBusinessPhoto.match(place, in: [row]))
+        place.providerPlaceId = row.id
+        place.latitude += 0.01
+        XCTAssertNil(LiveBundledBusinessPhoto.match(place, in: [row]))
+    }
+
+    func testUnidentifiedBranchNeedsNameAddressAndWGS84NotOnlyProximity() {
+        var place = fixture()
+        let row = catalogRow()
+        XCTAssertEqual(LiveBundledBusinessPhoto.match(place, in: [row])?.id, row.id)
+        place.address = "Fixture Street 2"
+        XCTAssertNil(LiveBundledBusinessPhoto.match(place, in: [row]))
+        place.address = "Fixture Street 1"
+        place.name = "Other branch"
+        XCTAssertNil(LiveBundledBusinessPhoto.match(place, in: [row]))
+        place.name = row.name
+        place.coordinateSystem = .gcj02
+        XCTAssertNil(LiveBundledBusinessPhoto.match(place, in: [row]))
+    }
+
+    func testPhotoDoesNotBorrowAnotherFloorOrHouseSuffix() {
+        let row = catalogRow()
+        for address in ["Fixture Street 11", "Fixture Street 1 Floor 2", "Fixture Street 1-1"] {
+            var place = fixture(); place.address = address
+            XCTAssertNil(LiveBundledBusinessPhoto.match(place, in: [row]))
+        }
+    }
+
+    func testAmbiguousBranchesDoNotSelectAPhoto() {
+        XCTAssertNil(LiveBundledBusinessPhoto.match(fixture(), in: [catalogRow(), catalogRow()]))
+        XCTAssertNil(LiveBundledBusinessPhoto.match(fixture(), in: []))
+    }
+
+    private func catalogRow() -> LiveBundledBusinessPhoto {
+        LiveBundledBusinessPhoto(id: "poi/node/123", name: "Redacted Business", point: [121.54, 25.03],
+                                 file: "fixture.jpg", alt: "Fixture", credit: "Fixture attribution",
+                                 commonsFile: "Fixture.jpg", width: 600, height: 800,
+                                 streetAddress: "Fixture Street 1")
     }
 
     private func fixture(photos: [String]? = nil, sourceImage: String? = nil) -> Place {

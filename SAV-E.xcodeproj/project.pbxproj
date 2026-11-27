@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F03D922511BB40F4A4170002 /* LiveCreatorCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F03D922511BB40F4A4170001 /* LiveCreatorCatalogTests.swift */; };
+		FBB22FD29AAB5D12CBAA0202 /* SavedGalleryWall.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBB22FD29AAB5D12CBAA0201 /* SavedGalleryWall.swift */; };
 		C5A6A0000000000000000003 /* SakugaNativeDrawing.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A6A0000000000000000004 /* SakugaNativeDrawing.swift */; };
 		C5A6A0000000000000000001 /* SavvySakugaFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A6A0000000000000000002 /* SavvySakugaFeedback.swift */; };
 		D0CF5E1E6F145692C1C6D365 /* DatePlanModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86392DA85DC10A4ADB33915B /* DatePlanModel.swift */; };
@@ -406,6 +408,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F03D922511BB40F4A4170001 /* LiveCreatorCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveCreatorCatalogTests.swift; path = "Tests/SAVETests/LiveCreatorCatalogTests.swift"; sourceTree = SOURCE_ROOT; };
+		FBB22FD29AAB5D12CBAA0201 /* SavedGalleryWall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SavedGalleryWall.swift; path = "Prototypes/DatePlanDemo/Main/SavedGalleryWall.swift"; sourceTree = SOURCE_ROOT; };
 		C5A6A0000000000000000004 /* SakugaNativeDrawing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SakugaNativeDrawing.swift; sourceTree = "<group>"; };
 		C5A6A0000000000000000002 /* SavvySakugaFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvySakugaFeedback.swift; sourceTree = "<group>"; };
 		86392DA85DC10A4ADB33915B /* DatePlanModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DatePlanModel.swift; path = "Prototypes/DatePlanDemo/Core/DatePlanModel.swift"; sourceTree = SOURCE_ROOT; };
@@ -737,6 +741,7 @@
 				1C8A8F0663D372E34151F3A4 /* GuideBrief.swift */,
 				B04EAD61BA7E8C9E44503F0F /* ImportedLinkNoteTests.swift */,
 				DDEF21FB7489D0FA5F1A2357 /* LiveBusinessPhoto.swift */,
+				F03D922511BB40F4A4170001 /* LiveCreatorCatalogTests.swift */,
 				39DBD047BDAF5B48EBC49016 /* LiveBusinessPhotoSourceTests.swift */,
 				811F39A2F5DF0B0BE805B7CF /* LiveBusinessWebsitePhoto.swift */,
 				59C6BBE2ABF5BB85554C68B4 /* LiveBusinessWebsitePhotoTests.swift */,
@@ -754,6 +759,7 @@
 				B5DBBD4E67D5544A4595A349 /* LivePlaceInformationTests.swift */,
 				70B15056EEBAD97FE9B11B05 /* LivePlaceNativeProbeTests.swift */,
 				7B6A5A4499EBF7C93E09B2B8 /* LivePlanningLibrary.swift */,
+				FBB22FD29AAB5D12CBAA0201 /* SavedGalleryWall.swift */,
 				86F10F2B74AA32C794F3415C /* LivePlanningLibraryTests.swift */,
 				3A34ABDAB7FD7F6533EC97DB /* LivePlanningMapRoot.swift */,
 				A91AD4603C38421F9C451B23 /* PocketCityForecast.swift */,
@@ -1862,6 +1868,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2267D22652C38D463DD859D2 /* ImportedLinkNoteTests.swift in Sources */,
+				F03D922511BB40F4A4170002 /* LiveCreatorCatalogTests.swift in Sources */,
 				4A11E65F445241665F210748 /* LiveBusinessPhotoSourceTests.swift in Sources */,
 				9055B8942D0A788AA70140A2 /* LiveBusinessWebsitePhotoTests.swift in Sources */,
 				818EA690E75ED68001269B19 /* LiveFriendMapPlacesTests.swift in Sources */,
@@ -1996,6 +2003,7 @@
 				EE9A6071EA4F596D29100B12 /* LivePlaceDetail.swift in Sources */,
 				FDF1E99BAB9415B78406B352 /* LivePlaceInformation.swift in Sources */,
 				6DC74CD8C3CE68E5307B0C10 /* LivePlanningLibrary.swift in Sources */,
+				FBB22FD29AAB5D12CBAA0202 /* SavedGalleryWall.swift in Sources */,
 				D9DBE44C2CB540905F4E1261 /* LivePlanningMapRoot.swift in Sources */,
 				B91AD4603C38421F9C451B23 /* PocketCityForecast.swift in Sources */,
 				1780E07F02EBA441F158DF60 /* LivePlanningReviewFixture.swift in Sources */,
