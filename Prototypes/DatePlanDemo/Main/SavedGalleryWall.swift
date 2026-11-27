@@ -37,7 +37,7 @@ struct SavedGalleryWall<Photo: View>: View {
     @State private var revealed = Set<UUID>()
     @State private var spotlight: CGPoint?
     @State private var activeFrame: UUID?
-    @State private var cordDrag = CGSize.zero
+    @GestureState private var cordDrag = CGSize.zero
     @State private var bounds: [UUID: CGRect] = [:]
 
     private var singleColumn: Bool { typeSize.isAccessibilitySize || voiceOver }
@@ -111,6 +111,7 @@ struct SavedGalleryWall<Photo: View>: View {
         }
         .background(palette.canvas)
         .environment(\.colorScheme, lightsOn ? systemScheme : .dark)
+        .overlay(alignment: .topTrailing) { pullCordControl }
         .coordinateSpace(name: "saved.gallery")
         .onPreferenceChange(GalleryFrameBounds.self) { bounds = $0 }
         .overlay { if !lightsOn, let spotlight, !reduceMotion { beam(to: spotlight).allowsHitTesting(false) } }
@@ -196,25 +197,31 @@ struct SavedGalleryWall<Photo: View>: View {
         .buttonStyle(.plain)
         .accessibilityLabel(chinese ? "拉燈開關" : "Gallery light switch")
         .accessibilityIdentifier("gallery.bulb")
-        .overlay(alignment: .top) {
+    }
+
+    // Own a stable hit area outside the button and measure movement in the gallery,
+    // not in the handle that is itself moving under the finger.
+    private var pullCordControl: some View {
+        ZStack(alignment: .top) {
             cord.allowsHitTesting(false)
             Image(systemName: "drop.fill")
                 .font(.system(size: 13)).foregroundStyle(palette.pink)
                 .shadow(color: palette.accent.opacity(0.3), radius: 3)
                 .frame(width: 44, height: 44).contentShape(Rectangle())
                 .offset(x: cordDrag.width, y: 90 + cordDrag.height)
-                .rotationEffect(.degrees(Double(cordDrag.width) * 0.15), anchor: .top)
-                .gesture(DragGesture(minimumDistance: 6)
-                    .onChanged { value in
-                        cordDrag = CGSize(width: max(-70, min(40, value.translation.width)),
-                                          height: max(-10, min(90, value.translation.height)))
+                .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("saved.gallery"))
+                    .updating($cordDrag) { value, state, transaction in
+                        transaction.animation = nil
+                        state = CGSize(width: max(-35, min(20, value.translation.width)),
+                                       height: max(0, min(90, value.translation.height)))
                     }
                     .onEnded { value in
                         if value.translation.height > 28 { toggleLights() }
-                        withAnimation(spring) { cordDrag = .zero }
                     })
                 .accessibilityHidden(true)
         }
+        .frame(width: 44, height: 224, alignment: .top)
+        .animation(spring, value: cordDrag == .zero)
     }
     private var cord: some View {
         GalleryCord(displacement: cordDrag)
@@ -291,7 +298,7 @@ nonisolated private struct GalleryCord: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: 22, y: 35))
-        path.addQuadCurve(to: CGPoint(x: 22 + displacement.width, y: 104 + displacement.height),
+        path.addQuadCurve(to: CGPoint(x: 22 + displacement.width, y: 112 + displacement.height),
                          control: CGPoint(x: 22 + displacement.width * 0.15, y: 80))
         return path
     }

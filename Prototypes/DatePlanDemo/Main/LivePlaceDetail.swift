@@ -553,9 +553,6 @@ struct LiveCreatorSourceSection: View {
                     ForEach(Array(entry.posts.dropFirst())) { sourcePost($0) }
                 }
             }
-            Link(copy("List compiled by @2xin15__", "清單整理：@2xin15__"),
-                 destination: URL(string: "https://2xin15.github.io/lala-food/")!)
-                .font(.caption).frame(minHeight: 44)
             Text(copy("Transcribed from the public list; originals may change.", "公開清單轉錄 · 原文可能更新"))
                 .font(.caption2).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)

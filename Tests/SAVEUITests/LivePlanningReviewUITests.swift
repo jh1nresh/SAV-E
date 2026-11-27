@@ -4,6 +4,7 @@ import XCTest
 /// Actual ContentView/root/canonical modal rail; all input and screenshots are explicitly synthetic.
 final class LivePlanningReviewUITests: SAVEUITestCase {
 
+
     @MainActor
     func testReviewedVenueOriginalsFromSavedAndExplore() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["SAVE_UI_TEST_LIVE_VENUE_ORIGINALS"] == "1",
@@ -316,5 +317,37 @@ final class LiveMapSearchUXUITests: SAVEUITestCase {
         XCTAssertTrue(result.waitForExistence(timeout: stepTimeout), "Typing should produce results without submit")
         close.tap()
     }
+}
+#endif
+
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
+import XCTest
+
+final class LiveSavedGalleryCordUITests: SAVEUITestCase {
+    @MainActor
+    func testGalleryCordTracksPullAndResetsForRepeatedInput() {
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
+            "--uitest-reviewed-venue-posts", "--preview-tab-saved", "--uitest-force-light"],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        let lights = app.buttons["gallery.lights"]
+        let bulb = app.buttons["gallery.bulb"]
+        XCTAssertTrue(bulb.waitForExistence(timeout: launchTimeout))
+        XCTAssertEqual(lights.value as? String, "On")
+        let handle = bulb.coordinate(withNormalizedOffset: .init(dx: 0.5, dy: 0.5))
+            .withOffset(.init(dx: 0, dy: 90))
+        handle.press(forDuration: 0.1, thenDragTo: handle.withOffset(.init(dx: -12, dy: 65)))
+        XCTAssertEqual(lights.value as? String, "Off")
+        attach(app, name: "gallery-cord-off")
+        handle.press(forDuration: 0.1, thenDragTo: handle.withOffset(.init(dx: 5, dy: 12)))
+        XCTAssertEqual(lights.value as? String, "Off", "A short pull must not toggle")
+        handle.press(forDuration: 0.1, thenDragTo: handle.withOffset(.init(dx: 8, dy: 65)))
+        XCTAssertEqual(lights.value as? String, "On", "The returned handle remains draggable")
+        XCTAssertFalse(app.buttons["live.place.close"].exists, "Pulling must not open the underlying place")
+        attach(app, name: "gallery-cord-on")
+        bulb.tap()
+        XCTAssertEqual(lights.value as? String, "Off", "Direct button remains available")
+    }
+
 }
 #endif
