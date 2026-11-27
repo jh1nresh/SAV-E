@@ -1,3 +1,4 @@
+import {loadCreatorCatalog,appendCreatorPlaces,withoutCreatorDuplicates} from './creator-place-sources.js';
 import {cityLandmarks,districtLandmarks} from './taipei-priority-places.js';
 import {readPocketCityAsset} from './pocket-city-atlas.js';
 import {addressShopFeature,addedOpenShops,canonicalShopId,isDuplicateShop} from './taipei-open-shop-catalog.js';
@@ -30,10 +31,10 @@ const revealZoom=['case',
 
 let pending;
 export function loadCityPlaces(){
-  return pending??=readPocketCityAsset('city-place-index').then(data=>({
+  return pending??=Promise.all([readPocketCityAsset('city-place-index'),loadCreatorCatalog()]).then(([data,creator])=>appendCreatorPlaces({
     ...data,features:data.features.filter(feature=>!isDuplicateShop(feature.id))
       .map(feature=>addressShopFeature(withShopFacts(feature))).concat(metroExitFeatures,addedOpenShops),
-  })).catch(error=>{pending=null;throw error;});
+  },creator)).catch(error=>{pending=null;throw error;});
 }
 
 export function addCityPlaceIndex(map,pin){
@@ -56,7 +57,7 @@ export function addCityPlaceIndex(map,pin){
   // Detailed street layers take over individual POIs. The index continues to name
   // outdoor areas represented by polygons in the detailed street packs.
   map.addLayer({id:outdoorNames,source,type:'symbol',minzoom:17.8,
-    filter:['all',named,matches(category,outdoor)],layout,paint:pin.paint},before);
+    filter:['all',named,['any',matches(category,outdoor),['has','creatorSource']]],layout,paint:pin.paint},before);
   map.addLayer({id:metroExitLayer,source,type:'symbol',minzoom:18.2,
     filter:['has','exitLabel'],
     layout:{...pin.layout,'icon-image':'place-pin-transit','icon-size':.8,
@@ -106,11 +107,11 @@ export function addCityPlaceIndex(map,pin){
 
   let loadingSavvy=false,removed=false,expiryTimer;
   async function updateSavvy(){
-    const {featureCollection,nextExpiry}=await loadVerifiedSavvyMapPins();
+    const [{featureCollection,nextExpiry},creator]=await Promise.all([loadVerifiedSavvyMapPins(),loadCreatorCatalog()]);
     if(removed)return;
     const pinSource=map.getSource(savvySource);
     if(!pinSource)return;
-    pinSource.setData(featureCollection);
+    pinSource.setData(withoutCreatorDuplicates(featureCollection,creator));
     if(Number.isFinite(nextExpiry))expiryTimer=setTimeout(updateSavvy,Math.min(2**31-1,Math.max(0,nextExpiry-Date.now())));
   }
   function loadSavvy(){

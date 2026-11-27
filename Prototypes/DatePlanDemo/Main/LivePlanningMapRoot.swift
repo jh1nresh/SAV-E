@@ -456,6 +456,7 @@ struct LivePlanningMapRoot: View {
                                  latitude: pin.coordinate.latitude, longitude: pin.coordinate.longitude,
                                  kind: kind, selected: selected?.id == pin.id, isSaved: owned,
                                  publicVenueID: pin.origin == .publicPost ? pin.id : key.map { "public:\($0.provider):\($0.id)" },
+                                 creatorPlaceID: LiveCreatorCatalog.shared.match(pin.place)?.placeId,
                                  category: pin.place.category.rawValue, address: pin.place.address)
         }, viewport: PocketCityViewport(camera.region, requestID: cameraRequestID),
            routes: canShowPlan ? plan.routes.compactMap { PocketCityRoute($0.polyline) } : [],
@@ -1532,6 +1533,9 @@ private struct LiveAtlasPlaceDrawer: View {
                     Label(title, systemImage: "mappin").frame(minHeight: 44, alignment: .leading)
                 }
                 .savvyPressFeedback()
+            }
+            if let creator = LiveCreatorCatalog.shared.entry(placeId: detail.placeId) {
+                LiveCreatorSourceSection(entry: creator)
             }
             if detail.posts.contains(where: { $0.expiresAt > now }) {
                 Divider()

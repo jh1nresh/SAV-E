@@ -39,6 +39,7 @@ struct PocketCityPin: Equatable {
     var selected = false
     var isSaved = false
     var publicVenueID: String?
+    var creatorPlaceID: String?
     var category: String?
     var address: String?
 
@@ -47,6 +48,7 @@ struct PocketCityPin: Equatable {
             "point": [longitude, latitude], "kind": kind.rawValue, "selected": selected,
             "isSaved": isSaved || kind == .saved || kind == .visited]
         value["publicVenueID"] = publicVenueID
+        value["creatorPlaceID"] = creatorPlaceID
         value["address"] = address
         value["category"] = category
         return value
@@ -138,6 +140,7 @@ struct PocketCityPlaceDetail: Equatable {
     }
 
     let serial: Int
+    let placeId: String?
     let name: String
     let kind: String
     let address: String
@@ -160,6 +163,7 @@ struct PocketCityPlaceDetail: Equatable {
         guard let serial = data["serial"] as? Int, serial > 0,
               let name = data["name"] as? String, !name.isEmpty else { return nil }
         self.serial = serial
+        placeId = data["placeId"] as? String
         self.name = name
         kind = data["kind"] as? String ?? ""
         address = data["address"] as? String ?? ""

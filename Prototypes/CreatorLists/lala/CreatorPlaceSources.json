@@ -1,0 +1,7308 @@
+{
+  "schemaVersion": 1,
+  "scope": "local_creator_preview",
+  "creator": "zeke_6973",
+  "creatorName": "拉拉熊",
+  "sourceRepository": "https://github.com/2xin15/lala-food",
+  "sourceRevision": "239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21",
+  "capturedAt": "2026-11-27",
+  "updated": "2026-11-27",
+  "sourceLists": {
+    "visited": "https://www.google.com/maps/@/data=!4m2!2m1!1ssS_9aKBvCYUpElpIW1_DqweYAWsM4A",
+    "wish": "https://www.google.com/maps/@/data=!4m2!2m1!1szx9JfvSi_pqYNQ6jvVv_ExkUjHRkgQ"
+  },
+  "summary": {
+    "visited": 74,
+    "wish": 248,
+    "uniquePlaces": 280,
+    "overlap": 42,
+    "attachedExisting": 91,
+    "newPlaces": 189,
+    "pendingPlaces": 0,
+    "postPlaces": 41,
+    "postAssociations": 44,
+    "attachedPostAssociations": 44,
+    "pendingPostAssociations": 0
+  },
+  "entries": [
+    {
+      "cid": "10066920517129074467",
+      "name": "自由溫室咖啡廳",
+      "address": "新北市永和區安和里水源街21巷2號",
+      "latitude": 25.00438,
+      "longitude": 121.511304,
+      "city": "新北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/10066920517129074467",
+      "mapPlaceIds": [
+        "creator/lala/10066920517129074467"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1022030170380991282",
+      "name": "眷村味",
+      "address": "臺北市中山區永安里北安路578巷6號",
+      "latitude": 25.080758,
+      "longitude": 121.548558,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1022030170380991282",
+      "mapPlaceIds": [
+        "creator/lala/1022030170380991282"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10307136958419678472",
+      "name": "烏弄原生茶飲 三多文橫店",
+      "address": "高雄市苓雅區美田里文橫二路3號",
+      "latitude": 22.61501,
+      "longitude": 120.306689,
+      "city": "高雄市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/10307136958419678472",
+      "mapPlaceIds": [
+        "creator/lala/10307136958419678472"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1031357613368008791",
+      "name": "老牌全家福酒釀湯圓元宵",
+      "address": "基隆市仁愛區玉田里愛四路52號門前號",
+      "latitude": 25.128807,
+      "longitude": 121.7442,
+      "city": "基隆市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1031357613368008791",
+      "mapPlaceIds": [
+        "creator/lala/1031357613368008791"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10316514710429371839",
+      "name": "陸光大姐",
+      "address": "臺北市大安區龍生里和平東路二段133號",
+      "latitude": 25.025412,
+      "longitude": 121.540885,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "陸光大姐",
+          "address": "No. 133號, Section 2, Heping E Rd, 龍生里大安區臺北市106"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Df4DMN5oP4e",
+          "text": "因为要拍采访作业又又又来吃眷村菜\n这是吃的第一家眷村热炒店！\n没想到意外的很好吃，老板人超好一直笑眯眯的\n特别是这个花椒炸蛋，超香超下饭…\n雪菜炒年糕也不错，很有咬劲也很入味\n（而且店里还有两只温顺的大肥猫可以随便摸）",
+          "date": "2026-11-18",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/13580311401",
+      "mapPlaceIds": [
+        "poi/node/13580311401"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "陸光大姐",
+          "address": "台北市大安區和平東路二段 133 號",
+          "latitude": 25.0254394,
+          "longitude": 121.5408329
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "10405057813726414777",
+      "name": "五月初。MayFirst Pâtisserie｜營業時間詳見Instagram",
+      "address": "新北市淡水區北新里北新路184巷172號1樓",
+      "latitude": 25.177092,
+      "longitude": 121.451449,
+      "city": "新北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/10405057813726414777",
+      "mapPlaceIds": [
+        "creator/lala/10405057813726414777"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10460725085699448610",
+      "name": "福大蒸餃館",
+      "address": "臺北市中山區民安里中山北路一段140巷11號",
+      "latitude": 25.051518,
+      "longitude": 121.521636,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DeWjrBFgc_d",
+          "text": "中山附近这家蒸饺店不错吃\n蒸饺皮很薄很韧，红油抄手是麻酱味的很香",
+          "date": "2026-10-11",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "savvy/apple_maps/H2710I3F98C588C3783",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C588C3783"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "福大蒸餃館",
+          "address": "台北市中山區中山北路一段140巷11號",
+          "latitude": 25.0515089,
+          "longitude": 121.5216327
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C588C3783"
+        }
+      ]
+    },
+    {
+      "cid": "1048405376045569528",
+      "name": "Mr. 雪腐 公館店",
+      "address": "臺北市中正區文盛里羅斯福路三段244巷21號",
+      "latitude": 25.016574,
+      "longitude": 121.530507,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "Mr. 雪腐 公馆店",
+          "address": "臺北市中正區文盛里羅斯福路三段244巷21號"
+        }
+      ],
+      "posts": [],
+      "placeId": "poi/node/4253208207",
+      "mapPlaceIds": [
+        "poi/node/4253208207"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "Mr.雪腐",
+          "address": "台北市中正區羅斯福路三段244巷 21 號",
+          "latitude": 25.0165837,
+          "longitude": 121.5304696
+        },
+        {
+          "name": "Mr.雪腐 公館店",
+          "address": "台北市中正區羅斯福路三段244巷21號",
+          "latitude": 25.016649548828134,
+          "longitude": 121.53045035742187
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C588D4CAD"
+        }
+      ]
+    },
+    {
+      "cid": "10501423644956350583",
+      "name": "奉茶．台南總店",
+      "address": "臺南市中西區赤嵌里公園路85號",
+      "latitude": 22.995583,
+      "longitude": 120.205531,
+      "city": "台南市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/10501423644956350583",
+      "mapPlaceIds": [
+        "creator/lala/10501423644956350583"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10516715856781796735",
+      "name": "亞米亞米",
+      "address": "臺北市士林區義信里基河路1號",
+      "latitude": 25.086323,
+      "longitude": 121.525042,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "亞米亞米",
+          "address": "臺北市士林區義信里基河路1號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DehAMOAAT9Z",
+          "text": "速通士林夜市\n鸡排是好吃的，先炸再烤，没有很多油，刷了甜口的酱\n亚米亚米要排20-30分钟也还不错喝，是老式奶茶味道",
+          "date": "2026-10-15",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/10516715856781796735",
+      "mapPlaceIds": [
+        "creator/lala/10516715856781796735"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10531808296216389716",
+      "name": "牛霸小吃店",
+      "address": "臺北市北投區溫泉里公舘路13號",
+      "latitude": 25.133306,
+      "longitude": 121.502697,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7138715792",
+      "mapPlaceIds": [
+        "poi/node/7138715792"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "牛霸小吃店",
+          "address": "台北市北投區 · 公舘路",
+          "latitude": 25.1332804,
+          "longitude": 121.5027839
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "10718240524628687205",
+      "name": "鬍鬚忠牛肉湯",
+      "address": "臺南市中西區藥王里民族路三段91號",
+      "latitude": 22.998381,
+      "longitude": 120.196911,
+      "city": "台南市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/10718240524628687205",
+      "mapPlaceIds": [
+        "creator/lala/10718240524628687205"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10836693710884008407",
+      "name": "五燈獎 台北永康店",
+      "address": "臺北市大安區永康里永康街14巷3號",
+      "latitude": 25.031401,
+      "longitude": 121.529269,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "inspection/A-190749180-00001-7",
+      "mapPlaceIds": [
+        "inspection/A-190749180-00001-7"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "五燈獎",
+          "address": "臺北市大安區永康街14巷3號1樓",
+          "latitude": 25.0313984,
+          "longitude": 121.5292334
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "10847765207816585792",
+      "name": "無名牛排1",
+      "address": "臺北市南港區新富里南港路一段57號",
+      "latitude": 25.055089,
+      "longitude": 121.616035,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/10847765207816585792",
+      "mapPlaceIds": [
+        "creator/lala/10847765207816585792"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "10853604412830763891",
+      "name": "豪牛牛肉湯",
+      "address": "臺南市中西區五條港里西門路二段359號",
+      "latitude": 22.99808,
+      "longitude": 120.199868,
+      "city": "台南市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/10853604412830763891",
+      "mapPlaceIds": [
+        "creator/lala/10853604412830763891"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1113275362516539745",
+      "name": "下港吔羊肉專賣店",
+      "address": "臺北市中山區集英里天祥路18號",
+      "latitude": 25.060921,
+      "longitude": 121.530105,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1113275362516539745",
+      "mapPlaceIds": [
+        "creator/lala/1113275362516539745"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11202105771563939112",
+      "name": "御品元冰火湯圓",
+      "address": "臺北市大安區通化里通化街39巷50弄31號",
+      "latitude": 25.030229,
+      "longitude": 121.55541,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/11406789720",
+      "mapPlaceIds": [
+        "poi/node/11406789720"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "御品元冰火湯圓",
+          "address": "台北市大安區通化街39巷50弄 31 號",
+          "latitude": 25.0302447,
+          "longitude": 121.5553985
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "11222846829073344401",
+      "name": "一番地壽喜燒 開封店",
+      "address": "臺北市中正區光復里開封街一段48號",
+      "latitude": 25.045904,
+      "longitude": 121.512047,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/6388641162",
+      "mapPlaceIds": [
+        "poi/node/6388641162"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "一番地",
+          "address": "台北市中正區開封街一段 48 號",
+          "latitude": 25.0459111,
+          "longitude": 121.5120214
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "11283850247032744433",
+      "name": "貓尾巴麵包店",
+      "address": "嘉義市東區朝陽里民族路25號",
+      "latitude": 23.476882,
+      "longitude": 120.461066,
+      "city": "嘉義市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11283850247032744433",
+      "mapPlaceIds": [
+        "creator/lala/11283850247032744433"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11331086576664940148",
+      "name": "宵夜牛肉麵大王 大安店 / NIGHT BEEF NOODLES KING DAAN",
+      "address": "臺北市大安區光武里大安路一段52巷7號",
+      "latitude": 25.043194,
+      "longitude": 121.545781,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11331086576664940148",
+      "mapPlaceIds": [
+        "creator/lala/11331086576664940148"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11345826532432704784",
+      "name": "牛燒味",
+      "address": "新北市新店區大豐里建國路184號",
+      "latitude": 24.980309,
+      "longitude": 121.537885,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11345826532432704784",
+      "mapPlaceIds": [
+        "creator/lala/11345826532432704784"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11366981156611272927",
+      "name": "庄頭豆花担",
+      "address": "臺北市松山區福成里市民大道四段73號",
+      "latitude": 25.04529,
+      "longitude": 121.546983,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/5502965139",
+      "mapPlaceIds": [
+        "poi/node/5502965139"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "庄頭豆花担",
+          "address": "市民大道四段 73 號",
+          "latitude": 25.0453375,
+          "longitude": 121.547116
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "11432354196742184079",
+      "name": "家鄉碳烤香雞排 士林店",
+      "address": "臺北市士林區義信里基河路1號",
+      "latitude": 25.086333,
+      "longitude": 121.525026,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "家鄉碳烤香雞排 士林店",
+          "address": "臺北市士林區義信里基河路1號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DehAMOAAT9Z",
+          "text": "速通士林夜市\n鸡排是好吃的，先炸再烤，没有很多油，刷了甜口的酱\n亚米亚米要排20-30分钟也还不错喝，是老式奶茶味道",
+          "date": "2026-10-15",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/11432354196742184079",
+      "mapPlaceIds": [
+        "creator/lala/11432354196742184079"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1144883667007461288",
+      "name": "景美同一家牛排",
+      "address": "臺北市文山區景美街",
+      "latitude": 24.992416,
+      "longitude": 121.541584,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1144883667007461288",
+      "mapPlaceIds": [
+        "creator/lala/1144883667007461288"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11496941030989048276",
+      "name": "Starbucks星巴克 愿秀門市",
+      "address": "1-2樓, No. 3號南港路二段南港區臺北市115",
+      "latitude": 25.053963,
+      "longitude": 121.605644,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/13911717992",
+      "mapPlaceIds": [
+        "poi/node/13911717992"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "星巴克",
+          "address": "台北市南港區",
+          "latitude": 25.0539859,
+          "longitude": 121.6055538
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "116091265888653935",
+      "name": "保記小籠包-創始店",
+      "address": "臺北市大同區隆和里延平北路三段3號",
+      "latitude": 25.063495,
+      "longitude": 121.51131,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7170215707",
+      "mapPlaceIds": [
+        "poi/node/7170215707"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "保記小籠包 創始店",
+          "address": "台北市大同區延平北路三段3號",
+          "latitude": 25.063500955078126,
+          "longitude": 121.51141388085935
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C28284E51"
+        }
+      ]
+    },
+    {
+      "cid": "11643719049567786305",
+      "name": "金豬食堂",
+      "address": "臺北市中山區康樂里南京東路一段29號",
+      "latitude": 25.052342,
+      "longitude": 121.524393,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "金豬食堂",
+          "address": "臺北市中山區康樂里南京東路一段29號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11643719049567786305",
+      "mapPlaceIds": [
+        "creator/lala/11643719049567786305"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11762039475601713902",
+      "name": "這里恬冰菓室",
+      "address": "新北市板橋區華翠里莒光路112號",
+      "latitude": 25.023926,
+      "longitude": 121.472334,
+      "city": "新北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11762039475601713902",
+      "mapPlaceIds": [
+        "creator/lala/11762039475601713902"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11781288441310801547",
+      "name": "甘蔗媽媽-台北永康店",
+      "address": "臺北市大安區永康里永康街6巷1-2號",
+      "latitude": 25.032685,
+      "longitude": 121.529721,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11781288441310801547",
+      "mapPlaceIds": [
+        "creator/lala/11781288441310801547"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11827541128665441847",
+      "name": "新營阿忠豆菜麵",
+      "address": "臺南市新營區王公里中正路25號",
+      "latitude": 23.311346,
+      "longitude": 120.316549,
+      "city": "台南市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11827541128665441847",
+      "mapPlaceIds": [
+        "creator/lala/11827541128665441847"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11920198649230331392",
+      "name": "阿英滷肉飯",
+      "address": "臺北市大安區大學里溫州街74巷5弄1號",
+      "latitude": 25.019545,
+      "longitude": 121.531988,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11920198649230331392",
+      "mapPlaceIds": [
+        "creator/lala/11920198649230331392"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11924104110035498762",
+      "name": "Café&Meal MUJI 統一時代店",
+      "address": "臺北市信義區忠孝東路五段8號B2F",
+      "latitude": 25.040584,
+      "longitude": 121.56548,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/11924104110035498762",
+      "mapPlaceIds": [
+        "creator/lala/11924104110035498762"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "11964059280160413592",
+      "name": "Sisinan Village Museum",
+      "address": "臺北市信義區景新里松勤街50號",
+      "latitude": 25.031629,
+      "longitude": 121.562017,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/way/330187862",
+      "mapPlaceIds": [
+        "poi/way/330187862"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "四四南村",
+          "address": "台北市信義區松勤街 50 號",
+          "latitude": 25.03146995,
+          "longitude": 121.56195694
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "11992006360066030046",
+      "name": "黃記魯肉飯",
+      "address": "臺北市中山區恆安里中山北路二段183巷28號",
+      "latitude": 25.06367,
+      "longitude": 121.524142,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/5110491043",
+      "mapPlaceIds": [
+        "poi/node/5110491043"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "黃記魯肉飯",
+          "address": "台北市中山區中山北路二段183巷28號",
+          "latitude": 25.0636698,
+          "longitude": 121.524142
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C578537E7"
+        }
+      ]
+    },
+    {
+      "cid": "12066454743999853327",
+      "name": "十二堂",
+      "address": "基隆市中正區真砂里正豐街93號1樓",
+      "latitude": 25.141175,
+      "longitude": 121.761404,
+      "city": "基隆市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12066454743999853327",
+      "mapPlaceIds": [
+        "creator/lala/12066454743999853327"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12093444966777838082",
+      "name": "極品鹹水雞",
+      "address": "臺北市信義區廣居里忠孝東路五段472號",
+      "latitude": 25.040644,
+      "longitude": 121.577001,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12093444966777838082",
+      "mapPlaceIds": [
+        "creator/lala/12093444966777838082"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1211372193835458548",
+      "name": "碧水堂 淡水店",
+      "address": "新北市淡水區中正路21巷3號",
+      "latitude": 25.172406,
+      "longitude": 121.435858,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1211372193835458548",
+      "mapPlaceIds": [
+        "creator/lala/1211372193835458548"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12167160044789304651",
+      "name": "金園排骨萬年店",
+      "address": "臺北市萬華區西門里西寧南路70號B1",
+      "latitude": 25.043541,
+      "longitude": 121.505834,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/13460439801",
+      "mapPlaceIds": [
+        "poi/node/13460439801"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "金園排骨萬年店",
+          "address": "台北市萬華區",
+          "latitude": 25.0435474,
+          "longitude": 121.5058377
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "12348536611969865480",
+      "name": "阿美小吃店",
+      "address": "基隆市信義區東信里東信路202號",
+      "latitude": 25.128266,
+      "longitude": 121.763244,
+      "city": "基隆市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12348536611969865480",
+      "mapPlaceIds": [
+        "creator/lala/12348536611969865480"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1247454145355116465",
+      "name": "霸味薑母鴨",
+      "address": "新北市三重區光田里重陽路一段100號",
+      "latitude": 25.059461,
+      "longitude": 121.486584,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "霸味薑母鴨",
+          "address": "新北市三重區光田里重陽路一段100號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1247454145355116465",
+      "mapPlaceIds": [
+        "creator/lala/1247454145355116465"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12476507357954515393",
+      "name": "阿坤麵",
+      "address": "臺中市中區光復里平等街142號",
+      "latitude": 24.143065,
+      "longitude": 120.682359,
+      "city": "台中市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12476507357954515393",
+      "mapPlaceIds": [
+        "creator/lala/12476507357954515393"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12575342447086573956",
+      "name": "活力站蒟蒻屋",
+      "address": "基隆市仁愛區花崗里仁一路133號",
+      "latitude": 25.127775,
+      "longitude": 121.752434,
+      "city": "基隆市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "活力站蒟蒻屋",
+          "address": "基隆市仁愛區花崗里仁一路133號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DgKeQKFIF6A",
+          "text": "巨大一碗冰+鸡排只要不到200块\n这个地瓜煮的超级软糯甜甜的超好吃",
+          "date": "2026-11-25",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/12575342447086573956",
+      "mapPlaceIds": [
+        "creator/lala/12575342447086573956"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12636747565643100852",
+      "name": "豚人拉面 二代目台湾総本店",
+      "address": "臺北市大安區建倫里忠孝東路四段170巷5弄10號",
+      "latitude": 25.040683,
+      "longitude": 121.551245,
+      "city": "台北市",
+      "category": "拉麵",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12636747565643100852",
+      "mapPlaceIds": [
+        "creator/lala/12636747565643100852"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12698133550535997437",
+      "name": "橋下泰式船麵 ก๋วยเตี๋ยวเรือใต้สะพาน",
+      "address": "臺北市士林區社子里中正路588號",
+      "latitude": 25.087208,
+      "longitude": 121.510093,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12698133550535997437",
+      "mapPlaceIds": [
+        "creator/lala/12698133550535997437"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12745323496759954582",
+      "name": "米栗豆鍋燒麵",
+      "address": "高雄市鼓山區壽山里壽山街42之1號",
+      "latitude": 22.624749,
+      "longitude": 120.271241,
+      "city": "高雄市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12745323496759954582",
+      "mapPlaceIds": [
+        "creator/lala/12745323496759954582"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12797442284997919035",
+      "name": "凱基金控總部 KGI Financial Holding Company Headquarters",
+      "address": "臺北市松山區中華里敦化北路135號",
+      "latitude": 25.053005,
+      "longitude": 121.549465,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/12797442284997919035",
+      "mapPlaceIds": [
+        "creator/lala/12797442284997919035"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1283393833441378191",
+      "name": "龜山眷村故事館",
+      "address": "桃園市龜山區龜山里光峰路43號",
+      "latitude": 24.998444,
+      "longitude": 121.340478,
+      "city": "桃園市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1283393833441378191",
+      "mapPlaceIds": [
+        "creator/lala/1283393833441378191"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1289932036301344794",
+      "name": "神農街",
+      "address": "臺南市中西區神農街",
+      "latitude": 22.997477,
+      "longitude": 120.196474,
+      "city": "台南市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1289932036301344794",
+      "mapPlaceIds": [
+        "creator/lala/1289932036301344794"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "12923090827669382434",
+      "name": "烏弄原生茶飲 遼寧店",
+      "address": "臺北市中山區遼寧街41號",
+      "latitude": 25.048691,
+      "longitude": 121.542274,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/11493126149",
+      "mapPlaceIds": [
+        "poi/node/11493126149"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "烏弄",
+          "address": "台北市中山區 · 遼寧街",
+          "latitude": 25.0486534,
+          "longitude": 121.5422217
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "13036630902482771915",
+      "name": "紅葉蛋糕 仁愛總店",
+      "address": "臺北市大安區民炤里仁愛路三段26-5號",
+      "latitude": 25.037642,
+      "longitude": 121.536244,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "紅葉蛋糕 仁愛總店",
+          "address": "臺北市大安區民炤里仁愛路三段26-5號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DeJVyStIIhi",
+          "text": "今天特意来大安区吃红叶蛋糕\n黑森林蛋糕顶一个染色樱桃完全是我儿时的味道\n奶油的甜和巧克力的苦融合的很好\n顺手买的黑芝麻卷也非常香甜松软好吃😋\n（可能需要搭配一些茶会更好，其实就是老式蛋糕的味道）\n到今天居然还能吃上和10多年前记忆中一样的味道真的很感动，谢谢红叶蛋糕一直坚持的老味道😭",
+          "date": "2026-10-06",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/13036630902482771915",
+      "mapPlaceIds": [
+        "creator/lala/13036630902482771915"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13168123270271448781",
+      "name": "陽明山美軍宿舍群",
+      "address": "臺北市士林區",
+      "latitude": 25.137206,
+      "longitude": 121.543846,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13168123270271448781",
+      "mapPlaceIds": [
+        "creator/lala/13168123270271448781"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13179846440540205750",
+      "name": "ADM hair salon台北東區髮廊",
+      "address": "臺北市大安區車層里忠孝東路四段216巷33弄17號",
+      "latitude": 25.03947,
+      "longitude": 121.553909,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13179846440540205750",
+      "mapPlaceIds": [
+        "creator/lala/13179846440540205750"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13299685000221513074",
+      "name": "林本源園邸",
+      "address": "新北市板橋區留侯里西門街9號",
+      "latitude": 25.011081,
+      "longitude": 121.454602,
+      "city": "新北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13299685000221513074",
+      "mapPlaceIds": [
+        "creator/lala/13299685000221513074"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13300454591706037987",
+      "name": "六合張排骨酥湯",
+      "address": "高雄市新興區明莊里六合二路25號",
+      "latitude": 22.632552,
+      "longitude": 120.301177,
+      "city": "高雄市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13300454591706037987",
+      "mapPlaceIds": [
+        "creator/lala/13300454591706037987"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13332064987716405235",
+      "name": "屬於你的咖喱Sunil's Curry",
+      "address": "臺南市中西區淺草里海安路二段96號",
+      "latitude": 22.994969,
+      "longitude": 120.196611,
+      "city": "台南市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13332064987716405235",
+      "mapPlaceIds": [
+        "creator/lala/13332064987716405235"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13391790951739596766",
+      "name": "火山湯海",
+      "address": "高雄市左營區新中里至真路186號",
+      "latitude": 22.671176,
+      "longitude": 120.304155,
+      "city": "高雄市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13391790951739596766",
+      "mapPlaceIds": [
+        "creator/lala/13391790951739596766"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13443172875240523976",
+      "name": "富霸王豬腳",
+      "address": "臺北市中山區中央里南京東路二段115巷20號",
+      "latitude": 25.053322,
+      "longitude": 121.533577,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "富霸王豬腳",
+          "address": "臺北市中山區中央里南京東路二段115巷20號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfCD56KILdc",
+          "text": "以后我就专挑那种有3个以上人推荐的店去吃\n真的好吃到五体投地，想拜师学艺\n不愧是黄仁勋爱店XD",
+          "date": "2026-10-28",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/3043949035",
+      "mapPlaceIds": [
+        "poi/node/3043949035"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "富霸王豬腳",
+          "address": "台北市中山區南京東路二段115巷 20 號",
+          "latitude": 25.0533341,
+          "longitude": 121.5335001
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "13467063495144831977",
+      "name": "吉峰香菇魯肉飯",
+      "address": "臺北市松山區復源里八德路三段144號",
+      "latitude": 25.047999,
+      "longitude": 121.55474,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7169581033",
+      "mapPlaceIds": [
+        "poi/node/7169581033"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "吉峰香菇魯肉飯",
+          "address": "台北市松山區 · 八德路三段",
+          "latitude": 25.0479864,
+          "longitude": 121.5547162
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "1346846733197701492",
+      "name": "德州小騎士炸雞-高雄六合店",
+      "address": "高雄市新興區黎明里六合一路174號",
+      "latitude": 22.633074,
+      "longitude": 120.302759,
+      "city": "高雄市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1346846733197701492",
+      "mapPlaceIds": [
+        "creator/lala/1346846733197701492"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1346953395218167343",
+      "name": "功夫豬私廚好麵",
+      "address": "新北市新店區江陵里二十張路30號一樓",
+      "latitude": 24.981628,
+      "longitude": 121.538218,
+      "city": "新北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1346953395218167343",
+      "mapPlaceIds": [
+        "creator/lala/1346953395218167343"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13531080319060914542",
+      "name": "柑橘Shinn",
+      "address": "臺北市大安區敦煌里仁愛路四段228-6號",
+      "latitude": 25.037215,
+      "longitude": 121.552254,
+      "city": "台北市",
+      "category": "拉麵",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13531080319060914542",
+      "mapPlaceIds": [
+        "creator/lala/13531080319060914542"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13565338943483935584",
+      "name": "阿輝伯蘿蔔絲餅",
+      "address": "臺北市北投區中央里光明路72巷65號",
+      "latitude": 25.132374,
+      "longitude": 121.501196,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/6408076686",
+      "mapPlaceIds": [
+        "poi/node/6408076686"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "阿輝伯蘿蔔絲餅",
+          "address": "台北市北投區光明路72巷",
+          "latitude": 25.1323815,
+          "longitude": 121.5011804
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "13620648875939891987",
+      "name": "山海豆花MATATofu 디저트",
+      "address": "臺北市大安區錦安里永康街63號",
+      "latitude": 25.029217,
+      "longitude": 121.529737,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Dfw6jF2oFXe",
+          "text": "今天晚上在板桥车站吃的这个豆花还不错\n花生是那种花生糖酥和豆花好配哦",
+          "date": "2026-11-15",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/13620648875939891987",
+      "mapPlaceIds": [
+        "creator/lala/13620648875939891987"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "13979215490115155205",
+      "name": "頂溪捷運一號出口",
+      "address": "新北市永和區後溪里永和路二段166號",
+      "latitude": 25.012819,
+      "longitude": 121.515425,
+      "city": "新北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/13979215490115155205",
+      "mapPlaceIds": [
+        "creator/lala/13979215490115155205"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14014734490597404021",
+      "name": "劉媽媽飯糰",
+      "address": "臺北市中正區新營里杭州南路二段88號1樓",
+      "latitude": 25.029439,
+      "longitude": 121.521859,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/4283574213",
+      "mapPlaceIds": [
+        "poi/node/4283574213"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "劉媽媽飯糰",
+          "address": "台北市中正區杭州南路二段88號1樓",
+          "latitude": 25.0294341,
+          "longitude": 121.5218545
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C5A58261F"
+        }
+      ]
+    },
+    {
+      "cid": "14020264257443981767",
+      "name": "【 明日麵包 】tomorrow bread",
+      "address": "臺北市信義區景勤里吳興街156巷2弄30號",
+      "latitude": 25.02929,
+      "longitude": 121.560998,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "【 明日麵包 】tomorrow bread",
+          "address": "臺北市信義區景勤里吳興街156巷2弄30號"
+        }
+      ],
+      "posts": [],
+      "placeId": "poi/node/12745957393",
+      "mapPlaceIds": [
+        "poi/node/12745957393"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "明日麵包",
+          "address": "台北市信義區吳興街156巷2弄 30 號",
+          "latitude": 25.0292502,
+          "longitude": 121.5609803
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "14127193981129266921",
+      "name": "YouBike微笑單車 2.0: 松仁路121巷口",
+      "address": "臺北市信義區安康里",
+      "latitude": 25.03476,
+      "longitude": 121.56865,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/9020115385",
+      "mapPlaceIds": [
+        "poi/node/9020115385"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "松仁路121巷口",
+          "address": "台北市信義區",
+          "latitude": 25.03476,
+          "longitude": 121.56865
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "14149054633695520397",
+      "name": "有有1969 - 一店",
+      "address": "臺北市中山區力行里遼寧街48號",
+      "latitude": 25.048975,
+      "longitude": 121.542074,
+      "city": "台北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F9AC4B069FB1",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F9AC4B069FB1"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "有有1969",
+          "address": "台北市中山區遼寧街48號",
+          "latitude": 25.0490252,
+          "longitude": 121.5420673
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F9AC4B069FB1"
+        }
+      ]
+    },
+    {
+      "cid": "14251371588833555057",
+      "name": "德龍水潤餅",
+      "address": "新竹市北區新雅里成功路326號",
+      "latitude": 24.810599,
+      "longitude": 120.951221,
+      "city": "新竹市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14251371588833555057",
+      "mapPlaceIds": [
+        "creator/lala/14251371588833555057"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14294375594988980892",
+      "name": "Goodmauii 古茂宜咖啡 台北大安店",
+      "address": "臺北市大安區敦化南路二段63巷48號",
+      "latitude": 25.030881,
+      "longitude": 121.551369,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14294375594988980892",
+      "mapPlaceIds": [
+        "creator/lala/14294375594988980892"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14296853322543943552",
+      "name": "BURGER OUT",
+      "address": "臺北市信義區新仁里忠孝東路四段553巷22弄2號",
+      "latitude": 25.043163,
+      "longitude": 121.563065,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/10682899645",
+      "mapPlaceIds": [
+        "poi/node/10682899645"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "Burger Out",
+          "address": "台北市信義區 · 忠孝東路四段553巷22弄｜松高後巷",
+          "latitude": 25.0431763,
+          "longitude": 121.5630153
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "14372021657062411403",
+      "name": "LIORA Hair Salon",
+      "address": "臺北市大安區車層里忠孝東路四段216巷19弄14號1樓",
+      "latitude": 25.040241,
+      "longitude": 121.553814,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14372021657062411403",
+      "mapPlaceIds": [
+        "creator/lala/14372021657062411403"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14374640371681483085",
+      "name": "平禄壽司-松竹店",
+      "address": "臺中市北屯區仁和里松竹路三段362號",
+      "latitude": 24.185683,
+      "longitude": 120.677443,
+      "city": "台中市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14374640371681483085",
+      "mapPlaceIds": [
+        "creator/lala/14374640371681483085"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14516560636217041769",
+      "name": "阿胖餡餅 扁食湯 炸醬麵",
+      "address": "基隆市仁愛區文昌里孝三路107號",
+      "latitude": 25.131179,
+      "longitude": 121.739844,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DgKEDk0oBIo",
+          "text": "基隆的干面确食不一样的好吃",
+          "date": "2026-11-25",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/14516560636217041769",
+      "mapPlaceIds": [
+        "creator/lala/14516560636217041769"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14525953851409341445",
+      "name": "臺虎 啜飲室大安",
+      "address": "臺北市大安區仁愛里仁愛路四段27巷34號",
+      "latitude": 25.041112,
+      "longitude": 121.545083,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/8146173955",
+      "mapPlaceIds": [
+        "poi/node/8146173955"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "啜飲室",
+          "address": "台北市大安區仁愛路四段27巷 34 號",
+          "latitude": 25.0410841,
+          "longitude": 121.5450817
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "14543610971589612815",
+      "name": "武聖夜市",
+      "address": "臺南市中西區光賢里武聖路69巷",
+      "latitude": 23.003458,
+      "longitude": 120.19051,
+      "city": "台南市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14543610971589612815",
+      "mapPlaceIds": [
+        "creator/lala/14543610971589612815"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14566795273712688072",
+      "name": "練家小吃",
+      "address": "基隆市安樂區七賢里安和一街2號",
+      "latitude": 25.1218,
+      "longitude": 121.72359,
+      "city": "基隆市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14566795273712688072",
+      "mapPlaceIds": [
+        "creator/lala/14566795273712688072"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14602401179918739271",
+      "name": "Mo-Mo-Paradise 台北復興牧場",
+      "address": "臺北市中山區埤頭里復興南路一段42號",
+      "latitude": 25.045301,
+      "longitude": 121.54363,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "Mo-Mo-Paradise 台北復興牧場",
+          "address": "臺北市中山區埤頭里復興南路一段42號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Dfy1lKFoNwk",
+          "text": "momoparadise是我来台湾吃的最爽的吃到饱\n因为2点多才进去他们3点就要歇业\n服务员小姐直接给我安排5大盘肉XD\n后面我说想要更多又给我4大盘！\n爽吃一大堆蛋白质和蔬菜只要500多🤣\n感觉比我之前吃的同价位烤肉品质好太多…",
+          "date": "2026-11-16",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/6354698707",
+      "mapPlaceIds": [
+        "poi/node/6354698707"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "Mo-Mo Paradise",
+          "address": "台北市中山區復興南路一段 44 號",
+          "latitude": 25.0452175,
+          "longitude": 121.5436283
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "14668456906811259100",
+      "name": "臺一牛奶大王",
+      "address": "臺北市大安區大學里新生南路三段82號",
+      "latitude": 25.018977,
+      "longitude": 121.533552,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/De3-qNyoLlw",
+          "text": "台一牛奶冰，又漂亮又好吃",
+          "date": "2026-10-24",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/2004499327",
+      "mapPlaceIds": [
+        "poi/node/2004499327"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "臺一牛奶大王",
+          "address": "台北市大安區新生南路三段 82 號",
+          "latitude": 25.0189739,
+          "longitude": 121.5335145
+        },
+        {
+          "name": "臺一牛奶大王",
+          "address": "台北市大安區新生南路三段82號",
+          "latitude": 25.0189739,
+          "longitude": 121.5335145
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C57544A8D"
+        }
+      ]
+    },
+    {
+      "cid": "14715907866964249889",
+      "name": "阿華炒麵",
+      "address": "基隆市仁愛區玉田里愛四路1-3號",
+      "latitude": 25.127944,
+      "longitude": 121.743163,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14715907866964249889",
+      "mapPlaceIds": [
+        "creator/lala/14715907866964249889"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14728996872531169433",
+      "name": "燒肉燒",
+      "address": "臺北市中山區中庄里吉林路141號",
+      "latitude": 25.05847,
+      "longitude": 121.530351,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14728996872531169433",
+      "mapPlaceIds": [
+        "creator/lala/14728996872531169433"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14785548146937615809",
+      "name": "鳳姐鴨肉飯",
+      "address": "臺南市中西區兌悅里民族路三段190號",
+      "latitude": 22.999345,
+      "longitude": 120.194699,
+      "city": "台南市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14785548146937615809",
+      "mapPlaceIds": [
+        "creator/lala/14785548146937615809"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1478576240692833592",
+      "name": "迷客夏 臺北忠孝復興店",
+      "address": "1樓, No. 1號復興南路一段135巷大安區臺北市10666",
+      "latitude": 25.042708,
+      "longitude": 121.54433,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1478576240692833592",
+      "mapPlaceIds": [
+        "creator/lala/1478576240692833592"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14822119787379448850",
+      "name": "旗哥牛肉湯",
+      "address": "臺南市北區賢北里中華北路一段126號",
+      "latitude": 23.009808,
+      "longitude": 120.185549,
+      "city": "台南市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14822119787379448850",
+      "mapPlaceIds": [
+        "creator/lala/14822119787379448850"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "14879981003335367766",
+      "name": "北投本土味明泉紅茶",
+      "address": "臺北市北投區長安里光明路174之2號",
+      "latitude": 25.135515,
+      "longitude": 121.50307,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/14879981003335367766",
+      "mapPlaceIds": [
+        "creator/lala/14879981003335367766"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15069034144160622563",
+      "name": "中心新村 Heart Village",
+      "address": "臺北市北投區林泉里新民路22巷9號",
+      "latitude": 25.139246,
+      "longitude": 121.507457,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15069034144160622563",
+      "mapPlaceIds": [
+        "creator/lala/15069034144160622563"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15166992437633658954",
+      "name": "麒麟創作拉麵坊",
+      "address": "臺北市中山區中山北路一段140巷25號1樓",
+      "latitude": 25.0515,
+      "longitude": 121.521227,
+      "city": "台北市",
+      "category": "拉麵",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "麒麟創作拉麵坊",
+          "address": "臺北市中山區中山北路一段140巷25號1樓"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DeY8Oo0oAVR",
+          "text": "今天终于吃到了麒麟！\n限量的叉烧饭也是特别美味\n汤头偏浓郁偏咸，我下次来应该会选清淡口味🤤",
+          "date": "2026-10-12",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/15166992437633658954",
+      "mapPlaceIds": [
+        "creator/lala/15166992437633658954"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15226712923579014777",
+      "name": "鴨母寮市場炭火麵",
+      "address": "臺南市北區北華里成功路148號",
+      "latitude": 22.999206,
+      "longitude": 120.204536,
+      "city": "台南市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15226712923579014777",
+      "mapPlaceIds": [
+        "creator/lala/15226712923579014777"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15233513723385724813",
+      "name": "瓦城泰國料理 - 南港車站店",
+      "address": "臺北市南港區新光里忠孝東路七段369號CITYLINK號C1棟8樓",
+      "latitude": 25.05251,
+      "longitude": 121.604954,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7213752462",
+      "mapPlaceIds": [
+        "poi/node/7213752462"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "瓦城泰國料理",
+          "address": "台北市南港區忠孝東路七段 369 號",
+          "latitude": 25.0525074,
+          "longitude": 121.6045815
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "15294529389386900880",
+      "name": "木新麵店",
+      "address": "臺北市文山區樟腳里木新路三段128號",
+      "latitude": 24.982055,
+      "longitude": 121.561862,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15294529389386900880",
+      "mapPlaceIds": [
+        "creator/lala/15294529389386900880"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15337634310050821078",
+      "name": "阿忠古早麵店",
+      "address": "基隆市仁愛區文昌里孝三路79巷4號",
+      "latitude": 25.130388,
+      "longitude": 121.739107,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15337634310050821078",
+      "mapPlaceIds": [
+        "creator/lala/15337634310050821078"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15338468298515431934",
+      "name": "店小二魯肉飯",
+      "address": "No. 27, No. 27號大同北路重新里三重區新北市241",
+      "latitude": 25.062654,
+      "longitude": 121.495494,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15338468298515431934",
+      "mapPlaceIds": [
+        "creator/lala/15338468298515431934"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15346118089937632146",
+      "name": "龍都冰菓專業家",
+      "address": "臺北市萬華區糖廍里和平西路三段192號",
+      "latitude": 25.035194,
+      "longitude": 121.497334,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/9957526457",
+      "mapPlaceIds": [
+        "poi/node/9957526457"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "龍都冰菓專業家",
+          "address": "台北市萬華區 · 和平西路三段",
+          "latitude": 25.0351873,
+          "longitude": 121.4972703
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "15361610955009835684",
+      "name": "羊肉湯鍋-車庫羊肉爐",
+      "address": "臺北市中山區江山里合江街93巷10號",
+      "latitude": 25.059395,
+      "longitude": 121.539804,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15361610955009835684",
+      "mapPlaceIds": [
+        "creator/lala/15361610955009835684"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15479004861717418403",
+      "name": "囍宅豆漿",
+      "address": "臺北市士林區社子里社正路48號",
+      "latitude": 25.08883,
+      "longitude": 121.510381,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15479004861717418403",
+      "mapPlaceIds": [
+        "creator/lala/15479004861717418403"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15510512292890624589",
+      "name": "豆腐洋行國華店",
+      "address": "83號, 國華街二段南廠里中西區臺南市700",
+      "latitude": 22.990111,
+      "longitude": 120.196549,
+      "city": "台南市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "豆腐洋行國華店",
+          "address": "83號, 國華街二段南廠里中西區臺南市700"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/15510512292890624589",
+      "mapPlaceIds": [
+        "creator/lala/15510512292890624589"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15607059608328736375",
+      "name": "寶杏堂 手切滷肉飯 溫補羊肉湯",
+      "address": "臺北市文山區樟腳里木新路三段179號",
+      "latitude": 24.98152,
+      "longitude": 121.560408,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15607059608328736375",
+      "mapPlaceIds": [
+        "creator/lala/15607059608328736375"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15665575602320487823",
+      "name": "雙月食品社 敦北店",
+      "address": "臺北市松山區敦化北路4巷62號",
+      "latitude": 25.050319,
+      "longitude": 121.544556,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15665575602320487823",
+      "mapPlaceIds": [
+        "creator/lala/15665575602320487823"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15711362936490549174",
+      "name": "時時香 南港車站店",
+      "address": "臺北市南港區新光里忠孝東路七段369號9樓C棟",
+      "latitude": 25.052558,
+      "longitude": 121.604518,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15711362936490549174",
+      "mapPlaceIds": [
+        "creator/lala/15711362936490549174"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15718881600920456155",
+      "name": "天使雞排-樂華店",
+      "address": "新北市永和區協和里保平路19號",
+      "latitude": 25.007474,
+      "longitude": 121.512731,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "天使雞排-樂華店",
+          "address": "新北市永和區協和里保平路19號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15718881600920456155",
+      "mapPlaceIds": [
+        "creator/lala/15718881600920456155"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15743597815905779674",
+      "name": "棉花糖早餐",
+      "address": "臺南市中西區藥王里民族路三段127號",
+      "latitude": 22.998622,
+      "longitude": 120.196098,
+      "city": "台南市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15743597815905779674",
+      "mapPlaceIds": [
+        "creator/lala/15743597815905779674"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "157502648286396430",
+      "name": "遠東Garden City (SOGO大巨蛋)",
+      "address": "臺北市信義區忠孝東路四段505號",
+      "latitude": 25.042074,
+      "longitude": 121.558394,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/157502648286396430",
+      "mapPlaceIds": [
+        "creator/lala/157502648286396430"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15760167148673950105",
+      "name": "淺水灣停車場",
+      "address": "新北市三芝區後厝里後厝裡北勢子淡金公路45之32號",
+      "latitude": 25.251924,
+      "longitude": 121.470702,
+      "city": "新北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15760167148673950105",
+      "mapPlaceIds": [
+        "creator/lala/15760167148673950105"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15844025171008708953",
+      "name": "泰讚了thai like tea通化店",
+      "address": "臺北市大安區通安里通化街36-1號",
+      "latitude": 25.031074,
+      "longitude": 121.554085,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15844025171008708953",
+      "mapPlaceIds": [
+        "creator/lala/15844025171008708953"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15893262100542538552",
+      "name": "waku waku burger",
+      "address": "臺北市信義區景新里吳興街117號",
+      "latitude": 25.029955,
+      "longitude": 121.561379,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/15893262100542538552",
+      "mapPlaceIds": [
+        "creator/lala/15893262100542538552"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "15959069116901855581",
+      "name": "Crafted Beer & Co. 精釀啤酒屋",
+      "address": "臺北市中山區圓山里玉門街1號",
+      "latitude": 25.06983,
+      "longitude": 121.522053,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/11294039991",
+      "mapPlaceIds": [
+        "poi/node/11294039991"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "Crafted",
+          "address": "台北市中山區玉門街 1 號",
+          "latitude": 25.0695991,
+          "longitude": 121.5219862
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "15987363905800824784",
+      "name": "內政部移民署",
+      "address": "臺北市中正區南門里廣州街15號",
+      "latitude": 25.035721,
+      "longitude": 121.508135,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2618719420",
+      "mapPlaceIds": [
+        "poi/node/2618719420"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "內政部移民署",
+          "address": "台北市中正區廣州街 15 號",
+          "latitude": 25.0357425,
+          "longitude": 121.5081313
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "16015407126769734449",
+      "name": "忠貞眷村口米干 麻辣滷味",
+      "address": "桃園市中壢區龍平里龍平路211號",
+      "latitude": 24.929004,
+      "longitude": 121.25394,
+      "city": "桃園市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DgHpl_hIJf4",
+          "text": "这家店的老板真的是我遇过最热情的一位…\n麻辣卤味非常之香，加花生超好吃\n米干也超级正宗！！\n我现在领着打包带走的鸡爪和鸭腿在捷运被香到不行，好想拆开吃",
+          "date": "2026-11-24",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/16015407126769734449",
+      "mapPlaceIds": [
+        "creator/lala/16015407126769734449"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16144473678729411302",
+      "name": "瑪露連嫩仙草 - 竹科門市",
+      "address": "新竹市東區關東里光復路一段300號",
+      "latitude": 24.782579,
+      "longitude": 121.019642,
+      "city": "新竹市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/16144473678729411302",
+      "mapPlaceIds": [
+        "creator/lala/16144473678729411302"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16171768365394638089",
+      "name": "香港鑫華茶餐廳",
+      "address": "臺北市大安區永康里愛國東路101號1樓",
+      "latitude": 25.031537,
+      "longitude": 121.52853,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/16171768365394638089",
+      "mapPlaceIds": [
+        "creator/lala/16171768365394638089"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16258921593551850091",
+      "name": "雙月食品社 南港店",
+      "address": "臺北市南港區東新里重陽路166巷9號1樓",
+      "latitude": 25.056657,
+      "longitude": 121.601587,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/16258921593551850091",
+      "mapPlaceIds": [
+        "creator/lala/16258921593551850091"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16259321547352114051",
+      "name": "榮興水果店",
+      "address": "臺南市北區北華里成功路58號",
+      "latitude": 22.998248,
+      "longitude": 120.206967,
+      "city": "台南市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "榮興水果店",
+          "address": "臺南市北區北華里成功路58號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/16259321547352114051",
+      "mapPlaceIds": [
+        "creator/lala/16259321547352114051"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16341536244857936202",
+      "name": "十一香牛肉麵（景美店）",
+      "address": "臺北市文山區景華里景美街5巷2之1號",
+      "latitude": 24.993245,
+      "longitude": 121.541764,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Dd_T2fQAXTU",
+          "text": "周五下课放学从世新走五分钟买一杯超纯正苹果凤梨牛奶喝着，买6个彩色圆子嚼嚼嚼，吃差不多走到十一香牛肉面点一个干拌半筋半肉面，真的感觉活的特别通透，一下子就想明白了一些事情…",
+          "date": "2026-10-02",
+          "author": "zeke_6973"
+        },
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfEObM2ID6l",
+          "text": "世新景美爱店\n一定要加辣椒油和榨菜碎\n每次不知道吃什么就吃这家🤣",
+          "date": "2026-10-29",
+          "author": "zeke_6973"
+        },
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfEPZk4IGxq",
+          "text": "十一香，在景美捷运2号口旁边",
+          "date": "2026-10-29",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/4033359736",
+      "mapPlaceIds": [
+        "poi/node/4033359736"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "十一香牛肉麵館",
+          "address": "台北市文山區景美街 5 號",
+          "latitude": 24.9932779,
+          "longitude": 121.5417527
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "16436120855669670878",
+      "name": "老麵店",
+      "address": "臺北市大同區鄰江里迪化街二段215-8號",
+      "latitude": 25.070365,
+      "longitude": 121.511647,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/4175821991",
+      "mapPlaceIds": [
+        "poi/node/4175821991"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "老麵店",
+          "address": "台北市大同區迪化街二段 215-8 號",
+          "latitude": 25.0703651,
+          "longitude": 121.5117924
+        },
+        {
+          "name": "老麵店",
+          "address": "台北市大同區迪化街二段215-8號",
+          "latitude": 25.07036095507813,
+          "longitude": 121.51164788085936
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C2828741D"
+        }
+      ]
+    },
+    {
+      "cid": "16778390392044867133",
+      "name": "清珍鴨肉焿",
+      "address": "臺南市中西區兌悅里金華路四段93號",
+      "latitude": 22.999714,
+      "longitude": 120.195242,
+      "city": "台南市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "清珍鴨肉焿",
+          "address": "臺南市中西區兌悅里金華路四段93號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/16778390392044867133",
+      "mapPlaceIds": [
+        "creator/lala/16778390392044867133"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1683033827156280665",
+      "name": "哦嗨喲漢堡屋",
+      "address": "臺北市文山區新光路一段35號",
+      "latitude": 24.989484,
+      "longitude": 121.573845,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1683033827156280665",
+      "mapPlaceIds": [
+        "creator/lala/1683033827156280665"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16908299507674726603",
+      "name": "黑工號嫩仙草 育樂店",
+      "address": "臺南市東區成大里育樂街185號",
+      "latitude": 22.993778,
+      "longitude": 120.21469,
+      "city": "台南市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/16908299507674726603",
+      "mapPlaceIds": [
+        "creator/lala/16908299507674726603"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "16990795618530835403",
+      "name": "黃家香腸",
+      "address": "臺北市中正區永功里泉州街32之3號",
+      "latitude": 25.025893,
+      "longitude": 121.513514,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7175334732",
+      "mapPlaceIds": [
+        "poi/node/7175334732"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "黃家香腸",
+          "address": "台北市中正區",
+          "latitude": 25.0258831,
+          "longitude": 121.5135003
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "17183780045036309809",
+      "name": "小川西堂 - 北方清燉牛肉麵 泡饃",
+      "address": "臺北市中正區羅斯福路三段244巷13號",
+      "latitude": 25.016698,
+      "longitude": 121.530655,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "小川西堂 - 北方清燉牛肉麵 泡饃",
+          "address": "臺北市中正區羅斯福路三段244巷13號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17183780045036309809",
+      "mapPlaceIds": [
+        "creator/lala/17183780045036309809"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17252319065860124806",
+      "name": "碰麵麵食館（吳興店）",
+      "address": "臺北市信義區景聯里吳興街24號1樓",
+      "latitude": 25.031424,
+      "longitude": 121.559674,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "碰麵麵食館（吳興店）",
+          "address": "臺北市信義區景聯里吳興街24號1樓"
+        }
+      ],
+      "posts": [],
+      "placeId": "poi/node/12622924550",
+      "mapPlaceIds": [
+        "poi/node/12622924550"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "碰麵",
+          "address": "台北市信義區吳興街 24 號",
+          "latitude": 25.0313897,
+          "longitude": 121.5596824
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "17404105529473132769",
+      "name": "如意甜品",
+      "address": "臺北市文山區景行里景美街155號",
+      "latitude": 24.989255,
+      "longitude": 121.541643,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/4538270107",
+      "mapPlaceIds": [
+        "poi/node/4538270107"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "如意甜品",
+          "address": "台北市文山區景美街 155 號",
+          "latitude": 24.9892207,
+          "longitude": 121.5416323
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "17404988198994103276",
+      "name": "宏源堂中藥店",
+      "address": "桃園市龜山區新路里中和南路176號",
+      "latitude": 24.993872,
+      "longitude": 121.335542,
+      "city": "桃園市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17404988198994103276",
+      "mapPlaceIds": [
+        "creator/lala/17404988198994103276"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17472889471272756631",
+      "name": "洪家炒飯",
+      "address": "高雄市新興區秋山里六合二路18號",
+      "latitude": 22.632889,
+      "longitude": 120.301269,
+      "city": "高雄市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17472889471272756631",
+      "mapPlaceIds": [
+        "creator/lala/17472889471272756631"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17497692303398499955",
+      "name": "竣師父牛肉麵-大安店",
+      "address": "臺北市大安區光武里大安路一段52巷24號一樓",
+      "latitude": 25.042978,
+      "longitude": 121.545124,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "竣師父牛肉麵-大安店",
+          "address": "臺北市大安區光武里大安路一段52巷24號一樓"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Df689tIIAOJ",
+          "text": "超好吃的牛肉面店，来了两次都感觉很惊艳…\n最好吃的是皮蛋干面和牛燥干面！\n（虽然我还没吃过汤面）",
+          "date": "2026-11-19",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "savvy/apple_maps/H2710I3F996BD806CD8",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F996BD806CD8"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "竣師父牛肉麵 大安店",
+          "address": "台北市大安區大安路一段52巷24號1樓",
+          "latitude": 25.04297289746095,
+          "longitude": 121.54511925097655
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F996BD806CD8"
+        }
+      ]
+    },
+    {
+      "cid": "17522244035928102994",
+      "name": "伊禾白湯",
+      "address": "臺北市信義區中興里光復南路519巷9號",
+      "latitude": 25.031955,
+      "longitude": 121.558028,
+      "city": "台北市",
+      "category": "拉麵",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "伊禾白湯",
+          "address": "臺北市信義區中興里光復南路519巷9號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DetkdHEIEno",
+          "text": "从1430到1730，终于吃到了大名鼎鼎的伊禾白汤！\n只能说名不虚传而且老板服务特别好\n搭配的沙茶酱有一种巧克力的神奇味道\n面是卷卷面很有麦子的香气\n汤底咸淡还会在制作之前给你品尝确认\n配餐的坚果奶酪也超好吃，巴旦木味很浓郁🤤\n下次还会来吃！",
+          "date": "2026-10-20",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/12745981604",
+      "mapPlaceIds": [
+        "poi/node/12745981604"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "伊禾白湯",
+          "address": "台北市信義區光復南路519巷 9 號",
+          "latitude": 25.0319472,
+          "longitude": 121.5581777
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "17570640834257039059",
+      "name": "Spyci 私宅咖哩炸雞店",
+      "address": "No. 30-1, No. 30-1景興路景華里文山區臺北市116",
+      "latitude": 24.997364,
+      "longitude": 121.544536,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/5970357103",
+      "mapPlaceIds": [
+        "poi/node/5970357103"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "私宅咖哩炸雞",
+          "address": "台北市文山區景興路 30之1 號",
+          "latitude": 24.9973455,
+          "longitude": 121.5445472
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "17579303080629790612",
+      "name": "北投高記茶莊總店",
+      "address": "臺北市北投區清江里清江路25巷54號",
+      "latitude": 25.131619,
+      "longitude": 121.503057,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "北投高記茶莊總店",
+          "address": "臺北市北投區清江里清江路25巷54號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17579303080629790612",
+      "mapPlaceIds": [
+        "creator/lala/17579303080629790612"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17637500245999112361",
+      "name": "鈞拉麵",
+      "address": "新北市板橋區明翠里民生路三段131號",
+      "latitude": 25.025943,
+      "longitude": 121.465981,
+      "city": "新北市",
+      "category": "拉麵",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17637500245999112361",
+      "mapPlaceIds": [
+        "creator/lala/17637500245999112361"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17650407727305247643",
+      "name": "三姐妹水餃鍋貼",
+      "address": "基隆市仁愛區玉田里愛三路98巷13號",
+      "latitude": 25.1291,
+      "longitude": 121.743648,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17650407727305247643",
+      "mapPlaceIds": [
+        "creator/lala/17650407727305247643"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17773423162308721146",
+      "name": "三角窗麵擔",
+      "address": "基隆市仁愛區文昌里忠三路52號",
+      "latitude": 25.129622,
+      "longitude": 121.738851,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17773423162308721146",
+      "mapPlaceIds": [
+        "creator/lala/17773423162308721146"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17851750584672243232",
+      "name": "魯肉飯專家",
+      "address": "基隆市仁愛區仁三路",
+      "latitude": 25.128297,
+      "longitude": 121.743127,
+      "city": "基隆市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/17851750584672243232",
+      "mapPlaceIds": [
+        "creator/lala/17851750584672243232"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "17935771450072828788",
+      "name": "圖南社 Tunan Society（原 Sunday Morning）",
+      "address": "臺北市中正區愛國里中華路二段75巷19-1號",
+      "latitude": 25.033774,
+      "longitude": 121.506988,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "圖南社 Tunan Society（原 Sunday Morning）",
+          "address": "臺北市中正區愛國里中華路二段75巷19-1號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfZpmr4gVGE",
+          "text": "脆上说是台北TOP1的烤蔬菜店\n但是我觉得调酒和咖喱也超顶啊！！\n非常经典的日式咖喱调味🍛\n蔬菜每一位都烤的恰到好处…\n低销要点一杯饮品就想说试试苹果酒\n居然很神奇地加了八角？\n结果味道意外的融合，酸酸甜甜\n有肉桂+八角+柠檬和苹果\n这家真的绝对是会回访的一家！！",
+          "date": "2026-11-06",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/17935771450072828788",
+      "mapPlaceIds": [
+        "creator/lala/17935771450072828788"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "18173318002827476167",
+      "name": "姥饕雞肉飯 乾拌麵",
+      "address": "臺北市中正區黎明里公園路20巷5號",
+      "latitude": 25.045258,
+      "longitude": 121.516825,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/8280854478",
+      "mapPlaceIds": [
+        "poi/node/8280854478"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "18244048401602128765",
+      "name": "Chirle Brown 查理布朗烘焙 台北車站店",
+      "address": "臺北市中正區黎明里北平西路3號",
+      "latitude": 25.047924,
+      "longitude": 121.517081,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F9267AE5EC56",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F9267AE5EC56"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "臺北車站",
+          "address": "臺北市中正區北平西路3號",
+          "latitude": 25.048075875976565,
+          "longitude": 121.51740524316405
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F9267AE5EC56"
+        }
+      ]
+    },
+    {
+      "cid": "1890294622770023312",
+      "name": "VWI by CHADWANG",
+      "address": "臺北市大安區誠安里忠孝東路三段251巷4弄16號",
+      "latitude": 25.042297,
+      "longitude": 121.540753,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "VWI by CHADWANG",
+          "address": "臺北市大安區誠安里忠孝東路三段251巷4弄16號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Ded4XFrIAvP",
+          "text": "在忠孝復興附近喝到两家超不错的咖啡▓\n第一家：VWI by CHADWANG\n（貌似还是不限时咖啡，可以坐床边办公学习）\n第二家：SIMPLE KAFFA興波咖啡",
+          "date": "2026-10-14",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/9488711559",
+      "mapPlaceIds": [
+        "poi/node/9488711559"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "VWI by CHADWANG",
+          "address": "台北市大安區忠孝東路三段251巷4弄16號",
+          "latitude": 25.042292131835943,
+          "longitude": 121.54074804394533
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C578EC986"
+        }
+      ]
+    },
+    {
+      "cid": "196138219456646540",
+      "name": "信義安康公園",
+      "address": "臺北市信義區安康里松勇路",
+      "latitude": 25.035716,
+      "longitude": 121.570072,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "park/relation/5012215",
+      "mapPlaceIds": [
+        "park/relation/5012215"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "信義安康公園",
+          "address": "台北市信義區",
+          "latitude": 25.0356402,
+          "longitude": 121.57004063
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "1976702762319013495",
+      "name": "18冠軍牛肉麵",
+      "address": "臺北市大安區通化街171巷24號",
+      "latitude": 25.027743,
+      "longitude": 121.554668,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1976702762319013495",
+      "mapPlaceIds": [
+        "creator/lala/1976702762319013495"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "1996105823642840062",
+      "name": "李家餐廳(Leega,韓式料理)",
+      "address": "臺北市大安區芳和里樂業街68(右邊號",
+      "latitude": 25.022134,
+      "longitude": 121.550433,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "李家餐廳(Leega,韓式料理)",
+          "address": "臺北市大安區芳和里樂業街68(右邊號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/1996105823642840062",
+      "mapPlaceIds": [
+        "creator/lala/1996105823642840062"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2008681373296871587",
+      "name": "印度美味餐廳 SWADISHT INDIAN RESTAURANT",
+      "address": "新北市三重區三民里三民街93號",
+      "latitude": 25.063284,
+      "longitude": 121.485476,
+      "city": "新北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2008681373296871587",
+      "mapPlaceIds": [
+        "creator/lala/2008681373296871587"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2009101605477551765",
+      "name": "Cornerstone角石早午餐",
+      "address": "臺北市文山區木柵路二段58號",
+      "latitude": 24.988637,
+      "longitude": 121.559166,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2009101605477551765",
+      "mapPlaceIds": [
+        "creator/lala/2009101605477551765"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2021455683086311662",
+      "name": "老山東牛肉麵",
+      "address": "臺北市萬華區西門里西寧南路70號B1之15室",
+      "latitude": 25.04358,
+      "longitude": 121.506086,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/5467994602",
+      "mapPlaceIds": [
+        "poi/node/5467994602"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "老山東牛肉家常麵店",
+          "address": "台北市萬華區西寧南路 70 號 15",
+          "latitude": 25.0434526,
+          "longitude": 121.5057481
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "2028556555833839260",
+      "name": "我家牛排 板橋遠科旗艦店",
+      "address": "新北市板橋區鄉雲里遠東路62-1號",
+      "latitude": 25.000673,
+      "longitude": 121.455614,
+      "city": "新北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2028556555833839260",
+      "mapPlaceIds": [
+        "creator/lala/2028556555833839260"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2053988786662848036",
+      "name": "禾豐美食",
+      "address": "臺北市信義區信安街153號",
+      "latitude": 25.022879,
+      "longitude": 121.55531,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2053988786662848036",
+      "mapPlaceIds": [
+        "creator/lala/2053988786662848036"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "207776848065512137",
+      "name": "烏弄原生茶飲 松山店",
+      "address": "臺北市信義區國業里松山路514號",
+      "latitude": 25.038122,
+      "longitude": 121.577997,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/207776848065512137",
+      "mapPlaceIds": [
+        "creator/lala/207776848065512137"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2135789422358765633",
+      "name": "阿城鵝肉 土城總店",
+      "address": "新北市土城區柑林里清水路78號",
+      "latitude": 24.981662,
+      "longitude": 121.456768,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2135789422358765633",
+      "mapPlaceIds": [
+        "creator/lala/2135789422358765633"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2161594596776339944",
+      "name": "旭達豆漿店",
+      "address": "新北市新店區百和里中正路438號",
+      "latitude": 24.978357,
+      "longitude": 121.534237,
+      "city": "新北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2161594596776339944",
+      "mapPlaceIds": [
+        "creator/lala/2161594596776339944"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2182843687451876530",
+      "name": "川渝小吃坊",
+      "address": "臺北市大同區建泰里南京西路18巷6弄8之1號",
+      "latitude": 25.052007,
+      "longitude": 121.519642,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/6255602888",
+      "mapPlaceIds": [
+        "poi/node/6255602888"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "川渝小吃坊",
+          "address": "台北市大同區南京西路18巷6弄 8之1 號",
+          "latitude": 25.0519919,
+          "longitude": 121.5196163
+        },
+        {
+          "name": "川渝小吃坊",
+          "address": "台北市大同區南京西路18巷6弄8之1號",
+          "latitude": 25.0520036,
+          "longitude": 121.519637
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C588C9FEB"
+        }
+      ]
+    },
+    {
+      "cid": "2189386220912764175",
+      "name": "徠徠水餃店",
+      "address": "臺北市中正區忠勤里中華路二段309巷9號",
+      "latitude": 25.028838,
+      "longitude": 121.505679,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/4043621251",
+      "mapPlaceIds": [
+        "poi/node/4043621251"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "徠徠水餃店",
+          "address": "台北市中正區中華路二段309巷9號",
+          "latitude": 25.02882613769532,
+          "longitude": 121.50568118066404
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F9966C6DCECC"
+        }
+      ]
+    },
+    {
+      "cid": "219018585736550059",
+      "name": "老眷村米干",
+      "address": "桃園市龍潭區龍祥里聖亭路300巷176號",
+      "latitude": 24.873159,
+      "longitude": 121.208054,
+      "city": "桃園市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/219018585736550059",
+      "mapPlaceIds": [
+        "creator/lala/219018585736550059"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2204171077572639018",
+      "name": "Curry Lab. Tokyo",
+      "address": "臺北市大安區泰順街40巷2號",
+      "latitude": 25.02422,
+      "longitude": 121.53125,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2204171077572639018",
+      "mapPlaceIds": [
+        "creator/lala/2204171077572639018"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2237042651143985521",
+      "name": "秋波名曲珈琲",
+      "address": "臺北市大同區隆和里昌吉街218號",
+      "latitude": 25.065866,
+      "longitude": 121.510753,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2237042651143985521",
+      "mapPlaceIds": [
+        "creator/lala/2237042651143985521"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2328676655693698190",
+      "name": "WEDO | WE-DO burger 松山區漢堡 小巨蛋漢堡 餐廳 聚餐聚會｜暫無訂位服務",
+      "address": "臺北市松山區東勢里南京東路四段133巷7弄3號",
+      "latitude": 25.052595,
+      "longitude": 121.555266,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2328676655693698190",
+      "mapPlaceIds": [
+        "creator/lala/2328676655693698190"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2439518397661521961",
+      "name": "老牌張豬腳飯",
+      "address": "臺北市大同區國慶里民族西路296號",
+      "latitude": 25.068559,
+      "longitude": 121.511107,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "老牌張豬腳飯",
+          "address": "No. 296號, Minzu W Rd, 國慶里大同區臺北市103"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Dft3N0woOTF",
+          "text": "大桥头很美味的腿库饭\n这个竹笋汤非常之鲜美\n而且因为下小雨不排队好舒服吧！",
+          "date": "2026-11-14",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/5344367621",
+      "mapPlaceIds": [
+        "poi/node/5344367621"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "老牌張豬腳飯",
+          "address": "台北市大同區",
+          "latitude": 25.0685699,
+          "longitude": 121.5110694
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "2449361768894675806",
+      "name": "陆军小馆",
+      "address": "桃園市桃園區成功里中山東路147號",
+      "latitude": 24.997097,
+      "longitude": 121.318059,
+      "city": "桃園市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2449361768894675806",
+      "mapPlaceIds": [
+        "creator/lala/2449361768894675806"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2545777722414220480",
+      "name": "A6263吳姳麵館",
+      "address": "基隆市仁愛區博愛里愛三路21號2樓",
+      "latitude": 25.127639,
+      "longitude": 121.741991,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2545777722414220480",
+      "mapPlaceIds": [
+        "creator/lala/2545777722414220480"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2555508192712092212",
+      "name": "旨燕",
+      "address": "臺北市中正區光復里開封街一段90號一樓",
+      "latitude": 25.045902,
+      "longitude": 121.510393,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/10806905888",
+      "mapPlaceIds": [
+        "poi/node/10806905888"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "旨燕",
+          "address": "台北市中正區 · 開封街一段",
+          "latitude": 25.0458809,
+          "longitude": 121.510389
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "2641955669637100732",
+      "name": "張家餛飩麵店",
+      "address": "基隆市仁愛區文昌里孝三路79巷9號",
+      "latitude": 25.130236,
+      "longitude": 121.739002,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2641955669637100732",
+      "mapPlaceIds": [
+        "creator/lala/2641955669637100732"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2682445993183041289",
+      "name": "Popeyes Chicken 台北許昌店",
+      "address": "臺北市中正區黎明里許昌街30號1樓",
+      "latitude": 25.045417,
+      "longitude": 121.515835,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2518367469",
+      "mapPlaceIds": [
+        "poi/node/2518367469"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "Popeyes",
+          "address": "台北市中正區許昌街 30 號",
+          "latitude": 25.0454229,
+          "longitude": 121.5158916
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "27587628862279662",
+      "name": "天下三絕麵食館",
+      "address": "臺北市大安區仁愛里仁愛路四段27巷3號",
+      "latitude": 25.03888,
+      "longitude": 121.545317,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "天下三絕麵食館",
+          "address": "臺北市大安區仁愛里仁愛路四段27巷3號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/De6fvK5oAMK",
+          "text": "又打卡一家台湾牛肉面\n听说这家是多年米其林必比登推荐▓\n汤头浓郁，肉类都很软烂入味，猪脚带点酒香味\n就是那种标准精致的好吃，如果我请客应该会选这家",
+          "date": "2026-10-25",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/9280713217",
+      "mapPlaceIds": [
+        "poi/node/9280713217"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "天下三絕",
+          "address": "台北市大安區仁愛路四段27巷 3 號",
+          "latitude": 25.0387522,
+          "longitude": 121.5452682
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "2767152867885774195",
+      "name": "雞家莊本店",
+      "address": "臺北市中山區中山里長春路55號",
+      "latitude": 25.055024,
+      "longitude": 121.526088,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2096004816",
+      "mapPlaceIds": [
+        "poi/node/2096004816"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "雞家莊",
+          "address": "台北市中山區長春路 55 號",
+          "latitude": 25.0550128,
+          "longitude": 121.5261699
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "2770553448934225599",
+      "name": "Karafuneya Coffee",
+      "address": "日本〒604-8031 Kyoto, Nakagyo Ward, Daikokucho, 39 河原町通三条下ル",
+      "latitude": 35.008433,
+      "longitude": 135.768841,
+      "city": "日本",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/2770553448934225599",
+      "mapPlaceIds": [
+        "creator/lala/2770553448934225599"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "277277626848771995",
+      "name": "沙丘",
+      "address": "臺北市大同區永樂里延平北路二段62號5樓",
+      "latitude": 25.055459,
+      "longitude": 121.511482,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/277277626848771995",
+      "mapPlaceIds": [
+        "creator/lala/277277626848771995"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "2791327599408947299",
+      "name": "統一時代百貨 台北店",
+      "address": "臺北市信義區興雅里忠孝東路五段8號",
+      "latitude": 25.040846,
+      "longitude": 121.565396,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/3353583463",
+      "mapPlaceIds": [
+        "poi/node/3353583463"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "統一時代百貨台北店",
+          "address": "台北市信義區忠孝東路五段 8 號",
+          "latitude": 25.0405841,
+          "longitude": 121.5654833
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "3091387009435336999",
+      "name": "廣東汕頭牛肉店",
+      "address": "基隆市中山區通化里復旦路17之6號",
+      "latitude": 25.145957,
+      "longitude": 121.739394,
+      "city": "基隆市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3091387009435336999",
+      "mapPlaceIds": [
+        "creator/lala/3091387009435336999"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "309806679650549453",
+      "name": "李好牛溫體牛肉湯爐｜溫體牛肉火鍋｜四川麻辣鍋｜潮汕溫補鍋｜台南牛肉火鍋｜台南美食推薦｜必吃溫體牛｜安平宵夜｜聚餐台南美食",
+      "address": "臺南市安平區安平路170號",
+      "latitude": 22.998469,
+      "longitude": 120.181965,
+      "city": "台南市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/309806679650549453",
+      "mapPlaceIds": [
+        "creator/lala/309806679650549453"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3139272573148765455",
+      "name": "雅口麻辣豆腐專賣",
+      "address": "臺北市大安區通化里臨江街19-1號",
+      "latitude": 25.029633,
+      "longitude": 121.556738,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3139272573148765455",
+      "mapPlaceIds": [
+        "creator/lala/3139272573148765455"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3186800864436997258",
+      "name": "大旺小舖",
+      "address": "臺北市大同區建明里華陰街179號號地下室",
+      "latitude": 25.050286,
+      "longitude": 121.515461,
+      "city": "台北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F98C58EC6731",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C58EC6731"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "大旺小舖",
+          "address": "台北市大同區華陰街179號地下室",
+          "latitude": 25.05029116210938,
+          "longitude": 121.51545952929686
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C58EC6731"
+        }
+      ]
+    },
+    {
+      "cid": "3212119495366417124",
+      "name": "艾萊創意早午餐-創始店I like",
+      "address": "臺北市信義區廣居里 Hulin St, 161號1樓",
+      "latitude": 25.039348,
+      "longitude": 121.576685,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3212119495366417124",
+      "mapPlaceIds": [
+        "creator/lala/3212119495366417124"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "327170411247126259",
+      "name": "溫度",
+      "address": "臺北市大安區住安里信義路四段60-100號1樓",
+      "latitude": 25.032495,
+      "longitude": 121.545622,
+      "city": "台北市",
+      "category": "其他美食",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/De6amiqIGIU",
+          "text": "大安-温度\n限定布丁还不错吃\n青提-香草冰淇淋-手作布丁-酒\n（店面有点mini）",
+          "date": "2026-10-25",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/327170411247126259",
+      "mapPlaceIds": [
+        "creator/lala/327170411247126259"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3420131550126576899",
+      "name": "延三溫體牛-黃記",
+      "address": "臺北市中正區文盛里羅斯福路三段244巷11號",
+      "latitude": 25.016722,
+      "longitude": 121.53068,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "延三溫體牛-黃記",
+          "address": "臺北市中正區文盛里羅斯福路三段244巷11號"
+        }
+      ],
+      "posts": [],
+      "placeId": "poi/node/2473809949",
+      "mapPlaceIds": [
+        "poi/node/2473809949"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "黃記延三溫體牛",
+          "address": "台北市中正區羅斯福路三段244巷 11 號",
+          "latitude": 25.0167357,
+          "longitude": 121.5306544
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "3482488932888708341",
+      "name": "無名米糕",
+      "address": "臺南市中西區城隍里中山路8巷5號",
+      "latitude": 22.992695,
+      "longitude": 120.205992,
+      "city": "台南市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "無名米糕",
+          "address": "臺南市中西區城隍里中山路8巷5號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3482488932888708341",
+      "mapPlaceIds": [
+        "creator/lala/3482488932888708341"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3602087028949414948",
+      "name": "蕉ㄚ吐司",
+      "address": "新北市三峽區大觀路120號",
+      "latitude": 24.947427,
+      "longitude": 121.373466,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3602087028949414948",
+      "mapPlaceIds": [
+        "creator/lala/3602087028949414948"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3645096630466435902",
+      "name": "阿杰溫體牛肉湯",
+      "address": "臺南市中西區五條港里西門路二段421號",
+      "latitude": 22.999285,
+      "longitude": 120.200862,
+      "city": "台南市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3645096630466435902",
+      "mapPlaceIds": [
+        "creator/lala/3645096630466435902"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3719284834517236615",
+      "name": "國華牛肉湯",
+      "address": "臺南市中西區府前里國華街二段140號",
+      "latitude": 22.991041,
+      "longitude": 120.196944,
+      "city": "台南市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "國華牛肉湯",
+          "address": "臺南市中西區府前里國華街二段140號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/3719284834517236615",
+      "mapPlaceIds": [
+        "creator/lala/3719284834517236615"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3824172883318131210",
+      "name": "華固天鑄",
+      "address": "臺北市士林區天福里天母東路8號",
+      "latitude": 25.117747,
+      "longitude": 121.531511,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3824172883318131210",
+      "mapPlaceIds": [
+        "creator/lala/3824172883318131210"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "3841166530183741982",
+      "name": "小云滇",
+      "address": "桃園市中壢區前龍街35號",
+      "latitude": 24.929231,
+      "longitude": 121.25355,
+      "city": "桃園市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/3841166530183741982",
+      "mapPlaceIds": [
+        "creator/lala/3841166530183741982"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4059747656393214691",
+      "name": "鮮茶道-延三夜市",
+      "address": "臺北市大同區隆和里延平北路三段47-1號",
+      "latitude": 25.065164,
+      "longitude": 121.511198,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4059747656393214691",
+      "mapPlaceIds": [
+        "creator/lala/4059747656393214691"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4061848508889157000",
+      "name": "林口三井OUTLET 二館",
+      "address": "新北市林口區南勢里文化二路一段123號",
+      "latitude": 25.069043,
+      "longitude": 121.365467,
+      "city": "新北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4061848508889157000",
+      "mapPlaceIds": [
+        "creator/lala/4061848508889157000"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4112294319200574818",
+      "name": "香港鳳盛燒臘店",
+      "address": "臺北市信義區景新里莊敬路242號",
+      "latitude": 25.029437,
+      "longitude": 121.562247,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/4298924690",
+      "mapPlaceIds": [
+        "poi/node/4298924690"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "香港鳳盛燒臘",
+          "address": "台北市信義區 · 莊敬路",
+          "latitude": 25.0293092,
+          "longitude": 121.5622913
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "4151553565195229306",
+      "name": "興波咖啡 華山旗艦店",
+      "address": "臺北市中正區梅花里忠孝東路二段27號",
+      "latitude": 25.043903,
+      "longitude": 121.52769,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "poi/node/6682287318",
+      "mapPlaceIds": [
+        "poi/node/6682287318"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "興波咖啡",
+          "address": "台北市中正區忠孝東路二段 27 號",
+          "latitude": 25.043919,
+          "longitude": 121.527757
+        },
+        {
+          "name": "Simple Kaffa 興波咖啡 華山旗艦店",
+          "address": "台北市中正區忠孝東路二段27號",
+          "latitude": 25.043898562500004,
+          "longitude": 121.52768681250001
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F996972C14E8"
+        }
+      ]
+    },
+    {
+      "cid": "4167633776798905020",
+      "name": "Curry Lab. Tokyo 大安店",
+      "address": "臺北市大安區龍圖里信義路三段166巷4-1號1樓",
+      "latitude": 25.032842,
+      "longitude": 121.541825,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4167633776798905020",
+      "mapPlaceIds": [
+        "creator/lala/4167633776798905020"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4181761012168449603",
+      "name": "滇味廚房",
+      "address": "臺北市信義區興雅里永吉路30巷178弄2號1 樓",
+      "latitude": 25.041399,
+      "longitude": 121.568631,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/9381950261",
+      "mapPlaceIds": [
+        "poi/node/9381950261"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "滇味廚房",
+          "address": "台北市信義區 · 永吉路30巷",
+          "latitude": 25.0414588,
+          "longitude": 121.5686166
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "4194183315977915863",
+      "name": "許仔豬腳麵線",
+      "address": "臺北市大同區延平里保安街49巷17號",
+      "latitude": 25.060511,
+      "longitude": 121.511945,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7839875695",
+      "mapPlaceIds": [
+        "poi/node/7839875695"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "許仔豬腳麵線",
+          "address": "台北市大同區保安街49巷 17 號",
+          "latitude": 25.0602531,
+          "longitude": 121.5119608
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "4207976514891025347",
+      "name": "阿裕牛肉涮涮鍋(崑崙店)",
+      "address": "臺南市仁德區上崙里崑崙路733-1號",
+      "latitude": 22.940426,
+      "longitude": 120.261106,
+      "city": "台南市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4207976514891025347",
+      "mapPlaceIds": [
+        "creator/lala/4207976514891025347"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4212111225969059386",
+      "name": "天蠍座燒烤（創始老店",
+      "address": "臺南市東區成大里育樂街206號",
+      "latitude": 22.993647,
+      "longitude": 120.214467,
+      "city": "台南市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfkNRZdAXOG",
+          "text": "1️⃣豆腐洋行國華店\n2️⃣鬍鬚忠牛肉湯\n3️⃣榮興水果店\n4️⃣清珍鴨肉羹\n5️⃣ 天蠍座燒烤（創始老店\n5️⃣ 黑工號嫩仙草 育樂店\n6️⃣ 國華牛肉湯\n7️⃣奉茶\n8️⃣木子樑室",
+          "date": "2026-11-10",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/4212111225969059386",
+      "mapPlaceIds": [
+        "creator/lala/4212111225969059386"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4233438229455444151",
+      "name": "BURNT BURGER SOCIAL CLUB",
+      "address": "臺北市信義區興雅里基隆路一段147巷54號",
+      "latitude": 25.042293,
+      "longitude": 121.567818,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "BURNT BURGER SOCIAL CLUB",
+          "address": "臺北市信義區興雅里基隆路一段147巷54號"
+        }
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F98C58F7187A",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C58F7187A"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "Burnt Burger Social Club",
+          "address": "台北市信義區基隆路一段147巷54號",
+          "latitude": 25.042288401367195,
+          "longitude": 121.56781185839844
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C58F7187A"
+        }
+      ]
+    },
+    {
+      "cid": "4285756756373307376",
+      "name": "嘉禾新村",
+      "address": "臺北市中正區富水里永春街131巷1號",
+      "latitude": 25.015753,
+      "longitude": 121.52718,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/relation/7413818",
+      "mapPlaceIds": [
+        "poi/relation/7413818"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "嘉禾新村",
+          "address": "台北市中正區永春街131巷 1 號",
+          "latitude": 25.0158299,
+          "longitude": 121.52712033
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "4349217316711748975",
+      "name": "弌弌咖啡 Ichi Cafe",
+      "address": "臺北市大同區南京西路25巷18-1號",
+      "latitude": 25.054603,
+      "longitude": 121.520293,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4349217316711748975",
+      "mapPlaceIds": [
+        "creator/lala/4349217316711748975"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "442926224695082437",
+      "name": "寧夏夜市-林振櫂燒麻糬",
+      "address": "臺北市大同區星明里寧夏路97號攤位",
+      "latitude": 25.055982,
+      "longitude": 121.515322,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F9AE050E2C28",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F9AE050E2C28"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "林振櫂燒麻糬",
+          "address": "台北市大同區寧夏路97號攤",
+          "latitude": 25.055976941406257,
+          "longitude": 121.51531730859375
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F9AE050E2C28"
+        }
+      ]
+    },
+    {
+      "cid": "4642733381052338517",
+      "name": "吃呷家小吃",
+      "address": "新北市樹林區博愛一街40之1號",
+      "latitude": 24.990725,
+      "longitude": 121.426091,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4642733381052338517",
+      "mapPlaceIds": [
+        "creator/lala/4642733381052338517"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "4901833457977212161",
+      "name": "libreadry 巢屋",
+      "address": "臺北市大安區建倫里仁愛路四段345巷4弄28號",
+      "latitude": 25.038824,
+      "longitude": 121.552086,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "libreadry 巢屋",
+          "address": "臺北市大安區建倫里仁愛路四段345巷4弄28號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/4901833457977212161",
+      "mapPlaceIds": [
+        "creator/lala/4901833457977212161"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5043250434353998530",
+      "name": "暖暖麵店",
+      "address": "基隆市暖暖區暖暖里暖暖街81號",
+      "latitude": 25.101943,
+      "longitude": 121.73833,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5043250434353998530",
+      "mapPlaceIds": [
+        "creator/lala/5043250434353998530"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5197782596628393729",
+      "name": "御菓子花雨",
+      "address": "臺北市信義區新仁里忠孝東路四段553巷16弄3號",
+      "latitude": 25.042799,
+      "longitude": 121.563175,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/12863795296",
+      "mapPlaceIds": [
+        "poi/node/12863795296"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "御菓子花雨",
+          "address": "台北市信義區",
+          "latitude": 25.042804,
+          "longitude": 121.5631347
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "5269186625783275524",
+      "name": "Coffee sind",
+      "address": "臺北市中正區幸市里新生南路一段56巷8號",
+      "latitude": 25.041086,
+      "longitude": 121.53214,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/6261510899",
+      "mapPlaceIds": [
+        "poi/node/6261510899"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "Coffee Sind",
+          "address": "台北市中正區新生南路一段56巷 8 號",
+          "latitude": 25.0410893,
+          "longitude": 121.5321
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "5416869853415620618",
+      "name": "花枝焿·大麵炒",
+      "address": "基隆市仁愛區玉田里仁三路攤位號第40號",
+      "latitude": 25.12846,
+      "longitude": 121.743316,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5416869853415620618",
+      "mapPlaceIds": [
+        "creator/lala/5416869853415620618"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5428357311392534781",
+      "name": "不夜侯製茶所(南港店)",
+      "address": "臺北市南港區東明里南港路二段6號1樓",
+      "latitude": 25.054444,
+      "longitude": 121.606001,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/8438683276",
+      "mapPlaceIds": [
+        "poi/node/8438683276"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "不夜侯製茶所",
+          "address": "台北市南港區南港路二段 6 號",
+          "latitude": 25.0543631,
+          "longitude": 121.6059126
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "5476821273160626042",
+      "name": "迷客夏Milksha 臺北車站店",
+      "address": "臺北市中正區忠孝西路一段47號地下街KB129號櫃位",
+      "latitude": 25.047048,
+      "longitude": 121.516149,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DgH3ExRIP-3",
+          "text": "迷客夏的嫩仙草冻奶真的好喝的不行\n我一天不喝就浑身难受",
+          "date": "2026-11-24",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/5476821273160626042",
+      "mapPlaceIds": [
+        "creator/lala/5476821273160626042"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "558869356515022290",
+      "name": "不葷主義茶餐廳 台北店 (13:30/20:30最後點餐｜僅收現金)",
+      "address": "臺北市松山區中正里南京東路三段275號2樓",
+      "latitude": 25.052003,
+      "longitude": 121.54553,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/5259659138",
+      "mapPlaceIds": [
+        "poi/node/5259659138"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "不葷主義茶餐廳",
+          "address": "台北市松山區",
+          "latitude": 25.0520186,
+          "longitude": 121.5455476
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "558918537317096546",
+      "name": "双妹嘜養生甜品_TWINS HEALTHY DESSERT",
+      "address": "臺北市中山區恆安里農安街2巷20號之33",
+      "latitude": 25.064061,
+      "longitude": 121.522957,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/558918537317096546",
+      "mapPlaceIds": [
+        "creator/lala/558918537317096546"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5729948388158024662",
+      "name": "香港澳華燒鵝",
+      "address": "臺北市大安區通安里通化街38巷21號",
+      "latitude": 25.030966,
+      "longitude": 121.553402,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DgC3XduoLCe",
+          "text": "偶然遇见的这家店还不错吃\n有脆皮的这个肉和鹅肉最好吃了！\n炒牛河和拼盘最右边的肉，我觉得一般般",
+          "date": "2026-11-22",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/5729948388158024662",
+      "mapPlaceIds": [
+        "creator/lala/5729948388158024662"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5789038344321738716",
+      "name": "東家館",
+      "address": "基隆市中山區西榮里西定路76號",
+      "latitude": 25.132828,
+      "longitude": 121.735386,
+      "city": "基隆市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5789038344321738716",
+      "mapPlaceIds": [
+        "creator/lala/5789038344321738716"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5848392168716256950",
+      "name": "深坑串霸",
+      "address": "新北市深坑區萬順里北深路三段23號",
+      "latitude": 25.001014,
+      "longitude": 121.60915,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5848392168716256950",
+      "mapPlaceIds": [
+        "creator/lala/5848392168716256950"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5853349700766352799",
+      "name": "恉霜 拉麵專賣",
+      "address": "臺北市中山區正守里長安東路一段48號",
+      "latitude": 25.048317,
+      "longitude": 121.527558,
+      "city": "台北市",
+      "category": "拉麵",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5853349700766352799",
+      "mapPlaceIds": [
+        "creator/lala/5853349700766352799"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5853567804028407634",
+      "name": "鄭老牌木瓜牛奶",
+      "address": "高雄市新興區明莊里六合二路1號",
+      "latitude": 22.632738,
+      "longitude": 120.301502,
+      "city": "高雄市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5853567804028407634",
+      "mapPlaceIds": [
+        "creator/lala/5853567804028407634"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5885513296328430102",
+      "name": "阿爸の芋圓 樂華店",
+      "address": "新北市永和區協和里保平路18巷1號",
+      "latitude": 25.007648,
+      "longitude": 121.512336,
+      "city": "新北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/5885513296328430102",
+      "mapPlaceIds": [
+        "creator/lala/5885513296328430102"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "588812754207182502",
+      "name": "Goodmauii 古茂宜咖啡 台北站前店",
+      "address": "臺北市大同區建明里華陰街69號1樓",
+      "latitude": 25.049638,
+      "longitude": 121.518207,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/588812754207182502",
+      "mapPlaceIds": [
+        "creator/lala/588812754207182502"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "5895780768888079129",
+      "name": "鼎泰豐 101店",
+      "address": "臺北市信義區西村里市府路45號B1",
+      "latitude": 25.033337,
+      "longitude": 121.56466,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DdNs2StIK_R",
+          "text": "我的妈呀鼎泰丰简直太好吃？！",
+          "date": "2026-09-13",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "savvy/apple_maps/H2710I3F996BBB24D53",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F996BBB24D53"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "鼎泰豐 101店",
+          "address": "台北市信義區市府路45號B1",
+          "latitude": 25.0333371,
+          "longitude": 121.5646596
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F996BBB24D53"
+        }
+      ]
+    },
+    {
+      "cid": "5914466972358801019",
+      "name": "一心餃子牛肉麵專賣店",
+      "address": "臺北市北投區大同里大同街43號",
+      "latitude": 25.133233,
+      "longitude": 121.498795,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/8383391929",
+      "mapPlaceIds": [
+        "poi/node/8383391929"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "一心餃子牛肉麵專賣店",
+          "address": "台北市北投區",
+          "latitude": 25.1332264,
+          "longitude": 121.4987475
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6058254244915304192",
+      "name": "七堵家傳營養三明治",
+      "address": "基隆市七堵區正光里南興路28號",
+      "latitude": 25.097424,
+      "longitude": 121.714428,
+      "city": "基隆市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6058254244915304192",
+      "mapPlaceIds": [
+        "creator/lala/6058254244915304192"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6079498572210272390",
+      "name": "waku waku pasta",
+      "address": "臺北市大同區光能里赤峰街8巷4號",
+      "latitude": 25.053836,
+      "longitude": 121.519129,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6079498572210272390",
+      "mapPlaceIds": [
+        "creator/lala/6079498572210272390"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6174552594486480178",
+      "name": "老眷村之張吳紀",
+      "address": "桃園市桃園區建國里桃鶯路117號",
+      "latitude": 24.987012,
+      "longitude": 121.318089,
+      "city": "桃園市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6174552594486480178",
+      "mapPlaceIds": [
+        "creator/lala/6174552594486480178"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6227887437760463946",
+      "name": "賴岡山羊肉",
+      "address": "新北市新店區建國里中正路244-4號1 樓",
+      "latitude": 24.973377,
+      "longitude": 121.539661,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6227887437760463946",
+      "mapPlaceIds": [
+        "creator/lala/6227887437760463946"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6322150133991570374",
+      "name": "憶龍米苔目",
+      "address": "基隆市安樂區慈仁里安一路188號",
+      "latitude": 25.132574,
+      "longitude": 121.732354,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6322150133991570374",
+      "mapPlaceIds": [
+        "creator/lala/6322150133991570374"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "636337644910689877",
+      "name": "山樂溫泉",
+      "address": "臺北市北投區中心里泉源路17號",
+      "latitude": 25.137875,
+      "longitude": 121.503922,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/636337644910689877",
+      "mapPlaceIds": [
+        "creator/lala/636337644910689877"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6364642939670777008",
+      "name": "Chubby Burger 恰彼漢堡",
+      "address": "臺北市信義區基隆路一段165號",
+      "latitude": 25.041738,
+      "longitude": 121.565262,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/12798825202",
+      "mapPlaceIds": [
+        "poi/node/12798825202"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "Chubby Burger",
+          "address": "台北市信義區",
+          "latitude": 25.0417095,
+          "longitude": 121.5652136
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6373818155247457926",
+      "name": "上善豆家 復興店",
+      "address": "臺北市大安區復興南路一段107巷16號",
+      "latitude": 25.043482,
+      "longitude": 121.545194,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6373818155247457926",
+      "mapPlaceIds": [
+        "creator/lala/6373818155247457926"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6437874030726077853",
+      "name": "金山客家小館 創始店",
+      "address": "臺北市松山區新聚里南京東路五段250巷2弄5號1樓",
+      "latitude": 25.050776,
+      "longitude": 121.566401,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2656074195",
+      "mapPlaceIds": [
+        "poi/node/2656074195"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "金山客家小館",
+          "address": "台北市松山區 · 南京東路五段250巷2弄",
+          "latitude": 25.050811,
+          "longitude": 121.5664089
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6445711715801714111",
+      "name": "飯糰霸",
+      "address": "臺北市中正區黎明里許昌街2號",
+      "latitude": 25.045433,
+      "longitude": 121.517089,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2782015673",
+      "mapPlaceIds": [
+        "poi/node/2782015673"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "廣東粥飯糰霸",
+          "address": "台北市中正區許昌街 2 號",
+          "latitude": 25.0453999,
+          "longitude": 121.517105
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6446975018571545130",
+      "name": "天一香肉焿順",
+      "address": "基隆市仁愛區玉田里仁三路27-1號",
+      "latitude": 25.128286,
+      "longitude": 121.743199,
+      "city": "基隆市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6446975018571545130",
+      "mapPlaceIds": [
+        "creator/lala/6446975018571545130"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "645314151261077024",
+      "name": "OriginBAR 源",
+      "address": "臺北市松山區東勢里南京東路四段133巷5弄31號",
+      "latitude": 25.052066,
+      "longitude": 121.556376,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/12517900419",
+      "mapPlaceIds": [
+        "poi/node/12517900419"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "OriginBAR 源",
+          "address": "台北市松山區",
+          "latitude": 25.0521192,
+          "longitude": 121.5563077
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6467416475833384992",
+      "name": "麻辣天后炒香鍋-大安師大店",
+      "address": "臺北市大安區龍泉里師大路59巷5號",
+      "latitude": 25.024081,
+      "longitude": 121.528918,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/way/592159235",
+      "mapPlaceIds": [
+        "poi/way/592159235"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "麻辣天后",
+          "address": "台北市大安區",
+          "latitude": 25.02402305,
+          "longitude": 121.52886955
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6571957059502450655",
+      "name": "基隆廟口 12號攤乾麵餛飩湯排骨麵",
+      "address": "基隆市仁愛區仁三路",
+      "latitude": 25.128601,
+      "longitude": 121.742973,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6571957059502450655",
+      "mapPlaceIds": [
+        "creator/lala/6571957059502450655"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6620514278128053048",
+      "name": "陳季炸雞 北投店",
+      "address": "臺北市北投區溫泉里公舘路5號",
+      "latitude": 25.133376,
+      "longitude": 121.502549,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "陳季炸雞 北投店",
+          "address": "臺北市北投區溫泉里公舘路5號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Df1xHLDIHYU",
+          "text": "一路吃到北投了~~\n陈季的甜不辣和鱿鱼都好好吃，很有咬劲\n鸡腿更是很香很嫩啊！\n旁边的红茶店大杯的真的巨大一杯…\n感觉只有这种大杯符合我大杯的标准哈哈哈",
+          "date": "2026-11-17",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/7138715790",
+      "mapPlaceIds": [
+        "poi/node/7138715790"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "陳季炸雞",
+          "address": "台北市北投區",
+          "latitude": 25.1333854,
+          "longitude": 121.5025644
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6635082117113889489",
+      "name": "SIMPLE KAFFA興波咖啡 新光三越Diamond Towers",
+      "address": "臺北市大安區忠孝東路三段268號",
+      "latitude": 25.041437,
+      "longitude": 121.542139,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "SIMPLE KAFFA興波咖啡 新光三越Diamond Towers",
+          "address": "臺北市大安區忠孝東路三段268號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Ded4XFrIAvP",
+          "text": "在忠孝復興附近喝到两家超不错的咖啡▓\n第一家：VWI by CHADWANG\n（貌似还是不限时咖啡，可以坐床边办公学习）\n第二家：SIMPLE KAFFA興波咖啡",
+          "date": "2026-10-14",
+          "author": "zeke_6973"
+        },
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Ded5YWfoD_B",
+          "text": "XD，而且有时候我喝咖啡会很容易想上厕所，第二家正好就在新光三越里面，上二楼就有很豪华的厕所🤣",
+          "date": "2026-10-14",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/6635082117113889489",
+      "mapPlaceIds": [
+        "creator/lala/6635082117113889489"
+      ],
+      "isNew": true,
+      "matchMethod": "reviewed_distinct_place",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6697520844597218110",
+      "name": "亞太三温暖",
+      "address": "臺北市松山區中正里南京東路三段337號15樓",
+      "latitude": 25.052032,
+      "longitude": 121.548106,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6697520844597218110",
+      "mapPlaceIds": [
+        "creator/lala/6697520844597218110"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6792061407002984794",
+      "name": "香滿園",
+      "address": "臺北市大同區雙連里萬全街8巷",
+      "latitude": 25.057851,
+      "longitude": 121.520489,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/8629125664",
+      "mapPlaceIds": [
+        "poi/node/8629125664"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "香滿園",
+          "address": "台北市大同區萬全街8巷",
+          "latitude": 25.0578822,
+          "longitude": 121.5205128
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "6809564890275771613",
+      "name": "江牛樓",
+      "address": "臺北市大同區永樂里民樂街6號",
+      "latitude": 25.055711,
+      "longitude": 121.510818,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F98C5990AE24",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C5990AE24"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "江牛樓",
+          "address": "台北市大同區民樂街6號",
+          "latitude": 25.0557045,
+          "longitude": 121.5107774
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C5990AE24"
+        }
+      ]
+    },
+    {
+      "cid": "6810767205053463252",
+      "name": "士林官邸公園",
+      "address": "臺北市士林區福林里中山北路五段460巷4號",
+      "latitude": 25.091379,
+      "longitude": 121.529164,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F9A3ECA68E06",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F9A3ECA68E06"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "士林官邸公園",
+          "address": "台北市士林區福林路60號",
+          "latitude": 25.0913793,
+          "longitude": 121.5291642
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F9A3ECA68E06"
+        }
+      ]
+    },
+    {
+      "cid": "694526374424343264",
+      "name": "台北中山阿城鵝肉吉林總店",
+      "address": "臺北市中山區吉林路105號",
+      "latitude": 25.056406,
+      "longitude": 121.530362,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/694526374424343264",
+      "mapPlaceIds": [
+        "creator/lala/694526374424343264"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "6974140397272107163",
+      "name": "逸居文旅 Stay Easy Inn",
+      "address": "臺南市中西區五條港里慈聖街71-1號",
+      "latitude": 22.998945,
+      "longitude": 120.200067,
+      "city": "台南市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/6974140397272107163",
+      "mapPlaceIds": [
+        "creator/lala/6974140397272107163"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7107734959072994922",
+      "name": "拾梯甜日式舒芙蕾_板橋一店(民權)",
+      "address": "新北市板橋區民安里民權路202巷10弄2號",
+      "latitude": 25.015102,
+      "longitude": 121.460481,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7107734959072994922",
+      "mapPlaceIds": [
+        "creator/lala/7107734959072994922"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7219110971842039446",
+      "name": "兩利餛飩大王",
+      "address": "基隆市仁愛區文昌里忠三路56號",
+      "latitude": 25.129675,
+      "longitude": 121.738728,
+      "city": "基隆市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7219110971842039446",
+      "mapPlaceIds": [
+        "creator/lala/7219110971842039446"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7390618790061298717",
+      "name": "五燈獎豬腳飯",
+      "address": "新北市三重區正德里正義北路38號",
+      "latitude": 25.063464,
+      "longitude": 121.497349,
+      "city": "新北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "五燈獎豬腳飯",
+          "address": "新北市三重區正德里正義北路38號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7390618790061298717",
+      "mapPlaceIds": [
+        "creator/lala/7390618790061298717"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "741289087091454239",
+      "name": "小紅莓石頭火鍋城",
+      "address": "臺北市松山區安平里寶清街24號1樓",
+      "latitude": 25.051793,
+      "longitude": 121.568053,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F98C58073A92",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C58073A92"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "小紅莓石頭火鍋",
+          "address": "台北市松山區寶清街24號1樓",
+          "latitude": 25.051788791015632,
+          "longitude": 121.56804724804687
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C58073A92"
+        }
+      ]
+    },
+    {
+      "cid": "7461393670493520752",
+      "name": "春山茶水舖",
+      "address": "臺北市大安區臥龍里復興南路二段323號",
+      "latitude": 25.023897,
+      "longitude": 121.543567,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "春山茶水舖",
+          "address": "臺北市大安區臥龍里復興南路二段323號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/Df44ByygWy1",
+          "text": "春山茶水不错喝\n就是记得点微微微微微微糖",
+          "date": "2026-11-18",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/3315810369",
+      "mapPlaceIds": [
+        "poi/node/3315810369"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "春山茶水舖",
+          "address": "台北市大安區",
+          "latitude": 25.0239402,
+          "longitude": 121.5435946
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "7491741949320542812",
+      "name": "小明拔絲地瓜",
+      "address": "臺北市松山區慈祐里饒河街33號",
+      "latitude": 25.050212,
+      "longitude": 121.572324,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/7175344587",
+      "mapPlaceIds": [
+        "poi/node/7175344587"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "小明拔絲地瓜",
+          "address": "台北市松山區 · 塔悠路",
+          "latitude": 25.05015,
+          "longitude": 121.5723735
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "7504761092682970833",
+      "name": "讓麵煮一會 雞白湯らーめん",
+      "address": "新北市新莊區榮和里中華路一段45巷1號停車場隔壁",
+      "latitude": 25.038104,
+      "longitude": 121.451911,
+      "city": "新北市",
+      "category": "拉麵",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7504761092682970833",
+      "mapPlaceIds": [
+        "creator/lala/7504761092682970833"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7515531210324071403",
+      "name": "二空眷村小馆",
+      "address": "臺北市松山區中華里敦化北路155巷14號",
+      "latitude": 25.05437,
+      "longitude": 121.551069,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7515531210324071403",
+      "mapPlaceIds": [
+        "creator/lala/7515531210324071403"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "752700156648663661",
+      "name": "山西刀削番茄牛肉麵",
+      "address": "臺北市北投區長安里光明路142-1號",
+      "latitude": 25.134258,
+      "longitude": 121.502428,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/752700156648663661",
+      "mapPlaceIds": [
+        "creator/lala/752700156648663661"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7555986921261684919",
+      "name": "連珍糕餅店",
+      "address": "基隆市仁愛區博愛里愛二路42號",
+      "latitude": 25.128714,
+      "longitude": 121.741914,
+      "city": "基隆市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "連珍糕餅店",
+          "address": "基隆市仁愛區博愛里愛二路42號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DgKLjbSoPua",
+          "text": "花生泡泡冰和芋泥球超好吃",
+          "date": "2026-11-25",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/7555986921261684919",
+      "mapPlaceIds": [
+        "creator/lala/7555986921261684919"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7597352538964806834",
+      "name": "森千雞飯",
+      "address": "臺北市文山區木柵路一段175號",
+      "latitude": 24.987765,
+      "longitude": 121.550901,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7597352538964806834",
+      "mapPlaceIds": [
+        "creator/lala/7597352538964806834"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7747765916332952201",
+      "name": "DOUBLE SINGLE",
+      "address": "臺北市大同區建泰里南京西路18巷26-1號號1",
+      "latitude": 25.050793,
+      "longitude": 121.520103,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7747765916332952201",
+      "mapPlaceIds": [
+        "creator/lala/7747765916332952201"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7754962606621351201",
+      "name": "烏弄原生茶飲(台北公館店)",
+      "address": "臺北市中正區水源里羅斯福路四段90巷2-1號",
+      "latitude": 25.013848,
+      "longitude": 121.534696,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/3867798197",
+      "mapPlaceIds": [
+        "poi/node/3867798197"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "烏弄原茶",
+          "address": "台北市中正區羅斯福路四段90巷 2之1 號",
+          "latitude": 25.013831,
+          "longitude": 121.5347003
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "7755657557883370876",
+      "name": "Patty Addy Burger",
+      "address": "臺北市大安區光武里大安路一段51巷23號",
+      "latitude": 25.043218,
+      "longitude": 121.547296,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "Patty Addy Burger",
+          "address": "臺北市大安區光武里大安路一段51巷23號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/De0t5sdIDI-",
+          "text": "听说是台北T0级别汉堡？\n确实好吃，下次还吃\n因为快关门所以外带，内用应该更美味🤤",
+          "date": "2026-10-23",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/7755657557883370876",
+      "mapPlaceIds": [
+        "creator/lala/7755657557883370876"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7877383838689186286",
+      "name": "自己人",
+      "address": "臺北市大安區浦城街13巷4號左",
+      "latitude": 25.02442,
+      "longitude": 121.527205,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7877383838689186286",
+      "mapPlaceIds": [
+        "creator/lala/7877383838689186286"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "7998446367725342638",
+      "name": "裕成水果行",
+      "address": "臺南市中西區南美里民生路一段122號",
+      "latitude": 22.994014,
+      "longitude": 120.200999,
+      "city": "台南市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/7998446367725342638",
+      "mapPlaceIds": [
+        "creator/lala/7998446367725342638"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8072098401472042803",
+      "name": "壹等品霸王豬腳-中壢中央店",
+      "address": "桃園市中壢區永興里中央西路一段143號",
+      "latitude": 24.958023,
+      "longitude": 121.219436,
+      "city": "桃園市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8072098401472042803",
+      "mapPlaceIds": [
+        "creator/lala/8072098401472042803"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8239175376240301640",
+      "name": "渡船頭海之冰",
+      "address": "高雄市鼓山區延平里濱海一路76號",
+      "latitude": 22.61989,
+      "longitude": 120.271063,
+      "city": "高雄市",
+      "category": "甜點・冰品",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "渡船頭海之冰",
+          "address": "高雄市鼓山區延平里濱海一路76號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8239175376240301640",
+      "mapPlaceIds": [
+        "creator/lala/8239175376240301640"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8269193100287278751",
+      "name": "百合麵包園 (大安門市)",
+      "address": "臺北市大安區龍雲里大安路二段152號",
+      "latitude": 25.02908,
+      "longitude": 121.545865,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8269193100287278751",
+      "mapPlaceIds": [
+        "creator/lala/8269193100287278751"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8285193402708631225",
+      "name": "金孫韓廚 義大利麵 (中山店)",
+      "address": "臺北市中山區民安里中山北路二段26巷15-1號",
+      "latitude": 25.054048,
+      "longitude": 121.521453,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "金孫韓廚 義大利麵 (中山店)",
+          "address": "臺北市中山區民安里中山北路二段26巷15-1號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8285193402708631225",
+      "mapPlaceIds": [
+        "creator/lala/8285193402708631225"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "829911751530089814",
+      "name": "烏弄原生茶飲 信義吳興店",
+      "address": "臺北市信義區吳興街35號",
+      "latitude": 25.031415,
+      "longitude": 121.559943,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "poi/node/3700536513",
+      "mapPlaceIds": [
+        "poi/node/3700536513"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "烏弄",
+          "address": "台北市信義區吳興街 35 號",
+          "latitude": 25.0313361,
+          "longitude": 121.5600033
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "8369438642297747883",
+      "name": "池音 雞白湯ラーメン",
+      "address": "臺北市大同區赤峰街23巷25號",
+      "latitude": 25.053824,
+      "longitude": 121.520215,
+      "city": "台北市",
+      "category": "拉麵",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "池音 雞白湯ラーメン",
+          "address": "臺北市大同區赤峰街23巷25號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DeMQ86gAfSi",
+          "text": "在台北吃过最好吃的日式拉面…\n只有这种水平的店有资格让我排队30分钟啊！",
+          "date": "2026-10-07",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/8369438642297747883",
+      "mapPlaceIds": [
+        "creator/lala/8369438642297747883"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8403730050297878298",
+      "name": "金門金山煙燻鵝肉",
+      "address": "金門縣金城鎮民族路244號",
+      "latitude": 24.430359,
+      "longitude": 118.315578,
+      "city": "金門縣",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8403730050297878298",
+      "mapPlaceIds": [
+        "creator/lala/8403730050297878298"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8473919206155098799",
+      "name": "八鐵廣島燒專賣店",
+      "address": "1樓, No. 12號撫順街中山區臺北市10491",
+      "latitude": 25.063547,
+      "longitude": 121.520951,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8473919206155098799",
+      "mapPlaceIds": [
+        "creator/lala/8473919206155098799"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8494257311789252890",
+      "name": "waku waku kitchen",
+      "address": "臺北市大同區承德路一段87號",
+      "latitude": 25.052627,
+      "longitude": 121.517705,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "waku waku kitchen",
+          "address": "臺北市大同區承德路一段87號"
+        }
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfO1a65ICE6",
+          "text": "中山这家pizza超好吃！\n点的是辣猪肉凤梨的口味\npizza是薄底的，中心铺了超多起司\n我猜是窑烤的，边缘非常酥脆有嚼劲\n上餐是不切的状态，会给一把大剪刀自己剪✂️\n其他的餐点我觉得中规中矩\n不过这杯草莓奶盖抹茶还不错喝😋",
+          "date": "2026-11-02",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "creator/lala/8494257311789252890",
+      "mapPlaceIds": [
+        "creator/lala/8494257311789252890"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8647963669744979520",
+      "name": "三合麵",
+      "address": "臺北市萬華區壽德里長泰街39號",
+      "latitude": 25.023243,
+      "longitude": 121.500474,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8647963669744979520",
+      "mapPlaceIds": [
+        "creator/lala/8647963669744979520"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8650884244354020940",
+      "name": "初炸小食店",
+      "address": "臺北市大安區正聲里光復南路308巷57號1 樓",
+      "latitude": 25.038872,
+      "longitude": 121.555316,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F98C58256269",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C58256269"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "初炸小食店",
+          "address": "台北市大安區光復南路308巷57號",
+          "latitude": 25.0388373,
+          "longitude": 121.5553113
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C58256269"
+        }
+      ]
+    },
+    {
+      "cid": "8695316315518563940",
+      "name": "穗月 手工脆皮蛋餅｜寵物友善｜咖啡",
+      "address": "臺北市中山區中庄里民生東路二段115巷1號",
+      "latitude": 25.058204,
+      "longitude": 121.53179,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8695316315518563940",
+      "mapPlaceIds": [
+        "creator/lala/8695316315518563940"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8713191030362838731",
+      "name": "芋香園",
+      "address": "臺北市大安區光武里大安路一段52巷20號",
+      "latitude": 25.04298,
+      "longitude": 121.545252,
+      "city": "台北市",
+      "category": "甜點・冰品",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/5698897031",
+      "mapPlaceIds": [
+        "poi/node/5698897031"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "芋香園",
+          "address": "台北市大安區大安路一段52巷 20 號",
+          "latitude": 25.0429406,
+          "longitude": 121.5452068
+        },
+        {
+          "name": "芋香園",
+          "address": "台北市大安區大安路一段52巷20號",
+          "latitude": 25.0429761,
+          "longitude": 121.5452463
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C28F5A93B"
+        }
+      ]
+    },
+    {
+      "cid": "8727552844200829948",
+      "name": "李氏咖啡",
+      "address": "No. 7號, Alley 29, Lane 205, Section 4, Zhongxiao E Rd, 大安區臺北市106",
+      "latitude": 25.04319,
+      "longitude": 121.552353,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8727552844200829948",
+      "mapPlaceIds": [
+        "creator/lala/8727552844200829948"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8764520433184135251",
+      "name": "楓悅烘焙坊",
+      "address": "臺北市中正區南門里廣州街10-1號",
+      "latitude": 25.035523,
+      "longitude": 121.508055,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DfZh9C3AWmz",
+          "text": "开团秒跟中…\n今天下课来小南门吃饭意外发现一家小面包店爆满\n晚上7:00之后居然还65折！\n（而且我刚刚好7:05到店门口）\n直接爽拿2个咸味面包+布丁\n甜味抢的比较快，没有我喜欢的口味了\n居然只要 95 台币？！▓\n而且味道还不错吃，难怪那么多阿公阿嬷在抢购",
+          "date": "2026-11-06",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/11247787061",
+      "mapPlaceIds": [
+        "poi/node/11247787061"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "楓悅烘焙坊",
+          "address": "台北市中正區廣州街 10-1 號",
+          "latitude": 25.0354839,
+          "longitude": 121.5081194
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "8824417611845292320",
+      "name": "名家手工潮州餛飩麵(自強店)",
+      "address": "高雄市苓雅區田西里自強三路159號",
+      "latitude": 22.617482,
+      "longitude": 120.298226,
+      "city": "高雄市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8824417611845292320",
+      "mapPlaceIds": [
+        "creator/lala/8824417611845292320"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8878976389717239684",
+      "name": "WonderREX 環球板橋車站店",
+      "address": "新北市板橋區縣民大道二段7號B1F",
+      "latitude": 25.014155,
+      "longitude": 121.463626,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8878976389717239684",
+      "mapPlaceIds": [
+        "creator/lala/8878976389717239684"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8884234200884718418",
+      "name": "肥貓不餓",
+      "address": "新北市新店區大同里二十張路25巷4號",
+      "latitude": 24.981963,
+      "longitude": 121.538729,
+      "city": "新北市",
+      "category": "其他美食",
+      "lists": [
+        "visited",
+        "wish"
+      ],
+      "sourceVariants": [
+        {
+          "name": "肥貓不餓",
+          "address": "新北市新店區大同里二十張路25巷4號"
+        }
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8884234200884718418",
+      "mapPlaceIds": [
+        "creator/lala/8884234200884718418"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8901177413190129050",
+      "name": "老眷村餡餅粥",
+      "address": "桃園市桃園區會稽里大興路299號",
+      "latitude": 25.01616,
+      "longitude": 121.315464,
+      "city": "桃園市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/8901177413190129050",
+      "mapPlaceIds": [
+        "creator/lala/8901177413190129050"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "8945578524530423166",
+      "name": "UNCLE-K 排骨火鍋店",
+      "address": "臺北市中山區江寧里合江街188巷1號",
+      "latitude": 25.061516,
+      "longitude": 121.539164,
+      "city": "台北市",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/13973401601",
+      "mapPlaceIds": [
+        "poi/node/13973401601"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "UNCLE-K排骨火鍋",
+          "address": "台北市中山區合江街188巷 1號",
+          "latitude": 25.0615182,
+          "longitude": 121.5391289
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "8959707536544169433",
+      "name": "BREW & KITCHEN",
+      "address": "臺北市中山區民安里中山北路二段16巷6號",
+      "latitude": 25.053046,
+      "longitude": 121.521784,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "savvy/apple_maps/H2710I3F98C57853074",
+      "mapPlaceIds": [
+        "savvy/apple_maps/H2710I3F98C57853074"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "BREW & KITCHEN",
+          "address": "台北市中山區中山北路二段16巷6號",
+          "latitude": 25.053042083007817,
+          "longitude": 121.52177967089844
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "apple_maps",
+          "id": "H2710I3F98C57853074"
+        }
+      ]
+    },
+    {
+      "cid": "9239286543964647648",
+      "name": "老家餡餅 北投店",
+      "address": "臺北市北投區中央里新市街47號",
+      "latitude": 25.132403,
+      "longitude": 121.50214,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/8383391898",
+      "mapPlaceIds": [
+        "poi/node/8383391898"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "老家餡餅北投店",
+          "address": "台北市北投區",
+          "latitude": 25.1318757,
+          "longitude": 121.5019085
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "9335746091659585931",
+      "name": "白家通化 十全排骨 滷肉飯 大安區小吃 通化街小吃",
+      "address": "臺北市大安區通安里通化街62號",
+      "latitude": 25.030525,
+      "longitude": 121.554125,
+      "city": "台北市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/De_vhjiAVUA",
+          "text": "老饕是什么意思？",
+          "date": "2026-10-27",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/4837986467",
+      "mapPlaceIds": [
+        "poi/node/4837986467"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "十全排骨",
+          "address": "台北市大安區通化街 62 號",
+          "latitude": 25.0303843,
+          "longitude": 121.554144
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "9399073434669257258",
+      "name": "Mikkeller Taipei 米凱樂啤酒吧",
+      "address": "臺北市大同區永樂里南京西路241號",
+      "latitude": 25.053654,
+      "longitude": 121.510155,
+      "city": "台北市",
+      "category": "飲料・咖啡・酒",
+      "lists": [
+        "visited"
+      ],
+      "posts": [
+        {
+          "url": "https://www.threads.com/@zeke_6973/post/DdgT__eILNF",
+          "text": "",
+          "date": "2026-09-20",
+          "author": "zeke_6973"
+        }
+      ],
+      "placeId": "poi/node/4384259204",
+      "mapPlaceIds": [
+        "poi/node/4384259204"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "米凱樂啤酒吧",
+          "address": "台北市大同區南京西路 241 號",
+          "latitude": 25.0536758,
+          "longitude": 121.5101463
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "9401400014447048756",
+      "name": "自由廣場",
+      "address": "臺北市中正區東門里中山南路21號",
+      "latitude": 25.03671,
+      "longitude": 121.517387,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/way/1053359244",
+      "mapPlaceIds": [
+        "poi/way/1053359244"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "自由廣場",
+          "address": "台北市中正區",
+          "latitude": 25.03616045,
+          "longitude": 121.5187198
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "9511623134232537728",
+      "name": "REALHOMIEBREAKFAST （景興店）",
+      "address": "臺北市文山區景東里景興路111號",
+      "latitude": 24.994952,
+      "longitude": 121.544836,
+      "city": "台北市",
+      "category": "早午餐・漢堡・麵包",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2949195367",
+      "mapPlaceIds": [
+        "poi/node/2949195367"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "Real Homie Breakfast",
+          "address": "台北市文山區景興路 111 號",
+          "latitude": 24.9949105,
+          "longitude": 121.5448245
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "9597654951644927654",
+      "name": "木子樑室 台南總站",
+      "address": "臺南市中西區藥王里民族路三段87號",
+      "latitude": 22.998349,
+      "longitude": 120.197001,
+      "city": "台南市",
+      "category": "其他美食",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/9597654951644927654",
+      "mapPlaceIds": [
+        "creator/lala/9597654951644927654"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "9602439104561302655",
+      "name": "蟾蜍山聚落文化中心 煥民新村",
+      "address": "No. 12號, Alley 66, Lane 119, Section 4, Luosifu Rd, 學府里大安區臺北市106",
+      "latitude": 25.009486,
+      "longitude": 121.539384,
+      "city": "台北市",
+      "category": "景點・生活",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/9602439104561302655",
+      "mapPlaceIds": [
+        "creator/lala/9602439104561302655"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "9694377927277151141",
+      "name": "溱湘小吃店",
+      "address": "基隆市中正區砂子里調和街1巷2號",
+      "latitude": 25.139446,
+      "longitude": 121.796429,
+      "city": "基隆市",
+      "category": "台式小吃・飯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/9694377927277151141",
+      "mapPlaceIds": [
+        "creator/lala/9694377927277151141"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "9803231183570564065",
+      "name": "Zipang curry kitchen",
+      "address": "臺北市中山區中山里中山北路二段59巷4號1樓",
+      "latitude": 25.055848,
+      "longitude": 121.523352,
+      "city": "台北市",
+      "category": "異國料理",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/9803231183570564065",
+      "mapPlaceIds": [
+        "creator/lala/9803231183570564065"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "9884642074681749167",
+      "name": "醇涎坊古早味鍋燒意麵",
+      "address": "臺南市中西區南廠里保安路53號",
+      "latitude": 22.990242,
+      "longitude": 120.196417,
+      "city": "台南市",
+      "category": "麵食・水餃",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/9884642074681749167",
+      "mapPlaceIds": [
+        "creator/lala/9884642074681749167"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    },
+    {
+      "cid": "9886338519292144785",
+      "name": "景美上海生煎包",
+      "address": "臺北市文山區景行里景文街55號",
+      "latitude": 24.991592,
+      "longitude": 121.541465,
+      "city": "台北市",
+      "category": "麵食・水餃",
+      "lists": [
+        "visited"
+      ],
+      "posts": [],
+      "placeId": "poi/node/4007798813",
+      "mapPlaceIds": [
+        "poi/node/4007798813"
+      ],
+      "isNew": false,
+      "matchMethod": "name_address_coordinates",
+      "matchedPlaces": [
+        {
+          "name": "景美上海生煎包",
+          "address": "台北市文山區景文街55號",
+          "latitude": 24.991592,
+          "longitude": 121.5414645
+        }
+      ],
+      "aliases": [
+        {
+          "provider": "google_places",
+          "id": "ChIJyyBw3gCqQjQRkWyr04BUM4k"
+        }
+      ]
+    },
+    {
+      "cid": "9940388562666567484",
+      "name": "牛店精燉牛肉麵",
+      "address": "臺北市萬華區西門里昆明街91號",
+      "latitude": 25.042553,
+      "longitude": 121.504781,
+      "city": "台北市",
+      "category": "牛肉麵・牛肉湯",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "poi/node/2918997923",
+      "mapPlaceIds": [
+        "poi/node/2918997923"
+      ],
+      "isNew": false,
+      "matchMethod": "reviewed_branch",
+      "matchedPlaces": [
+        {
+          "name": "牛店",
+          "address": "台北市萬華區昆明街 91 號",
+          "latitude": 25.0425721,
+          "longitude": 121.5048228
+        }
+      ],
+      "aliases": []
+    },
+    {
+      "cid": "9963243765584784670",
+      "name": "牛大福｜屏東潮州 全牛料理、沙茶火鍋",
+      "address": "屏東縣潮州鎮三和里太平路165號",
+      "latitude": 22.554947,
+      "longitude": 120.537276,
+      "city": "屏東縣",
+      "category": "燒烤・鍋物",
+      "lists": [
+        "wish"
+      ],
+      "posts": [],
+      "placeId": "creator/lala/9963243765584784670",
+      "mapPlaceIds": [
+        "creator/lala/9963243765584784670"
+      ],
+      "isNew": true,
+      "matchMethod": "source_cid",
+      "matchedPlaces": [],
+      "aliases": []
+    }
+  ],
+  "pending": [],
+  "inputSHA256": {
+    "data": "5090485adea874ae4abbc65f419f58ebc64246be01fd22d5774598f575abf158",
+    "posts": "00cb2857220e866009351bb81a3f9d6d26323d13310bca6cd2a3d4f29d82453b",
+    "city": "3c30cb0b4abdc0a478ecb309dbd2951279d3d1929122b6a75b9e5198aec01648",
+    "existing": "8b5660ff7e997cd53df18c187a21223e822d83c72113829d259e35a3dfb89e1e",
+    "projection": "44ff474e4064783b2f5ef5bd534d3dfb9498823535c3ee59ed410f807828378a",
+    "reviewed": "f463e5330649ce053e5225ac4bd300a3fd3a3d6fdc5dc6e44d2ceaab545f8abf"
+  }
+}

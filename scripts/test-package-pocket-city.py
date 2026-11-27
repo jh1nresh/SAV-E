@@ -162,18 +162,29 @@ class PocketCityPackageTests(unittest.TestCase):
                     self.assertEqual(data.stat().st_ino, inode)
                     self.assertFalse((cache / 'staging').exists())
                     self.assertEqual(list(output.parent.iterdir()), [output])
+                creator = web.parent / 'CreatorLists/lala/CreatorPlaceSources.json'
+                creator.parent.mkdir(parents=True)
+                creator.write_text('{"schemaVersion":1,"fixture":"default creator"}')
+                with patch.dict(os.environ, {'CONFIGURATION': 'Debug',
+                                             'SAVVY_LOCAL_CREATOR_SOURCES': ''}):
+                    pkg.package(output)
+                    pkg.package(output)
+                    self.assertEqual((output / 'CreatorPlaceSources.json').read_bytes(), creator.read_bytes())
                 snapshot = root / 'verified-sources.json'
                 snapshot.write_text('{"schemaVersion":1}')
                 local = {'SAVVY_LOCAL_POCKET_CITY_SOURCES': str(snapshot),
-                         'SAVVY_LOCAL_NATIVE_SOURCES': str(snapshot)}
+                         'SAVVY_LOCAL_NATIVE_SOURCES': str(snapshot),
+                         'SAVVY_LOCAL_CREATOR_SOURCES': str(snapshot)}
                 with patch.dict(os.environ, {**local, 'CONFIGURATION': 'Debug'}):
                     pkg.package(output)
                     pkg.package(output)
                     self.assertEqual((output / 'savvy-place-sources.json').read_bytes(), snapshot.read_bytes())
+                    self.assertEqual((output / 'CreatorPlaceSources.json').read_bytes(), snapshot.read_bytes())
                     self.assertEqual((output.parent / 'TaipeiPublicSourceSnapshot.json').read_bytes(), snapshot.read_bytes())
                 with patch.dict(os.environ, {**local, 'CONFIGURATION': 'Release'}):
                     pkg.package(output)
                     self.assertFalse((output / 'savvy-place-sources.json').exists())
+                    self.assertFalse((output / 'CreatorPlaceSources.json').exists())
                     self.assertFalse((output.parent / 'TaipeiPublicSourceSnapshot.json').exists())
                 data.unlink()
                 pkg.package(output)
