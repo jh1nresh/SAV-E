@@ -1,0 +1,844 @@
+{
+  "duplicateAddressVariants": {
+    "10316514710429371839": [
+      "臺北市大安區龍生里和平東路二段133號",
+      "No. 133號, Section 2, Heping E Rd, 龍生里大安區臺北市106"
+    ],
+    "2439518397661521961": [
+      "臺北市大同區國慶里民族西路296號",
+      "No. 296號, Minzu W Rd, 國慶里大同區臺北市103"
+    ]
+  },
+  "places": {
+    "27587628862279662": {
+      "sourceName": "天下三絕麵食館",
+      "sourceAddress": "臺北市大安區仁愛里仁愛路四段27巷3號",
+      "placeId": "poi/node/9280713217",
+      "targetName": "天下三絕",
+      "targetAddress": "台北市大安區仁愛路四段27巷 3 號",
+      "evidence": "Curator branch and existing map share exact street, lane and door number, compatible shop name and coordinates within 85m; preserves full unit, no match by brand alone. Other nearby candidate has no door number."
+    },
+    "9335746091659585931": {
+      "sourceName": "白家通化 十全排骨 滷肉飯 大安區小吃 通化街小吃",
+      "sourceAddress": "臺北市大安區通安里通化街62號",
+      "placeId": "poi/node/4837986467",
+      "targetName": "十全排骨",
+      "targetAddress": "台北市大安區通化街 62 號",
+      "evidence": "Curator branch and existing map share exact street, lane and door number, compatible shop name and coordinates within 85m; preserves full unit, no match by brand alone. Other nearby candidate has no door number."
+    },
+    "9399073434669257258": {
+      "sourceName": "Mikkeller Taipei 米凱樂啤酒吧",
+      "sourceAddress": "臺北市大同區永樂里南京西路241號",
+      "placeId": "poi/node/4384259204",
+      "targetName": "米凱樂啤酒吧",
+      "targetAddress": "台北市大同區南京西路 241 號",
+      "evidence": "Curator branch and existing map share exact street, lane and door number, compatible shop name and coordinates within 85m; preserves full unit, no match by brand alone. Other nearby candidate has no door number."
+    },
+    "10516715856781796735": {
+      "sourceName": "亞米亞米",
+      "sourceAddress": "臺北市士林區義信里基河路1號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "The candidate is 7-Eleven 新福慶門市, a different business at the same market entrance. Keep the curator CID for 亞米亞米; do not transfer convenience-store identity or photos.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/3136977851",
+          "targetName": "7-Eleven",
+          "targetAddress": "台北市士林區基河路 1 號"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/3136977851"
+      ]
+    },
+    "10531808296216389716": {
+      "sourceName": "牛霸小吃店",
+      "sourceAddress": "臺北市北投區溫泉里公舘路13號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/7138715792",
+      "targetName": "牛霸小吃店",
+      "targetAddress": "台北市北投區 · 公舘路",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/7138715792"
+      ]
+    },
+    "10836693710884008407": {
+      "sourceName": "五燈獎 台北永康店",
+      "sourceAddress": "臺北市大安區永康里永康街14巷3號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "inspection/A-190749180-00001-7",
+      "targetName": "五燈獎",
+      "targetAddress": "臺北市大安區永康街14巷3號1樓",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js"
+      ]
+    },
+    "11366981156611272927": {
+      "sourceName": "庄頭豆花担",
+      "sourceAddress": "臺北市松山區福成里市民大道四段73號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/5502965139",
+      "targetName": "庄頭豆花担",
+      "targetAddress": "市民大道四段 73 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/5502965139"
+      ]
+    },
+    "11432354196742184079": {
+      "sourceName": "家鄉碳烤香雞排 士林店",
+      "sourceAddress": "臺北市士林區義信里基河路1號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "The candidate is 7-Eleven 新福慶門市, not 家鄉碳烤香雞排. Different shop at shared market address; preserve own CID.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/3136977851",
+          "targetName": "7-Eleven",
+          "targetAddress": "台北市士林區基河路 1 號"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/3136977851"
+      ]
+    },
+    "1144883667007461288": {
+      "sourceName": "景美同一家牛排",
+      "sourceAddress": "臺北市文山區景美街",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "728小吃店 is a different named stall; a street-only address cannot identify 景美同一家牛排. Keep creator-listed stall separately, no invented door number.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/9669374739",
+          "targetName": "728小吃店",
+          "targetAddress": "台北市文山區景美街"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/9669374739"
+      ]
+    },
+    "11496941030989048276": {
+      "sourceName": "Starbucks星巴克 愿秀門市",
+      "sourceAddress": "1-2樓, No. 3號南港路二段南港區臺北市115",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/13911717992",
+      "targetName": "星巴克",
+      "targetAddress": "台北市南港區",
+      "evidence": "Current OSM tags explicitly identify Starbucks 愿秀門市, 9m from source. English/mixed address is 南港路二段3號1-2樓; do not generalize across Starbucks branches.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/13911717992"
+      ]
+    },
+    "11964059280160413592": {
+      "sourceName": "Sisinan Village Museum",
+      "sourceAddress": "臺北市信義區景新里松勤街50號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/way/330187862",
+      "targetName": "四四南村",
+      "targetAddress": "台北市信義區松勤街 50 號",
+      "evidence": "Sisinan Village Museum is the English listing for the preserved 四四南村/信義公民會館 museum site, exact 松勤街50號 and 19m apart. Taipei Xinyi District public page confirms the site identity.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://xydo.gov.taipei/News_Content.aspx?n=51D1E85EF9360CD6&s=0201A7D2F0B08B2F",
+        "https://hk.trip.com/travel-guide/attraction/taipei/sisinan-village-museum-22846545/",
+        "https://www.openstreetmap.org/way/330187862"
+      ]
+    },
+    "12167160044789304651": {
+      "sourceName": "金園排骨萬年店",
+      "sourceAddress": "臺北市萬華區西門里西寧南路70號B1",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/13460439801",
+      "targetName": "金園排骨萬年店",
+      "targetAddress": "台北市萬華區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/13460439801"
+      ]
+    },
+    "12923090827669382434": {
+      "sourceName": "烏弄原生茶飲 遼寧店",
+      "sourceAddress": "臺北市中山區遼寧街41號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/11493126149",
+      "targetName": "烏弄",
+      "targetAddress": "台北市中山區 · 遼寧街",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/11493126149"
+      ]
+    },
+    "13168123270271448781": {
+      "sourceName": "陽明山美軍宿舍群",
+      "sourceAddress": "臺北市士林區",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "The source is the 陽明山美軍宿舍群 area, not Cine Café or Starbucks. These tenants must not absorb the historic-area identity.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/7194706723",
+          "targetName": "Cine Café",
+          "targetAddress": "台北市士林區"
+        },
+        {
+          "placeId": "poi/node/7226694685",
+          "targetName": "星巴克",
+          "targetAddress": "台北市士林區"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/7194706723",
+        "https://www.openstreetmap.org/node/7226694685"
+      ]
+    },
+    "13467063495144831977": {
+      "sourceName": "吉峰香菇魯肉飯",
+      "sourceAddress": "臺北市松山區復源里八德路三段144號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/7169581033",
+      "targetName": "吉峰香菇魯肉飯",
+      "targetAddress": "台北市松山區 · 八德路三段",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/7169581033"
+      ]
+    },
+    "13565338943483935584": {
+      "sourceName": "阿輝伯蘿蔔絲餅",
+      "sourceAddress": "臺北市北投區中央里光明路72巷65號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/6408076686",
+      "targetName": "阿輝伯蘿蔔絲餅",
+      "targetAddress": "台北市北投區光明路72巷",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/6408076686"
+      ]
+    },
+    "14296853322543943552": {
+      "sourceName": "BURGER OUT",
+      "sourceAddress": "臺北市信義區新仁里忠孝東路四段553巷22弄2號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/10682899645",
+      "targetName": "Burger Out",
+      "targetAddress": "台北市信義區 · 忠孝東路四段553巷22弄｜松高後巷",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/10682899645"
+      ]
+    },
+    "14602401179918739271": {
+      "sourceName": "Mo-Mo-Paradise 台北復興牧場",
+      "sourceAddress": "臺北市中山區埤頭里復興南路一段42號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/6354698707",
+      "targetName": "Mo-Mo Paradise",
+      "targetAddress": "台北市中山區復興南路一段 44 號",
+      "evidence": "Official Mo-Mo branch directory confirms 復興南路一段42號1樓. Existing Mo-Mo node is 9m away and has stale 44號; retain the Mo-Mo ID, reject nearby 路易莎 even though its address is 42號.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.mo-mo.com.tw/",
+        "https://www.openstreetmap.org/node/6354698705",
+        "https://www.openstreetmap.org/node/6354698707"
+      ]
+    },
+    "1478576240692833592": {
+      "sourceName": "迷客夏 臺北忠孝復興店",
+      "sourceAddress": "1樓, No. 1號復興南路一段135巷大安區臺北市10666",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "OSM node name:en is Dreamers Coffee Roasters, at 135巷7號. Source is 迷客夏 at 135巷1號. Similar branch label 忠孝復興店 does not mean same brand.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/10297663909",
+          "targetName": "忠孝復興店",
+          "targetAddress": "台北市大安區復興南路一段135巷 7 號"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/10297663909"
+      ]
+    },
+    "15233513723385724813": {
+      "sourceName": "瓦城泰國料理 - 南港車站店",
+      "sourceAddress": "臺北市南港區新光里忠孝東路七段369號CITYLINK號C1棟8樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/7213752462",
+      "targetName": "瓦城泰國料理",
+      "targetAddress": "台北市南港區忠孝東路七段 369 號",
+      "evidence": "Current OSM branch=南港車站店, addr:floor=8 and C棟 at 忠孝東路七段369號, matching creator CITYLINK C1棟8樓.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/7213752462"
+      ]
+    },
+    "15346118089937632146": {
+      "sourceName": "龍都冰菓專業家",
+      "sourceAddress": "臺北市萬華區糖廍里和平西路三段192號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/9957526457",
+      "targetName": "龍都冰菓專業家",
+      "targetAddress": "台北市萬華區 · 和平西路三段",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/9957526457"
+      ]
+    },
+    "16341536244857936202": {
+      "sourceName": "十一香牛肉麵（景美店）",
+      "sourceAddress": "臺北市文山區景華里景美街5巷2之1號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/4033359736",
+      "targetName": "十一香牛肉麵館",
+      "targetAddress": "台北市文山區景美街 5 號",
+      "evidence": "Full-map search found 十一香牛肉麵館 4m from source. Government registration 88229249 confirms 景美街5巷2之1號1樓. Do not use candidate 創意鍋麵 node. Existing 十一香 node has incomplete 5號 address.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://serv.gcis.nat.gov.tw/moeadsBF/cmpy/reportAction.do?fileName=379100000Gsetup11104.pdf&method=report&reportClass=bms&subPath=11104",
+        "https://www.openstreetmap.org/node/3730158026",
+        "https://www.openstreetmap.org/node/4033359736"
+      ]
+    },
+    "16990795618530835403": {
+      "sourceName": "黃家香腸",
+      "sourceAddress": "臺北市中正區永功里泉州街32之3號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/7175334732",
+      "targetName": "黃家香腸",
+      "targetAddress": "台北市中正區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/7175334732"
+      ]
+    },
+    "17183780045036309809": {
+      "sourceName": "小川西堂 - 北方清燉牛肉麵 泡饃",
+      "sourceAddress": "臺北市中正區羅斯福路三段244巷13號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "小川西堂 and 維都小酒館 are different business identities at the same listed address. Retain source CID without merging histories or photos; list membership does not certify current operation.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/6542562816",
+          "targetName": "維都小酒館",
+          "targetAddress": "台北市中正區羅斯福路三段244巷 13 號"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/6542562816"
+      ]
+    },
+    "17252319065860124806": {
+      "sourceName": "碰麵麵食館（吳興店）",
+      "sourceAddress": "臺北市信義區景聯里吳興街24號1樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/12622924550",
+      "targetName": "碰麵",
+      "targetAddress": "台北市信義區吳興街 24 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/12622924550"
+      ]
+    },
+    "17570640834257039059": {
+      "sourceName": "Spyci 私宅咖哩炸雞店",
+      "sourceAddress": "No. 30-1, No. 30-1景興路景華里文山區臺北市116",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/5970357103",
+      "targetName": "私宅咖哩炸雞",
+      "targetAddress": "台北市文山區景興路 30之1 號",
+      "evidence": "OSM 私宅咖哩炸雞 / spyci fried + chick at 景興路30之1號 matches mixed-language duplicated No.30-1 source; 2m difference.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/5970357103"
+      ]
+    },
+    "18173318002827476167": {
+      "sourceName": "姥饕雞肉飯 乾拌麵",
+      "sourceAddress": "臺北市中正區黎明里公園路20巷5號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/8280854478",
+      "targetName": "",
+      "targetAddress": "台北市中正區公園路20巷 5 號",
+      "evidence": "Unnamed OSM restaurant node at 公園路20巷5號, 5m away. Government registration 93195634 names 姥饕小吃店 at that exact address. Reuse unnamed restaurant pin, not a new duplicate.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://serv.gcis.nat.gov.tw/moeadsBF/cmpy/reportAction.do?fileName=379100000Gsetup11308.pdf&method=report&reportClass=bms&subPath=11308",
+        "https://www.openstreetmap.org/node/8280854478"
+      ]
+    },
+    "196138219456646540": {
+      "sourceName": "信義安康公園",
+      "sourceAddress": "臺北市信義區安康里松勇路",
+      "reviewedAt": "2026-11-27",
+      "placeId": "park/relation/5012215",
+      "targetName": "信義安康公園",
+      "targetAddress": "台北市信義區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/relation/5012215"
+      ]
+    },
+    "2021455683086311662": {
+      "sourceName": "老山東牛肉麵",
+      "sourceAddress": "臺北市萬華區西門里西寧南路70號B1之15室",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/5467994602",
+      "targetName": "老山東牛肉家常麵店",
+      "targetAddress": "台北市萬華區西寧南路 70 號 15",
+      "evidence": "Current OSM full address 西寧南路70號地下15室, floor=-1, unit=15 confirms exact 老山東 branch. Creator B1之15室 is same unit.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/5467994602"
+      ]
+    },
+    "2439518397661521961": {
+      "sourceName": "老牌張豬腳飯",
+      "sourceAddress": "臺北市大同區國慶里民族西路296號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/5344367621",
+      "targetName": "老牌張豬腳飯",
+      "targetAddress": "台北市大同區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/5344367621"
+      ]
+    },
+    "2555508192712092212": {
+      "sourceName": "旨燕",
+      "sourceAddress": "臺北市中正區光復里開封街一段90號一樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/10806905888",
+      "targetName": "旨燕",
+      "targetAddress": "台北市中正區 · 開封街一段",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/10806905888"
+      ]
+    },
+    "2682445993183041289": {
+      "sourceName": "Popeyes Chicken 台北許昌店",
+      "sourceAddress": "臺北市中正區黎明里許昌街30號1樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/2518367469",
+      "targetName": "Popeyes",
+      "targetAddress": "台北市中正區許昌街 30 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/2518367469"
+      ]
+    },
+    "3186800864436997258": {
+      "sourceName": "大旺小舖",
+      "sourceAddress": "臺北市大同區建明里華陰街179號號地下室",
+      "reviewedAt": "2026-11-27",
+      "placeId": "savvy/apple_maps/H2710I3F98C58EC6731",
+      "targetName": "大旺小舖",
+      "targetAddress": "台北市大同區華陰街179號地下室",
+      "evidence": "Exact 大旺小舖 native identity, coordinates within 1m; 華陰街179號號地下室 is duplicate 號 typo for 179號地下室.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js"
+      ]
+    },
+    "3420131550126576899": {
+      "sourceName": "延三溫體牛-黃記",
+      "sourceAddress": "臺北市中正區文盛里羅斯福路三段244巷11號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/2473809949",
+      "targetName": "黃記延三溫體牛",
+      "targetAddress": "台北市中正區羅斯福路三段244巷 11 號",
+      "evidence": "Current OSM 黃記延三溫體牛 full address 羅斯福路三段244巷11號 matches source 延三溫體牛-黃記; reordered name, same branch.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/2473809949"
+      ]
+    },
+    "4059747656393214691": {
+      "sourceName": "鮮茶道-延三夜市",
+      "sourceAddress": "臺北市大同區隆和里延平北路三段47-1號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "鮮茶道 is a specific beverage shop at 延平北路三段47-1號; tcma-market-41 is the whole 延三夜市 area, not the shop.",
+      "rejectedCandidates": [
+        {
+          "placeId": "tcma-market-41",
+          "targetName": "延三夜市",
+          "targetAddress": "台北市大同區 · 民權西路至民族西路口"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js"
+      ]
+    },
+    "4112294319200574818": {
+      "sourceName": "香港鳳盛燒臘店",
+      "sourceAddress": "臺北市信義區景新里莊敬路242號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/4298924690",
+      "targetName": "香港鳳盛燒臘",
+      "targetAddress": "台北市信義區 · 莊敬路",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/4298924690"
+      ]
+    },
+    "4181761012168449603": {
+      "sourceName": "滇味廚房",
+      "sourceAddress": "臺北市信義區興雅里永吉路30巷178弄2號1 樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/9381950261",
+      "targetName": "滇味廚房",
+      "targetAddress": "台北市信義區 · 永吉路30巷",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/9381950261"
+      ]
+    },
+    "4349217316711748975": {
+      "sourceName": "弌弌咖啡 Ichi Cafe",
+      "sourceAddress": "臺北市大同區南京西路25巷18-1號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "Government registration 88301781 identifies 弌弌咖啡館 at 南京西路25巷18之1號. OSM is MOGU CAFE 蘑菇 with different name, website and phone; no evidence of identical business. Keep distinct creator CID.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/4524863566",
+          "targetName": "蘑菇",
+          "targetAddress": "台北市大同區南京西路25巷 18之1 號"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://serv.gcis.nat.gov.tw/moeadsBF/cmpy/reportAction.do?fileName=379100000Gsetup11110.pdf&method=report&reportClass=bmsItem&subPath=11110",
+        "https://www.openstreetmap.org/node/4524863566"
+      ]
+    },
+    "442926224695082437": {
+      "sourceName": "寧夏夜市-林振櫂燒麻糬",
+      "sourceAddress": "臺北市大同區星明里寧夏路97號攤位",
+      "reviewedAt": "2026-11-27",
+      "placeId": "savvy/apple_maps/H2710I3F9AE050E2C28",
+      "targetName": "林振櫂燒麻糬",
+      "targetAddress": "台北市大同區寧夏路97號攤",
+      "evidence": "Existing native 林振櫂燒麻糬, same 寧夏路97號攤位 and coordinates within 1m. Reject whole 寧夏夜市 polygon and market node.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/way/396410905"
+      ]
+    },
+    "5197782596628393729": {
+      "sourceName": "御菓子花雨",
+      "sourceAddress": "臺北市信義區新仁里忠孝東路四段553巷16弄3號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/12863795296",
+      "targetName": "御菓子花雨",
+      "targetAddress": "台北市信義區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/12863795296"
+      ]
+    },
+    "5269186625783275524": {
+      "sourceName": "Coffee sind",
+      "sourceAddress": "臺北市中正區幸市里新生南路一段56巷8號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/6261510899",
+      "targetName": "Coffee Sind",
+      "targetAddress": "台北市中正區新生南路一段56巷 8 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/6261510899"
+      ]
+    },
+    "5428357311392534781": {
+      "sourceName": "不夜侯製茶所(南港店)",
+      "sourceAddress": "臺北市南港區東明里南港路二段6號1樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/8438683276",
+      "targetName": "不夜侯製茶所",
+      "targetAddress": "台北市南港區南港路二段 6 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/8438683276"
+      ]
+    },
+    "558869356515022290": {
+      "sourceName": "不葷主義茶餐廳 台北店 (13:30/20:30最後點餐｜僅收現金)",
+      "sourceAddress": "臺北市松山區中正里南京東路三段275號2樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/5259659138",
+      "targetName": "不葷主義茶餐廳",
+      "targetAddress": "台北市松山區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/5259659138"
+      ]
+    },
+    "5914466972358801019": {
+      "sourceName": "一心餃子牛肉麵專賣店",
+      "sourceAddress": "臺北市北投區大同里大同街43號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/8383391929",
+      "targetName": "一心餃子牛肉麵專賣店",
+      "targetAddress": "台北市北投區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/8383391929"
+      ]
+    },
+    "6079498572210272390": {
+      "sourceName": "waku waku pasta",
+      "sourceAddress": "臺北市大同區光能里赤峰街8巷4號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "Creator waku waku pasta and OSM Solo Pizza have different names at 赤峰街8巷4號. Do not merge successive/different operators or borrow photos.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/5002733221",
+          "targetName": "Solo Pizza",
+          "targetAddress": "台北市大同區赤峰街8巷 4 號"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/5002733221"
+      ]
+    },
+    "6364642939670777008": {
+      "sourceName": "Chubby Burger 恰彼漢堡",
+      "sourceAddress": "臺北市信義區基隆路一段165號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/12798825202",
+      "targetName": "Chubby Burger",
+      "targetAddress": "台北市信義區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/12798825202"
+      ]
+    },
+    "6437874030726077853": {
+      "sourceName": "金山客家小館 創始店",
+      "sourceAddress": "臺北市松山區新聚里南京東路五段250巷2弄5號1樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/2656074195",
+      "targetName": "金山客家小館",
+      "targetAddress": "台北市松山區 · 南京東路五段250巷2弄",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/2656074195"
+      ]
+    },
+    "645314151261077024": {
+      "sourceName": "OriginBAR 源",
+      "sourceAddress": "臺北市松山區東勢里南京東路四段133巷5弄31號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/12517900419",
+      "targetName": "OriginBAR 源",
+      "targetAddress": "台北市松山區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/12517900419"
+      ]
+    },
+    "6467416475833384992": {
+      "sourceName": "麻辣天后炒香鍋-大安師大店",
+      "sourceAddress": "臺北市大安區龍泉里師大路59巷5號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/way/592159235",
+      "targetName": "麻辣天后",
+      "targetAddress": "台北市大安區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/way/592159235"
+      ]
+    },
+    "6620514278128053048": {
+      "sourceName": "陳季炸雞 北投店",
+      "sourceAddress": "臺北市北投區溫泉里公舘路5號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/7138715790",
+      "targetName": "陳季炸雞",
+      "targetAddress": "台北市北投區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/7138715790"
+      ]
+    },
+    "6635082117113889489": {
+      "sourceName": "SIMPLE KAFFA興波咖啡 新光三越Diamond Towers",
+      "sourceAddress": "臺北市大安區忠孝東路三段268號",
+      "reviewedAt": "2026-11-27",
+      "decision": "distinct_place",
+      "evidence": "Official Simple Kaffa shop list and SKM directory identify Diamond Towers 1F tenant. OSM candidate is department_store 新光三越. Create tenant identity, never attach cafe post to entire mall.",
+      "rejectedCandidates": [
+        {
+          "placeId": "poi/node/11335942020",
+          "targetName": "新光三越",
+          "targetAddress": "台北市大安區"
+        }
+      ],
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.skm.com.tw/brand/2871",
+        "https://simplekaffa.beta.today/journal/Simple%20Kaffa%E8%88%88%E6%B3%A2%E5%92%96%E5%95%A1%E9%96%80%E5%B8%82%E7%B8%BD%E8%A6%BD",
+        "https://www.openstreetmap.org/node/11335942020"
+      ]
+    },
+    "6810767205053463252": {
+      "sourceName": "士林官邸公園",
+      "sourceAddress": "臺北市士林區福林里中山北路五段460巷4號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "savvy/apple_maps/H2710I3F9A3ECA68E06",
+      "targetName": "士林官邸公園",
+      "targetAddress": "台北市士林區福林路60號",
+      "evidence": "Existing native 士林官邸公園 has identical coordinates (<1m), different park entrance addresses 福林路60號 versus 中山北路五段460巷4號. Both refer to the same named park.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js"
+      ]
+    },
+    "7461393670493520752": {
+      "sourceName": "春山茶水舖",
+      "sourceAddress": "臺北市大安區臥龍里復興南路二段323號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/3315810369",
+      "targetName": "春山茶水舖",
+      "targetAddress": "台北市大安區",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/3315810369"
+      ]
+    },
+    "7491741949320542812": {
+      "sourceName": "小明拔絲地瓜",
+      "sourceAddress": "臺北市松山區慈祐里饒河街33號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/7175344587",
+      "targetName": "小明拔絲地瓜",
+      "targetAddress": "台北市松山區 · 塔悠路",
+      "evidence": "Same 小明拔絲地瓜 node 8m away, near 饒河街/塔悠路 corner. Branch report confirms 饒河街33號; map only has nearby 塔悠路 label.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://supertaste.tvbs.com.tw/infocard/31578",
+        "https://www.openstreetmap.org/node/7175344587"
+      ]
+    },
+    "7754962606621351201": {
+      "sourceName": "烏弄原生茶飲(台北公館店)",
+      "sourceAddress": "臺北市中正區水源里羅斯福路四段90巷2-1號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/3867798197",
+      "targetName": "烏弄原茶",
+      "targetAddress": "台北市中正區羅斯福路四段90巷 2之1 號",
+      "evidence": "OSM 烏弄原茶 at 羅斯福路四段90巷2之1號 exactly matches 公館店 2-1號; name is shortened, no other branch used.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/3867798197"
+      ]
+    },
+    "829911751530089814": {
+      "sourceName": "烏弄原生茶飲 信義吳興店",
+      "sourceAddress": "臺北市信義區吳興街35號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/3700536513",
+      "targetName": "烏弄",
+      "targetAddress": "台北市信義區吳興街 35 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/3700536513"
+      ]
+    },
+    "8650884244354020940": {
+      "sourceName": "初炸小食店",
+      "sourceAddress": "臺北市大安區正聲里光復南路308巷57號1 樓",
+      "reviewedAt": "2026-11-27",
+      "placeId": "savvy/apple_maps/H2710I3F98C58256269",
+      "targetName": "初炸小食店",
+      "targetAddress": "台北市大安區光復南路308巷57號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js"
+      ]
+    },
+    "9239286543964647648": {
+      "sourceName": "老家餡餅 北投店",
+      "sourceAddress": "臺北市北投區中央里新市街47號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/8383391898",
+      "targetName": "老家餡餅北投店",
+      "targetAddress": "台北市北投區",
+      "evidence": "Existing 北投店 name is exact and within 63m. Public branch reports identify 新市街47號 (older reports 17號/53號); reuse branch identity, preserve creator address and do not assert coordinate precision.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://r923e.blog109.fc2.com/blog-entry-3042.html",
+        "https://www.openstreetmap.org/node/8383391898"
+      ]
+    },
+    "9401400014447048756": {
+      "sourceName": "自由廣場",
+      "sourceAddress": "臺北市中正區東門里中山南路21號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/way/1053359244",
+      "targetName": "自由廣場",
+      "targetAddress": "台北市中正區",
+      "evidence": "Full-map search found exact 自由廣場 area. Source coordinate is its west entrance; area representative point is 148m east. Preserve area ID, not distinct 自由廣場門 landmark.",
+      "decision": "same_named_area",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/way/1052759782",
+        "https://www.openstreetmap.org/way/1053359244"
+      ]
+    },
+    "9940388562666567484": {
+      "sourceName": "牛店精燉牛肉麵",
+      "sourceAddress": "臺北市萬華區西門里昆明街91號",
+      "reviewedAt": "2026-11-27",
+      "placeId": "poi/node/2918997923",
+      "targetName": "牛店",
+      "targetAddress": "台北市萬華區昆明街 91 號",
+      "evidence": "Reviewed frozen creator branch against current OSM name/branch tags and map coordinates. Compatible shop name, same street/district where present, one candidate within 85m; missing floor/door data is retained rather than guessed. This is an explicit branch decision, not a global fuzzy-match rule.",
+      "evidenceURLs": [
+        "https://github.com/2xin15/lala-food/blob/239f2a049cb94a9526cc6c06cd37e2a5f3bfaa21/data.js",
+        "https://www.openstreetmap.org/node/2918997923"
+      ]
+    }
+  }
+}

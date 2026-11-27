@@ -101,6 +101,9 @@ struct LivePlaceDetail: View {
                             reloadGeneration &+= 1
                         }.frame(minHeight: 44)
                     }
+                    if let creator = LiveCreatorCatalog.shared.match(pin.place) {
+                        LiveCreatorSourceSection(entry: creator)
+                    }
                     sourceLinks
                     if let onAddToOuting {
                         Divider()
@@ -361,6 +364,147 @@ private struct LiveNativePlaceCard: UIViewControllerRepresentable {
         var onClose: () -> Void
         init(onClose: @escaping () -> Void) { self.onClose = onClose }
         func mapItemDetailViewControllerDidFinish(_ detailViewController: MKMapItemDetailViewController) { onClose() }
+    }
+}
+/// A Debug-bundled public creator reference. It never writes Place, user notes, or visits.
+struct LiveCreatorCatalog: Decodable {
+    struct Alias: Decodable { let provider: String; let id: String }
+    struct MatchedPlace: Decodable {
+        let name: String; let address: String; let latitude: Double; let longitude: Double
+    }
+    struct Original: Decodable, Identifiable {
+        var id: String { url }
+        let url: String
+        let text: String
+        let date: String
+        let author: String
+    }
+    struct Entry: Decodable, Identifiable {
+        var id: String { cid }
+        let cid: String
+        let name: String
+        let address: String
+        let latitude: Double
+        let longitude: Double
+        let placeId: String
+        let lists: [String]
+        let aliases: [Alias]
+        let matchedPlaces: [MatchedPlace]?
+        let posts: [Original]
+    }
+    let schemaVersion: Int
+    let scope: String
+    let creator: String
+    let entries: [Entry]
+
+    static let shared: Self = {
+        guard let file = Bundle.main.url(forResource: "CreatorPlaceSources", withExtension: "json", subdirectory: "PocketCity"),
+              let data = try? Data(contentsOf: file), data.count <= 2_000_000,
+              let value = try? JSONDecoder().decode(Self.self, from: data), value.valid else {
+            return Self(schemaVersion: 1, scope: "local_creator_preview", creator: "zeke_6973", entries: [])
+        }
+        return value
+    }()
+
+    var valid: Bool {
+        schemaVersion == 1 && scope == "local_creator_preview" && creator == "zeke_6973"
+        && entries.count <= 2000 && Set(entries.map(\.cid)).count == entries.count
+        && Set(entries.map(\.placeId)).count == entries.count
+        && entries.allSatisfy { entry in
+            entry.cid.range(of: #"^[1-9][0-9]{0,19}$"#, options: .regularExpression) != nil
+            && !entry.name.isEmpty && !entry.address.isEmpty && !entry.placeId.isEmpty
+            && entry.latitude.isFinite && entry.longitude.isFinite
+            && abs(entry.latitude) <= 90 && abs(entry.longitude) <= 180
+            && !entry.lists.isEmpty && entry.lists.allSatisfy { ["visited", "wish"].contains($0) }
+            && (entry.matchedPlaces ?? []).allSatisfy {
+                !$0.name.isEmpty && $0.latitude.isFinite && $0.longitude.isFinite
+                && abs($0.latitude) <= 90 && abs($0.longitude) <= 180
+            }
+            && entry.posts.allSatisfy { post in
+                post.author == creator && post.text.count <= 4000
+                && post.url.range(of: #"^https://www\.threads\.com/@zeke_6973/post/[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil
+            }
+        }
+    }
+
+    func entry(placeId: String?) -> Entry? {
+        guard let placeId else { return nil }
+        return entries.first { $0.placeId == placeId }
+    }
+
+    private static func folded(_ value: String) -> String {
+        value.precomposedStringWithCompatibilityMapping.lowercased()
+            .replacingOccurrences(of: "臺", with: "台").replacingOccurrences(of: "馆", with: "館")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+    private static func nameKey(_ value: String) -> String {
+        String(String.UnicodeScalarView(folded(value).unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+    }
+    private static func addressKey(_ value: String) -> String {
+        var result = folded(value)
+        for (index, number) in Array("一二三四五六七八九十").enumerated() {
+            result = result.replacingOccurrences(of: "\(number)段", with: "\(index + 1)段")
+        }
+        result = result.replacingOccurrences(of: #"(\d+)號之(\d+)"#, with: "$1-$2號", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(\d+)之(\d+)號"#, with: "$1-$2號", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(b?\d+)f"#, with: "$1樓", options: .regularExpression)
+        result = result.replacingOccurrences(of: "一樓", with: "1樓")
+        result = result.replacingOccurrences(of: #"^(?:\d{3,6})?(?:台灣)?"#, with: "", options: .regularExpression)
+        return result.replacingOccurrences(of: #"(?<=[區鄉鎮])[^區鄉鎮市路街巷弄號\d]{1,8}里"#, with: "", options: .regularExpression)
+    }
+    func match(_ place: Place) -> Entry? {
+        let key = LivePublicDiscoveryVenueKey(savedPlace: place)
+        let matches = entries.filter { row in
+            // Only paired names/addresses from the approved canonical match.
+            // Never combine a brand alias with another branch's address.
+            if (row.matchedPlaces ?? []).contains(where: { known in
+                Self.nameKey(known.name) == Self.nameKey(place.name)
+                && Self.addressKey(known.address) == Self.addressKey(place.address)
+                && hypot((known.latitude - place.latitude) * 110540,
+                         (known.longitude - place.longitude) * 111320 * cos(place.latitude * .pi / 180)) <= 65
+            }) { return true }
+            let distance = hypot((row.latitude - place.latitude) * 110540,
+                                 (row.longitude - place.longitude) * 111320 * cos(place.latitude * .pi / 180))
+            guard distance.isFinite, distance <= 65 else { return false }
+            let identified = key.map { key in row.aliases.contains { $0.provider == key.provider && $0.id == key.id } } ?? false
+            return identified || (Self.nameKey(row.name) == Self.nameKey(place.name)
+                && Self.addressKey(row.address) == Self.addressKey(place.address))
+        }
+        return matches.count == 1 ? matches[0] : nil
+    }
+}
+
+@MainActor
+struct LiveCreatorSourceSection: View {
+    let entry: LiveCreatorCatalog.Entry
+    @Environment(\.appLanguageSettings) private var language
+    private func copy(_ en: String, _ zh: String) -> String {
+        language.localized(english: en, traditionalChinese: zh)
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(copy("Lala’s public list", "拉拉熊公開清單")).font(.subheadline.weight(.semibold))
+            Text(entry.lists.map { $0 == "visited" ? copy("Creator visited", "作者去過") : copy("Creator wants to go", "作者想去") }.joined(separator: " · "))
+                .font(.caption).foregroundStyle(.secondary)
+            if let url = URL(string: "https://www.google.com/maps?cid=" + entry.cid) {
+                Link(copy("View list place", "查看清單地點"), destination: url).frame(minHeight: 44)
+            }
+            ForEach(entry.posts) { post in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: post.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    if let url = URL(string: post.url) {
+                        Link("Threads · @\(post.author) · \(post.date)", destination: url)
+                            .font(.caption).frame(minHeight: 44)
+                    }
+                }
+            }
+            Link(copy("List compiled by @2xin15__", "清單整理：@2xin15__"),
+                 destination: URL(string: "https://2xin15.github.io/lala-food/")!)
+                .font(.caption).frame(minHeight: 44)
+            Text(copy("Transcribed from the public list; originals may change.", "公開清單轉錄 · 原文可能更新"))
+                .font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("live.place.creatorSources")
     }
 }
 #endif

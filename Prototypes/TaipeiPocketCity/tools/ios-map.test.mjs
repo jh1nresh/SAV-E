@@ -308,3 +308,28 @@ test('floor change hides only in-wing native pins before grouping, and restores 
   turn(null);assert.deepEqual(ids(),['known','outside','unknown']);
   assert.deepEqual(messages,[]);
 });
+
+test('creator identity deduplicates atlas, saved and shared pins without a live-post snapshot', t => {
+  const previous=globalThis.document, markers=new Set(), messages=[], events=[];
+  globalThis.document={createElement:()=>({dataset:{},classList:{toggle(){}},setAttribute(){},
+    addEventListener(type,handler){this[type]=handler;}})};
+  t.after(()=>{if(previous===undefined)delete globalThis.document;else globalThis.document=previous;});
+  class Marker {
+    constructor({element}){this.button=element;}
+    getElement(){return this.button;} setLngLat(){return this;}
+    addTo(){markers.add(this);return this;} remove(){markers.delete(this);}
+  }
+  const map={on(){},fire(type,data){events.push([type,data]);},
+    getBounds:()=>({getEast:()=>122,getWest:()=>120,getSouth:()=>24,getNorth:()=>26})};
+  const bridge=connectIOSMap(map,Marker,{postMessage:m=>messages.push(m)});
+  const pin={id:'saved-local',name:'Branch A',label:'Saved A',kind:'saved',point:[121.54,25.04],creatorPlaceID:'poi/node/123'};
+  bridge.update({pins:[pin,{...pin,id:'friend-local',kind:'shared',point:[121.54001,25.04001]}]});
+  assert.equal(markers.size,1);
+  assert.deepEqual(map.savvyAccountPlaceIds,['poi/node/123']);
+  [...markers][0].button.click({stopPropagation(){}});
+  assert.deepEqual(messages.at(-1),{event:'select',ids:['saved-local','friend-local']});
+  bridge.update({pins:[pin,{...pin,id:'branch-b',creatorPlaceID:'poi/node/456',point:[121.541,25.04]}]});
+  assert.equal(markers.size,2);
+  bridge.update({pins:[]});
+  assert.equal(markers.size,0);assert.deepEqual(map.savvyAccountPlaceIds,[]);
+});

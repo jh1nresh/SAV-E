@@ -183,6 +183,9 @@ def build(output, cache, preview):
     data_version = [digest(WEB / 'prepare_data.py'), parts]
     inputs = {name: WEB / name for name in runtime_paths()}
     if preview:
+        creator = os.environ.get('SAVVY_LOCAL_CREATOR_SOURCES')
+        inputs['CreatorPlaceSources.json'] = (Path(creator) if creator else
+            WEB.parent / 'CreatorLists/lala/CreatorPlaceSources.json')
         if source := os.environ.get('SAVVY_LOCAL_POCKET_CITY_SOURCES'):
             inputs['savvy-place-sources.json'] = Path(source)
         if tiles := os.environ.get('SAVVY_LOCAL_TAIPEI_TILES'):

@@ -1,3 +1,4 @@
+import {loadCreatorCatalog,creatorEntry} from './creator-place-sources.js';
 import {additionalShopFloor} from './shop-floor-labels.js';
 import {setPlacePinEmphasis} from './photo-pin-motion.js';
 import {placeButtonIcon} from './place-pins.js?v=category-badges-1';
@@ -49,11 +50,11 @@ export function createPlaceCallout(map){
   const savedButton=card.querySelector('#place-in-explore');
   const friendButton=card.querySelector('#place-in-friends');
   const choices=card.querySelector('.place-choices');
-  let branchPhoto=null,reviewed=[],lastPayload;
+  let branchPhoto=null,reviewed=[],lastPayload,activePlaceId=null;
   if(nativeSheet)card.classList.add('uses-native-drawer');
   function publish(force=false){
     if(!nativeSheet||card.hidden)return;
-    const payload={serial:openSerial,name:name.textContent,kind:kind.textContent,
+    const payload={placeId:activePlaceId,serial:openSerial,name:name.textContent,kind:kind.textContent,
       address:detail.hidden?'':detail.textContent,directions:directions.hidden?null:directions.href,
       website:official.hidden?null:official.href,websiteLabel:official.hidden?'':official.textContent.replace(/ ↗$/,''),
       photo:branchPhoto&&{file:branchPhoto.file,alt:branchPhoto.alt,credit:branchPhoto.credit,url:branchPhoto.url},
@@ -194,7 +195,29 @@ export function createPlaceCallout(map){
       item.append(link,byline);
       postsList.append(item);
     }
-    postsList.hidden=posts.length===0;
+    const catalog=await loadCreatorCatalog();
+    if(serial!==openSerial)return;
+    const creator=creatorEntry(catalog,cityPlaceID(place));
+    if(creator){
+      const item=document.createElement('li');
+      const heading=document.createElement('strong');
+      heading.textContent='拉拉熊公開清單 · '+creator.lists.map(s=>s==='visited'?'作者去過':'作者想去').join(' / ');
+      item.append(heading);
+      const source=document.createElement('a');
+      source.href='https://www.google.com/maps?cid='+creator.cid;
+      source.textContent='查看清單地點';source.target='_blank';source.rel='noopener noreferrer';item.append(source);
+      for(const original of creator.posts){
+        const text=document.createElement('p');text.textContent=original.text;item.append(text);
+        const link=document.createElement('a');link.href=original.url;
+        link.textContent='Threads · @'+original.author+' · '+original.date;
+        link.target='_blank';link.rel='noopener noreferrer';item.append(link);
+      }
+      const credit=document.createElement('a');credit.href='https://2xin15.github.io/lala-food/';
+      credit.textContent='清單整理：@2xin15__ · 轉錄原文可能更新';
+      credit.target='_blank';credit.rel='noopener noreferrer';item.append(credit);
+      postsList.append(item);
+    }
+    postsList.hidden=posts.length===0&&!creator;
     if(hadFocus)closeButton.focus({preventScroll:true});
     const featured=posts.find(post=>post.cover);
     const coverExpiresAt=featured?Math.min(featured.expiresAt,featured.coverExpiry):undefined;
@@ -220,6 +243,7 @@ export function createPlaceCallout(map){
     const wasOpen=!card.hidden;
     if(map.savvySavedOnly&&!button?.classList.contains('is-saved'))return;
     reset();
+    activePlaceId=cityPlaceID(place);
     anchor=place.point??null;
     trigger=button;
     button?.setAttribute('aria-expanded','true');

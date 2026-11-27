@@ -115,10 +115,10 @@ export function connectIOSMap(map, Marker, channel, controls, explore, {floorEve
       const venueKey = pin.publicVenueID ?? (pin.kind === 'post' ? pin.id : undefined);
       if (visiblePin) {
         const venue = venueKey && explore?.venues.get(venueKey);
-        const placeID = venue && venue.expiresAt > now ? venue.placeId : pin.id;
+        const placeID = venue && venue.expiresAt > now ? venue.placeId : pin.creatorPlaceID ?? pin.id;
         if (!visiblePin(pin.point, placeID)) continue;
       }
-      const key = venueKey || pin.id;
+      const key = pin.creatorPlaceID || venueKey || pin.id;
       if (!byEntity.has(key)) byEntity.set(key, []);
       byEntity.get(key).push(pin);
     }
@@ -145,6 +145,10 @@ export function connectIOSMap(map, Marker, channel, controls, explore, {floorEve
       }
       if (!bounds.contains(pin.point)) continue;
       if (reviewed) covered.add(reviewed.placeId);
+      // Creator identity is independent of live-post freshness. A saved/shared
+      // native pin covers the same atlas place without promoting creator posts
+      // into verified public discovery or changing the native selection route.
+      if (pin.creatorPlaceID) covered.add(pin.creatorPlaceID);
       const entry = {...pin, members, photo, reviewedPlaceId: reviewed?.placeId};
       const pointKey = pin.point.join(',');
       let markerKey = pointGroups.get(pointKey) ?? pointKey;
