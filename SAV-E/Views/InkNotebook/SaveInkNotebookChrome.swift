@@ -687,10 +687,31 @@ final class SaveInkMapRouteState: ObservableObject {
     }
 }
 
-/// Live ink map. Explicit screen/suite fixtures keep `SaveInkWalkMap`
-/// so the approved stills stay on the drawn roads. The canvas follows
-/// `SaveDoodleMapView`: SwiftUI `Map`, `UserAnnotation`, and `MapPolyline`.
-/// Ink pins and a light paper wash stay on this surface only.
+/// Camera requests change only for initial framing, explicit focus or retry.
+/// A data refresh may update pins without taking over the user's camera.
+struct SaveInkMapViewportState {
+    private(set) var viewport: PocketCityViewport?
+    private(set) var lastRegion: MKCoordinateRegion?
+    private var requestID = 0
+
+    mutating func observe(_ region: MKCoordinateRegion) { lastRegion = region }
+
+    mutating func fit(_ region: MKCoordinateRegion?, explicit: Bool = false) {
+        guard explicit || lastRegion == nil, let region else { return }
+        if explicit { requestID &+= 1 }
+        guard let next = PocketCityViewport(region, requestID: requestID) else { return }
+        viewport = next
+        if explicit { lastRegion = nil }
+    }
+
+    mutating func retry() {
+        if let lastRegion { viewport = PocketCityViewport(lastRegion, requestID: requestID) }
+    }
+}
+
+/// One Pocket City surface for saved places, place focus and walking routes.
+/// MapKit supplies route coordinates without replacing the rendered map.
+/// Explicit screen/suite fixtures keep `SaveInkWalkMap`.
 struct SaveInkLiveMap: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     var places: [SaveInkPlace]
@@ -705,7 +726,8 @@ struct SaveInkLiveMap: View {
     var onPublicSelect: ((LivePublicDiscoveryPinGroup) -> Void)?
 #endif
 
-    @State private var position: MapCameraPosition = .automatic
+    @State private var pocketMapFailed = false
+    @State private var pocketCamera = SaveInkMapViewportState()
     @StateObject private var routeState = SaveInkMapRouteState()
 
     private var focused: SaveInkPlace? {
@@ -724,20 +746,6 @@ struct SaveInkLiveMap: View {
                 coordinate: coordinate
             )
         }
-    }
-
-    @State private var usesPocketCity = true
-#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-    @State private var pocketPublicStart: PocketCityViewport?
-#endif
-    private var homeRegion: MKCoordinateRegion? {
-        SaveInkMapCamera.region(around: pins.map(\.coordinate), user: userCoordinate, focused: nil)
-    }
-    private var homeViewport: PocketCityViewport? {
-#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-        if publicVenues != nil { return pocketPublicStart ?? PocketCityViewport(homeRegion ?? publicMapSeedRegion) }
-#endif
-        return PocketCityViewport(homeRegion)
     }
 
     private var pocketPins: [PocketCityPin] {
@@ -776,6 +784,7 @@ struct SaveInkLiveMap: View {
     }
 
     private func pocketCameraMoved(_ region: MKCoordinateRegion) {
+        pocketCamera.observe(region)
 #if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
         reportPublicViewport(region)
 #endif
@@ -792,80 +801,37 @@ struct SaveInkLiveMap: View {
     }
 #endif
 
-    var body: some View {
-        if showsRoute || focusPlaceID != nil {
-            appleMap
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                if usesPocketCity {
-                    PocketCitySurface(
-                        pins: pocketPins, viewport: homeViewport,
-                        userDot: PocketCityUserDot(userCoordinate, label: languageSettings.localized(english: "My location", traditionalChinese: "我的位置")),
-                        onSelect: selectPocketPin, onMove: pocketCameraMoved,
-                        onFailure: { usesPocketCity = false }
-                    )
-                    .frame(height: 360)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .accessibilityIdentifier("ink.home.map")
-                    .accessibilityLabel(mapAccessibilityLabel)
-                } else {
-                    appleMap
-                }
-                Button(usesPocketCity ? languageSettings.localized(english: "Apple Maps", traditionalChinese: "Apple 地圖")
-                                      : languageSettings.localized(english: "Pocket City", traditionalChinese: "Pocket City 立體地圖")) {
-                    usesPocketCity.toggle()
-                }
-                .font(SaveInkType.aux).foregroundStyle(SaveInkPalette.ink)
-                .frame(minHeight: 44)
-            }
-#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-            .onChange(of: publicVenues != nil, initial: true) { _, showingPublic in
-                // Keep later Saved/location refreshes from moving an active Explore camera.
-                pocketPublicStart = showingPublic ? PocketCityViewport(homeRegion ?? publicMapSeedRegion) : nil
-            }
-#endif
-        }
+    private var pocketRoutes: [PocketCityRoute] {
+        guard showsRoute, let route = routeState.route,
+              let line = PocketCityRoute(MKPolyline(coordinates: route.points, count: route.points.count)) else { return [] }
+        return [line]
     }
 
-    private var appleMap: some View {
-        MapReader { proxy in
-            Map(position: $position) {
-                UserAnnotation()
-#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-                if let publicVenues {
-                    publicPins(publicVenues, proxy: proxy)
-                } else {
-                    savedPins
+    var body: some View {
+        ZStack {
+            if pocketMapFailed {
+                VStack(spacing: 12) {
+                    Text(languageSettings.localized(english: "Couldn't load Pocket City", traditionalChinese: "Pocket City 載入失敗"))
+                    Button(languageSettings.localized(english: "Try again", traditionalChinese: "重試")) {
+                        pocketCamera.retry()
+                        pocketMapFailed = false
+                    }
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityIdentifier("ink.map.retry")
                 }
-#else
-                savedPins
-#endif
-                if let route = routeState.route, route.points.count >= 2 {
-                    MapPolyline(MKPolyline(coordinates: route.points, count: route.points.count))
-                        .stroke(
-                            SaveInkPalette.ink.opacity(0.82),
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [7, 5])
-                        )
-                }
+                .font(SaveInkType.aux)
+                .foregroundStyle(SaveInkPalette.ink)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(SaveInkPalette.paper)
+            } else {
+                PocketCitySurface(
+                    pins: pocketPins, viewport: pocketCamera.viewport,
+                    userDot: PocketCityUserDot(userCoordinate, label: languageSettings.localized(english: "My location", traditionalChinese: "我的位置")),
+                    routes: pocketRoutes, allowsRemoteTiles: false,
+                    onSelect: selectPocketPin, onMove: pocketCameraMoved,
+                    onFailure: { pocketMapFailed = true }
+                )
             }
-            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
-            .mapFeatureSelectionDisabled { _ in true }
-            .mapControls { MapCompass() }
-#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-            .onMapCameraChange(frequency: .onEnd) { context in reportPublicViewport(context.region) }
-#endif
-        }
-        .overlay {
-            Image("PaperTexture")
-                .resizable(resizingMode: .tile)
-                .opacity(0.14)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-        .overlay {
-            SaveInkPalette.paper.opacity(0.08)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
         }
         .overlay(alignment: .bottomTrailing) {
             if let travelLabel {
@@ -879,25 +845,16 @@ struct SaveInkLiveMap: View {
                     .allowsHitTesting(false)
             }
         }
-        .frame(height: 190)
+        .frame(height: focusPlaceID == nil && !showsRoute ? 360 : 190)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            SaveInkRoughRoundedRect(cornerRadius: 18, seed: 42, amplitude: 0.45)
-                .stroke(SaveInkPalette.ink, lineWidth: 2)
-        )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(focusPlaceID == nil ? "ink.home.map" : "ink.place.map")
         .accessibilityLabel(mapAccessibilityLabel)
-        .onAppear(perform: fit)
-        .onChange(of: cameraToken) { _, _ in
-#if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-            if onPublicViewport != nil, position.positionedByUser { return }
-#endif
-            fit()
-        }
+        .onAppear { fitIfNeeded() }
+        .onChange(of: cameraToken) { _, _ in fitIfNeeded() }
+        .onChange(of: focusPlaceID) { _, _ in fitIfNeeded(force: true) }
         .task(id: routeToken) { await loadRoute() }
     }
-
 
     private var mapAccessibilityLabel: String {
         if focusPlaceID != nil {
@@ -911,53 +868,7 @@ struct SaveInkLiveMap: View {
         return languageSettings.localized(english: "Saved places map", traditionalChinese: "已存地點地圖")
     }
 
-    @MapContentBuilder
-    private var savedPins: some MapContent {
-        ForEach(pins) { pin in
-            Annotation(pin.name, coordinate: pin.coordinate, anchor: .bottom) {
-                Button {
-                    onSelect(pin.id)
-                } label: {
-                    SaveInkMapPin(visited: pin.visited)
-                        .frame(width: 22, height: 30)
-                        .frame(width: 44, height: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(pin.visited ? languageSettings.localized(english: "\(pin.name), visited", traditionalChinese: "\(pin.name)，去過") : languageSettings.localized(english: "\(pin.name), saved, not visited", traditionalChinese: "\(pin.name)，存了還沒去"))
-            }
-        }
-    }
-
 #if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-    @MapContentBuilder
-    private func publicPins(_ venues: [LivePublicDiscoveryVenue], proxy: MapProxy) -> some MapContent {
-        ForEach(LivePublicDiscoveryPinGroup.grouping(venues, project: { place in
-            proxy.convert(CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude), to: .local)
-        })) { group in
-            let place = group.venues[0].place
-            let location = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
-            let isTopic = group.venues.contains { $0.recentTopicAccountCount(at: Date()) != nil }
-            let label = group.venues.count == 1 ? place.name
-                : languageSettings.localized(english: "\(group.venues.count) public places", traditionalChinese: "\(group.venues.count) 個公開地點")
-            Annotation(label, coordinate: location, anchor: .bottom) {
-                Button { onPublicSelect?(group) } label: {
-                    Image(systemName: isTopic ? "flame" : group.venues.count > 1 ? "bubble.left.and.bubble.right" : "bubble.left")
-                        .foregroundStyle(SaveInkPalette.ink)
-                        .padding(7)
-                        .background(SaveInkPalette.paper, in: Circle())
-                        .overlay(Circle().strokeBorder(SaveInkPalette.ink, lineWidth: 1.3))
-                        .frame(width: 44, height: 44, alignment: .bottom)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isTopic ? languageSettings.localized(english: "\(label), recent topic",
-                    traditionalChinese: "\(label)，近期話題") : label)
-                .accessibilityIdentifier("ink.map.public.\(group.id)")
-            }
-            .annotationTitles(.hidden)
-        }
-    }
-
     private func reportPublicViewport(_ region: MKCoordinateRegion) {
         if let viewport = LivePublicDiscoveryViewport.mapRegion(
             latitude: region.center.latitude, longitude: region.center.longitude,
@@ -991,29 +902,19 @@ struct SaveInkLiveMap: View {
         return nil
     }
 
-    private func fit() {
-        let focusedCoordinate = focused.flatMap(Self.coordinate(of:))
-        if let region = SaveInkMapCamera.region(
-            around: pins.map(\.coordinate),
-            user: userCoordinate,
-            focused: focusedCoordinate
-        ) {
-            position = .region(region)
+    private func fitIfNeeded(force: Bool = false) {
+        // Pin refreshes and location updates must not take over a camera the
+        // user has already moved. Only an explicit new focus reframes it.
+        var region = SaveInkMapCamera.region(
+            around: pins.map(\.coordinate), user: userCoordinate,
+            focused: focused.flatMap(Self.coordinate(of:))
+        )
 #if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-            reportPublicViewport(region)
+        if region == nil, onPublicViewport != nil { region = publicMapSeedRegion }
 #endif
-            return
-        }
-        if userCoordinate != nil {
-            position = .userLocation(fallback: .automatic)
-            return
-        }
+        pocketCamera.fit(region, explicit: force)
 #if SAVVY_MAIN_APP && SAVVY_PUBLIC_DISCOVERY_BACKEND
-        if onPublicViewport != nil {
-            let region = publicMapSeedRegion
-            position = .region(region)
-            reportPublicViewport(region)
-        }
+        if let region, pocketCamera.lastRegion == nil { reportPublicViewport(region) }
 #endif
     }
 
