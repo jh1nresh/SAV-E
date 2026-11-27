@@ -57,6 +57,8 @@ struct SavedGalleryWall<Photo: View>: View {
                         .font(.caption.weight(.medium)).padding(.horizontal, 14)
                         .frame(height: 28)
                         .background(palette.surface, in: Capsule())
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("gallery.lights")
