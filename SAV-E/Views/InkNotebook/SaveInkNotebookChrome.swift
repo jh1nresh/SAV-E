@@ -727,6 +727,7 @@ struct SaveInkLiveMap: View {
 #endif
 
     @State private var pocketMapFailed = false
+    @State private var pocketCreditsRequest = 0
     @State private var pocketCamera = SaveInkMapViewportState()
     @StateObject private var routeState = SaveInkMapRouteState()
 
@@ -827,7 +828,7 @@ struct SaveInkLiveMap: View {
                 PocketCitySurface(
                     pins: pocketPins, viewport: pocketCamera.viewport,
                     userDot: PocketCityUserDot(userCoordinate, label: languageSettings.localized(english: "My location", traditionalChinese: "我的位置")),
-                    routes: pocketRoutes, allowsRemoteTiles: false,
+                    routes: pocketRoutes, creditsRequest: pocketCreditsRequest, allowsRemoteTiles: true,
                     onSelect: selectPocketPin, onMove: pocketCameraMoved,
                     onFailure: { pocketMapFailed = true }
                 )
@@ -843,6 +844,20 @@ struct SaveInkLiveMap: View {
                     .background(Capsule().fill(SaveInkPalette.paper))
                     .padding(12)
                     .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if !pocketMapFailed {
+                Button { pocketCreditsRequest &+= 1 } label: {
+                    Image(systemName: "info.circle")
+                        .frame(width: 44, height: 44)
+                        .background(SaveInkPalette.paper, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SaveInkPalette.ink)
+                .accessibilityLabel(languageSettings.localized(english: "Map credits", traditionalChinese: "地圖來源"))
+                .accessibilityIdentifier("ink.map.credits")
+                .padding(8)
             }
         }
         .frame(height: focusPlaceID == nil && !showsRoute ? 360 : 190)

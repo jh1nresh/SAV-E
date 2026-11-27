@@ -425,7 +425,8 @@ struct PocketCityMap: UIViewRepresentable {
             let pinsChanged = screen.pins != sentPins
             let viewportChanged = screen.viewport != sentViewport
             let dotChanged = screen.userDot != sentDot
-            let routes = allowsRemoteTiles ? [] : screen.routes
+            // Route geometry stays in the local page regardless of the basemap tile provider.
+            let routes = screen.routes
             let routesChanged = routes != sentRoutes
             let presentationChanged = screen.presentation != sentPresentation
             guard pinsChanged || viewportChanged || dotChanged || routesChanged || presentationChanged else { return }
