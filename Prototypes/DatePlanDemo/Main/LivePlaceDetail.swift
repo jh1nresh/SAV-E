@@ -65,7 +65,7 @@ struct LivePlaceDetail: View {
         websitePhoto.cancel()
         await information.load(pin: pin, ownerSubject: ownerSubject, sessionGeneration: sessionGeneration)
         guard !Task.isCancelled else { return }
-        if case .available = LiveBusinessPhotoSource.resolve(pin.place) { return }
+        if LiveBusinessPhotoSource.resolve(pin.place).hasPhoto { return }
         await websitePhoto.load(website: information.item?.url, ownerSubject: ownerSubject, generation: sessionGeneration)
     }
 
@@ -163,7 +163,7 @@ struct LivePlaceDetail: View {
     private var identity: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(verbatim: pin.place.name)
+                Text(verbatim: displayIdentity.name)
                     .font(.title2.weight(.bold))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
@@ -178,11 +178,20 @@ struct LivePlaceDetail: View {
     }
 
     private var address: some View {
-        Text(verbatim: pin.place.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-             ? copy("Address unavailable", "尚無地址") : pin.place.address)
+        Text(verbatim: displayIdentity.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+             ? copy("Address unavailable", "尚無地址") : LivePlaceAddress.display(displayIdentity.address))
             .font(.body).foregroundStyle(DateTheme.muted)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
+    }
+
+    private var displayIdentity: (name: String, address: String) {
+        // Only present a reviewed branch's display identity for search results.
+        // Saved user titles, provider fields and navigation coordinates remain intact.
+        if pin.origin == .search, let creator = LiveCreatorCatalog.shared.match(pin.place) {
+            return (creator.name, creator.address)
+        }
+        return (pin.place.name, pin.place.address)
     }
 
     @ViewBuilder
@@ -232,10 +241,13 @@ struct LivePlaceDetail: View {
     }
 
     @ViewBuilder private var businessPhotos: some View {
-        if case .available = LiveBusinessPhotoSource.resolve(pin.place) {
+        if LiveBusinessPhotoSource.resolve(pin.place).hasPhoto {
             LiveBusinessPhoto(place: pin.place).frame(height: 200)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .accessibilityIdentifier("live.place.businessPhoto")
+            if case .bundled(let photo) = LiveBusinessPhotoSource.resolve(pin.place), let source = photo.original {
+                Link(photo.credit, destination: source).font(.caption).foregroundStyle(DateTheme.muted)
+            }
         } else if let image = websitePhoto.image {
             VStack(alignment: .leading, spacing: 4) {
                 Image(uiImage: image).resizable().scaledToFill().frame(height: 200).clipped()
@@ -292,7 +304,7 @@ struct LivePlaceDetail: View {
                         Image(systemName: "arrow.up.right").font(.caption)
                     }.font(.subheadline).frame(minHeight: 44)
                 }.accessibilityIdentifier("live.place.sourceLink")
-            } else {
+            } else if LiveCreatorCatalog.shared.match(pin.place) == nil {
                 Label(copy("No source link attached", "未附來源連結"), systemImage: "link")
                     .font(.caption).foregroundStyle(DateTheme.muted).frame(minHeight: 32)
             }
@@ -366,11 +378,50 @@ private struct LiveNativePlaceCard: UIViewControllerRepresentable {
         func mapItemDetailViewControllerDidFinish(_ detailViewController: MKMapItemDetailViewController) { onClose() }
     }
 }
+/// Presentation and comparison only. Never overwrites provider/user address data.
+/// Taiwan's municipality, street, house number and floor remain part of the key.
+enum LivePlaceAddress {
+    static func display(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let traditional = (trimmed.applyingTransform(StringTransform("Hans-Hant"), reverse: false) ?? trimmed)
+            .precomposedStringWithCompatibilityMapping.replacingOccurrences(of: "臺", with: "台")
+        let compact = traditional.components(separatedBy: .whitespacesAndNewlines).joined()
+        let country = #"(?:中國)?台灣(?:省)?"#
+        let postal = #"(?:[0-9]{3,6})?"#
+        let cities = "(?:台北市|新北市|桃園市|台中市|台南市|高雄市|基隆市|新竹市|嘉義市|新竹縣|苗栗縣|彰化縣|南投縣|雲林縣|嘉義縣|屏東縣|宜蘭縣|花蓮縣|台東縣|澎湖縣|金門縣|連江縣)"
+        let prefix = "^" + postal + "(?:" + country + ")?" + postal
+        guard compact.range(of: prefix + cities, options: .regularExpression) != nil else { return trimmed }
+        var result = compact.replacingOccurrences(of: prefix, with: "", options: .regularExpression)
+        // Collapse only an identical city/district prefix. Different districts
+        // remain distinct even if their road and house number happen to match.
+        let duplicate = "^(" + cities + "[^市縣區鄉鎮路街巷弄號0-9]{1,5}[區鄉鎮市])" + postal + "(?:" + country + ")?" + postal + #"\1"#
+        result = result.replacingOccurrences(of: duplicate, with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(?<=[區鄉鎮])[^區鄉鎮市路街巷弄號\d]{1,8}里"#, with: "", options: .regularExpression)
+        for (index, number) in Array("一二三四五六七八九十").enumerated() {
+            result = result.replacingOccurrences(of: "\(number)段", with: "\(index + 1)段")
+        }
+        result = result.replacingOccurrences(of: #"(\d+)號之(\d+)號?"#, with: "$1之$2號", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(\d+)-(\d+)號"#, with: "$1之$2號", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"(?i)(b?\d+)f"#, with: "$1樓", options: .regularExpression)
+        return result.replacingOccurrences(of: "一樓", with: "1樓")
+    }
+}
+
 /// A Debug-bundled public creator reference. It never writes Place, user notes, or visits.
 struct LiveCreatorCatalog: Decodable {
     struct Alias: Decodable { let provider: String; let id: String }
     struct MatchedPlace: Decodable {
         let name: String; let address: String; let latitude: Double; let longitude: Double
+        // An explicitly reviewed provider representation may have different coordinates.
+        // Its identity, paired text and observed location must all agree.
+        let provider: String?
+        let providerPlaceId: String?
+        var hasValidProviderIdentity: Bool {
+            if provider == nil && providerPlaceId == nil { return true }
+            return provider == "apple_maps"
+                && providerPlaceId?.range(of: #"^[A-Za-z0-9_-]{1,200}$"#, options: .regularExpression) != nil
+                && !address.isEmpty
+        }
     }
     struct Original: Decodable, Identifiable {
         var id: String { url }
@@ -419,6 +470,7 @@ struct LiveCreatorCatalog: Decodable {
             && (entry.matchedPlaces ?? []).allSatisfy {
                 !$0.name.isEmpty && $0.latitude.isFinite && $0.longitude.isFinite
                 && abs($0.latitude) <= 90 && abs($0.longitude) <= 180
+                && $0.hasValidProviderIdentity
             }
             && entry.posts.allSatisfy { post in
                 post.author == creator && post.text.count <= 4000
@@ -432,25 +484,15 @@ struct LiveCreatorCatalog: Decodable {
         return entries.first { $0.placeId == placeId }
     }
 
-    private static func folded(_ value: String) -> String {
-        value.precomposedStringWithCompatibilityMapping.lowercased()
-            .replacingOccurrences(of: "臺", with: "台").replacingOccurrences(of: "馆", with: "館")
-            .components(separatedBy: .whitespacesAndNewlines).joined()
-    }
     private static func nameKey(_ value: String) -> String {
-        String(String.UnicodeScalarView(folded(value).unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+        let traditional = value.applyingTransform(StringTransform("Hans-Hant"), reverse: false) ?? value
+        let folded = traditional.precomposedStringWithCompatibilityMapping.lowercased()
+            .replacingOccurrences(of: "臺", with: "台").replacingOccurrences(of: "麵", with: "面")
+        return String(String.UnicodeScalarView(folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
     }
     private static func addressKey(_ value: String) -> String {
-        var result = folded(value)
-        for (index, number) in Array("一二三四五六七八九十").enumerated() {
-            result = result.replacingOccurrences(of: "\(number)段", with: "\(index + 1)段")
-        }
-        result = result.replacingOccurrences(of: #"(\d+)號之(\d+)"#, with: "$1-$2號", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"(\d+)之(\d+)號"#, with: "$1-$2號", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"(b?\d+)f"#, with: "$1樓", options: .regularExpression)
-        result = result.replacingOccurrences(of: "一樓", with: "1樓")
-        result = result.replacingOccurrences(of: #"^(?:\d{3,6})?(?:台灣)?"#, with: "", options: .regularExpression)
-        return result.replacingOccurrences(of: #"(?<=[區鄉鎮])[^區鄉鎮市路街巷弄號\d]{1,8}里"#, with: "", options: .regularExpression)
+        LivePlaceAddress.display(value).precomposedStringWithCompatibilityMapping.lowercased()
+            .components(separatedBy: .whitespacesAndNewlines).joined()
     }
     func match(_ place: Place) -> Entry? {
         let key = LivePublicDiscoveryVenueKey(savedPlace: place)
@@ -458,7 +500,9 @@ struct LiveCreatorCatalog: Decodable {
             // Only paired names/addresses from the approved canonical match.
             // Never combine a brand alias with another branch's address.
             if (row.matchedPlaces ?? []).contains(where: { known in
-                Self.nameKey(known.name) == Self.nameKey(place.name)
+                known.hasValidProviderIdentity
+                && (known.provider == nil || (key?.provider == known.provider && key?.id == known.providerPlaceId))
+                && Self.nameKey(known.name) == Self.nameKey(place.name)
                 && Self.addressKey(known.address) == Self.addressKey(place.address)
                 && hypot((known.latitude - place.latitude) * 110540,
                          (known.longitude - place.longitude) * 111320 * cos(place.latitude * .pi / 180)) <= 65
@@ -478,33 +522,62 @@ struct LiveCreatorCatalog: Decodable {
 struct LiveCreatorSourceSection: View {
     let entry: LiveCreatorCatalog.Entry
     @Environment(\.appLanguageSettings) private var language
+    @State private var otherMentionsExpanded = false
     private func copy(_ en: String, _ zh: String) -> String {
         language.localized(english: en, traditionalChinese: zh)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(copy("Lala’s public list", "拉拉熊公開清單")).font(.subheadline.weight(.semibold))
+                .accessibilityIdentifier("live.place.creatorSources")
             Text(entry.lists.map { $0 == "visited" ? copy("Creator visited", "作者去過") : copy("Creator wants to go", "作者想去") }.joined(separator: " · "))
                 .font(.caption).foregroundStyle(.secondary)
             if let url = URL(string: "https://www.google.com/maps?cid=" + entry.cid) {
                 Link(copy("View list place", "查看清單地點"), destination: url).frame(minHeight: 44)
             }
-            ForEach(entry.posts) { post in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: post.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-                    if let url = URL(string: post.url) {
-                        Link("Threads · @\(post.author) · \(post.date)", destination: url)
-                            .font(.caption).frame(minHeight: 44)
-                    }
+            if let first = entry.posts.first {
+                sourcePost(first)
+            }
+            if entry.posts.count > 1 {
+                Button {
+                    otherMentionsExpanded.toggle()
+                } label: {
+                    Label(copy("Other mentions (\(entry.posts.count - 1))", "其他提及（\(entry.posts.count - 1)）"),
+                          systemImage: otherMentionsExpanded ? "chevron.up" : "chevron.down")
+                        .font(.subheadline).frame(minHeight: 44, alignment: .leading)
+                }
+                .buttonStyle(.plain).foregroundStyle(DateTheme.blue)
+                .accessibilityIdentifier("live.place.otherMentions")
+                .accessibilityValue(otherMentionsExpanded ? copy("Expanded", "已展開") : copy("Collapsed", "已收起"))
+                if otherMentionsExpanded {
+                    ForEach(Array(entry.posts.dropFirst())) { sourcePost($0) }
                 }
             }
-            Link(copy("List compiled by @2xin15__", "清單整理：@2xin15__"),
-                 destination: URL(string: "https://2xin15.github.io/lala-food/")!)
-                .font(.caption).frame(minHeight: 44)
             Text(copy("Transcribed from the public list; originals may change.", "公開清單轉錄 · 原文可能更新"))
                 .font(.caption2).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("live.place.creatorSources")
+            .onChange(of: entry.id) { _, _ in otherMentionsExpanded = false }
+    }
+
+    private func sourcePost(_ post: LiveCreatorCatalog.Original) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: post.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+            if let url = URL(string: post.url) {
+                Text("Threads · @\(post.author) · \(post.date)")
+                    .font(.caption).foregroundStyle(DateTheme.muted)
+                Link(destination: url) {
+                    Label(copy("Open original in Threads", "在 Threads 開啟原文"), systemImage: "arrow.up.right.square")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .padding(.horizontal, 14).padding(.vertical, 4)
+                        .foregroundStyle(DateTheme.blue)
+                        .background(DateTheme.soft, in: RoundedRectangle(cornerRadius: 14))
+                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("live.place.original." + post.id)
+            }
+        }
     }
 }
 #endif

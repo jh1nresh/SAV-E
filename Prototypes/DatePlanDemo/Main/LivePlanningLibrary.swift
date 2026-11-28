@@ -12,6 +12,7 @@ struct LivePlanningLibraryView: View {
     let onOpenReview: (UUID) -> Void
     let onClearReviewBatch: () -> Void
     let sharedQuery: Binding<String>?
+    let galleryLights: Binding<Bool>
     @Environment(\.appLanguageSettings) private var language
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
@@ -22,7 +23,7 @@ struct LivePlanningLibraryView: View {
     init(places: [Place], isLoading: Bool, onOpen: @escaping (Place) -> Void,
          onCapture: @escaping () -> Void, reviewCandidates: [PlaceReviewCandidate] = [],
          reviewBatchIDs: [UUID]? = nil, onOpenReview: @escaping (UUID) -> Void = { _ in },
-         onClearReviewBatch: @escaping () -> Void = {}, sharedQuery: Binding<String>? = nil) {
+         onClearReviewBatch: @escaping () -> Void = {}, sharedQuery: Binding<String>? = nil, galleryLights: Binding<Bool> = .constant(true)) {
         self.places = places
         self.isLoading = isLoading
         self.onOpen = onOpen
@@ -32,6 +33,7 @@ struct LivePlanningLibraryView: View {
         self.onOpenReview = onOpenReview
         self.onClearReviewBatch = onClearReviewBatch
         self.sharedQuery = sharedQuery
+        self.galleryLights = galleryLights
     }
 
     private var searchText: String { sharedQuery?.wrappedValue ?? query }
@@ -71,51 +73,38 @@ struct LivePlanningLibraryView: View {
                 .modifier(LiveLibraryCard())
             }
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    if reviewBatchIDs != nil {
-                        reviewSection(pending)
-                    } else if !pending.eligible.isEmpty {
-                        Button { reviewsExpanded.toggle() } label: {
-                            HStack(spacing: 8) {
-                                Text(copy("To review · \(pending.eligible.count)", "待確認 · \(pending.eligible.count)"))
-                                Spacer()
-                                Image(systemName: reviewsExpanded ? "chevron.down" : "chevron.right")
-                                    .accessibilityHidden(true)
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(minHeight: 44)
-                            .contentShape(Rectangle())
+            VStack(alignment: .leading, spacing: 12) {
+                if reviewBatchIDs != nil {
+                    ScrollView { reviewSection(pending) }.frame(maxHeight: 180)
+                } else if !pending.eligible.isEmpty {
+                    Button { reviewsExpanded.toggle() } label: {
+                        HStack(spacing: 8) {
+                            Text(copy("To review · \(pending.eligible.count)", "待確認 · \(pending.eligible.count)"))
+                            Spacer()
+                            Image(systemName: reviewsExpanded ? "chevron.down" : "chevron.right")
+                                .accessibilityHidden(true)
                         }
-                        .savvyPressFeedback()
-                        .accessibilityValue(reviewsExpanded ? copy("Expanded", "已展開") : copy("Collapsed", "已收合"))
-                        .accessibilityIdentifier("live.library.review.disclosure")
-                        if reviewsExpanded { reviewSection(pending) }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
-                    collectionHeader(collection)
-                    if isLoading {
-                        ProgressView(copy("Loading saved places…", "載入收藏…"))
-                            .font(.system(.subheadline, design: .rounded)).padding(.vertical, 16)
-                            .frame(maxWidth: .infinity)
-                    }
-                    if collection.matches.isEmpty && !isLoading {
-                        emptyState
-                    } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: dynamicTypeSize.isAccessibilitySize ? 320 : 142),
-                                                     spacing: 12, alignment: .top)],
-                                  alignment: .leading, spacing: 12) {
-                            ForEach(collection.matches) { entry in
-                                Button { onOpen(entry.place) } label: {
-                                    LiveLibraryPlaceTile(entry: entry)
-                                }
-                                .savvyPressFeedback()
-                                .accessibilityIdentifier("live.library.place.\(entry.id.uuidString)")
-                            }
-                        }
-                    }
-                }.padding(.bottom, 8)
-            }
-            .scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
+                    .savvyPressFeedback()
+                    .accessibilityValue(reviewsExpanded ? copy("Expanded", "已展開") : copy("Collapsed", "已收合"))
+                    .accessibilityIdentifier("live.library.review.disclosure")
+                    if reviewsExpanded { ScrollView { reviewSection(pending) }.frame(maxHeight: 180) }
+                }
+                collectionHeader(collection)
+                if isLoading {
+                    ProgressView(copy("Loading saved places…", "載入收藏…"))
+                        .font(.system(.subheadline, design: .rounded)).padding(.vertical, 16)
+                        .frame(maxWidth: .infinity)
+                }
+                if collection.matches.isEmpty && !isLoading {
+                    emptyState
+                } else {
+                    gallery(collection)
+                }
+            }.padding(.bottom, 8)
 
             if sharedQuery == nil {
                 Button(action: onCapture) {
@@ -134,6 +123,36 @@ struct LivePlanningLibraryView: View {
         .foregroundStyle(DateTheme.ink)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("live.library")
+    }
+
+    private func gallery(_ collection: LiveLibraryCollection) -> some View {
+        let entries = Dictionary(collection.matches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let items = collection.matches.map { entry -> SavedGalleryItem in
+            let source = LiveSavedPlaceCoverSource.resolve(entry.place)
+            let bundled: LiveBundledBusinessPhoto?
+            if case .business(.bundled(let local)) = source { bundled = local }
+            else { bundled = nil }
+            return SavedGalleryItem(
+                id: entry.id,
+                title: entry.place.name.isEmpty ? copy("Untitled saved place", "未命名收藏") : entry.place.name,
+                location: entry.location.isEmpty ? copy("Location unavailable", "暫無位置資訊") : entry.location,
+                symbol: entry.place.category.iconName, photoURL: source.url,
+                aspectRatio: bundled?.aspectRatio ?? 1.08,
+                photoCredit: bundled?.credit, photoSource: bundled?.original,
+                markedVisited: entry.place.status == .visited,
+                photoKindLabel: source.isSavedSource ? copy("Saved source image", "收藏來源圖片") : nil)
+        }
+        return SavedGalleryWall(items: items,
+            palette: SavedGalleryPalette(canvas: SaveBrandUI.canvas, surface: SaveBrandUI.surface,
+                                         ink: SaveBrandUI.ink, muted: SaveBrandUI.muted,
+                                         accent: SaveBrandUI.accent, pink: SaveBrandUI.soft),
+            chinese: copy("en", "zh") == "zh", lightsOn: galleryLights,
+            onOpen: { id in
+                // Resolve against the current account's collection before opening.
+                if let entry = entries[id] { onOpen(entry.place) }
+            }, photo: { item in
+                if let entry = entries[item.id] { LiveSavedPlaceCover(place: entry.place) }
+            })
     }
 
     private func collectionHeader(_ collection: LiveLibraryCollection) -> some View {
@@ -511,51 +530,6 @@ struct LiveLibraryCollection {
                     || entry.place.address.localizedStandardContains(text)
                     || entry.location.localizedStandardContains(text))
         }
-    }
-}
-
-@MainActor
-private struct LiveLibraryPlaceTile: View {
-    let entry: LiveLibraryCollection.Entry
-    @Environment(\.appLanguageSettings) private var language
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let place = entry.place
-        let visited = place.status == .visited
-        let location = entry.location.isEmpty
-            ? language.localized(english: "Location unavailable", traditionalChinese: "暫無位置資訊")
-            : entry.location
-        VStack(alignment: .leading, spacing: 0) {
-            Color.clear.aspectRatio(1.27, contentMode: .fit)
-                .overlay { LiveBusinessPhoto(place: place) }
-                .clipped()
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(place.name.isEmpty
-                     ? language.localized(english: "Untitled saved place", traditionalChinese: "未命名收藏")
-                     : place.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                Text(location)
-                    .font(.caption)
-                    .foregroundStyle(DateTheme.muted)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .accessibilityLabel(place.address.isEmpty ? location : place.address)
-                if visited {
-                    Text(language.localized(english: "Marked visited", traditionalChinese: "標記去過"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(DateTheme.muted)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-        }
-        .multilineTextAlignment(.leading)
-        .background(DateTheme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
     }
 }
 

@@ -4,6 +4,7 @@ import XCTest
 /// Actual ContentView/root/canonical modal rail; all input and screenshots are explicitly synthetic.
 final class LivePlanningReviewUITests: SAVEUITestCase {
 
+
     @MainActor
     func testReviewedVenueOriginalsFromSavedAndExplore() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["SAVE_UI_TEST_LIVE_VENUE_ORIGINALS"] == "1",
@@ -219,5 +220,159 @@ final class LivePlanningReviewUITests: SAVEUITestCase {
         XCTAssertTrue(element.isHittable, "Expected a reachable native control: \(element.identifier)")
         element.tap()
     }
+}
+#endif
+
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
+import XCTest
+
+final class LiveCreatorOriginalsUITests: SAVEUITestCase {
+    @MainActor
+    func testLiveNativeSourceDisclosureAndOriginalDestinations() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SAVE_LIVE_APPLE_PLACE_PROBE"] == "1", "Explicit public native lookup")
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline", "--uitest-native-creator-sources"],
+                          launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString, "SAVE_LIVE_APPLE_PLACE_PROBE": "1"])
+        launch(app)
+        let toggle = app.buttons["live.place.otherMentions"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: stepTimeout))
+        let urls = ["https://www.threads.com/@zeke_6973/post/Dd_T2fQAXTU",
+                    "https://www.threads.com/@zeke_6973/post/DfEObM2ID6l",
+                    "https://www.threads.com/@zeke_6973/post/DfEPZk4IGxq"]
+        func link(_ url: String) -> XCUIElement {
+            app.descendants(matching: .any).matching(identifier: "live.place.original." + url).firstMatch
+        }
+        func reveal(_ element: XCUIElement, upward: Bool = true) {
+            for _ in 0..<6 {
+                if element.exists && element.isHittable { return }
+                if upward { app.swipeUp() } else { app.swipeDown() }
+            }
+            XCTAssertTrue(element.isHittable)
+        }
+        XCTAssertTrue(link(urls[0]).exists)
+        XCTAssertFalse(link(urls[1]).exists)
+        XCTAssertFalse(link(urls[2]).exists)
+        reveal(toggle)
+        attach(app, name: "live-jingmei-one-source-collapsed")
+        toggle.tap()
+        XCTAssertTrue(link(urls[1]).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(link(urls[2]).exists)
+        reveal(link(urls[2]))
+        attach(app, name: "live-jingmei-other-mentions-expanded")
+        for (index, url) in urls.enumerated() {
+            reveal(link(url), upward: index > 0)
+            link(url).tap()
+            XCTAssertEqual(app.staticTexts["probe.openedURL"].label, url,
+                           "Each actual Link must hand off its own original URL")
+        }
+        reveal(toggle, upward: false)
+        toggle.tap()
+        XCTAssertTrue(link(urls[1]).waitForNonExistence(timeout: stepTimeout))
+        XCTAssertFalse(link(urls[2]).exists)
+        XCTAssertTrue(link(urls[0]).exists)
+    }
+}
+#endif
+
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
+final class LiveMapSearchUXUITests: SAVEUITestCase {
+    @MainActor
+    func testSearchSheetResultsReturnAndHistory() throws {
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline", "--uitest-map-search"],
+                          launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        let map = app.buttons["demo.tab.map"]
+        XCTAssertTrue(map.waitForExistence(timeout: stepTimeout)); map.tap()
+        let open = app.buttons["live.search"]
+        XCTAssertTrue(open.waitForExistence(timeout: stepTimeout)); open.tap()
+        let food = app.buttons["live.map.search.nearby.food"]
+        XCTAssertTrue(food.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["live.map.search.nearby.coffee"].exists)
+        XCTAssertFalse(app.buttons["live.map.search.clearRecent"].exists)
+        let close = app.buttons["live.map.search.close"]
+        XCTAssertGreaterThan(close.frame.minY, app.frame.height * 0.35, "Search begins as a half sheet")
+        attach(app, name: "map-search-half-sheet-initial")
+        food.tap()
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "live.map.search.result.")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout)); result.tap()
+        let detailClose = app.buttons["live.place.close"]
+        XCTAssertTrue(detailClose.waitForExistence(timeout: stepTimeout), "Pick must open the native place detail")
+        XCTAssertTrue(app.staticTexts["Search Fixture Café"].exists)
+        detailClose.tap()
+        XCTAssertTrue(open.waitForExistence(timeout: stepTimeout)); open.tap()
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
+        let search = app.searchFields.firstMatch
+        XCTAssertEqual(search.value as? String, "Food")
+        attach(app, name: "map-search-preserved-results")
+        search.tap()
+        search.buttons.firstMatch.tap()
+        let recent = app.buttons["live.map.search.recent.Food"]
+        XCTAssertTrue(recent.waitForExistence(timeout: stepTimeout))
+        app.swipeUp()
+        attach(app, name: "map-search-recent-and-categories")
+        let clear = app.buttons["live.map.search.clearRecent"]
+        XCTAssertTrue(clear.isHittable); clear.tap()
+        XCTAssertFalse(recent.exists)
+        XCTAssertTrue(food.exists)
+        search.tap(); search.typeText("Coffee")
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout), "Typing should produce results without submit")
+        close.tap()
+    }
+}
+#endif
+
+#if DEBUG && SAVVY_DATE_PLAN_PHONE_PREVIEW && targetEnvironment(simulator)
+import XCTest
+
+final class LiveSavedGalleryCordUITests: SAVEUITestCase {
+    @MainActor
+    func testDarkGalleryTapIlluminatesAndOpensDetailImmediately() {
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
+            "--uitest-reviewed-venue-posts", "--preview-tab-saved", "--uitest-force-light"],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString, "SAVE_UI_TEST_SOURCE_COVER": "1"])
+        launch(app)
+        let bulb = app.buttons["gallery.bulb"]
+        XCTAssertTrue(bulb.waitForExistence(timeout: launchTimeout))
+        bulb.tap()
+        XCTAssertEqual(bulb.value as? String, "Off")
+        let first = app.buttons["live.library.place.C77AF9C1-064A-45D0-833D-E0C809C1F013"]
+        XCTAssertEqual(first.value as? String, "Dim")
+        XCTAssertTrue(first.label.contains("收藏來源圖片") || first.label.contains("Saved source image"),
+                      "The frame exposes source-image provenance to VoiceOver")
+        first.tap()
+        let close = app.buttons["live.place.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout), "A single tap opens details")
+        close.tap()
+        XCTAssertTrue(first.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(first.value as? String, "Illuminated", "The tapped frame stays illuminated behind its detail")
+        attach(app, name: "gallery-tap-light-after-detail")
+        bulb.tap(); bulb.tap()
+        XCTAssertEqual(first.value as? String, "Dim", "The room switch still resets the gallery")
+    }
+
+    @MainActor
+    func testGalleryCordTracksPullAndResetsForRepeatedInput() {
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
+            "--uitest-reviewed-venue-posts", "--preview-tab-saved", "--uitest-force-light"],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        let lights = app.buttons["gallery.bulb"]
+        let bulb = app.buttons["gallery.bulb"]
+        XCTAssertTrue(bulb.waitForExistence(timeout: launchTimeout))
+        XCTAssertEqual(lights.value as? String, "On")
+        let handle = bulb.coordinate(withNormalizedOffset: .init(dx: 0.5, dy: 0.5))
+            .withOffset(.init(dx: 0, dy: 90))
+        handle.press(forDuration: 0.1, thenDragTo: handle.withOffset(.init(dx: -12, dy: 65)))
+        XCTAssertEqual(lights.value as? String, "Off")
+        attach(app, name: "gallery-cord-off")
+        handle.press(forDuration: 0.1, thenDragTo: handle.withOffset(.init(dx: 5, dy: 12)))
+        XCTAssertEqual(lights.value as? String, "Off", "A short pull must not toggle")
+        handle.press(forDuration: 0.1, thenDragTo: handle.withOffset(.init(dx: 8, dy: 65)))
+        XCTAssertEqual(lights.value as? String, "On", "The returned handle remains draggable")
+        XCTAssertFalse(app.buttons["live.place.close"].exists, "Pulling must not open the underlying place")
+        attach(app, name: "gallery-cord-on")
+        bulb.tap()
+        XCTAssertEqual(lights.value as? String, "Off", "Direct button remains available")
+    }
+
 }
 #endif

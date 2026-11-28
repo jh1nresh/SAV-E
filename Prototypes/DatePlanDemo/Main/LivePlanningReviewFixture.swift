@@ -12,7 +12,7 @@ final class LivePlanningReviewFixture {
 
     nonisolated static func requestedNamespace(arguments: [String], environment: [String: String]) -> UUID? {
         let allowedTestFlags: Set<String> = ["--uitest-live-review-rail", "--uitest-review-demo-offline",
-            "--uitest-location-denied", "--uitest-force-dark", "--uitest-force-light", "--uitest-reviewed-venue-posts"]
+            "--uitest-location-denied", "--uitest-force-dark", "--uitest-force-light", "--uitest-reviewed-venue-posts", "--uitest-native-creator-sources", "--uitest-map-search"]
         guard hasLaunchIntent(arguments: arguments), arguments.contains("--uitest-review-demo-offline"),
               !arguments.contains(where: { $0.hasPrefix("--uitest-") && !allowedTestFlags.contains($0) }),
               let raw = environment["SAVE_UI_TEST_STORAGE_ID"], raw.count == 36 else { return nil }
@@ -101,11 +101,21 @@ final class LivePlanningReviewFixture {
             entitlementResolvedProvider: { false }, usesRemotePersistence: false)
         let denied = LiveReviewDeniedBackend(servesReviewedVenue: seedsReviewedVenue)
         self.discoveryBackend = denied
-        self.dependencies = LivePlanningDependencies(
+        var dependencies = LivePlanningDependencies(
             outing: LiveOutingModel(ownerSubject: owner, sessionGeneration: 0, backend: denied, sessionIsCurrent: isCurrent),
             plan: LiveRoutePlan(ownerSubject: owner, sessionGeneration: 0,
                 makeDirections: { _ in LiveReviewDeniedDirections() }, sessionIsCurrent: isCurrent),
             discovery: LivePublicDiscoveryModel(backend: denied, sessionIsCurrent: isCurrent), sessionIsCurrent: isCurrent)
+        if ProcessInfo.processInfo.arguments.contains("--uitest-map-search") {
+            dependencies.mapSearch = LiveMapSearchModel { text, _ in
+                if text == "Unavailable" { throw URLError(.notConnectedToInternet) }
+                if text == "No matches" { return [] }
+                let item = MKMapItem(placemark: MKPlacemark(coordinate: .init(latitude: 25.04, longitude: 121.54)))
+                item.name = "Search Fixture Café"
+                return LiveMapPlace.search(item).map { [$0] } ?? []
+            }
+        }
+        self.dependencies = dependencies
     }
 
     func makeVenueDiscovery() -> LivePublicDiscoveryModel {
@@ -118,7 +128,8 @@ final class LivePlanningReviewFixture {
         name: "Café Fixture", address: "2 Fixture St", latitude: 25.0354, longitude: 121.5620,
         googlePlaceId: "ChIJFixtureCafe", category: .food, status: .visited, rating: nil,
         note: nil, sourceUrl: nil, sourcePlatform: .other, coordinateSystem: .wgs84, locationProvider: .googlePlaces,
-        sourceImageUrl: nil, extractedDishes: nil, priceRange: nil, recommender: nil, googleRating: nil,
+        sourceImageUrl: ProcessInfo.processInfo.environment["SAVE_UI_TEST_SOURCE_COVER"] == "1"
+            ? "https://images.example.invalid/redacted-post-screenshot.jpg" : nil, extractedDishes: nil, priceRange: nil, recommender: nil, googleRating: nil,
         googlePriceLevel: nil, openingHours: nil, createdAt: Date(timeIntervalSince1970: 1))
 }
 
@@ -131,7 +142,12 @@ struct LivePlanningReviewFixtureRoot: View {
         Group {
             if LivePlanningReviewFixture.isRequested && LivePlanningReviewFixture.hasNoActiveIdentity {
                 let fixture = LivePlanningReviewFixture.shared
-                if fixture.isCurrent { LivePlanningReviewFixtureContent(fixture: fixture) }
+                if fixture.isCurrent {
+                    if ProcessInfo.processInfo.arguments.contains("--uitest-native-creator-sources"),
+                       ProcessInfo.processInfo.environment["SAVE_LIVE_APPLE_PLACE_PROBE"] == "1" {
+                        LiveNativeCreatorSourceProbe(defaults: fixture.defaults)
+                    } else { LivePlanningReviewFixtureContent(fixture: fixture) }
+                }
                 else { unavailable }
             } else { unavailable }
         }
@@ -140,6 +156,49 @@ struct LivePlanningReviewFixtureRoot: View {
     private var unavailable: some View {
         Text("Synthetic review fixture unavailable. Use the exact isolated offline test flags.")
             .padding().accessibilityIdentifier("live.fixture.unavailable")
+    }
+}
+
+/// Explicit simulator-only public lookup. Auth/backend remain isolated; saves and
+/// navigation are disabled, and original links are intercepted for URL assertions.
+@MainActor
+private struct LiveNativeCreatorSourceProbe: View {
+    let defaults: UserDefaults
+    @State private var pin: LiveMapPlace?
+    @State private var error: String?
+    @State private var openedURL = ""
+    var body: some View {
+        Group {
+            if let pin {
+                LivePlaceDetail(pin: pin, isSaving: false, saveError: nil,
+                    onSave: nil, onOpenSaved: nil, onDirections: {}, onAddToOuting: nil,
+                    canAddToOuting: false, onClose: {})
+                    .environment(\.openURL, OpenURLAction { openedURL = $0.absoluteString; return .handled })
+            } else if let error { Text(error).accessibilityIdentifier("probe.lookupError") }
+            else { ProgressView("Reading public native place…") }
+        }
+        .environment(\.appLanguageSettings, AppLanguageSettings(userDefaults: defaults, preferredLanguages: { ["zh-Hant"] }))
+        .preferredColorScheme(.light)
+        .overlay(alignment: .bottom) {
+            Text(openedURL).font(.caption2).lineLimit(1).accessibilityIdentifier("probe.openedURL")
+        }
+        .task {
+            guard pin == nil else { return }
+            guard #available(iOS 18.0, *) else { error = "Native identifier unavailable"; return }
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = "十一香"
+            request.region = MKCoordinateRegion(center: .init(latitude: 24.993245, longitude: 121.541764),
+                                                 latitudinalMeters: 10000, longitudinalMeters: 10000)
+            request.resultTypes = .pointOfInterest
+            let search = MKLocalSearch(request: request)
+            defer { search.cancel() }
+            do {
+                let result = try await search.start()
+                guard let item = result.mapItems.first(where: { $0.identifier?.rawValue == "H2710I3F98C5753DCAB" }),
+                      let projection = LiveMapPlace.search(item) else { error = "Live Jingmei result missing"; return }
+                pin = projection
+            } catch { self.error = error.localizedDescription }
+        }
     }
 }
 

@@ -315,6 +315,28 @@
         "https://serv.gcis.nat.gov.tw/moeadsBF/cmpy/reportAction.do?fileName=379100000Gsetup11104.pdf&method=report&reportClass=bms&subPath=11104",
         "https://www.openstreetmap.org/node/3730158026",
         "https://www.openstreetmap.org/node/4033359736"
+      ],
+      "nativeMatches": [
+        {
+          "provider": "apple_maps",
+          "providerPlaceId": "H2710I3F98C5753DCAB",
+          "name": "十一香牛肉面(景美店)",
+          "address": "中国台湾省台北市文山区116台湾台北市文山区景华里景美街5巷2号之1号",
+          "latitude": 24.990345,
+          "longitude": 121.545582,
+          "observedAt": "2026-11-27",
+          "evidence": "Live MKLocalSearch for 十一香 in Jingmei returned this identifier and complete branch address in zh-Hans/en. 景美街5巷2之1號 matches the reviewed creator branch; 木柵路二段66號 is a separate result (H2710I3F9ADA23A5F03). Observed provider coordinate differs by about 500m; retain canonical map coordinate and require this exact identity, paired name/address and observed location."
+        },
+        {
+          "provider": "apple_maps",
+          "providerPlaceId": "H2710I3F98C5753DCAB",
+          "name": "11 Xiang Beef Noodles (Jingmei Shop)",
+          "address": "116 Taiwan Taibei City Wenshan Jinghuali Jingmei Street 5 Alley No.2 Zhi No.1, Wenshan, Taibei, Taiwan China",
+          "latitude": 24.990345,
+          "longitude": 121.545582,
+          "observedAt": "2026-11-27",
+          "evidence": "Live MKLocalSearch for 十一香 in Jingmei returned this identifier and complete branch address in zh-Hans/en. 景美街5巷2之1號 matches the reviewed creator branch; 木柵路二段66號 is a separate result (H2710I3F9ADA23A5F03). Observed provider coordinate differs by about 500m; retain canonical map coordinate and require this exact identity, paired name/address and observed location."
+        }
       ]
     },
     "16990795618530835403": {

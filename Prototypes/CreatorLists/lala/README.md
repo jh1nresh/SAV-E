@@ -34,6 +34,13 @@ Examples:
 
 - 十一香景美店 -> `poi/node/4033359736`, 3 source references. Reuses the named
   restaurant instead of the different 創意鍋麵 candidate at the same address.
+  A 2026-11-27 live `MKLocalSearch` observation returned native identifier
+  `H2710I3F98C5753DCAB` at 24.990345, 121.545582, about 500m from the canonical
+  coordinate. Its Chinese/English branch names and complete addresses are
+  explicitly reviewed in `nativeMatches`. Native attachment requires that
+  provider identifier, the paired name/address, and a position within 65m of
+  the observed provider position. This does not move the canonical pin or widen
+  matching for other stores; the separate 木柵 result remains unmatched.
 - Mo-Mo 復興牧場 -> `poi/node/6354698707`. Official branch address resolves the
   old 42/44 discrepancy; does not merge the nearby 路易莎.
 - 林振櫂燒麻糬 -> `savvy/apple_maps/H2710I3F9AE050E2C28`. Keeps the existing
