@@ -1635,16 +1635,69 @@ final class SaveInkNotebookTests: XCTestCase {
         )
     }
 
+    func testPocketCityResourceRecoveryStaysLightAfterHealthyBudgetReset() {
+        var recovery = PocketCityRecoveryBudget()
+        XCTAssertEqual(recovery.failed(at: 1, resourceLoss: true), .lighterRenderer)
+        XCTAssertEqual(recovery.failed(at: 2), .lighterRenderer)
+        XCTAssertEqual(recovery.failed(at: 3), .exhausted)
+        recovery.acknowledged(at: 4)
+        XCTAssertEqual(recovery.failed(at: 65), .lighterRenderer)
+        XCTAssertEqual(recovery.attempts, 1)
+        var navigation = PocketCityRecoveryBudget()
+        XCTAssertEqual(navigation.failed(at: 1), .reload)
+        XCTAssertEqual(navigation.failed(at: 2), .lighterRenderer)
+        XCTAssertEqual(navigation.failed(at: 3), .exhausted)
+    }
+
+    func testPocketCityCheckpointRejectsStaleAndInvalidCamera() {
+        let camera = [121.56, 25.03, 19.0, -12.0, 47.0]
+        let body: [String: Any] = ["viewportSerial": 3, "camera": camera]
+        XCTAssertEqual(PocketCityCameraCheckpoint.read(body, viewportSerial: 3), camera)
+        XCTAssertNil(PocketCityCameraCheckpoint.read(body, viewportSerial: 4))
+        for bad in [[Double.nan, 25, 19, 0, 47], [121, 25, 22, 0, 47], [121, 25, 19, 0, 66], [121, 25]] {
+            XCTAssertNil(PocketCityCameraCheckpoint.read(["viewportSerial": 3, "camera": bad], viewportSerial: 3))
+        }
+    }
+
+    func testPocketCityRefreshPreservesPanButExplicitFocusAndRetryReframe() throws {
+        let original = MKCoordinateRegion(center: .init(latitude: 25.03, longitude: 121.56),
+                                          span: .init(latitudeDelta: 0.008, longitudeDelta: 0.01))
+        let panned = MKCoordinateRegion(center: .init(latitude: 25.06, longitude: 121.52),
+                                        span: original.span)
+        var camera = SaveInkMapViewportState()
+        camera.fit(original)
+        let first = try XCTUnwrap(camera.viewport)
+        camera.observe(panned)
+        camera.fit(panned)
+        XCTAssertEqual(camera.viewport, first, "Pin/location refresh must not send another camera command")
+        camera.fit(original, explicit: true)
+        let focused = try XCTUnwrap(camera.viewport)
+        XCTAssertEqual(focused.bounds, first.bounds)
+        XCTAssertNotEqual(focused, first, "A same-building tenant still needs an explicit camera request after panning")
+        camera.retry()
+        XCTAssertEqual(camera.viewport, focused, "A failure before focus settles must not restore the previous pan")
+        camera.observe(panned)
+        camera.retry()
+        XCTAssertEqual(camera.viewport?.bounds, PocketCityViewport(panned)?.bounds)
+    }
+
     func testLiveMapStaysOffTheFixtureNotebook() throws {
         let chrome = try source("SAV-E/Views/InkNotebook/SaveInkNotebookChrome.swift")
         let screens = try source("SAV-E/Views/InkNotebook/SaveInkNotebookScreens.swift")
         XCTAssertTrue(chrome.contains("struct SaveInkWalkMap"))
         XCTAssertTrue(chrome.contains("struct SaveInkLiveMap"))
-        XCTAssertTrue(chrome.contains("emphasis: .muted"))
-        XCTAssertTrue(chrome.contains("pointsOfInterest: .excludingAll"))
-        XCTAssertTrue(chrome.contains("UserAnnotation()"))
+        let liveMap = try XCTUnwrap(chrome.components(separatedBy: "struct SaveInkLiveMap: View {").last?
+            .components(separatedBy: "enum SaveInkAppleMaps").first)
+        XCTAssertEqual(liveMap.components(separatedBy: "PocketCitySurface(").count - 1, 1)
+        XCTAssertFalse(liveMap.contains("Map(position:"))
+        XCTAssertFalse(liveMap.contains("appleMap"))
+        XCTAssertFalse(liveMap.contains("usesPocketCity"))
+        XCTAssertTrue(liveMap.contains("routes: pocketRoutes, creditsRequest: pocketCreditsRequest, allowsRemoteTiles: true"))
+        XCTAssertTrue(liveMap.contains("ink.map.credits"))
+        XCTAssertTrue(liveMap.contains("PocketCityUserDot(userCoordinate"))
+        XCTAssertTrue(liveMap.contains("kind: pin.visited ? .visited : .saved"))
+        XCTAssertTrue(liveMap.contains("ink.map.retry"))
         XCTAssertTrue(chrome.contains("SaveInkMapPin()"))
-        XCTAssertTrue(chrome.contains("SaveInkMapPin(visited: pin.visited)"))
         XCTAssertTrue(chrome.contains("head.fill(SaveInkPalette.ink)"))
         XCTAssertTrue(chrome.contains("PaperTexture"))
         XCTAssertTrue(chrome.contains("openInMaps"))

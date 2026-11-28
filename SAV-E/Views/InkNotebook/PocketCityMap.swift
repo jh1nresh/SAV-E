@@ -7,6 +7,7 @@ struct PocketCityRecoveryBudget {
     enum Decision: Equatable { case reload, lighterRenderer, exhausted }
 
     private(set) var attempts = 0
+    private(set) var usesLighterRenderer = false
     private var healthySince: TimeInterval?
 
     func acceptsProcessExit(committed: Bool) -> Bool {
@@ -17,12 +18,27 @@ struct PocketCityRecoveryBudget {
         if healthySince == nil { healthySince = time }
     }
 
-    mutating func failed(at time: TimeInterval) -> Decision {
+    mutating func failed(at time: TimeInterval, resourceLoss: Bool = false) -> Decision {
         if let healthySince, time - healthySince >= 60 { attempts = 0 }
         healthySince = nil
+        usesLighterRenderer = usesLighterRenderer || resourceLoss
         guard attempts < 2 else { return .exhausted }
         attempts += 1
-        return attempts == 1 ? .reload : .lighterRenderer
+        if attempts == 2 { usesLighterRenderer = true }
+        return usesLighterRenderer ? .lighterRenderer : .reload
+    }
+}
+
+/// Gesture checkpoints are camera-only; they must not refresh discovery or
+/// replace a newer explicit native camera request.
+struct PocketCityCameraCheckpoint {
+    static func read(_ body: [String: Any], viewportSerial: Int) -> [Double]? {
+        guard (body["viewportSerial"] as? Int ?? 0) == viewportSerial,
+              let camera = body["camera"] as? [Double], camera.count == 5,
+              camera.allSatisfy(\.isFinite), (-180...180).contains(camera[0]),
+              (-90...90).contains(camera[1]), (-2...21.6).contains(camera[2]),
+              (-180...180).contains(camera[3]), (0...65).contains(camera[4]) else { return nil }
+        return camera
     }
 }
 
@@ -364,9 +380,9 @@ struct PocketCityMap: UIViewRepresentable {
             }
         }
 
-        private func recover(_ view: WKWebView, reason: String, code: Int = 0) {
+        private func recover(_ view: WKWebView, reason: String, code: Int = 0, resourceLoss: Bool = false) {
             guard web === view, basePage != nil else { return }
-            let decision = recovery.failed(at: ProcessInfo.processInfo.systemUptime)
+            let decision = recovery.failed(at: ProcessInfo.processInfo.systemUptime, resourceLoss: resourceLoss)
             log.warning("Map recovery \(reason, privacy: .public) code=\(code, privacy: .public) attempts=\(self.recovery.attempts, privacy: .public)")
             guard decision != .exhausted else { fail(); return }
             screen.placeDrawer?.dismiss()
@@ -425,7 +441,8 @@ struct PocketCityMap: UIViewRepresentable {
             let pinsChanged = screen.pins != sentPins
             let viewportChanged = screen.viewport != sentViewport
             let dotChanged = screen.userDot != sentDot
-            let routes = allowsRemoteTiles ? [] : screen.routes
+            // Route geometry stays in the local page regardless of the basemap tile provider.
+            let routes = screen.routes
             let routesChanged = routes != sentRoutes
             let presentationChanged = screen.presentation != sentPresentation
             guard pinsChanged || viewportChanged || dotChanged || routesChanged || presentationChanged else { return }
@@ -468,7 +485,7 @@ struct PocketCityMap: UIViewRepresentable {
                         Task { [weak self, weak web] in
                             try? await Task.sleep(for: .milliseconds(300))
                             guard let self, let web, self.pageGeneration == generation else { return }
-                            self.recover(web, reason: "bridge-process-terminated", code: failure.code)
+                            self.recover(web, reason: "bridge-process-terminated", code: failure.code, resourceLoss: true)
                         }
                     } else {
                         self.recover(web, reason: "bridge", code: failure.code)
@@ -504,7 +521,7 @@ struct PocketCityMap: UIViewRepresentable {
             // When a navigation error has already replaced the page, this callback can
             // still describe the old process. Wait for the new navigation or its watchdog.
             guard recovery.acceptsProcessExit(committed: navigationCommitted) else { return }
-            recover(webView, reason: "web-content-terminated")
+            recover(webView, reason: "web-content-terminated", resourceLoss: true)
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
@@ -520,7 +537,8 @@ struct PocketCityMap: UIViewRepresentable {
             guard let navigation, navigation === self.navigation else { return }
             let failure = error as NSError
             if failure.domain == NSURLErrorDomain, failure.code == NSURLErrorCancelled { return }
-            recover(view, reason: "navigation", code: failure.code)
+            recover(view, reason: "navigation", code: failure.code,
+                    resourceLoss: failure.domain == WKError.errorDomain && failure.code == WKError.webContentProcessTerminated.rawValue)
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -535,7 +553,8 @@ struct PocketCityMap: UIViewRepresentable {
                 sync()
                 if pendingMapCredits { showMapCredits() }
             case "failure", "rendererLost":
-                if let web { recover(web, reason: body["event"] as? String == "rendererLost" ? "webgl-context-lost" : "initialization") }
+                if let web { recover(web, reason: body["event"] as? String == "rendererLost" ? "webgl-context-lost" : "initialization",
+                                             resourceLoss: body["event"] as? String == "rendererLost") }
             case "placeDetail" where ready:
                 guard screen.pageVisible, let drawer = screen.placeDrawer,
                       let data = body["detail"] as? [String: Any], let detail = PocketCityPlaceDetail(data)
@@ -559,15 +578,17 @@ struct PocketCityMap: UIViewRepresentable {
                 let requested = Set(ids)
                 let current = screen.pins.map(\.id).filter(requested.contains)
                 if !current.isEmpty { screen.onSelect(current) }
+            case "camera" where ready:
+                if let camera = PocketCityCameraCheckpoint.read(body, viewportSerial: viewportSerial) {
+                    lastCamera = camera
+                }
             case "move" where ready:
                 guard let values = body["region"] as? [Double], values.count == 4,
                       values.allSatisfy(\.isFinite), (-180...180).contains(values[0]),
                       (-85...85).contains(values[1]), (0...360).contains(values[2]),
                       (0...180).contains(values[3]), values[2] > 0, values[3] > 0 else { return }
                 guard (body["viewportSerial"] as? Int ?? 0) == viewportSerial else { return }
-                if let camera = body["camera"] as? [Double], camera.count == 5, camera.allSatisfy(\.isFinite),
-                   (-180...180).contains(camera[0]), (-90...90).contains(camera[1]),
-                   (-2...21.6).contains(camera[2]), (-180...180).contains(camera[3]), (0...65).contains(camera[4]) {
+                if let camera = PocketCityCameraCheckpoint.read(body, viewportSerial: viewportSerial) {
                     lastCamera = camera
                 }
                 screen.onMove(.init(center: .init(latitude: values[1], longitude: values[0]),

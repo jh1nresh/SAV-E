@@ -53,3 +53,33 @@ test('a moving figure keeps its position and mesh when neighbouring route packs 
   assert.deepEqual(render(next),after);
   assert.deepEqual(next.firstPosition,before.firstPosition);
 });
+
+test('native flat recovery retains walkers and offscreen districts release crowd buffers',t=>{
+  const prior={document:globalThis.document,matchMedia:globalThis.matchMedia};
+  globalThis.document={hidden:false};globalThis.matchMedia=()=>({matches:false});
+  t.after(()=>{for(const [key,value] of Object.entries(prior)){
+    if(value===undefined)delete globalThis[key];else globalThis[key]=value;
+  }});
+  const origin=[121.576,25.041],path={points:[origin,[121.577,25.041]],people:2};
+  const crowd=new StreetPeople('regression',origin,[path],16.65,true);
+  assert.equal(crowd.vertexData.byteLength,0);
+  let zoom=19,terrain=null,elevation=null,vertices;
+  const allocations=[];
+  crowd.map={getZoom:()=>zoom,getTerrain:()=>terrain,queryTerrainElevation:()=>elevation,
+    getBounds:()=>({toArray:()=>[[121.57,25.04],[121.58,25.05]],contains:()=>true})};
+  crowd.paused=true;
+  const noop=()=>{},gl=new Proxy({
+    bufferData:(_target,size)=>allocations.push(size),
+    bufferSubData:(_target,_offset,data,start,length)=>{vertices=data.slice(start,start+length);},
+  },{get:(obj,key)=>obj[key]??noop});
+  const render=()=>crowd.render(gl,{defaultProjectionData:{mainMatrix:new Float32Array(16)}});
+  render();assert.equal(crowd.count,2);assert(vertices.every(Number.isFinite));
+  const flat=vertices;
+  terrain={source:'dem'};render();assert.equal(crowd.count,0); // Never invent a hillside height.
+  elevation=12;render();assert.equal(crowd.count,2);
+  for(let i=2;i<vertices.length;i+=6)assert(Math.abs(vertices[i]-flat[i]-12)<.0001);
+  const allocated=crowd.vertexData.byteLength;
+  zoom=14;render();assert.equal(crowd.count,0);assert.equal(crowd.vertexData.byteLength,0);
+  assert.deepEqual(allocations,[allocated,0]);
+  zoom=19;render();assert.equal(crowd.count,2);assert.equal(allocations.at(-1),allocated);
+});

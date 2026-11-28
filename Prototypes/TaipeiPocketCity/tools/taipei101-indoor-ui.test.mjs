@@ -107,7 +107,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   assert(sharedIsVisible());assert(markerVisible(streetExit));
   assert.deepEqual(map.savvyAccountPlaceIds,[mallStreetExit4,canonical]);
   const selected=[];stage.addEventListener('mall101-floor',e=>selected.push(e.detail.floor));
-  panel=addTaipei101Indoor(map,{stage,Marker,startFloor:'B1',setCutaway:v=>cut.push(v),closePlace(){},openPlace:p=>cards.push(p),
+  panel=addTaipei101Indoor(map,{stage,Marker,setCutaway:v=>cut.push(v),closePlace(){},openPlace:p=>cards.push(p),
     load:async()=>({...venue,directory})});
   panel.setNames(false); // Preference changed while lazy assets were still loading.
   await Promise.resolve();await Promise.resolve();
@@ -131,7 +131,15 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
       _validate(...args){Style.prototype._validate.call(this,...args);return true;}},layer);
     assert.deepEqual(errors,[],layer.id);
   }
-  z=19;events.moveend();assert.equal(panel.state().floor,'B1');
+  const entry=stage.children.find(el=>el.className==='mall101-floor-entry');
+  assert(entry);assert(entry.hidden);assert(![...markers].some(m=>m.el===entry));
+  z=19;events.moveend();assert.equal(panel.state().active,false);assert.equal(pitch,47);
+  assert.equal(lastJump,undefined);assert.equal(entry.hidden,false);
+  container.handlers.get('click')({target:canvas,clientX:8,clientY:9,
+    stopImmediatePropagation(){assert.fail('outdoor gesture click must remain with the map');}});
+  assert.equal(panel.state().active,false);assert.equal(lastJump,undefined);
+  entry.click();assert.equal(panel.state().floor,'1F');assert.equal(z,19);
+  els['[data-floor-list]'].children.find(el=>el.dataset.floor==='B1').click();
   assert(panel.isContextPin(outside));assert(!panel.isContextPin(mall));
   assert(!markerVisible(streetExit));
   assert(panel.isPinVisible(exitPoint,'unrelated-saved-pin'));
@@ -259,20 +267,22 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   choose('2F');assert.equal(source.data.features.length,0);assert(els['[data-directory]'].children.length>1);
   assert(els['[data-directory]'].children.every(row=>row.children.every(el=>el.tag==='a')));
   assert.equal(plan.data.features.length,0);assert.equal(els['[data-floor-note]'].hidden,true);
+  const exitAt=z;
   els['[data-floor-exit]'].click();assert.equal(panel.state().active,false);assert.equal(pitch,47);
+  assert.equal(z,exitAt);assert.equal(entry.hidden,false);assert.equal(entry.focused,true);
   assert.deepEqual(map.savvyMallAdjacentPlaceIds,[]);
   assert(markerVisible(streetExit));
   assert(panel.isPinVisible(dinTaiFung.geometry.coordinates,'poi/'+dinTaiFung.id));
   assert(panel.isStreetPinVisible(dinTaiFung.geometry.coordinates,'din-tai-fung'));
   assert.deepEqual(paint,outdoorPaint);assert(!panel.isContextPin(outside));
   assert.equal(plan.data.features.length,0);
-  assert.equal(nav.hidden,true);assert.deepEqual(cut,[true,false]);assert.deepEqual(selected,['B1','B1','1F','B1','2F',null]);
+  assert.equal(nav.hidden,true);assert.deepEqual(cut,[true,false]);assert.deepEqual(selected,['1F','B1','B1','1F','B1','2F',null]);
   z=19;events.moveend();assert.equal(panel.state().active,false);
-  z=16;events.moveend();z=19;events.moveend();assert.equal(panel.state().floor,'1F');
+  z=16;events.moveend();z=19;events.moveend();assert.equal(panel.state().active,false);entry.click();assert.equal(panel.state().floor,'1F');
   map.savvySavedOnly=true;panel.refreshVisibility();assert.equal(panel.state().active,false);
   assert.deepEqual(paint,outdoorPaint);
   assert(panel.isPinVisible(hit.geometry.coordinates,'account-id'));
-  map.savvySavedOnly=false;panel.refreshVisibility();assert(panel.state().active);
+  map.savvySavedOnly=false;panel.refreshVisibility();assert(!panel.state().active);entry.click();assert(panel.state().active);
   loc.lng=121.57;events.moveend({pocketPlaceReveal:true});assert(panel.state().active);loc.lng=mall[0];
   const searched={name:hit.properties.name,id:'poi/'+hit.id,point:hit.geometry.coordinates};
   panel.openSearchPlace(searched);assert.equal(panel.state().floor,'B1');
@@ -280,7 +290,7 @@ test('zoom in, expand, select, inspect, leave and re-enter the same map',async t
   panel.openSearchPlace({...searched,id:'unknown'});
   assert.equal(panel.state().active,false);assert.equal(cards.at(-1).id,'unknown');
   assert(panel.isPinVisible(searched.point,'account-id'));
-  loc.lng=121.57;events.moveend();loc.lng=mall[0];events.moveend();assert(panel.state().active);
+  loc.lng=121.57;events.moveend();loc.lng=mall[0];events.moveend();assert(!panel.state().active);entry.click();assert(panel.state().active);
   loc.lng=121.57;events.moveend();assert.equal(panel.state().active,false);assert.equal(pitch,47);
   [loc.lng,loc.lat]=apple.geometry.coordinates;
   panel.openSearchPlace({name:apple.properties.name,id:'poi/'+apple.id,point:apple.geometry.coordinates});

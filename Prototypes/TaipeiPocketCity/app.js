@@ -51,7 +51,8 @@ const iosChannel=window.webkit?.messageHandlers?.pocketMap;
 if(iosChannel) document.documentElement.classList.add('ios-map');
 const preview=new URLSearchParams(location.search);
 const bundledTiles=preview.get('tiles')==='bundled';
-const appChrome=Boolean(iosChannel&&bundledTiles);
+// Native controls and resource limits apply to both local and remote basemaps.
+const appChrome=Boolean(iosChannel);
 const reducedLoad=appChrome&&preview.get('renderer')==='light';
 if(appChrome)document.documentElement.classList.add('ios-app-map');
 const lanternCamera={center:[121.84363,25.10852],zoom:20.25,mobileZoom:19.8,pitch:58,mobilePitch:56,bearing:138};
