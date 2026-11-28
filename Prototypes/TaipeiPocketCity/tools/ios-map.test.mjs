@@ -185,6 +185,35 @@ test('the atlas owns reviewed branch pins, with a separate action for the live n
   assert.equal(detail.hidden, true);
 });
 
+test('pinch checkpoints are bounded, camera-only, flushed on loss and cancelled on teardown', t => {
+  t.mock.timers.enable({apis:['setTimeout','Date'],now:1000});
+  const handlers=new Map(), canvasHandlers=new Map(), messages=[];
+  let zoom=17, boundsReads=0;
+  const canvas={addEventListener:(type,fn)=>canvasHandlers.set(type,fn),removeEventListener:type=>canvasHandlers.delete(type)};
+  const map={on(type,fn){const list=handlers.get(type)??[];list.push(fn);handlers.set(type,list);},
+    off(type,fn){handlers.set(type,(handlers.get(type)??[]).filter(f=>f!==fn));},
+    getCanvas:()=>canvas, getCenter:()=>({lng:121.56,lat:25.03}),getZoom:()=>zoom,getBearing:()=>-12,getPitch:()=>47,
+    getBounds:()=>{boundsReads++;return {getEast:()=>122,getWest:()=>120,getNorth:()=>26,getSouth:()=>24};}};
+  const emit=type=>{for(const fn of handlers.get(type)??[])fn();};
+  const bridge=connectIOSMap(map,class {},{postMessage:message=>messages.push(message)});
+  bridge.update({viewportSerial:3});boundsReads=0;
+  emit('move');assert.equal(messages.length,1);assert.equal(messages[0].event,'camera');
+  for(let i=0;i<50;i++){zoom=18+i/100;emit('move');}
+  assert.equal(messages.length,1);assert.equal(boundsReads,0);
+  t.mock.timers.tick(250);
+  assert.equal(messages.length,2);assert.equal(messages[1].camera[2],18.49);
+  assert.equal(messages[1].viewportSerial,3);assert.equal(boundsReads,0);
+  zoom=19;emit('move');canvasHandlers.get('webglcontextlost')();
+  assert.equal(messages.at(-1).camera[2],19);assert.equal(messages.at(-1).event,'camera');
+  t.mock.timers.tick(250);assert.equal(messages.length,3);
+  zoom=19.5;emit('move');zoom=20;emit('move');emit('moveend');
+  assert.equal(messages.at(-1).event,'move');assert.equal(messages.at(-1).camera[2],20);
+  const settledCount=messages.length;t.mock.timers.tick(250);assert.equal(messages.length,settledCount);
+  emit('move');emit('move');const count=messages.length;emit('remove');
+  t.mock.timers.tick(1000);emit('move');assert.equal(messages.length,count);
+  assert.equal(canvasHandlers.size,0);
+});
+
 test('camera replay follows presentation, supersedes bounds, and reports the acknowledged pose', () => {
   const calls = [], messages = [];
   const map = {

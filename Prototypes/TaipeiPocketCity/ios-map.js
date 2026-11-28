@@ -78,7 +78,6 @@ export function connectIOSMap(map, Marker, channel, controls, explore, {floorEve
         channel.postMessage({event:'select',ids:friendTarget.ids});
       }
     });
-    map.on('remove', () => clearTimeout(expiryTimer));
   }
 
   function updateRoutes(routes) {
@@ -231,19 +230,52 @@ export function connectIOSMap(map, Marker, channel, controls, explore, {floorEve
     }
   }
 
-  let viewportSerial;
-  function reportViewport() {
-    refresh();
+  let viewportSerial, checkpointTimer;
+  let lastCheckpointAt = -Infinity;
+  const cameraPose = () => {
     const center = map.getCenter?.();
-    const camera = center && [wrap(center.lng + 180) - 180, center.lat, map.getZoom(), map.getBearing(), map.getPitch()];
+    return center && [wrap(center.lng + 180) - 180, center.lat, map.getZoom(), map.getBearing(), map.getPitch()];
+  };
+  function cancelCheckpoint() { clearTimeout(checkpointTimer); checkpointTimer = undefined; }
+  function checkpointCamera() {
+    cancelCheckpoint();
+    const camera = cameraPose();
+    if (!validCamera(camera)) return;
+    lastCheckpointAt = Date.now();
+    const message = {event: 'camera', camera};
+    if (viewportSerial !== undefined) message.viewportSerial = viewportSerial;
+    channel.postMessage(message);
+  }
+  function scheduleCheckpoint() {
+    const remaining = 250 - (Date.now() - lastCheckpointAt);
+    if (remaining <= 0) checkpointCamera();
+    else if (checkpointTimer === undefined) checkpointTimer = setTimeout(checkpointCamera, remaining);
+  }
+  function reportViewport() {
+    cancelCheckpoint();
+    lastCheckpointAt = Date.now();
+    refresh();
+    const camera = cameraPose();
     const message = {event: 'move', region: visibleRegion(map.getBounds()).region};
     if (validCamera(camera)) message.camera = camera;
     if (viewportSerial !== undefined) message.viewportSerial = viewportSerial;
     channel.postMessage(message);
   }
+  // Camera-only checkpoints avoid pin layout and native discovery refreshes
+  // during a pinch. A renderer loss flushes the current pose before recovery.
+  map.on('move', scheduleCheckpoint);
   map.on('moveend', reportViewport);
+  const canvas = map.getCanvas?.();
+  canvas?.addEventListener('webglcontextlost', checkpointCamera);
+  map.on('remove', () => {
+    clearTimeout(expiryTimer);
+    floorEvents?.removeEventListener('mall101-floor', refresh);
+    cancelCheckpoint();
+    map.off?.('move', scheduleCheckpoint);
+    map.off?.('moveend', reportViewport);
+    canvas?.removeEventListener('webglcontextlost', checkpointCamera);
+  });
   floorEvents?.addEventListener('mall101-floor', refresh);
-  if (floorEvents) map.on('remove', () => floorEvents.removeEventListener('mall101-floor', refresh));
   const host = {
     update(state) {
       if (Array.isArray(state.pins)) pins = state.pins;

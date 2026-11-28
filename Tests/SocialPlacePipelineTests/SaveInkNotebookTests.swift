@@ -1635,6 +1635,30 @@ final class SaveInkNotebookTests: XCTestCase {
         )
     }
 
+    func testPocketCityResourceRecoveryStaysLightAfterHealthyBudgetReset() {
+        var recovery = PocketCityRecoveryBudget()
+        XCTAssertEqual(recovery.failed(at: 1, resourceLoss: true), .lighterRenderer)
+        XCTAssertEqual(recovery.failed(at: 2), .lighterRenderer)
+        XCTAssertEqual(recovery.failed(at: 3), .exhausted)
+        recovery.acknowledged(at: 4)
+        XCTAssertEqual(recovery.failed(at: 65), .lighterRenderer)
+        XCTAssertEqual(recovery.attempts, 1)
+        var navigation = PocketCityRecoveryBudget()
+        XCTAssertEqual(navigation.failed(at: 1), .reload)
+        XCTAssertEqual(navigation.failed(at: 2), .lighterRenderer)
+        XCTAssertEqual(navigation.failed(at: 3), .exhausted)
+    }
+
+    func testPocketCityCheckpointRejectsStaleAndInvalidCamera() {
+        let camera = [121.56, 25.03, 19.0, -12.0, 47.0]
+        let body: [String: Any] = ["viewportSerial": 3, "camera": camera]
+        XCTAssertEqual(PocketCityCameraCheckpoint.read(body, viewportSerial: 3), camera)
+        XCTAssertNil(PocketCityCameraCheckpoint.read(body, viewportSerial: 4))
+        for bad in [[Double.nan, 25, 19, 0, 47], [121, 25, 22, 0, 47], [121, 25, 19, 0, 66], [121, 25]] {
+            XCTAssertNil(PocketCityCameraCheckpoint.read(["viewportSerial": 3, "camera": bad], viewportSerial: 3))
+        }
+    }
+
     func testPocketCityRefreshPreservesPanButExplicitFocusAndRetryReframe() throws {
         let original = MKCoordinateRegion(center: .init(latitude: 25.03, longitude: 121.56),
                                           span: .init(latitudeDelta: 0.008, longitudeDelta: 0.01))
