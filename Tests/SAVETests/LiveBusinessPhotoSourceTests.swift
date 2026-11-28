@@ -130,6 +130,25 @@ final class LiveBusinessPhotoSourceTests: XCTestCase {
         XCTAssertNil(LiveBundledBusinessPhoto.match(fixture(), in: []))
     }
 
+    func testSavedSourceCoverStaysSeparateFromBusinessPhotoAndDoesNotMutatePlace() throws {
+        let place = fixture(sourceImage: sourceURL)
+        let original = place
+        XCTAssertEqual(LiveSavedPlaceCoverSource.resolve(place), .savedSource(try XCTUnwrap(URL(string: sourceURL))))
+        XCTAssertTrue(LiveSavedPlaceCoverSource.resolve(place).isSavedSource)
+        XCTAssertEqual(LiveBusinessPhotoSource.resolve(place), .missingMetadata)
+        XCTAssertEqual(place, original)
+    }
+
+    func testSavedCoverPrefersBusinessPhotoAndRejectsUnsafeOrRestrictedSource() throws {
+        XCTAssertEqual(LiveSavedPlaceCoverSource.resolve(fixture(photos: [businessURL], sourceImage: sourceURL)),
+                       .business(.available(try XCTUnwrap(URL(string: businessURL)))))
+        for value in [googleURL, "https://lh3.googleusercontent.com/p/synthetic", "file:///tmp/private.jpg",
+                      "http://example.invalid/image.jpg", "https://user:secret@example.invalid/image.jpg", "relative.jpg", ""] {
+            XCTAssertEqual(LiveSavedPlaceCoverSource.resolve(fixture(sourceImage: value)), .missing)
+        }
+        XCTAssertEqual(LiveSavedPlaceCoverSource.resolve(fixture()), .missing)
+    }
+
     private func catalogRow() -> LiveBundledBusinessPhoto {
         LiveBundledBusinessPhoto(id: "poi/node/123", name: "Redacted Business", point: [121.54, 25.03],
                                  file: "fixture.jpg", alt: "Fixture", credit: "Fixture attribution",

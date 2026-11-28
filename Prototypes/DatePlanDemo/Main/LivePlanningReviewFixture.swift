@@ -128,7 +128,8 @@ final class LivePlanningReviewFixture {
         name: "Café Fixture", address: "2 Fixture St", latitude: 25.0354, longitude: 121.5620,
         googlePlaceId: "ChIJFixtureCafe", category: .food, status: .visited, rating: nil,
         note: nil, sourceUrl: nil, sourcePlatform: .other, coordinateSystem: .wgs84, locationProvider: .googlePlaces,
-        sourceImageUrl: nil, extractedDishes: nil, priceRange: nil, recommender: nil, googleRating: nil,
+        sourceImageUrl: ProcessInfo.processInfo.environment["SAVE_UI_TEST_SOURCE_COVER"] == "1"
+            ? "https://images.example.invalid/redacted-post-screenshot.jpg" : nil, extractedDishes: nil, priceRange: nil, recommender: nil, googleRating: nil,
         googlePriceLevel: nil, openingHours: nil, createdAt: Date(timeIntervalSince1970: 1))
 }
 

@@ -128,22 +128,19 @@ struct LivePlanningLibraryView: View {
     private func gallery(_ collection: LiveLibraryCollection) -> some View {
         let entries = Dictionary(collection.matches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let items = collection.matches.map { entry -> SavedGalleryItem in
-            let source = LiveBusinessPhotoSource.resolve(entry.place)
-            let url: URL?
+            let source = LiveSavedPlaceCoverSource.resolve(entry.place)
             let bundled: LiveBundledBusinessPhoto?
-            switch source {
-            case .available(let remote): url = remote; bundled = nil
-            case .bundled(let local): url = local.fileURL; bundled = local
-            default: url = nil; bundled = nil
-            }
+            if case .business(.bundled(let local)) = source { bundled = local }
+            else { bundled = nil }
             return SavedGalleryItem(
                 id: entry.id,
                 title: entry.place.name.isEmpty ? copy("Untitled saved place", "未命名收藏") : entry.place.name,
                 location: entry.location.isEmpty ? copy("Location unavailable", "暫無位置資訊") : entry.location,
-                symbol: entry.place.category.iconName, photoURL: url,
+                symbol: entry.place.category.iconName, photoURL: source.url,
                 aspectRatio: bundled?.aspectRatio ?? 1.08,
                 photoCredit: bundled?.credit, photoSource: bundled?.original,
-                markedVisited: entry.place.status == .visited)
+                markedVisited: entry.place.status == .visited,
+                photoKindLabel: source.isSavedSource ? copy("Saved source image", "收藏來源圖片") : nil)
         }
         return SavedGalleryWall(items: items,
             palette: SavedGalleryPalette(canvas: SaveBrandUI.canvas, surface: SaveBrandUI.surface,
@@ -154,7 +151,7 @@ struct LivePlanningLibraryView: View {
                 // Resolve against the current account's collection before opening.
                 if let entry = entries[id] { onOpen(entry.place) }
             }, photo: { item in
-                if let entry = entries[item.id] { LiveBusinessPhoto(place: entry.place) }
+                if let entry = entries[item.id] { LiveSavedPlaceCover(place: entry.place) }
             })
     }
 

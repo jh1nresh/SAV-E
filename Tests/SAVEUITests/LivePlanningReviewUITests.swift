@@ -325,12 +325,37 @@ import XCTest
 
 final class LiveSavedGalleryCordUITests: SAVEUITestCase {
     @MainActor
+    func testDarkGalleryTapIlluminatesAndOpensDetailImmediately() {
+        let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
+            "--uitest-reviewed-venue-posts", "--preview-tab-saved", "--uitest-force-light"],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString, "SAVE_UI_TEST_SOURCE_COVER": "1"])
+        launch(app)
+        let bulb = app.buttons["gallery.bulb"]
+        XCTAssertTrue(bulb.waitForExistence(timeout: launchTimeout))
+        bulb.tap()
+        XCTAssertEqual(bulb.value as? String, "Off")
+        let first = app.buttons["live.library.place.C77AF9C1-064A-45D0-833D-E0C809C1F013"]
+        XCTAssertEqual(first.value as? String, "Dim")
+        XCTAssertTrue(first.label.contains("收藏來源圖片") || first.label.contains("Saved source image"),
+                      "The frame exposes source-image provenance to VoiceOver")
+        first.tap()
+        let close = app.buttons["live.place.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout), "A single tap opens details")
+        close.tap()
+        XCTAssertTrue(first.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(first.value as? String, "Illuminated", "The tapped frame stays illuminated behind its detail")
+        attach(app, name: "gallery-tap-light-after-detail")
+        bulb.tap(); bulb.tap()
+        XCTAssertEqual(first.value as? String, "Dim", "The room switch still resets the gallery")
+    }
+
+    @MainActor
     func testGalleryCordTracksPullAndResetsForRepeatedInput() {
         let app = makeApp(launchArguments: ["--uitest-live-review-rail", "--uitest-review-demo-offline",
             "--uitest-reviewed-venue-posts", "--preview-tab-saved", "--uitest-force-light"],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         launch(app)
-        let lights = app.buttons["gallery.lights"]
+        let lights = app.buttons["gallery.bulb"]
         let bulb = app.buttons["gallery.bulb"]
         XCTAssertTrue(bulb.waitForExistence(timeout: launchTimeout))
         XCTAssertEqual(lights.value as? String, "On")

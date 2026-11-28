@@ -11,6 +11,7 @@ struct SavedGalleryItem: Identifiable, Equatable {
     let photoCredit: String?
     let photoSource: URL?
     var markedVisited = false
+    var photoKindLabel: String? = nil
 }
 
 struct SavedGalleryPalette {
@@ -39,6 +40,8 @@ struct SavedGalleryWall<Photo: View>: View {
     @State private var activeFrame: UUID?
     @GestureState private var cordDrag = CGSize.zero
     @State private var bounds: [UUID: CGRect] = [:]
+    @State private var torchOrigin = CGPoint.zero
+    @State private var wallViewport = CGRect.zero
 
     private var singleColumn: Bool { typeSize.isAccessibilitySize || voiceOver }
     private var spotlightTitle: String? {
@@ -52,18 +55,13 @@ struct SavedGalleryWall<Photo: View>: View {
             HStack {
                 Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
                 Spacer()
-                Button(action: toggleLights) {
-                    Text(lightsOn ? (chinese ? "燈亮著" : "Lights on") : (chinese ? "夜間探索" : "After hours"))
-                        .font(.caption.weight(.medium)).padding(.horizontal, 14)
-                        .frame(height: 28)
-                        .background(palette.surface, in: Capsule())
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("gallery.lights")
-                .accessibilityLabel(chinese ? "切換收藏館燈光" : "Toggle gallery lighting")
-                .accessibilityValue(lightsOn ? "On" : "Off")
+                Text(lightsOn ? (chinese ? "燈亮著" : "Lights on") : (chinese ? "夜間探索" : "After hours"))
+                    .font(.caption.weight(.medium)).padding(.horizontal, 14)
+                    .frame(height: 28)
+                    .background(palette.surface, in: Capsule())
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("gallery.lights")
+                    .accessibilityValue(lightsOn ? "On" : "Off")
                 Spacer()
                 bulbControl
             }
@@ -85,6 +83,9 @@ struct SavedGalleryWall<Photo: View>: View {
             .padding(.horizontal, 12).padding(.trailing, singleColumn ? 0 : 30)
             .padding(.top, 4).padding(.bottom, 12)
             }
+            .onGeometryChange(for: CGRect.self) { geometry in
+                geometry.frame(in: .named("saved.gallery"))
+            } action: { wallViewport = $0 }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .overlay(alignment: .top) {
@@ -96,14 +97,16 @@ struct SavedGalleryWall<Photo: View>: View {
                     .frame(height: 16).allowsHitTesting(false)
             }
 
-            HStack(spacing: 12) {
+            HStack(alignment: .bottom, spacing: 8) {
                 torchControl
                 Text(spotlightTitle ?? (lightsOn
                     ? (chinese ? "你的私人收藏館" : "Your private collection")
-                    : (chinese ? "用光，找回想去的地方" : "A little light. A place to go.")))
+                    : (chinese ? "點照片，照亮並打開地點" : "Tap a picture to light it and open the place")))
                     .font(.caption).foregroundStyle(palette.ink)
+                    .lineLimit(2)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(palette.surface, in: Capsule())
+                    .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.bottom, 20)
                     .contentTransition(.opacity)
                 Spacer(minLength: 0)
             }.padding(.top, 8).padding(.bottom, 4)
@@ -114,7 +117,14 @@ struct SavedGalleryWall<Photo: View>: View {
         .overlay(alignment: .topTrailing) { pullCordControl }
         .coordinateSpace(name: "saved.gallery")
         .onPreferenceChange(GalleryFrameBounds.self) { bounds = $0 }
+        .onPreferenceChange(GalleryTorchOrigin.self) { torchOrigin = $0 }
         .overlay { if !lightsOn, let spotlight, !reduceMotion { beam(to: spotlight).allowsHitTesting(false) } }
+        .onChange(of: lightsOn) { _, _ in
+            // Header switch and pull cord share one room state and reset behavior.
+            revealed.removeAll()
+            spotlight = nil
+            activeFrame = nil
+        }
         .onChange(of: items.map(\.id)) { _, ids in
             revealed.formIntersection(ids)
             bounds = bounds.filter { ids.contains($0.key) }
@@ -124,29 +134,29 @@ struct SavedGalleryWall<Photo: View>: View {
     }
 
     private func frame(_ item: SavedGalleryItem, index: Int) -> some View {
-        let illuminated = lightsOn || revealed.contains(item.id)
+        let illuminated = lightsOn || activeFrame == item.id || revealed.contains(item.id)
         let ratio: CGFloat = index % 5 == 4 ? 1.35 : (index % 2 == 0 ? 0.76 : 0.84)
-        return Button { onOpen(item.id) } label: {
+        return Button {
+            if !lightsOn {
+                // One tap aims the light and opens the place; no second tap or delay.
+                activeFrame = item.id
+                revealed.insert(item.id)
+                if let rect = bounds[item.id] {
+                    spotlight = CGPoint(x: rect.midX, y: rect.midY)
+                }
+            }
+            onOpen(item.id)
+        } label: {
             VStack(spacing: 5) {
-                GalleryPictureLight(lit: illuminated, palette: palette)
+                GalleryPictureLight(lit: illuminated || activeFrame == item.id, palette: palette)
                     .frame(width: 38, height: 12).accessibilityHidden(true)
                 Color.clear.aspectRatio(ratio, contentMode: .fit)
                     .overlay {
                         if item.photoURL != nil {
-                            photo(item).saturation(illuminated ? 1 : 0).opacity(illuminated ? 1 : 0.4)
-                                .overlay {
-                                    if !illuminated, let spotlight {
-                                        GeometryReader { geometry in
-                                            let rect = geometry.frame(in: .named("saved.gallery"))
-                                            photo(item).frame(width: geometry.size.width, height: geometry.size.height)
-                                                .mask {
-                                                    Circle().fill(.white).frame(width: 110, height: 110)
-                                                        .blur(radius: reduceMotion ? 0 : 12)
-                                                        .position(x: spotlight.x - rect.minX, y: spotlight.y - rect.minY)
-                                                }
-                                        }
-                                    }
-                                }
+                            photo(item)
+                                .saturation(illuminated ? 1 : 0)
+                                .brightness(!lightsOn && illuminated ? 0.10 : 0)
+                                .opacity(illuminated ? 1 : 0.30)
                         } else {
                             VStack(spacing: 8) {
                                 Image(systemName: item.symbol).font(.title3)
@@ -157,13 +167,18 @@ struct SavedGalleryWall<Photo: View>: View {
                     .clipped()
                     .padding(10)
                     .background(palette.surface)
-                    .overlay { GalleryFrame(style: index % 3, palette: palette).allowsHitTesting(false) }
+                    .overlay { GalleryFrame(style: index % 3, palette: palette)
+                        .opacity(illuminated ? 1 : 0.28).allowsHitTesting(false) }
                     .shadow(color: palette.ink.opacity(0.12), radius: 2, x: 1, y: 2)
                 Text(item.title).font(.caption2.weight(.medium))
                     .foregroundStyle(palette.ink).lineLimit(singleColumn ? nil : 1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if singleColumn {
                     Text(item.location).font(.caption).foregroundStyle(palette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let kind = item.photoKindLabel {
+                    Text(kind).font(.caption2).foregroundStyle(palette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if item.markedVisited {
@@ -180,9 +195,13 @@ struct SavedGalleryWall<Photo: View>: View {
         }
         .buttonStyle(GalleryPressStyle(reduceMotion: reduceMotion))
         .accessibilityIdentifier("live.library.place.\(item.id.uuidString)")
-        .accessibilityLabel(item.title + ", " + item.location + (item.markedVisited ? (chinese ? "，標記去過" : ", marked visited") : ""))
+        .accessibilityLabel([item.title, item.location, item.photoKindLabel,
+                             item.markedVisited ? (chinese ? "標記去過" : "Marked visited") : nil]
+            .compactMap { $0 }.joined(separator: chinese ? "，" : ", "))
         .accessibilityValue(illuminated ? "Illuminated" : "Dim")
-        .accessibilityHint(chinese ? "開啟地點詳細資訊" : "Open place details")
+        .accessibilityHint(lightsOn
+            ? (chinese ? "開啟地點詳細資訊" : "Open place details")
+            : (chinese ? "照亮並開啟地點詳細資訊" : "Illuminate and open place details"))
         .contextMenu {
             if let credit = item.photoCredit, let source = item.photoSource { Link(credit, destination: source) }
         }
@@ -196,6 +215,7 @@ struct SavedGalleryWall<Photo: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(chinese ? "拉燈開關" : "Gallery light switch")
+        .accessibilityValue(lightsOn ? "On" : "Off")
         .accessibilityIdentifier("gallery.bulb")
     }
 
@@ -229,14 +249,30 @@ struct SavedGalleryWall<Photo: View>: View {
         .accessibilityHidden(true)
     }
     private var torchControl: some View {
-        Image(systemName: "flashlight.on.fill")
-            .font(.system(size: 28)).rotationEffect(.degrees(32))
-            .foregroundStyle(palette.accent).frame(width: 56, height: 64)
+        Image("GalleryGuide")
+            .resizable().scaledToFit()
+            .frame(width: 98, height: 146)
+            .opacity(lightsOn || spotlight != nil ? 1 : 0.62)
+            .background(GeometryReader { geometry in
+                let rect = geometry.frame(in: .named("saved.gallery"))
+                // The illustration's flashlight lens is 80% across and 16% down.
+                Color.clear.preference(key: GalleryTorchOrigin.self,
+                    value: CGPoint(x: rect.minX + rect.width * 0.80,
+                                   y: rect.minY + rect.height * 0.16))
+            })
 
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 3, coordinateSpace: .named("saved.gallery"))
                 .onChanged { value in
                     guard !lightsOn else { return }
+                    // Lazy stacks also report offscreen frame bounds. Only the visible
+                    // wall can receive light; the guide/footer is not a hidden photo.
+                    guard wallViewport.contains(value.location) else {
+                        if let activeFrame { revealed.insert(activeFrame) }
+                        activeFrame = nil
+                        spotlight = nil
+                        return
+                    }
                     spotlight = value.location
                     let hit = items.first { bounds[$0.id]?.contains(value.location) == true }?.id
                     if activeFrame != hit {
@@ -251,26 +287,34 @@ struct SavedGalleryWall<Photo: View>: View {
                         spotlight = nil
                     }
                 })
-            .accessibilityLabel(chinese ? "探索收藏" : "Rediscover saved places")
-            .accessibilityHint(chinese ? "點兩下照亮下一個地方" : "Double tap to illuminate the next place")
+            .accessibilityLabel(chinese ? "小女孩的手電筒" : "Gallery guide flashlight")
+            .accessibilityHint(lightsOn
+                ? (chinese ? "先用右上角開關關燈，再照亮收藏" : "Turn off the top-right light switch to explore")
+                : (chinese ? "拖向照片照亮收藏；點兩下照亮下一個地方" : "Drag toward a photo, or double tap to illuminate the next place"))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction {
-                if lightsOn { toggleLights() }
+                guard !lightsOn else { return }
                 if let next = items.first(where: { !revealed.contains($0.id) }) { revealed.insert(next.id) }
             }
             .accessibilityIdentifier("gallery.torch")
     }
     private func beam(to point: CGPoint) -> some View {
-        GeometryReader { geometry in
-            let source = CGPoint(x: 28, y: geometry.size.height - 40)
+        GeometryReader { _ in
+            let source = torchOrigin
             Canvas { context, _ in
                 var path = Path()
                 path.move(to: source)
-                path.addLine(to: CGPoint(x: point.x - 40, y: point.y))
-                path.addQuadCurve(to: CGPoint(x: point.x + 40, y: point.y), control: CGPoint(x: point.x, y: point.y - 24))
+                let distance = max(1, hypot(point.x - source.x, point.y - source.y))
+                let normal = CGSize(width: -(point.y - source.y) / distance * 40,
+                                    height: (point.x - source.x) / distance * 40)
+                path.addLine(to: CGPoint(x: point.x + normal.width, y: point.y + normal.height))
+                path.addLine(to: CGPoint(x: point.x - normal.width, y: point.y - normal.height))
                 path.closeSubpath()
-                context.fill(path, with: .linearGradient(Gradient(colors: [.clear, palette.pink.opacity(0.24)]),
+                context.fill(path, with: .linearGradient(Gradient(colors: [.white.opacity(0.42), palette.accent.opacity(0.20), .white.opacity(0.28)]),
                                                          startPoint: source, endPoint: point))
+                context.fill(Path(ellipseIn: CGRect(x: source.x - 10, y: source.y - 10, width: 20, height: 20)),
+                             with: .radialGradient(Gradient(colors: [.white.opacity(0.85), .clear]),
+                                                   center: source, startRadius: 1, endRadius: 10))
                 context.fill(Path(ellipseIn: CGRect(x: point.x - 40, y: point.y - 40, width: 80, height: 80)),
                              with: .radialGradient(Gradient(colors: [.white.opacity(0.22), .clear]),
                                                    center: point, startRadius: 5, endRadius: 40))
@@ -278,12 +322,11 @@ struct SavedGalleryWall<Photo: View>: View {
         }.accessibilityHidden(true)
     }
     private func toggleLights() {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) {
-            lightsOn.toggle()
-            revealed.removeAll()
-            spotlight = nil
-            activeFrame = nil
-        }
+        // Avoid crossfading preferredColorScheme trees and ghosting text.
+        lightsOn.toggle()
+        revealed.removeAll()
+        spotlight = nil
+        activeFrame = nil
     }
 }
 
@@ -302,6 +345,11 @@ nonisolated private struct GalleryCord: Shape {
                          control: CGPoint(x: 22 + displacement.width * 0.15, y: 80))
         return path
     }
+}
+
+nonisolated private struct GalleryTorchOrigin: PreferenceKey {
+    static let defaultValue = CGPoint.zero
+    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) { value = nextValue() }
 }
 
 nonisolated private struct GalleryFrameBounds: PreferenceKey {
@@ -366,9 +414,9 @@ private struct GalleryPictureLight: View {
     var body: some View {
         ZStack(alignment: .top) {
             Rectangle().fill(palette.accent.opacity(0.7)).frame(width: 2, height: 12)
-            Capsule().fill(lit ? palette.pink : palette.muted.opacity(0.4)).frame(height: 5)
-                .overlay(Capsule().stroke(palette.accent, lineWidth: 1.2))
-                .shadow(color: lit ? palette.pink.opacity(0.65) : .clear, radius: 5, y: 3)
+            Capsule().fill(lit ? palette.accent : palette.muted.opacity(0.12)).frame(height: 5)
+                .overlay(Capsule().stroke(palette.accent.opacity(lit ? 1 : 0.25), lineWidth: 1.2))
+                .shadow(color: lit ? palette.accent.opacity(0.6) : .clear, radius: 5, y: 3)
         }
     }
 }

@@ -44,6 +44,60 @@ enum LiveBusinessPhotoSource: Equatable {
     }
 }
 
+/// Private Saved presentation only. A source cover is never promoted to business
+/// metadata or published on a map; the business-photo resolver remains unchanged.
+enum LiveSavedPlaceCoverSource: Equatable {
+    case business(LiveBusinessPhotoSource)
+    case savedSource(URL)
+    case missing
+
+    var url: URL? {
+        switch self {
+        case .business(.available(let url)), .savedSource(let url): url
+        case .business(.bundled(let photo)): photo.fileURL
+        default: nil
+        }
+    }
+    var isSavedSource: Bool {
+        if case .savedSource = self { return true }
+        return false
+    }
+    static func resolve(_ place: Place) -> Self {
+        let business = LiveBusinessPhotoSource.resolve(place)
+        if business.hasPhoto { return .business(business) }
+        guard let value = place.sourceImageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: value), url.scheme?.lowercased() == "https",
+              let host = url.host, !host.isEmpty, url.user == nil, url.password == nil,
+              let safeURL = GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(url) else { return .missing }
+        return .savedSource(safeURL)
+    }
+}
+
+@MainActor
+struct LiveSavedPlaceCover: View {
+    let place: Place
+    @Environment(\.appLanguageSettings) private var language
+    var body: some View {
+        switch LiveSavedPlaceCoverSource.resolve(place) {
+        case .savedSource(let url):
+            CachedAsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().scaledToFill()
+                        .accessibilityLabel(language.localized(english: "Saved source image", traditionalChinese: "收藏來源圖片"))
+                } else {
+                    Image(systemName: place.category.iconName)
+                        .foregroundStyle(DateTheme.muted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(DateTheme.soft)
+                        .accessibilityLabel(language.localized(english: "Source image unavailable", traditionalChinese: "來源圖片暫時無法顯示"))
+                }
+            }
+        default:
+            LiveBusinessPhoto(place: place)
+        }
+    }
+}
+
 /// Caller supplies the size and clipping shape (for example, a pin circle or library tile).
 /// This component never enriches, persists or shares the Place or its private images.
 @MainActor

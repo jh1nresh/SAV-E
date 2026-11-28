@@ -550,7 +550,20 @@ struct LivePlanningMapRoot: View {
                         rootButton(.map, title: copy("Map", "地圖"))
                     }
                     Spacer(minLength: 0)
-                    if destination == .map, !usesFixtureMap {
+                    if destination == .saved {
+                        Button { galleryLightsOn.toggle() } label: {
+                            Image(systemName: galleryLightsOn ? "lightbulb.fill" : "lightbulb")
+                                .font(.title3)
+                                .foregroundStyle(SaveBrandUI.accent)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Circle())
+                                .liveFloatingGlass(in: Circle())
+                        }
+                        .savvyPressFeedback()
+                        .accessibilityLabel(galleryLightsOn ? copy("Turn lights off", "關燈") : copy("Turn lights on", "開燈"))
+                        .accessibilityValue(galleryLightsOn ? "On" : "Off")
+                        .accessibilityIdentifier("gallery.roomSwitch")
+                    } else if destination == .map, !usesFixtureMap {
                         LiveMapWeatherCard(area: weatherArea,
                                            forecast: appliedWeatherArea == weatherArea ? mapForecast : nil)
                             .id(weatherArea)
